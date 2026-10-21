@@ -20,6 +20,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
@@ -57,7 +58,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-enum class Tab { HOME, ENTRIES, REPORTS, SETTINGS }
+enum class Tab { HOME, ENTRIES, REPORTS, TRASH, SETTINGS }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -91,9 +92,35 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit) {
         }
     }
 
+    var trash by remember { mutableStateOf(store.loadTrash()) }
+
+    fun saveTrash(list: List<Entry>) {
+        trash = list
+        store.saveTrash(list)
+    }
+
     fun save(list: List<Entry>) {
         entries = list
         store.save(list)
+    }
+
+    /** Moves entries to Trash and offers Undo. */
+    fun moveToTrash(ids: Set<String>) {
+        val gone = entries.filter { it.id in ids }
+        if (gone.isEmpty()) return
+        save(entries.filter { it.id !in ids })
+        store.markTrashed(ids)
+        saveTrash(gone + trash.filter { it.id !in ids })
+        scope.launch {
+            snackbar.currentSnackbarData?.dismiss()
+            val res = snackbar.showSnackbar(
+                "Moved ${gone.size} to Trash", actionLabel = "Undo", duration = SnackbarDuration.Long
+            )
+            if (res == SnackbarResult.ActionPerformed) {
+                save(gone + entries)
+                saveTrash(trash.filter { it.id !in ids })
+            }
+        }
     }
 
     fun askDelete(label: String, list: List<Entry>) {
@@ -221,6 +248,23 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit) {
                 )
                 tab == Tab.ENTRIES -> TransactionsScreen(entries, currency, onEdit = { editing = it }, onAdd = { adding = true }, onMenu = { openMenu() })
                 tab == Tab.REPORTS -> ReportsScreen(entries, currency, onMenu = { openMenu() })
+                tab == Tab.TRASH -> TrashScreen(
+                    trash = trash, currency = currency, onMenu = { openMenu() },
+                    onRestore = { e ->
+                        save(listOf(e) + entries)
+                        saveTrash(trash.filter { it.id != e.id })
+                        toast("✓ Restored")
+                    },
+                    onRestoreAll = {
+                        save(trash + entries)
+                        saveTrash(emptyList())
+                        toast("✓ All restored")
+                    },
+                    onEmpty = {
+                        saveTrash(emptyList())
+                        toast("Trash emptied")
+                    }
+                )
                 else -> SettingsScreen(
                     name = name, currency = currency, lang = lang, dark = dark,
                     version = BuildConfig.VERSION_NAME, checking = checking,
@@ -299,14 +343,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit) {
             confirmButton = {
                 Button(
                     onClick = {
-                        val before = entries
-                        save(entries.filter { it.id !in ids })
                         confirm = null
-                        scope.launch {
-                            snackbar.currentSnackbarData?.dismiss()
-                            val res = snackbar.showSnackbar("Deleted ${ids.size}", actionLabel = "Undo", duration = SnackbarDuration.Long)
-                            if (res == SnackbarResult.ActionPerformed) save(before)
-                        }
+                        moveToTrash(ids)
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = RedSpend)
                 ) { Text("Delete") }
@@ -333,9 +371,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit) {
                     toast("✓ Saved")
                 },
                 onDelete = {
-                    save(entries.filter { it.id != e.id })
                     editing = null
-                    toast("✓ Entry deleted")
+                    moveToTrash(setOf(e.id))
                 },
                 onCancel = { editing = null }
             )
@@ -468,6 +505,10 @@ private fun DrawerMenu(tab: Tab, name: String, onPick: (Tab) -> Unit) {
         NavigationDrawerItem(
             label = { Text("Reports") }, selected = tab == Tab.REPORTS, onClick = { onPick(Tab.REPORTS) },
             icon = { ChartGlyph(LocalContentColor.current) }, modifier = itemPad
+        )
+        NavigationDrawerItem(
+            label = { Text("Trash") }, selected = tab == Tab.TRASH, onClick = { onPick(Tab.TRASH) },
+            icon = { Icon(Icons.Filled.Delete, contentDescription = null) }, modifier = itemPad
         )
         NavigationDrawerItem(
             label = { Text("Settings") }, selected = tab == Tab.SETTINGS, onClick = { onPick(Tab.SETTINGS) },

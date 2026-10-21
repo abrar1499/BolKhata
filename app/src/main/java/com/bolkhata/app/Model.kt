@@ -46,8 +46,36 @@ data class Entry(
 class Store(context: Context) {
     private val prefs = context.getSharedPreferences("bolkhata", Context.MODE_PRIVATE)
 
-    fun load(): List<Entry> {
-        val raw = prefs.getString("entries", "[]") ?: "[]"
+    fun load(): List<Entry> = read("entries")
+
+    /** Deleted entries; createdAt is reused as the time it was deleted. Kept for 30 days. */
+    fun loadTrash(): List<Entry> {
+        val cutoff = System.currentTimeMillis() - 30L * 86_400_000L
+        val times = trashTimes
+        return read("trash").filter { (times[it.id] ?: now()) > cutoff }
+    }
+
+    fun saveTrash(list: List<Entry>) = write("trash", list)
+
+    private val trashTimes: Map<String, Long>
+        get() = try {
+            val o = JSONObject(prefs.getString("trashTimes", "{}") ?: "{}")
+            o.keys().asSequence().associateWith { o.getLong(it) }
+        } catch (e: Exception) {
+            emptyMap()
+        }
+
+    fun markTrashed(ids: Collection<String>) {
+        val o = try { JSONObject(prefs.getString("trashTimes", "{}") ?: "{}") } catch (e: Exception) { JSONObject() }
+        val t = now()
+        ids.forEach { o.put(it, t) }
+        prefs.edit().putString("trashTimes", o.toString()).apply()
+    }
+
+    private fun now() = System.currentTimeMillis()
+
+    private fun read(key: String): List<Entry> {
+        val raw = prefs.getString(key, "[]") ?: "[]"
         return try {
             val arr = JSONArray(raw)
             (0 until arr.length()).mapNotNull { i ->
@@ -74,7 +102,9 @@ class Store(context: Context) {
         }
     }
 
-    fun save(list: List<Entry>) {
+    fun save(list: List<Entry>) = write("entries", list)
+
+    private fun write(key: String, list: List<Entry>) {
         val arr = JSONArray()
         list.forEach { e ->
             arr.put(
@@ -90,7 +120,7 @@ class Store(context: Context) {
                     .put("createdAt", e.createdAt)
             )
         }
-        prefs.edit().putString("entries", arr.toString()).apply()
+        prefs.edit().putString(key, arr.toString()).apply()
     }
 
     var language: String

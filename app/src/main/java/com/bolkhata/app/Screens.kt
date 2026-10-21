@@ -765,3 +765,80 @@ fun ResultsScreen(
         }
     }
 }
+
+// ======================= TRASH =======================
+
+@Composable
+fun TrashScreen(
+    trash: List<Entry>,
+    currency: String,
+    onMenu: () -> Unit,
+    onRestore: (Entry) -> Unit,
+    onRestoreAll: () -> Unit,
+    onEmpty: () -> Unit
+) {
+    var askEmpty by remember { mutableStateOf(false) }
+
+    LazyColumn(
+        Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        item { ScreenTitle("Trash", onMenu = onMenu) }
+        item {
+            Text(
+                "Deleted entries stay here for 30 days. Restore anything you deleted by mistake.",
+                fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        if (trash.isEmpty()) {
+            item {
+                Panel(Modifier.fillMaxWidth().padding(top = 8.dp), padding = 20.dp) {
+                    Text("🗑️", fontSize = 32.sp)
+                    Text("Trash is empty", fontWeight = FontWeight.SemiBold)
+                }
+            }
+        } else {
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilledTonalButton(onClick = onRestoreAll, modifier = Modifier.weight(1f)) { Text("Restore all") }
+                    OutlinedButton(
+                        onClick = { askEmpty = true }, modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = RedSpend)
+                    ) { Text("Empty trash") }
+                }
+            }
+            items(trash, key = { "t-" + it.id }) { e ->
+                Panel(Modifier.fillMaxWidth(), padding = 12.dp) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CatBubble(e.category)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(entryTitle(e), fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(
+                                dayLabel(e.date) + " · " + money(currency, e.amount),
+                                fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        TextButton(onClick = { onRestore(e) }) { Text("Restore") }
+                    }
+                }
+            }
+        }
+    }
+
+    if (askEmpty) {
+        AlertDialog(
+            onDismissRequest = { askEmpty = false },
+            title = { Text("Empty trash?") },
+            text = { Text("${trash.size} entries will be deleted forever. This cannot be undone.") },
+            confirmButton = {
+                Button(
+                    onClick = { askEmpty = false; onEmpty() },
+                    colors = ButtonDefaults.buttonColors(containerColor = RedSpend)
+                ) { Text("Delete forever") }
+            },
+            dismissButton = { TextButton(onClick = { askEmpty = false }) { Text("Cancel") } }
+        )
+    }
+}
