@@ -10,6 +10,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -265,7 +266,7 @@ fun TxRow(e: Entry, currency: String, onClick: () -> Unit) {
 }
 
 @Composable
-fun ScreenTitle(title: String, onBack: (() -> Unit)? = null) {
+fun ScreenTitle(title: String, onBack: (() -> Unit)? = null, onMenu: (() -> Unit)? = null) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -274,6 +275,9 @@ fun ScreenTitle(title: String, onBack: (() -> Unit)? = null) {
     ) {
         if (onBack != null) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+        }
+        if (onMenu != null) {
+            IconButton(onClick = onMenu) { Icon(Icons.Filled.Menu, contentDescription = "Menu") }
         }
         Text(title, fontSize = 24.sp, fontWeight = FontWeight.Bold)
     }

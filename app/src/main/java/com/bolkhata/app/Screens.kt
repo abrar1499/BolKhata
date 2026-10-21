@@ -12,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -44,6 +45,7 @@ fun HomeScreen(
     progress: Int,
     onUpdate: () -> Unit,
     onAdd: () -> Unit,
+    onMenu: () -> Unit,
     onEdit: (Entry) -> Unit,
     onPeople: (Boolean) -> Unit,
     onReports: () -> Unit,
@@ -84,6 +86,8 @@ fun HomeScreen(
                 )
                 Column(Modifier.padding(horizontal = 16.dp).padding(top = 14.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = onMenu) { Icon(Icons.Filled.Menu, contentDescription = "Menu", tint = Color.White) }
+                        Spacer(Modifier.width(4.dp))
                         Box(
                             Modifier
                                 .size(44.dp)
@@ -113,8 +117,8 @@ fun HomeScreen(
                         )
                         Spacer(Modifier.height(12.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            MiniTile("Income", money(currency, monthIncome), "↑", GreenIn, Modifier.weight(1f))
-                            MiniTile("Balance", money(currency, monthIncome - monthSpent), "≈", if (monthIncome - monthSpent >= 0) GreenIn else RedSpend, Modifier.weight(1f))
+                            MiniTile("Income", money(currency, monthIncome), "+", GreenIn, Modifier.weight(1f))
+                            MiniTile("Balance", money(currency, monthIncome - monthSpent), "=", if (monthIncome - monthSpent >= 0) GreenIn else RedSpend, Modifier.weight(1f))
                         }
                     }
                 }
@@ -248,7 +252,7 @@ fun Avatar(name: String) {
 enum class TxFilter(val label: String) { ALL("All"), EXPENSE("Expenses"), INCOME("Income"), LOANS("Loans") }
 
 @Composable
-fun TransactionsScreen(entries: List<Entry>, currency: String, onEdit: (Entry) -> Unit, onAdd: () -> Unit) {
+fun TransactionsScreen(entries: List<Entry>, currency: String, onEdit: (Entry) -> Unit, onAdd: () -> Unit, onMenu: () -> Unit) {
     var query by remember { mutableStateOf("") }
     var filter by remember { mutableStateOf(TxFilter.ALL) }
 
@@ -275,7 +279,7 @@ fun TransactionsScreen(entries: List<Entry>, currency: String, onEdit: (Entry) -
     ) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.weight(1f)) { ScreenTitle("Entries") }
+                Box(Modifier.weight(1f)) { ScreenTitle("Entries", onMenu = onMenu) }
                 FilledTonalButton(onClick = onAdd) {
                     Icon(Icons.Filled.Add, contentDescription = null)
                     Text("Add")
@@ -361,7 +365,7 @@ private fun spanRange(span: Span, offset: Int): Triple<Long, Long, String> {
 }
 
 @Composable
-fun ReportsScreen(entries: List<Entry>, currency: String) {
+fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit) {
     var span by remember { mutableStateOf(Span.MONTH) }
     var offset by remember { mutableIntStateOf(0) }
     var open by remember { mutableStateOf(setOf<Cat>()) }
@@ -380,7 +384,7 @@ fun ReportsScreen(entries: List<Entry>, currency: String) {
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        item { ScreenTitle("Reports") }
+        item { ScreenTitle("Reports", onMenu = onMenu) }
         item {
             Row(
                 Modifier
@@ -570,7 +574,8 @@ fun SettingsScreen(
     onCurrency: (String) -> Unit,
     onLang: (String) -> Unit,
     onDark: (Boolean) -> Unit,
-    onCheckUpdate: () -> Unit
+    onCheckUpdate: () -> Unit,
+    onMenu: () -> Unit
 ) {
     var nameText by remember(name) { mutableStateOf(name) }
     var currencyMenu by remember { mutableStateOf(false) }
@@ -584,6 +589,11 @@ fun SettingsScreen(
                     .background(Brush.verticalGradient(listOf(GreenDeep, Green)))
                     .padding(20.dp)
             ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onMenu) { Icon(Icons.Filled.Menu, contentDescription = "Menu", tint = Color.White) }
+                    Text("Settings", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                }
+                Spacer(Modifier.height(10.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         Modifier.size(58.dp).clip(CircleShape).background(Color.White),

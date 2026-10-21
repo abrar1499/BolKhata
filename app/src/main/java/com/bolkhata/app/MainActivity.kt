@@ -14,8 +14,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
@@ -24,10 +28,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
@@ -133,6 +140,11 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit) {
         }
     }
 
+    val drawer = rememberDrawerState(DrawerValue.Closed)
+    fun openMenu() {
+        scope.launch { drawer.open() }
+    }
+
     BackHandler(enabled = people != null || tab != Tab.HOME) {
         if (people != null) {
             people = null
@@ -141,15 +153,19 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit) {
         }
     }
 
+    ModalNavigationDrawer(
+        drawerState = drawer,
+        drawerContent = {
+            DrawerMenu(tab, name) { t ->
+                tab = t
+                people = null
+                scope.launch { drawer.close() }
+            }
+        }
+    ) {
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
-        bottomBar = {
-            BottomBar(
-                tab = tab,
-                onTab = { tab = it; people = null },
-                onMic = { startVoice() }
-            )
-        },
+        bottomBar = { InputBar(onSend = { handleText(it) }, onMic = { startVoice() }) },
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { pad ->
@@ -160,11 +176,11 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit) {
                 tab == Tab.HOME -> HomeScreen(
                     name = name, entries = entries, currency = currency,
                     newVersion = newVersion, progress = progress, onUpdate = { startUpdate() },
-                    onAdd = { adding = true }, onEdit = { editing = it },
+                    onAdd = { adding = true }, onMenu = { openMenu() }, onEdit = { editing = it },
                     onPeople = { people = it }, onReports = { tab = Tab.REPORTS }, onSeeAll = { tab = Tab.ENTRIES }
                 )
-                tab == Tab.ENTRIES -> TransactionsScreen(entries, currency, onEdit = { editing = it }, onAdd = { adding = true })
-                tab == Tab.REPORTS -> ReportsScreen(entries, currency)
+                tab == Tab.ENTRIES -> TransactionsScreen(entries, currency, onEdit = { editing = it }, onAdd = { adding = true }, onMenu = { openMenu() })
+                tab == Tab.REPORTS -> ReportsScreen(entries, currency, onMenu = { openMenu() })
                 else -> SettingsScreen(
                     name = name, currency = currency, lang = lang, dark = dark,
                     version = BuildConfig.VERSION_NAME, checking = checking,
@@ -183,10 +199,12 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit) {
                                 tab = Tab.HOME
                             }
                         }
-                    }
+                    },
+                    onMenu = { openMenu() }
                 )
             }
         }
+    }
     }
 
     // Ask about anything the parser did not understand, one at a time.
@@ -286,53 +304,86 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit) {
 }
 
 @Composable
-private fun BottomBar(tab: Tab, onTab: (Tab) -> Unit, onMic: () -> Unit) {
+private fun InputBar(onSend: (String) -> Unit, onMic: () -> Unit) {
+    var text by rememberSaveable { mutableStateOf("") }
+    fun send() {
+        val t = text.trim()
+        if (t.isNotEmpty()) {
+            text = ""
+            onSend(t)
+        }
+    }
     Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 10.dp) {
         Row(
             Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .height(70.dp),
+                .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            NavItem("Home", tab == Tab.HOME, Modifier.weight(1f), { onTab(Tab.HOME) }) { c ->
-                Icon(Icons.Filled.Home, contentDescription = null, tint = c)
-            }
-            NavItem("Entries", tab == Tab.ENTRIES, Modifier.weight(1f), { onTab(Tab.ENTRIES) }) { c ->
-                Icon(Icons.AutoMirrored.Filled.List, contentDescription = null, tint = c)
-            }
-            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                Box(
-                    Modifier
-                        .size(62.dp)
-                        .shadow(6.dp, CircleShape)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary)
-                        .clickable { onMic() },
-                    contentAlignment = Alignment.Center
-                ) { MicGlyph(MaterialTheme.colorScheme.onPrimary, 30.dp) }
-            }
-            NavItem("Reports", tab == Tab.REPORTS, Modifier.weight(1f), { onTab(Tab.REPORTS) }) { c ->
-                ChartGlyph(c)
-            }
-            NavItem("Settings", tab == Tab.SETTINGS, Modifier.weight(1f), { onTab(Tab.SETTINGS) }) { c ->
-                Icon(Icons.Filled.Settings, contentDescription = null, tint = c)
-            }
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                placeholder = { Text("Type here… e.g. petrol 50") },
+                modifier = Modifier.weight(1f),
+                maxLines = 3,
+                shape = RoundedCornerShape(24.dp),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                keyboardActions = KeyboardActions(onSend = { send() }),
+                trailingIcon = {
+                    if (text.isNotBlank()) {
+                        IconButton(onClick = { send() }) {
+                            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Add", tint = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                }
+            )
+            Spacer(Modifier.width(10.dp))
+            Box(
+                Modifier
+                    .size(56.dp)
+                    .shadow(6.dp, CircleShape)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary)
+                    .clickable { onMic() },
+                contentAlignment = Alignment.Center
+            ) { MicGlyph(MaterialTheme.colorScheme.onPrimary, 28.dp) }
         }
     }
 }
 
 @Composable
-private fun NavItem(label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit, icon: @Composable (Color) -> Unit) {
-    val c = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-    Column(
-        modifier
-            .clip(CircleShape)
-            .clickable { onClick() }
-            .padding(vertical = 6.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        icon(c)
-        Text(label, fontSize = 11.sp, color = c, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
+private fun DrawerMenu(tab: Tab, name: String, onPick: (Tab) -> Unit) {
+    ModalDrawerSheet {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .background(Brush.verticalGradient(listOf(GreenDeep, Green)))
+                .padding(20.dp)
+        ) {
+            Text("Bol Khata", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
+            Text(
+                if (name.isBlank()) "Bolo, hisaab ho jaye" else "Hello, ${name.trim()}",
+                color = Color.White.copy(alpha = 0.85f)
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        val itemPad = Modifier.padding(horizontal = 12.dp)
+        NavigationDrawerItem(
+            label = { Text("Home") }, selected = tab == Tab.HOME, onClick = { onPick(Tab.HOME) },
+            icon = { Icon(Icons.Filled.Home, contentDescription = null) }, modifier = itemPad
+        )
+        NavigationDrawerItem(
+            label = { Text("Entries") }, selected = tab == Tab.ENTRIES, onClick = { onPick(Tab.ENTRIES) },
+            icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) }, modifier = itemPad
+        )
+        NavigationDrawerItem(
+            label = { Text("Reports") }, selected = tab == Tab.REPORTS, onClick = { onPick(Tab.REPORTS) },
+            icon = { ChartGlyph(LocalContentColor.current) }, modifier = itemPad
+        )
+        NavigationDrawerItem(
+            label = { Text("Settings") }, selected = tab == Tab.SETTINGS, onClick = { onPick(Tab.SETTINGS) },
+            icon = { Icon(Icons.Filled.Settings, contentDescription = null) }, modifier = itemPad
+        )
     }
 }
