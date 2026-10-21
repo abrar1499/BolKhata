@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 
@@ -73,7 +74,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit) {
     var people by remember { mutableStateOf<Boolean?>(null) }   // true = to receive, false = to pay
     var editing by remember { mutableStateOf<Entry?>(null) }
     var adding by remember { mutableStateOf(false) }
-    var pending by remember { mutableStateOf(listOf<Entry>()) }  // entries the app did not understand
+    var pending by remember { mutableStateOf(listOf<Entry>()) }
+    var moreFor by remember { mutableStateOf<Entry?>(null) }  // entries the app did not understand
     var newVersion by remember { mutableStateOf<UpdateInfo?>(null) }
     var progress by remember { mutableIntStateOf(-1) }
     var checking by remember { mutableStateOf(false) }
@@ -209,25 +211,44 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit) {
 
     // Ask about anything the parser did not understand, one at a time.
     val ask = pending.firstOrNull()
-    if (ask != null && editing == null && !adding) {
+    if (ask != null && editing == null && !adding && moreFor == null) {
+        AskDialog(
+            entry = ask,
+            currency = currency,
+            onPick = { e ->
+                save(listOf(e) + entries)
+                pending = pending.drop(1)
+                toast("✓ Saved: " + entryTitle(e) + " " + fmt(e.amount))
+            },
+            onMore = {
+                pending = pending.drop(1)
+                editing = null
+                moreFor = ask
+            },
+            onSkip = { pending = pending.drop(1); toast("Skipped") }
+        )
+    }
+
+    // "More options" from the quick question opens the full form.
+    moreFor?.let { m ->
         ModalBottomSheet(
-            onDismissRequest = { pending = pending.drop(1) },
+            onDismissRequest = { moreFor = null },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         ) {
             EntryForm(
-                initial = ask,
+                initial = m,
                 title = "What is this?",
-                question = "I didn't understand \"${ask.note}\". Please choose:",
+                question = "You said: \"${m.note}\"",
                 askType = true,
                 currency = currency,
                 saveLabel = "Save",
                 onSave = { e ->
                     save(listOf(e) + entries)
-                    pending = pending.drop(1)
+                    moreFor = null
                     toast("✓ Saved")
                 },
                 onDelete = null,
-                onCancel = { pending = pending.drop(1); toast("Skipped") }
+                onCancel = { moreFor = null }
             )
         }
     }
@@ -385,5 +406,70 @@ private fun DrawerMenu(tab: Tab, name: String, onPick: (Tab) -> Unit) {
             label = { Text("Settings") }, selected = tab == Tab.SETTINGS, onClick = { onPick(Tab.SETTINGS) },
             icon = { Icon(Icons.Filled.Settings, contentDescription = null) }, modifier = itemPad
         )
+    }
+}
+
+/** A friendly one-tap question for things the app did not understand. */
+@Composable
+private fun AskDialog(entry: Entry, currency: String, onPick: (Entry) -> Unit, onMore: () -> Unit, onSkip: () -> Unit) {
+    val who = entry.person.ifBlank { "Someone" }
+    Dialog(onDismissRequest = onSkip) {
+        Surface(shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 12.dp) {
+            Column(Modifier.padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(
+                    Modifier.size(56.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center
+                ) { Text("🤔", fontSize = 28.sp) }
+                Spacer(Modifier.height(12.dp))
+                Text(money(currency, entry.amount), fontSize = 26.sp, fontWeight = FontWeight.ExtraBold)
+                Text(
+                    "\"${entry.note}\"",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+                Spacer(Modifier.height(6.dp))
+                Text("What is this?", fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
+                Spacer(Modifier.height(16.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    ChoiceTile("Expense", "I spent it", "−", RedSpend, Modifier.weight(1f)) {
+                        onPick(entry.copy(type = Type.KHARCHA, category = Cat.OTHER, item = "Other", person = ""))
+                    }
+                    ChoiceTile("Income", "I got paid", "+", GreenIn, Modifier.weight(1f)) {
+                        onPick(entry.copy(type = Type.AAMDANI, category = Cat.TANKHWAH, item = "Income", person = ""))
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    ChoiceTile("To pay", "I owe $who", "💸", OrangeOwe, Modifier.weight(1f)) {
+                        onPick(entry.copy(type = Type.LIYA, category = Cat.UDHAAR, item = "Loans", person = who))
+                    }
+                    ChoiceTile("To receive", "$who owes me", "🤝", GreenIn, Modifier.weight(1f)) {
+                        onPick(entry.copy(type = Type.DIYA, category = Cat.UDHAAR, item = "Loans", person = who))
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                Row {
+                    TextButton(onClick = onMore) { Text("More options") }
+                    TextButton(onClick = onSkip) { Text("Skip") }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChoiceTile(title: String, sub: String, glyph: String, color: Color, modifier: Modifier, onClick: () -> Unit) {
+    Column(
+        modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(color.copy(alpha = 0.14f))
+            .clickable { onClick() }
+            .padding(vertical = 16.dp, horizontal = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(glyph, fontSize = 22.sp, color = color, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(4.dp))
+        Text(title, fontWeight = FontWeight.Bold, color = color, fontSize = 16.sp)
+        Text(sub, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
     }
 }
