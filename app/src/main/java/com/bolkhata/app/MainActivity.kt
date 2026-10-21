@@ -439,14 +439,17 @@ private fun InputBar(onSend: (String) -> Unit, onMic: () -> Unit) {
 
 @Composable
 private fun DrawerMenu(tab: Tab, name: String, onPick: (Tab) -> Unit) {
-    ModalDrawerSheet {
+    ModalDrawerSheet(
+        modifier = Modifier.width(250.dp),
+        drawerContainerColor = MaterialTheme.colorScheme.surface
+    ) {
         Column(
             Modifier
                 .fillMaxWidth()
                 .background(Brush.verticalGradient(listOf(GreenDeep, Green)))
                 .padding(20.dp)
         ) {
-            Text("Bol Khata", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
+            Text("Bol Khata", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
             Text(
                 if (name.isBlank()) "Bolo, hisaab ho jaye" else "Hello, ${name.trim()}",
                 color = Color.White.copy(alpha = 0.85f)
