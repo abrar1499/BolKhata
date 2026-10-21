@@ -75,7 +75,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit) {
     var editing by remember { mutableStateOf<Entry?>(null) }
     var adding by remember { mutableStateOf(false) }
     var pending by remember { mutableStateOf(listOf<Entry>()) }
-    var moreFor by remember { mutableStateOf<Entry?>(null) }  // entries the app did not understand
+    var moreFor by remember { mutableStateOf<Entry?>(null) }
+    var results by remember { mutableStateOf<Pair<String, Boolean>?>(null) }      // query, edit mode
+    var confirm by remember { mutableStateOf<Pair<String, Set<String>>?>(null) }  // message, ids to delete  // entries the app did not understand
     var newVersion by remember { mutableStateOf<UpdateInfo?>(null) }
     var progress by remember { mutableIntStateOf(-1) }
     var checking by remember { mutableStateOf(false) }
@@ -94,7 +96,31 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit) {
         store.save(list)
     }
 
+    fun askDelete(label: String, list: List<Entry>) {
+        if (list.isEmpty()) {
+            toast("Nothing found for \"$label\"")
+        } else {
+            confirm = "Delete ${list.size} " + (if (list.size == 1) "entry" else "entries") + " for \"$label\"?" to list.map { it.id }.toSet()
+        }
+    }
+
+    /** Handles typed or spoken commands: search, edit, delete, clear all. Returns true if it was a command. */
+    fun handleCommand(text: String): Boolean {
+        val c = Commands.read(text) ?: return false
+        when (c.action) {
+            Commands.Action.SEARCH -> { results = c.query to false; people = null }
+            Commands.Action.EDIT -> { results = c.query to true; people = null }
+            Commands.Action.DELETE -> askDelete(c.query, matchEntries(entries, c.query))
+            Commands.Action.CLEAR_ALL -> {
+                if (entries.isEmpty()) toast("Khata is already empty")
+                else confirm = "Delete ALL ${entries.size} entries? This clears the whole khata." to entries.map { it.id }.toSet()
+            }
+        }
+        return true
+    }
+
     fun handleText(text: String) {
+        if (handleCommand(text)) return
         val r = Parser.parse(text)
         if (r.entries.isEmpty() && r.unclear.isEmpty()) {
             toast("No amount heard. Try: \"50 ka khana\"")
@@ -147,8 +173,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit) {
         scope.launch { drawer.open() }
     }
 
-    BackHandler(enabled = people != null || tab != Tab.HOME) {
-        if (people != null) {
+    BackHandler(enabled = results != null || people != null || tab != Tab.HOME) {
+        if (results != null) {
+            results = null
+        } else if (people != null) {
             people = null
         } else {
             tab = Tab.HOME
@@ -161,6 +189,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit) {
             DrawerMenu(tab, name) { t ->
                 tab = t
                 people = null
+                results = null
                 scope.launch { drawer.close() }
             }
         }
@@ -174,6 +203,15 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit) {
         Box(Modifier.padding(pad).fillMaxSize()) {
             val who = people
             when {
+                results != null -> {
+                    val (q, editMode) = results!!
+                    ResultsScreen(
+                        query = q, editMode = editMode, entries = entries, currency = currency,
+                        onBack = { results = null },
+                        onEdit = { editing = it },
+                        onDeleteAll = { list -> askDelete(q, list) }
+                    )
+                }
                 who != null -> PeopleScreen(entries, currency, who, onBack = { people = null }, onEdit = { editing = it })
                 tab == Tab.HOME -> HomeScreen(
                     name = name, entries = entries, currency = currency,
@@ -251,6 +289,30 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit) {
                 onCancel = { moreFor = null }
             )
         }
+    }
+
+    confirm?.let { (msg, ids) ->
+        AlertDialog(
+            onDismissRequest = { confirm = null },
+            title = { Text("Are you sure?") },
+            text = { Text(msg) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val before = entries
+                        save(entries.filter { it.id !in ids })
+                        confirm = null
+                        scope.launch {
+                            snackbar.currentSnackbarData?.dismiss()
+                            val res = snackbar.showSnackbar("Deleted ${ids.size}", actionLabel = "Undo", duration = SnackbarDuration.Long)
+                            if (res == SnackbarResult.ActionPerformed) save(before)
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = RedSpend)
+                ) { Text("Delete") }
+            },
+            dismissButton = { TextButton(onClick = { confirm = null }) { Text("Cancel") } }
+        )
     }
 
     editing?.let { e ->

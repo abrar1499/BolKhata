@@ -702,3 +702,66 @@ private fun SettingRow(title: String, sub: String?, trailing: @Composable () -> 
         trailing()
     }
 }
+
+// ======================= SEARCH / EDIT RESULTS =======================
+
+@Composable
+fun ResultsScreen(
+    query: String,
+    editMode: Boolean,
+    entries: List<Entry>,
+    currency: String,
+    onBack: () -> Unit,
+    onEdit: (Entry) -> Unit,
+    onDeleteAll: (List<Entry>) -> Unit
+) {
+    val found = matchEntries(entries, query)
+    val spent = found.filter { it.type == Type.KHARCHA }.sumOf { it.amount }
+    val owed = balances(found).filter { it.value.roundToLong() != 0L }
+
+    LazyColumn(
+        Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        item { ScreenTitle((if (editMode) "Edit: " else "Search: ") + query, onBack) }
+        item {
+            Panel(Modifier.fillMaxWidth(), padding = 16.dp) {
+                Text(
+                    "${found.size} " + (if (found.size == 1) "entry" else "entries") + " found",
+                    fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (spent > 0) {
+                    Text("Spent ${money(currency, spent)}", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = RedSpend)
+                }
+                owed.forEach { (p, v) ->
+                    Text(
+                        if (v > 0) "$p will pay you ${money(currency, v)}" else "You will pay $p ${money(currency, -v)}",
+                        fontWeight = FontWeight.SemiBold, color = if (v > 0) GreenIn else OrangeOwe
+                    )
+                }
+                if (editMode && found.isNotEmpty()) {
+                    Text("Tap any entry to change or delete it.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+        if (found.isEmpty()) {
+            item {
+                Text(
+                    "Nothing found for \"$query\". Try a name, an item like roti, or a category like food.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        items(found, key = { it.id }) { e -> TxRow(e, currency) { onEdit(e) } }
+        if (found.isNotEmpty()) {
+            item {
+                OutlinedButton(
+                    onClick = { onDeleteAll(found) },
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = RedSpend)
+                ) { Text("Delete these ${found.size}") }
+            }
+        }
+    }
+}
