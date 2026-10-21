@@ -117,8 +117,8 @@ fun HomeScreen(
                         )
                         Spacer(Modifier.height(12.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            MiniTile("Income", money(currency, monthIncome), "+", GreenIn, Modifier.weight(1f))
-                            MiniTile("Balance", money(currency, monthIncome - monthSpent), "=", if (monthIncome - monthSpent >= 0) GreenIn else RedSpend, Modifier.weight(1f))
+                            MiniTile("To pay", money(currency, pay), "−", OrangeOwe, Modifier.weight(1f)) { onPeople(false) }
+                            MiniTile("To receive", money(currency, receive), "+", GreenIn, Modifier.weight(1f)) { onPeople(true) }
                         }
                     }
                 }
@@ -147,8 +147,8 @@ fun HomeScreen(
                 Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                BigTile("To receive", money(currency, receive), "from people ›", GreenIn, Modifier.weight(1f)) { onPeople(true) }
-                BigTile("To pay", money(currency, pay), "to people ›", OrangeOwe, Modifier.weight(1f)) { onPeople(false) }
+                BigTile("Expenses", money(currency, monthSpent), "this month ›", RedSpend, Modifier.weight(1f)) { onReports() }
+                BigTile("Income", money(currency, monthIncome), "this month ›", GreenIn, Modifier.weight(1f)) { onReports() }
             }
         }
 
@@ -208,11 +208,12 @@ fun HomeScreen(
 }
 
 @Composable
-private fun MiniTile(label: String, value: String, glyph: String, color: Color, modifier: Modifier) {
+private fun MiniTile(label: String, value: String, glyph: String, color: Color, modifier: Modifier, onClick: () -> Unit) {
     Row(
         modifier
             .clip(RoundedCornerShape(14.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clickable { onClick() }
             .padding(10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -230,9 +231,14 @@ private fun MiniTile(label: String, value: String, glyph: String, color: Color, 
 
 @Composable
 private fun BigTile(label: String, value: String, sub: String, color: Color, modifier: Modifier, onClick: () -> Unit) {
-    Panel(modifier, onClick = onClick) {
-        Text(label.uppercase(), fontSize = 11.sp, letterSpacing = 1.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, fontSize = 19.sp, fontWeight = FontWeight.ExtraBold, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    Panel(modifier, onClick = onClick, padding = 16.dp) {
+        Box(
+            Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)).background(color.copy(alpha = 0.18f)),
+            contentAlignment = Alignment.Center
+        ) { Text(if (color == RedSpend) "−" else "+", color = color, fontWeight = FontWeight.Bold, fontSize = 20.sp) }
+        Spacer(Modifier.height(10.dp))
+        Text(label, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(sub, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
