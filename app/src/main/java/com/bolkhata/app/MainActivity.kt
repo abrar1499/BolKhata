@@ -412,14 +412,7 @@ private fun InputBar(onSend: (String) -> Unit, onMic: () -> Unit) {
                 maxLines = 3,
                 shape = RoundedCornerShape(24.dp),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                keyboardActions = KeyboardActions(onSend = { send() }),
-                trailingIcon = {
-                    if (text.isNotBlank()) {
-                        IconButton(onClick = { send() }) {
-                            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Add", tint = MaterialTheme.colorScheme.primary)
-                        }
-                    }
-                }
+                keyboardActions = KeyboardActions(onSend = { send() })
             )
             Spacer(Modifier.width(10.dp))
             Box(
@@ -428,9 +421,18 @@ private fun InputBar(onSend: (String) -> Unit, onMic: () -> Unit) {
                     .shadow(6.dp, CircleShape)
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.primary)
-                    .clickable { onMic() },
+                    .clickable { if (text.isNotBlank()) send() else onMic() },
                 contentAlignment = Alignment.Center
-            ) { MicGlyph(MaterialTheme.colorScheme.onPrimary, 28.dp) }
+            ) {
+                if (text.isNotBlank()) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.Send, contentDescription = "Send",
+                        tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(26.dp)
+                    )
+                } else {
+                    MicGlyph(MaterialTheme.colorScheme.onPrimary, 28.dp)
+                }
+            }
         }
     }
 }
