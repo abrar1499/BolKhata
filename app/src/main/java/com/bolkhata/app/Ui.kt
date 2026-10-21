@@ -214,7 +214,7 @@ fun SmallLabel(s: String) =
     )
 
 @Composable
-fun SectionHeader(title: String, count: Int?, expanded: Boolean, onToggle: () -> Unit) {
+fun SectionHeader(title: String, count: Int?, expanded: Boolean, total: String? = null, onToggle: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -234,6 +234,10 @@ fun SectionHeader(title: String, count: Int?, expanded: Boolean, onToggle: () ->
             ) { Text("$count", fontSize = 12.sp, color = MaterialTheme.colorScheme.onPrimaryContainer) }
         }
         Spacer(Modifier.weight(1f))
+        if (total != null) {
+            Text(total, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = RedSpend)
+            Spacer(Modifier.width(6.dp))
+        }
         Icon(
             if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
             contentDescription = if (expanded) "Close" else "Open",

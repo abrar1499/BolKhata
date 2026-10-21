@@ -51,8 +51,10 @@ fun HomeScreen(
     onReports: () -> Unit,
     onSeeAll: () -> Unit
 ) {
-    var peopleOpen by remember { mutableStateOf(true) }
-    var recentOpen by remember { mutableStateOf(true) }
+    var open by remember { mutableStateOf(setOf("today")) }
+    fun toggle(k: String) {
+        open = if (k in open) open - k else open + k
+    }
 
     val now = Calendar.getInstance()
     fun inMonth(ms: Long) = cal(ms).let { it.get(Calendar.YEAR) == now.get(Calendar.YEAR) && it.get(Calendar.MONTH) == now.get(Calendar.MONTH) }
@@ -64,8 +66,6 @@ fun HomeScreen(
     val bal = balances(entries)
     val receive = bal.values.filter { it > 0 }.sum()
     val pay = -bal.values.filter { it < 0 }.sum()
-    val owing = bal.filter { it.value.roundToLong() != 0L }.toList().sortedByDescending { abs(it.second) }
-    val recent = entries.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt }).take(15)
     val hour = now.get(Calendar.HOUR_OF_DAY)
     val greeting = when {
         hour < 12 -> "Good morning"
@@ -152,59 +152,83 @@ fun HomeScreen(
             }
         }
 
-        if (owing.isNotEmpty()) {
-            item {
-                Box(Modifier.padding(horizontal = 16.dp)) {
-                    SectionHeader("People", owing.size, peopleOpen) { peopleOpen = !peopleOpen }
+        val nowMs = System.currentTimeMillis()
+        val sortedAll = entries.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt })
+        val todayList = sortedAll.filter { sameDay(it.date, nowMs) }
+        val dayGroups = sortedAll.filter { !sameDay(it.date, nowMs) && inMonth(it.date) }.groupBy { dayKey(it.date) }
+        val monthGroups = sortedAll.filter { !inMonth(it.date) }.groupBy { monthKey(it.date) }
+
+        item {
+            Box(Modifier.padding(horizontal = 16.dp).padding(top = 6.dp)) {
+                SectionHeader("Today", todayList.size, "today" in open, spentLabel(currency, todayList)) { toggle("today") }
+            }
+        }
+        if ("today" in open) {
+            if (todayList.isEmpty()) {
+                item {
+                    Text(
+                        if (entries.isEmpty()) "No entries yet. Tap the green mic and speak, e.g. \"Aaj 35 ka khana khaya\"."
+                        else "Nothing added today yet.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
+                    )
                 }
             }
-            if (peopleOpen) {
-                items(owing, key = { "p-" + it.first }) { (p, v) ->
-                    Panel(
-                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                        onClick = { onPeople(v > 0) }, padding = 12.dp
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Avatar(p)
-                            Spacer(Modifier.width(12.dp))
-                            Text(p, Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text(money(currency, abs(v)), fontWeight = FontWeight.Bold, color = if (v > 0) GreenIn else OrangeOwe)
-                                Text(if (v > 0) "will pay you" else "you will pay", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                    }
+            items(todayList, key = { it.id }) { e ->
+                Box(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) { TxRow(e, currency) { onEdit(e) } }
+            }
+        }
+
+        dayGroups.forEach { (key, list) ->
+            item(key = "dh-$key") {
+                Box(Modifier.padding(horizontal = 16.dp)) {
+                    SectionHeader(dayLabel(list.first().date), list.size, key in open, spentLabel(currency, list)) { toggle(key) }
+                }
+            }
+            if (key in open) {
+                items(list, key = { it.id }) { e ->
+                    Box(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) { TxRow(e, currency) { onEdit(e) } }
                 }
             }
         }
 
-        item {
-            Row(Modifier.padding(horizontal = 16.dp).padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.weight(1f)) { SectionHeader("Recent entries", null, recentOpen) { recentOpen = !recentOpen } }
-            }
-        }
-        if (recentOpen) {
-            if (recent.isEmpty()) {
-                item {
-                    Panel(Modifier.fillMaxWidth().padding(16.dp)) {
-                        Text("No entries yet", fontWeight = FontWeight.SemiBold)
-                        Text(
-                            "Tap the green mic below and speak, for example \"Aaj 35 ka khana khaya\" or \"Hamza ko 1000 diye 14 date\".",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp
-                        )
-                    }
+        monthGroups.forEach { (key, list) ->
+            item(key = "mh-$key") {
+                Box(Modifier.padding(horizontal = 16.dp)) {
+                    SectionHeader(
+                        SimpleDateFormat("MMMM yyyy", Locale.US).format(Date(list.first().date)),
+                        list.size, key in open, spentLabel(currency, list)
+                    ) { toggle(key) }
                 }
             }
-            items(recent, key = { it.id }) { e ->
-                Box(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) { TxRow(e, currency) { onEdit(e) } }
-            }
-            if (entries.size > recent.size) {
-                item {
-                    TextButton(onClick = onSeeAll, modifier = Modifier.padding(horizontal = 8.dp)) { Text("See all ${entries.size} entries ›") }
+            if (key in open) {
+                var lastDay = ""
+                list.forEach { e ->
+                    val d = dayKey(e.date)
+                    if (d != lastDay) {
+                        lastDay = d
+                        item(key = "md-$key-$d") {
+                            Text(
+                                dayLabel(e.date), fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 24.dp).padding(top = 8.dp)
+                            )
+                        }
+                    }
+                    item(key = e.id) {
+                        Box(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) { TxRow(e, currency) { onEdit(e) } }
+                    }
                 }
             }
         }
     }
+}
+
+private fun dayKey(ms: Long): String = cal(ms).let { "d" + it.get(Calendar.YEAR) + "-" + it.get(Calendar.DAY_OF_YEAR) }
+private fun monthKey(ms: Long): String = cal(ms).let { "m" + it.get(Calendar.YEAR) + "-" + it.get(Calendar.MONTH) }
+private fun spentLabel(currency: String, list: List<Entry>): String? {
+    val spent = list.filter { it.type == Type.KHARCHA }.sumOf { it.amount }
+    return if (spent > 0) money(currency, spent) else null
 }
 
 @Composable
