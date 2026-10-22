@@ -246,14 +246,15 @@ private fun MiniTile(label: String, value: AnnotatedString, glyph: String, color
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .clickable { onClick() }
             .padding(horizontal = 10.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
     ) {
         Box(
             Modifier.size(26.dp).clip(RoundedCornerShape(8.dp)).background(color.copy(alpha = 0.18f)),
             contentAlignment = Alignment.Center
         ) { Text(glyph, color = color, fontWeight = FontWeight.Bold) }
         Spacer(Modifier.width(8.dp))
-        Column {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(label, fontSize = 11.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(value, fontWeight = FontWeight.Bold, fontSize = 14.sp, lineHeight = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
@@ -263,6 +264,7 @@ private fun MiniTile(label: String, value: AnnotatedString, glyph: String, color
 @Composable
 private fun BigTile(label: String, value: AnnotatedString, sub: String, color: Color, modifier: Modifier, onClick: () -> Unit) {
     Panel(modifier, onClick = onClick, padding = 12.dp) {
+      Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 Modifier.size(26.dp).clip(RoundedCornerShape(8.dp)).background(color.copy(alpha = 0.18f)),
@@ -274,6 +276,7 @@ private fun BigTile(label: String, value: AnnotatedString, sub: String, color: C
         Spacer(Modifier.height(4.dp))
         Text(value, fontSize = 21.sp, lineHeight = 25.sp, fontWeight = FontWeight.ExtraBold, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(sub, fontSize = 11.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+      }
     }
 }
 
