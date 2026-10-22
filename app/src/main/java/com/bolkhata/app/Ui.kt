@@ -268,7 +268,8 @@ fun TxRow(e: Entry, currency: String, onClick: () -> Unit) {
                 )
                 Text(
                     timeLabel(e.createdAt),
-                    fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+                    fontSize = 9.sp, lineHeight = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                 )
             }
             Spacer(Modifier.width(8.dp))
