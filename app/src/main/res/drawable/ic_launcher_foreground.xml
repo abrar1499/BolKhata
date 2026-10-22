@@ -8,7 +8,7 @@
     <!-- shadow -->
     <path android:fillColor="#33000000" android:pathData="M37,43 h40 a7,7 0 0 1 7,7 v22 a7,7 0 0 1 -7,7 h-40 a7,7 0 0 1 -7,-7 v-22 a7,7 0 0 1 7,-7 z" />
     <!-- bill2 -->
-    <path android:fillColor="#9FDDB9" android:pathData="M42,30 l26,-4 a2,2 0 0 1 2.3,1.7 l2.4,15.3 h-30 z" />
+    <path android:fillColor="#E5484D" android:pathData="M42,30 l26,-4 a2,2 0 0 1 2.3,1.7 l2.4,15.3 h-30 z" />
     <!-- bill -->
     <path android:fillColor="#E3F7EC" android:pathData="M38,33 h28 a2,2 0 0 1 2,2 v8 h-32 v-8 a2,2 0 0 1 2,-2 z" />
     <!-- billline -->
@@ -18,7 +18,7 @@
     <!-- flap -->
     <path android:fillColor="#DDF2E6" android:pathData="M64,51 h17 v15 h-17 a5,5 0 0 1 -5,-5 v-5 a5,5 0 0 1 5,-5 z" />
     <!-- clasp -->
-    <path android:fillColor="#0B7A45" android:pathData="M67,58.5 m-3,0 a3,3 0 1 0 6,0 a3,3 0 1 0 -6,0" />
+    <path android:fillColor="#E5484D" android:pathData="M67,58.5 m-3,0 a3,3 0 1 0 6,0 a3,3 0 1 0 -6,0" />
     <!-- coinshadow -->
     <path android:fillColor="#33000000" android:pathData="M41,74 m-10,0 a10,10 0 1 0 20,0 a10,10 0 1 0 -20,0" />
     <!-- coin -->
