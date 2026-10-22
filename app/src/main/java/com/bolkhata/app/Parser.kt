@@ -88,10 +88,10 @@ object Parser {
     )
 
     private val splitRegex = Regex("""[,\n،۔]|(?<!\d)\.(?!\d)|\baur\b|\bphir\b|\band\b| اور | پھر """, RegexOption.IGNORE_CASE)
-    private val numberRegex = Regex("""(\d[\d,]*(?:\.\d+)?)(?:\s*(hazar|hazaar|hazzar|thousand|k|lakh|lac|ہزار|لاکھ)(?!\p{L}))?""", RegexOption.IGNORE_CASE)
+    private val numberRegex = Regex("""(\d[\d,]*(?:\.\d+)?)(?:\s*(hazar|hazaar|hazzar|thousand|k|lakh|lac|hundred|sau|ہزار|لاکھ|سو)(?!\p{L}))?""", RegexOption.IGNORE_CASE)
 
     fun parse(input: String, now: Long = System.currentTimeMillis()): Result {
-        val found = extractDate(normalizeDigits(input), now)
+        val found = extractDate(NumberWords.convert(normalizeDigits(input)), now)
         val date = found.first ?: now
         val text = found.second
         val entries = mutableListOf<Entry>()
@@ -104,7 +104,11 @@ object Parser {
             var amount = num.groupValues[1].replace(",", "").toDoubleOrNull() ?: continue
             val mult = num.groupValues[2].lowercase()
             if (mult.isNotEmpty()) {
-                amount *= if (mult.startsWith("l") || mult == "لاکھ") 100_000.0 else 1_000.0
+                amount *= when {
+                    mult.startsWith("l") || mult == "لاکھ" -> 100_000.0
+                    mult == "hundred" || mult == "sau" || mult == "سو" -> 100.0
+                    else -> 1_000.0
+                }
             }
             if (amount <= 0) continue
 
