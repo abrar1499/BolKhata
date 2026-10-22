@@ -249,6 +249,50 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         }
     }
 
+    /**
+     * "kachi eint ke pese abhi nahi diye" marks that purchase as on credit (the supplier goes in To pay);
+     * "Afzal ko eint ke pese de diye" marks it as paid. Returns false when no sale or purchase fits.
+     */
+    fun applyPayStatus(text: String): Boolean {
+        val st = Parser.payStatus(text) ?: return false
+        val trades = entries.filter { isTrade(it.type) }.sortedByDescending { it.createdAt }
+        if (trades.isEmpty()) return false
+        fun hit(e: Entry, k: String) = e.person.equals(k, ignoreCase = true) ||
+            e.item.lowercase().split(" ").any { w -> w.length >= 3 && (w.startsWith(k) || k.startsWith(w)) }
+        val target = trades.firstOrNull { e -> st.keywords.isNotEmpty() && st.keywords.all { k -> hit(e, k) } }
+            ?: trades.firstOrNull { e -> st.keywords.any { k -> hit(e, k) } }
+            ?: (if (st.mentionsMoney && st.keywords.isEmpty()) trades.first() else null)
+            ?: return false
+        val who = target.person.ifBlank { st.person }
+        if (!st.paid && who.isBlank()) {
+            toast("Who is it with? Say the name too, e.g. \"Afzal se li thi, pese nahi diye\"")
+            return true
+        }
+        val updated = target.copy(paid = st.paid, person = who)
+        // A cash payment saved with it in the same sentence did not happen after all.
+        val payType = if (target.type == Type.SALE) Type.WAPIS_MILA else Type.WAPIS_DIYA
+        val undone = if (st.paid) emptyList() else entries.filter {
+            it.type == payType && it.person.equals(who, true) && kotlin.math.abs(it.createdAt - target.createdAt) < 5_000
+        }
+        val undoneIds = undone.map { it.id }.toSet()
+        val after = entries.filter { it.id !in undoneIds }.map { if (it.id == target.id) updated else it }
+        val bal = balances(after).entries.firstOrNull { it.key.equals(who, true) }?.value ?: 0.0
+        val owe = when {
+            who.isBlank() -> ""
+            bal < -0.005 -> " · you will pay $who ${money(currency, -bal)}"
+            bal > 0.005 -> " · $who will pay you ${money(currency, bal)}"
+            else -> " · all settled with $who"
+        }
+        val label = target.item.ifBlank { if (target.type == Type.SALE) "Sale" else "Purchase" }
+        val msg = if (st.paid) "$label marked paid$owe" else "$label on credit$owe"
+        if (updated == target && undone.isEmpty()) {
+            toast(msg)
+        } else {
+            applyPlan(Ai.EditPlan(listOf(target to updated), undone, msg))
+        }
+        return true
+    }
+
     /** "hamza wali 500 ko 400 kar do", "last entry food mein daal do", "kal ka petrol 60 tha 50 nahi". */
     fun looksLikeEdit(text: String): Boolean {
         val t = " " + text.lowercase() + " "
@@ -304,6 +348,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             return
         }
         val r = Parser.parse(text)
+        if (r.entries.isEmpty() && r.unclear.isEmpty() && applyPayStatus(text)) return
         val unsure = r.unclear.isNotEmpty() || r.entries.isEmpty() ||
             r.entries.any { it.type == Type.KHARCHA && it.category == Cat.OTHER }
         if (!unsure || activeKey.isBlank()) {

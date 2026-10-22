@@ -209,11 +209,14 @@ fun isTrade(t: Type) = t == Type.SALE || t == Type.PURCHASE
 /** True when this entry changes what a person owes: loans, and sales or purchases on credit. */
 fun withPerson(e: Entry) = e.person.isNotBlank() && (isLoan(e.type) || isTrade(e.type))
 
+/** "On credit" / "Paid" for a sale or purchase with a person, else empty. */
+fun creditTag(e: Entry) = if (isTrade(e.type) && e.person.isNotBlank()) (if (e.paid) "Paid" else "On credit") else ""
+
 /** Positive = they owe me, negative = I owe them. */
 fun balances(entries: List<Entry>): Map<String, Double> {
     val map = linkedMapOf<String, Double>()
     for (e in entries) {
-        if (!withPerson(e)) continue
+        if (!withPerson(e) || e.paid) continue
         val p = e.person.trim()
         val v = map[p] ?: 0.0
         map[p] = when (e.type) {
@@ -372,7 +375,7 @@ fun TxRow(e: Entry, currency: String, onClick: () -> Unit) {
                     maxLines = 1, overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    timeLabel(e.createdAt),
+                    timeLabel(e.createdAt) + creditTag(e).let { if (it.isEmpty()) "" else "  ·  $it" },
                     fontSize = 9.sp, lineHeight = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                 )

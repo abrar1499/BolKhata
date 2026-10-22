@@ -94,6 +94,7 @@ fun EntryForm(
     var item by remember(initial.id) { mutableStateOf(if (initial.item == "Loans") "" else initial.item) }
     var qty by remember(initial.id) { mutableStateOf(if (initial.qty > 0) plain(initial.qty) else "") }
     var person by remember(initial.id) { mutableStateOf(initial.person) }
+    var paid by remember(initial.id) { mutableStateOf(initial.paid) }
     var date by remember(initial.id) { mutableLongStateOf(initial.date) }
     var note by remember(initial.id) { mutableStateOf(initial.note) }
     var showDate by remember { mutableStateOf(false) }
@@ -171,6 +172,13 @@ fun EntryForm(
                 label = { Text(if (isTrade(chosen)) "Customer / supplier (optional)" else "Person", fontSize = 12.sp) }, singleLine = true, textStyle = small,
                 shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()
             )
+            if (isTrade(chosen) && person.isNotBlank()) {
+                // On credit: the amount goes in To pay / To receive. Paid: settled in cash, khata unchanged.
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Pill("On credit", !paid, OrangeOwe) { paid = false }
+                    Pill("Paid now", paid, GreenIn) { paid = true }
+                }
+            }
         }
 
         if (chosen == Type.KHARCHA) {
@@ -259,6 +267,7 @@ fun EntryForm(
                                 item = finalItem,
                                 qty = qty.toDoubleOrNull() ?: 0.0,
                                 person = if (isLoan(t) || isTrade(t)) person.trim() else "",
+                                paid = isTrade(t) && person.isNotBlank() && paid,
                                 date = date,
                                 note = note.trim().ifBlank { finalItem }
                             )

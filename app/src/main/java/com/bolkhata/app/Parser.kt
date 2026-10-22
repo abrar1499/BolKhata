@@ -303,7 +303,7 @@ object Parser {
             val goods = (if (unit.isEmpty()) afterQty else afterQty.drop(1))
                 .takeWhile { w ->
                     val lw = w.lowercase()
-                    !isNumber(w) && lw !in goodsStop && lw !in clauseEnd && lw != person.lowercase() && lw !in knownPeople
+                    !isNumber(w) && lw !in goodsStop && lw !in cashWords && lw !in creditWords && lw !in clauseEnd && lw != person.lowercase() && lw !in knownPeople
                 }
                 .take(3).joinToString(" ").trim().replaceFirstChar { it.uppercase() }
 
@@ -328,6 +328,8 @@ object Parser {
             val income = incomeRules.firstOrNull { (_, keys) -> keys.any { matches(it, t, words) } }
             val isReturn = returnWords.any { matches(it, t, words) }
             val isLoan = loanWords.any { matches(it, t, words) }
+            // "Afzal se 1000 ki eint cash li": paid on the spot, so nobody owes anybody.
+            val cashNow = words.any { it in cashWords } && words.none { it in creditWords }
 
             when {
                 // "..., 10000 diye baqi udhaar" right after a sale or purchase: a part payment from or to that person.
@@ -338,14 +340,14 @@ object Parser {
                 asset != null && sells -> entries += make(Type.AAMDANI, Cat.ASSETS, "$asset (sold)", "")
                 asset != null && buys && person.isEmpty() -> entries += make(Type.KHARCHA, Cat.ASSETS, asset, "")
                 sells && person.isEmpty() -> entries += make(Type.SALE, Cat.SALES, goods.ifEmpty { "Sale" }, "")
-                sells && person.isNotEmpty() -> entries += make(Type.SALE, Cat.SALES, goods.ifEmpty { "Sale" }, person)
+                sells && person.isNotEmpty() -> entries += make(Type.SALE, Cat.SALES, goods.ifEmpty { "Sale" }, person).copy(paid = cashNow)
                 buys && trade && person.isEmpty() && matchSpending(t, words) == null ->
                     entries += make(Type.PURCHASE, Cat.STOCK, goods, "")
                 isReturn && person.isNotEmpty() -> {
                     val type = if (hasSe || hasNe || has(t, "mile", "mila", "ملے", "ملا", "received", "got")) Type.WAPIS_MILA else Type.WAPIS_DIYA
                     entries += make(type, Cat.UDHAAR, "Loans", person)
                 }
-                isLoan && person.isNotEmpty() -> {
+                isLoan && person.isNotEmpty() && !trade -> {
                     val type = if ((hasSe && !hasKo) || words.contains("borrowed")) Type.LIYA else Type.DIYA
                     entries += make(type, Cat.UDHAAR, "Loans", person)
                 }
@@ -363,8 +365,8 @@ object Parser {
                     }
                     when {
                         // Goods with a quantity are trade: a sale on credit or a purchase on credit.
-                        trade && type == Type.DIYA -> entries += make(Type.SALE, Cat.SALES, goods, person)
-                        trade && type == Type.LIYA -> entries += make(Type.PURCHASE, Cat.STOCK, goods, person)
+                        trade && type == Type.DIYA -> entries += make(Type.SALE, Cat.SALES, goods, person).copy(paid = cashNow)
+                        trade && type == Type.LIYA -> entries += make(Type.PURCHASE, Cat.STOCK, goods, person).copy(paid = cashNow)
                         // "Ahmed ne 5000 diye" when Ahmed owes me: he is paying back.
                         type == Type.LIYA && hasNe && owes > 0.005 -> entries += make(Type.WAPIS_MILA, Cat.UDHAAR, "Loans", person)
                         // "Ahmed ko 5000 diye" when I owe Ahmed: I am paying back.
@@ -402,6 +404,39 @@ object Parser {
 
     /** What each person owes now (lowercase name), positive = they owe me. Used to read payments correctly. */
     @Volatile var owed: Map<String, Double> = emptyMap()
+
+    private val cashWords = setOf("cash", "naqad", "nakad", "naqd", "nakd")
+    private val creditWords = setOf("udhaar", "udhar", "udhaari", "udhari", "credit", "baqi", "baki", "unpaid", "ادھار")
+
+    /** "kachi eint ke pese nahi diye abhi" / "Afzal ko eint ke pese de diye": says whether a sale or purchase is paid. */
+    class PayStatus(val paid: Boolean, val keywords: List<String>, val person: String, val mentionsMoney: Boolean)
+
+    private val noWords = setOf("ni", "nhi", "nahi", "nahin", "nai", "nahi.", "not", "na", "didnt", "nahe", "nhe")
+    private val moneyTalk = setOf("pese", "paise", "paisay", "paisa", "pesa", "pesay", "payment", "rakam", "raqam", "adaigi", "money", "amount", "bill")
+    private val payVerbs = setOf("diye", "diya", "di", "dia", "dye", "mile", "mila", "mili", "paid", "pay", "ada", "chuka", "chukaye", "clear", "received")
+    private val payStop = setOf(
+        "abhi", "abi", "tak", "ke", "ka", "ki", "ko", "se", "ne", "hain", "hai", "the", "thay", "tha", "thi", "wale", "wali", "wala",
+        "mene", "maine", "men", "main", "mein", "me", "usne", "us", "os", "osne", "unhon", "unho", "kar", "kr", "de", "do", "diye", "diya",
+        "liye", "liya", "li", "mujhe", "abhi", "bhi", "bi", "b", "and", "the", "for", "yet", "still"
+    ) + noWords + moneyTalk + payVerbs + creditWords + cashWords
+
+    fun payStatus(input: String): PayStatus? {
+        val t = input.lowercase().replace("didn't", "didnt")
+        if (t.any { it.isDigit() }) return null
+        val words = t.split(Regex("""[^\p{L}]+""")).filter { it.isNotEmpty() }
+        val neg = words.any { it in noWords }
+        val money = words.any { it in moneyTalk }
+        val verb = words.any { it in payVerbs }
+        val credit = words.any { it in creditWords }
+        val cash = words.any { it in cashWords }
+        val paid = when {
+            credit || (neg && (money || verb)) -> false
+            cash || (money && verb) || words.contains("paid") -> true
+            else -> return null
+        }
+        val keys = words.filter { it.length >= 3 && it !in payStop }
+        return PayStatus(paid, keys, findPerson(input), money)
+    }
 
     private val paidWords = setOf("diye", "diya", "di", "d", "cash", "naqad", "nakad", "paid", "advance", "jama", "mile", "mila", "received", "payment")
 

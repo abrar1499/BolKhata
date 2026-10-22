@@ -53,7 +53,9 @@ data class Entry(
     /** Unit for [qty], e.g. "kg", "pcs". Empty when not said. */
     val unit: String = "",
     /** Price per unit (or per 1000 for bricks) when said. 0 when not said. */
-    val rate: Double = 0.0
+    val rate: Double = 0.0,
+    /** Sale or purchase with a person that was settled in cash, so it does not go in the khata. */
+    val paid: Boolean = false
 )
 
 /** Saves entries on the phone itself (no internet needed). */
@@ -132,7 +134,8 @@ class Store(context: Context) {
                         createdAt = o.getLong("createdAt"),
                         qty = o.optDouble("qty", 0.0).let { if (it.isNaN()) 0.0 else it },
                         unit = o.optString("unit", ""),
-                        rate = o.optDouble("rate", 0.0).let { if (it.isNaN()) 0.0 else it }
+                        rate = o.optDouble("rate", 0.0).let { if (it.isNaN()) 0.0 else it },
+                        paid = o.optBoolean("paid", false)
                     )
                 } catch (e: Exception) {
                     null
@@ -162,6 +165,7 @@ class Store(context: Context) {
                     .put("qty", e.qty)
                     .put("unit", e.unit)
                     .put("rate", e.rate)
+                    .put("paid", e.paid)
             )
         }
         prefs.edit().putString(key, arr.toString()).apply()
