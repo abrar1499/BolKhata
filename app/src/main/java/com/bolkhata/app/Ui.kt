@@ -22,7 +22,10 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -262,7 +265,11 @@ fun TxRow(e: Entry, currency: String, onClick: () -> Unit) {
             Column(Modifier.weight(1f)) {
                 Text(entryTitle(e), fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
-                    dayLabel(e.date) + ", " + timeLabel(e.createdAt) + " · " + e.note,
+                    buildAnnotatedString {
+                        append(dayLabel(e.date))
+                        withStyle(SpanStyle(fontSize = 10.sp)) { append("  " + timeLabel(e.createdAt)) }
+                        append(" · " + e.note)
+                    },
                     fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1, overflow = TextOverflow.Ellipsis
                 )
