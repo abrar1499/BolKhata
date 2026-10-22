@@ -261,15 +261,6 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         return strong.any { t.contains(it) } || (soft.any { t.contains(it) } && refers.any { t.contains(it) })
     }
 
-    fun handleText(text: String) {
-        try {
-            handleTextSafely(text)
-        } catch (e: Exception) {
-            // Never close the app because a sentence was not understood.
-            toast("Sorry, I couldn't read that. Tap + to add it by hand.")
-        }
-    }
-
     fun handleTextSafely(text: String) {
         if (handleCommand(text)) return
         if (Questions.isQuestion(text)) {
@@ -332,6 +323,15 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             } catch (e: Exception) {
                 addOffline(r)
             }
+        }
+    }
+
+    fun handleText(text: String) {
+        try {
+            handleTextSafely(text)
+        } catch (e: Exception) {
+            // Never close the app because a sentence was not understood.
+            toast("Sorry, I couldn't read that. Tap + to add it by hand.")
         }
     }
 
