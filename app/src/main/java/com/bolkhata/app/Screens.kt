@@ -245,38 +245,38 @@ private fun MiniTile(label: String, value: AnnotatedString, glyph: String, color
             .clip(RoundedCornerShape(14.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .clickable { onClick() }
-            .padding(horizontal = 10.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center
+            .padding(start = 12.dp, end = 10.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
+        Column(Modifier.weight(1f)) {
+            Text(label, fontSize = 11.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(value, fontWeight = FontWeight.Bold, fontSize = 15.sp, lineHeight = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
         Box(
-            Modifier.size(26.dp).clip(RoundedCornerShape(8.dp)).background(color.copy(alpha = 0.18f)),
+            Modifier.size(28.dp).clip(CircleShape).background(color.copy(alpha = 0.18f)),
             contentAlignment = Alignment.Center
         ) { Text(glyph, color = color, fontWeight = FontWeight.Bold) }
-        Spacer(Modifier.width(8.dp))
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(label, fontSize = 11.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(value, fontWeight = FontWeight.Bold, fontSize = 14.sp, lineHeight = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
     }
 }
 
 @Composable
 private fun BigTile(label: String, value: AnnotatedString, sub: String, color: Color, modifier: Modifier, onClick: () -> Unit) {
     Panel(modifier, onClick = onClick, padding = 12.dp) {
-      Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(verticalAlignment = Alignment.Top) {
+            Column(Modifier.weight(1f)) {
+                Text(label, fontSize = 13.sp, lineHeight = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    value, fontSize = 21.sp, lineHeight = 25.sp, fontWeight = FontWeight.ExtraBold, color = color,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis
+                )
+                Text(sub, fontSize = 11.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             Box(
-                Modifier.size(26.dp).clip(RoundedCornerShape(8.dp)).background(color.copy(alpha = 0.18f)),
+                Modifier.size(32.dp).clip(CircleShape).background(color.copy(alpha = 0.16f)),
                 contentAlignment = Alignment.Center
-            ) { Text(if (color == RedSpend) "−" else "+", color = color, fontWeight = FontWeight.Bold, fontSize = 16.sp) }
-            Spacer(Modifier.width(8.dp))
-            Text(label, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            ) { Text(if (color == RedSpend) "↓" else "↑", color = color, fontWeight = FontWeight.Bold, fontSize = 17.sp) }
         }
-        Spacer(Modifier.height(4.dp))
-        Text(value, fontSize = 21.sp, lineHeight = 25.sp, fontWeight = FontWeight.ExtraBold, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(sub, fontSize = 11.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-      }
     }
 }
 
