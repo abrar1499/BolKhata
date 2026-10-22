@@ -47,6 +47,7 @@ fun HomeScreen(
     onUpdate: () -> Unit,
     onAdd: () -> Unit,
     onMenu: () -> Unit,
+    onSearch: () -> Unit,
     onEdit: (Entry) -> Unit,
     onPeople: (Boolean) -> Unit,
     onReports: () -> Unit,
@@ -103,6 +104,11 @@ fun HomeScreen(
                             Text(if (name.isBlank()) "Hello!" else "Hello, ${name.trim()}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                             Text(greeting, color = Color.White.copy(alpha = 0.85f), fontSize = 13.sp)
                         }
+                        IconButton(
+                            onClick = onSearch,
+                            modifier = Modifier.clip(CircleShape).background(Color.White.copy(alpha = 0.22f))
+                        ) { Icon(Icons.Filled.Search, contentDescription = "Search", tint = Color.White) }
+                        Spacer(Modifier.width(8.dp))
                         IconButton(
                             onClick = onAdd,
                             modifier = Modifier.clip(CircleShape).background(Color.White.copy(alpha = 0.22f))

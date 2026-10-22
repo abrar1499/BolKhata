@@ -24,6 +24,7 @@ import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -79,6 +80,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit) {
     var adding by remember { mutableStateOf(false) }
     var pending by remember { mutableStateOf(listOf<Entry>()) }
     var moreFor by remember { mutableStateOf<Entry?>(null) }
+    var searching by remember { mutableStateOf(false) }
     var results by remember { mutableStateOf<Pair<String, Boolean>?>(null) }      // query, edit mode
     var confirm by remember { mutableStateOf<Pair<String, Set<String>>?>(null) }  // message, ids to delete  // entries the app did not understand
     var newVersion by remember { mutableStateOf<UpdateInfo?>(null) }
@@ -249,7 +251,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit) {
                 tab == Tab.HOME -> HomeScreen(
                     name = name, entries = entries, currency = currency,
                     newVersion = newVersion, progress = progress, onUpdate = { startUpdate() },
-                    onAdd = { adding = true }, onMenu = { openMenu() }, onEdit = { editing = it },
+                    onAdd = { adding = true }, onMenu = { openMenu() }, onSearch = { searching = true }, onEdit = { editing = it },
                     onPeople = { people = it }, onReports = { tab = Tab.REPORTS }, onSeeAll = { tab = Tab.ENTRIES }
                 )
                 tab == Tab.ENTRIES -> TransactionsScreen(entries, currency, onEdit = { editing = it }, onAdd = { adding = true }, onMenu = { openMenu() })
@@ -335,6 +337,39 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit) {
                 onDelete = null,
                 onCancel = { moreFor = null }
             )
+        }
+    }
+
+    if (searching) {
+        var q by remember { mutableStateOf("") }
+        fun go() {
+            val t = q.trim()
+            if (t.isNotEmpty()) {
+                searching = false
+                people = null
+                results = t to false
+            }
+        }
+        FormPopup(onDismiss = { searching = false }) {
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Search", fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                OutlinedTextField(
+                    value = q, onValueChange = { q = it },
+                    placeholder = { Text("Name, item or category… e.g. hamza, roti, food") },
+                    leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                    singleLine = true, shape = RoundedCornerShape(14.dp),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { go() }),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { searching = false }, shape = RoundedCornerShape(14.dp)) { Text("Cancel") }
+                    Button(
+                        onClick = { go() }, enabled = q.isNotBlank(),
+                        shape = RoundedCornerShape(14.dp), modifier = Modifier.weight(1f)
+                    ) { Text("Search") }
+                }
+            }
         }
     }
 
