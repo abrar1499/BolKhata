@@ -89,7 +89,8 @@ fun EntryForm(
     var type by remember(initial.id) { mutableStateOf<Type?>(if (askType) null else initial.type) }
     var cat by remember(initial.id) { mutableStateOf(if (initial.category == Cat.UDHAAR || initial.category == Cat.TANKHWAH) Cat.OTHER else initial.category) }
     var amount by remember(initial.id) { mutableStateOf(if (initial.amount > 0) plain(initial.amount) else "") }
-    var item by remember(initial.id) { mutableStateOf(initial.item) }
+    var item by remember(initial.id) { mutableStateOf(if (initial.item == "Loans") "" else initial.item) }
+    var qty by remember(initial.id) { mutableStateOf(if (initial.qty > 0) plain(initial.qty) else "") }
     var person by remember(initial.id) { mutableStateOf(initial.person) }
     var date by remember(initial.id) { mutableLongStateOf(initial.date) }
     var note by remember(initial.id) { mutableStateOf(initial.note) }
@@ -181,13 +182,31 @@ fun EntryForm(
             }
         }
 
-        if (chosen == Type.KHARCHA || chosen == Type.AAMDANI) {
-            OutlinedTextField(
-                value = item, onValueChange = { item = it },
-                label = { Text(if (chosen == Type.AAMDANI) "Item (Salary, Bonus…)" else "Item (Petrol, Milk…)", fontSize = 12.sp) },
-                singleLine = true, textStyle = small,
-                shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()
-            )
+        if (chosen != null) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = item, onValueChange = { item = it },
+                    label = {
+                        Text(
+                            when {
+                                isLoan(chosen) -> "Goods (optional)"
+                                chosen == Type.AAMDANI -> "Item (Salary, Bonus…)"
+                                else -> "Item (Petrol, Milk…)"
+                            },
+                            fontSize = 12.sp
+                        )
+                    },
+                    singleLine = true, textStyle = small,
+                    shape = RoundedCornerShape(14.dp), modifier = Modifier.weight(1f)
+                )
+                OutlinedTextField(
+                    value = qty, onValueChange = { v -> qty = v.filter { it.isDigit() || it == '.' } },
+                    label = { Text("Qty", fontSize = 12.sp) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    singleLine = true, textStyle = small,
+                    shape = RoundedCornerShape(14.dp), modifier = Modifier.width(90.dp)
+                )
+            }
         }
 
         OutlinedTextField(
@@ -217,11 +236,12 @@ fun EntryForm(
                     chosen?.let { t ->
                         val finalCat = when {
                             isLoan(t) -> Cat.UDHAAR
+                            t == Type.AAMDANI && cat == Cat.ASSETS -> Cat.ASSETS
                             t == Type.AAMDANI -> Cat.TANKHWAH
                             else -> cat
                         }
                         val finalItem = when {
-                            isLoan(t) -> "Loans"
+                            isLoan(t) -> item.trim().ifBlank { "Loans" }
                             item.isNotBlank() -> item.trim()
                             t == Type.AAMDANI -> "Income"
                             else -> finalCat.label
@@ -232,6 +252,7 @@ fun EntryForm(
                                 amount = amountValue ?: 0.0,
                                 category = finalCat,
                                 item = finalItem,
+                                qty = qty.toDoubleOrNull() ?: 0.0,
                                 person = if (isLoan(t)) person.trim() else "",
                                 date = date,
                                 note = note.trim().ifBlank { finalItem }

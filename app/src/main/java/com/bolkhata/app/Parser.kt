@@ -89,7 +89,7 @@ object Parser {
     private val loanWords = listOf("udhaar", "udhar", "qarz", "karz", "qarza", "loan", "lent", "borrowed", "ادھار", "قرض")
     private val returnWords = listOf("wapis", "wapas", "lauta", "lotaye", "return", "returned", "واپس", "لوٹا")
     private val takeWords = listOf("liye", "liya", "li", "lia", "took", "borrowed", "لیے", "لیا")
-    private val giveWords = listOf("give", "gave", "given", "diye", "diya", "diay", "dye", "de", "dia", "دیے", "دیا")
+    private val giveWords = listOf("give", "gave", "given", "diye", "diya", "diay", "dye", "de", "dia", "d", "دیے", "دیا")
 
     private val notNames = setOf(
         "ghar", "aaj", "kal", "maine", "main", "mujhe", "dukan", "dukaan", "market", "shop", "store", "baqala",
@@ -105,7 +105,8 @@ object Parser {
         "diye", "diya", "di", "diay", "dye", "liye", "liya", "li", "lia", "le", "khai", "khaya", "khaye", "khaaya",
         "khaai", "piya", "pi", "pee", "bheje", "bheja", "bheji", "bhejay", "dala", "dali", "dalwaya", "dalwaye",
         "kharida", "kharide", "kharidi", "bharwaya", "karwaya", "karwayi", "mile", "mila", "mili", "aaye", "aya",
-        "gave", "paid", "spent", "bought", "took", "received", "sent", "returned", "lent", "borrowed",
+        "gave", "paid", "spent", "bought", "took", "received", "sent", "returned", "lent", "borrowed", "d",
+        "becha", "bechi", "beche", "sold", "dali", "daali", "dalwai", "laya", "layi", "kharida", "khareeda",
         "hai", "hain", "tha", "thay", "the", "دیے", "دیا", "لیے", "لیا", "کھائی", "کھایا", "بھیجے"
     )
 
@@ -118,6 +119,33 @@ object Parser {
     )
 
     private fun isNumber(w: String) = w.any { it.isDigit() }
+
+    /** Words that start a new spoken entry. */
+    private val clauseStart = setOf("mene", "maine", "men", "main", "aaj", "aj", "kal", "ar", "aur", "phir", "then", "today", "yesterday")
+
+    /** Words after a number that mark it as the price: "17000 ki", "13000 ka", "1000 rate". */
+    private val priceMarkers = setOf("ka", "ki", "ke", "kay", "wala", "wali", "wale", "rate")
+
+    private val priceRegex = Regex("""(\d[\d,]*(?:\.\d+)?)\s*(?:ka|ki|ke|kay|wala|wali|wale)(?!\p{L})""", RegexOption.IGNORE_CASE)
+    private val rateRegex = Regex("""(?:rate\s*(?:hai|he|is|=|:)?\s*(\d[\d,]*(?:\.\d+)?))|(?:(\d[\d,]*(?:\.\d+)?)\s*(?:ka\s*|ki\s*)?rate)""", RegexOption.IGNORE_CASE)
+
+    private val assetWords = linkedMapOf(
+        "mobile" to "Mobile", "phone" to "Mobile", "iphone" to "Mobile", "laptop" to "Laptop", "computer" to "Computer",
+        "tv" to "TV", "fridge" to "Fridge", "ac" to "AC", "car" to "Car", "gaari" to "Car", "gari" to "Car", "gaadi" to "Car",
+        "bike" to "Bike", "motorcycle" to "Motorcycle", "gold" to "Gold", "sona" to "Gold", "plot" to "Plot",
+        "zameen" to "Land", "land" to "Land", "furniture" to "Furniture", "sofa" to "Sofa", "watch" to "Watch", "ghari" to "Watch"
+    )
+    private val buyWords = setOf("liya", "li", "lia", "liye", "kharida", "kharidi", "kharide", "khareeda", "khareedi", "bought", "purchased", "purchase", "new", "naya", "nayi")
+    private val sellWords = setOf("becha", "bechi", "beche", "bech", "bechdiya", "sold", "sell", "sale", "فروخت")
+    private val neGiveWords = setOf("di", "diya", "diye", "d", "dali", "dala", "daali", "dalwai", "bheji", "bheja", "bheje", "laya", "layi", "gave", "sent", "delivered")
+
+    /** Words that are never part of a goods name. */
+    private val goodsStop = setOf(
+        "ne", "ko", "se", "ka", "ki", "ke", "kay", "rate", "hai", "he", "tha", "the", "aur", "ar", "mene", "maine", "men",
+        "aaj", "aj", "kal", "wala", "wali", "wale"
+    )
+
+    private fun overlaps(a: IntRange, b: IntRange) = a.first <= b.last && b.first <= a.last
 
     /** "2 kilo", "3 packet": a count, not money. */
     private val unitWords = setOf(
@@ -140,10 +168,38 @@ object Parser {
         val words = s.trim().split(Regex("""\s+""")).filter { it.isNotEmpty() }
         val pieces = mutableListOf<List<String>>()
         var cur = mutableListOf<String>()
+        var cutAt = -1
         words.forEachIndexed { i, w ->
             cur.add(w)
             val rest = words.subList(i + 1, words.size)
-            if (w.lowercase() in clauseEnd && cur.any { isNumber(it) } && rest.any { isNumber(it) }) {
+            val lw = w.lowercase()
+            if (i == cutAt) {
+                if (rest.any { isNumber(it) }) {
+                    pieces.add(cur)
+                    cur = mutableListOf()
+                }
+                cutAt = -1
+                return@forEachIndexed
+            }
+            if (cutAt > i) return@forEachIndexed
+            val curHasNumber = cur.any { isNumber(it) }
+            // "...li 17000 ki": the price right after the verb belongs to this entry.
+            // A price is a suffix ("li 17000 ki | 2000 ...") only when what follows starts a new entry,
+            // not an item ("diye | 10 ki roti khai").
+            val priceNext = rest.size >= 2 && isNumber(rest[0]) && rest[1].lowercase() in priceMarkers &&
+                (rest[1].lowercase() == "rate" || rest.size == 2 || isNumber(rest[2]) || rest[2].lowercase() in clauseStart)
+            if (lw in clauseEnd && curHasNumber && rest.any { isNumber(it) }) {
+                if (priceNext) {
+                    cutAt = i + 2
+                } else {
+                    pieces.add(cur)
+                    cur = mutableListOf()
+                }
+            } else if (lw in priceMarkers && i > 0 && isNumber(words[i - 1]) && rest.any { isNumber(it) } &&
+                cur.dropLast(2).any { !isNumber(it) } &&
+                (isNumber(rest[0]) || rest[0].lowercase() in clauseStart || rest.getOrNull(1)?.lowercase() in setOf("ne", "ko", "se"))
+            ) {
+                // "mobile becha 13000 ka | aaj mobile liya 20000 ka": a price after the item ends the entry.
                 pieces.add(cur)
                 cur = mutableListOf()
             }
@@ -152,7 +208,9 @@ object Parser {
 
         val out = mutableListOf<String>()
         for (p in pieces) {
-            val hasCurrency = p.any { it.lowercase() in currencyWords }
+            val hasCurrency = p.any { it.lowercase() in currencyWords } ||
+                p.indices.any { i -> p[i].lowercase() in priceMarkers && i > 0 && isNumber(p[i - 1]) } ||
+                p.any { it.lowercase() == "rate" }
             val numIdx = p.indices.filter { isNumber(p[it]) && p.getOrNull(it + 1)?.lowercase() !in unitWords }
             if (hasCurrency || numIdx.size < 2) {
                 out.add(p.joinToString(" "))
@@ -170,7 +228,7 @@ object Parser {
         return out
     }
 
-    private val splitRegex = Regex("""[,\n،۔]|(?<!\d)\.(?!\d)|\baur\b|\bphir\b|\band\b| اور | پھر """, RegexOption.IGNORE_CASE)
+    private val splitRegex = Regex("""[,\n،۔]|(?<!\d)\.(?!\d)|\baur\b|\bar\b|\bphir\b|\band\b| اور | پھر """, RegexOption.IGNORE_CASE)
     private val numberRegex = Regex("""(\d[\d,]*(?:\.\d+)?)(?:\s*(hazar|hazaar|hazzar|thousand|k|lakh|lac|hundred|sau|ہزار|لاکھ|سو)(?!\p{L}))?""", RegexOption.IGNORE_CASE)
 
     fun parse(input: String, now: Long = System.currentTimeMillis()): Result {
@@ -194,11 +252,22 @@ object Parser {
         for (raw in parts) {
             val part = raw.trim().replace(Regex("""\s+"""), " ")
             if (part.isEmpty()) continue
+            val rateMatch = rateRegex.find(part)
+            val rateValue = rateMatch?.let { m -> (m.groupValues[1].ifEmpty { m.groupValues[2] }).replace(",", "").toDoubleOrNull() } ?: 0.0
             val num = moneyRegex.find(part)
-                ?: numberRegex.findAll(part).firstOrNull { !isQuantity(part, it.range.last) }
+                ?: priceRegex.find(part)
+                ?: numberRegex.findAll(part).firstOrNull { !isQuantity(part, it.range.last) && (rateMatch == null || !overlaps(it.range, rateMatch.range)) }
+                ?: rateMatch?.let { m -> numberRegex.find(part, m.range.first) }
                 ?: numberRegex.find(part)
                 ?: continue
             var amount = num.groupValues[1].replace(",", "").toDoubleOrNull() ?: continue
+            // "1000 kachi eint, 1000 rate": no price was said, so the number is how many and the rate is the price.
+            val priced = moneyRegex.containsMatchIn(part) || priceRegex.containsMatchIn(part)
+            var rateQty = 0.0
+            if (!priced && rateValue > 0 && rateMatch != null && !overlaps(num.range, rateMatch.range)) {
+                rateQty = amount
+                amount = rateValue
+            }
             val mult = num.groupValues[2].lowercase()
             if (mult.isNotEmpty()) {
                 amount *= when {
@@ -220,11 +289,33 @@ object Parser {
             }
             val takes = takeWords.any { words.contains(it) }
 
+            // Another number that is not the price: a quantity, with the goods named after it ("1000 awal eint").
+            val qtyMatch = if (rateQty > 0) num else numberRegex.findAll(part).firstOrNull { m ->
+                !overlaps(m.range, num.range) && (rateMatch == null || !overlaps(m.range, rateMatch.range))
+            }
+            val qty = if (rateQty > 0) rateQty else qtyMatch?.groupValues?.get(1)?.replace(",", "")?.toDoubleOrNull() ?: 0.0
+            val afterQty = qtyMatch?.let { part.substring(it.range.last + 1).trim().split(Regex("""\s+""")) }.orEmpty()
+            val unit = afterQty.firstOrNull()?.lowercase()?.takeIf { it in unitWords } ?: ""
+            val goods = (if (unit.isEmpty()) afterQty else afterQty.drop(1))
+                .takeWhile { w ->
+                    val lw = w.lowercase()
+                    !isNumber(w) && lw !in goodsStop && lw !in clauseEnd && lw != person.lowercase() && lw !in knownPeople
+                }
+                .take(3).joinToString(" ").trim().replaceFirstChar { it.uppercase() }
+
             fun make(type: Type, cat: Cat, item: String, who: String) = Entry(
                 id = "e" + System.nanoTime() + entries.size + unclear.size,
-                type = type, amount = amount, category = cat, item = item, person = who,
-                note = part, date = date, createdAt = System.currentTimeMillis()
+                type = type, amount = amount, category = cat,
+                item = if (isLoan(type) && goods.isNotEmpty()) goods else item,
+                person = who,
+                note = part, date = date, createdAt = System.currentTimeMillis(),
+                qty = if (qty > 0 && (goods.isNotEmpty() || unit.isNotEmpty())) qty else 0.0,
+                unit = unit, rate = rateValue
             )
+
+            val asset = assetWords.entries.firstOrNull { (k, _) -> words.contains(k) }?.value
+            val sells = sellWords.any { words.contains(it) }
+            val buys = buyWords.any { words.contains(it) }
 
             val spend = matchSpending(t, words)
             val income = incomeRules.firstOrNull { (_, keys) -> keys.any { matches(it, t, words) } }
@@ -232,6 +323,11 @@ object Parser {
             val isLoan = loanWords.any { matches(it, t, words) }
 
             when {
+                asset != null && sells -> entries += make(Type.AAMDANI, Cat.ASSETS, "$asset (sold)", "")
+                asset != null && buys && person.isEmpty() -> entries += make(Type.KHARCHA, Cat.ASSETS, asset, "")
+                sells && person.isEmpty() -> entries += make(
+                    Type.AAMDANI, Cat.TANKHWAH, if (goods.isNotEmpty()) "$goods (sold)" else "Sale", ""
+                )
                 isReturn && person.isNotEmpty() -> {
                     val type = if (hasSe || hasNe || has(t, "mile", "mila", "ملے", "ملا", "received", "got")) Type.WAPIS_MILA else Type.WAPIS_DIYA
                     entries += make(type, Cat.UDHAAR, "Loans", person)
@@ -242,8 +338,16 @@ object Parser {
                 }
                 income != null -> entries += make(Type.AAMDANI, Cat.TANKHWAH, income.first, "")
                 spend != null -> entries += make(Type.KHARCHA, spend.first, spend.second, "")
-                person.isNotEmpty() && (hasKo || hasSe || hasNe || takes || giveWords.any { words.contains(it) }) -> {
-                    val type = if ((hasSe && !hasKo) || (takes && !hasKo)) Type.LIYA else Type.DIYA
+                person.isNotEmpty() && (hasKo || hasSe || hasNe || takes || giveWords.any { words.contains(it) } ||
+                    neGiveWords.any { words.contains(it) }) -> {
+                    val type = when {
+                        // "Ashraf ne li": Ashraf took from me, so he owes me.
+                        hasNe && takes -> Type.DIYA
+                        // "Ashraf ne dali / di": Ashraf gave or delivered to me, so I owe him.
+                        hasNe && neGiveWords.any { words.contains(it) } -> Type.LIYA
+                        (hasSe && !hasKo) || (takes && !hasKo) -> Type.LIYA
+                        else -> Type.DIYA
+                    }
                     entries += make(type, Cat.UDHAAR, "Loans", person)
                 }
                 else -> {

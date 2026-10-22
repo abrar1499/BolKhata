@@ -70,6 +70,7 @@ private val catWords = mapOf(
     Cat.FEES to "fees visa permit fine govt",
     Cat.EDU to "education school books fees",
     Cat.CHARITY to "charity gift zakat sadqa",
+    Cat.ASSETS to "assets asset mobile phone car laptop gold",
     Cat.OTHER to "other"
 )
 

@@ -28,6 +28,7 @@ enum class Cat(val label: String, val icon: String) {
     FEES("Fees & Govt", "🏛️"),
     EDU("Education", "📚"),
     CHARITY("Gifts & Charity", "🎁"),
+    ASSETS("Assets", "🏷️"),
     OTHER("Other", "📝")
 }
 
@@ -42,7 +43,13 @@ data class Entry(
     val person: String,
     val note: String,
     val date: Long,
-    val createdAt: Long
+    val createdAt: Long,
+    /** How many, e.g. 1000 bricks or 2 kg. 0 when not said. */
+    val qty: Double = 0.0,
+    /** Unit for [qty], e.g. "kg", "pcs". Empty when not said. */
+    val unit: String = "",
+    /** Price per unit (or per 1000 for bricks) when said. 0 when not said. */
+    val rate: Double = 0.0
 )
 
 /** Saves entries on the phone itself (no internet needed). */
@@ -118,7 +125,10 @@ class Store(context: Context) {
                         person = o.optString("person", ""),
                         note = o.optString("note", ""),
                         date = o.getLong("date"),
-                        createdAt = o.getLong("createdAt")
+                        createdAt = o.getLong("createdAt"),
+                        qty = o.optDouble("qty", 0.0).let { if (it.isNaN()) 0.0 else it },
+                        unit = o.optString("unit", ""),
+                        rate = o.optDouble("rate", 0.0).let { if (it.isNaN()) 0.0 else it }
                     )
                 } catch (e: Exception) {
                     null
@@ -145,6 +155,9 @@ class Store(context: Context) {
                     .put("note", e.note)
                     .put("date", e.date)
                     .put("createdAt", e.createdAt)
+                    .put("qty", e.qty)
+                    .put("unit", e.unit)
+                    .put("rate", e.rate)
             )
         }
         prefs.edit().putString(key, arr.toString()).apply()

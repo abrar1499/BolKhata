@@ -109,6 +109,7 @@ fun catColor(c: Cat): Color = when (c) {
     Cat.FEES -> Color(0xFF6366F1)
     Cat.EDU -> Color(0xFF0EA5E9)
     Cat.CHARITY -> Color(0xFFDB2777)
+    Cat.ASSETS -> Color(0xFF7C3AED)
     Cat.OTHER -> Color(0xFF94A3B8)
 }
 
@@ -240,6 +241,13 @@ fun typeLabel(t: Type, person: String): String {
     }
 }
 
+/** "1000 Awal eint", "2 kg Cheeni"; empty when no quantity was said. */
+fun qtyText(e: Entry): String {
+    if (e.qty <= 0) return ""
+    val item = if (e.item.isBlank() || e.item == "Loans") "" else e.item
+    return listOf(fmt(e.qty), e.unit, item).filter { it.isNotBlank() }.joinToString(" ")
+}
+
 fun entryTitle(e: Entry): String = when {
     isLoan(e.type) -> typeLabel(e.type, e.person)
     e.item.isNotBlank() -> e.item
@@ -327,7 +335,9 @@ fun TxRow(e: Entry, currency: String, onClick: () -> Unit) {
             Column(Modifier.weight(1f)) {
                 Text(entryTitle(e), fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
-                    dayLabel(e.date) + " · " + e.note,
+                    dayLabel(e.date) + " · " + qtyText(e).ifBlank {
+                        if (isLoan(e.type) && e.item.isNotBlank() && e.item != "Loans") e.item else e.note
+                    },
                     fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1, overflow = TextOverflow.Ellipsis
                 )

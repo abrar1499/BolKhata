@@ -26,7 +26,9 @@ object Questions {
         "this", "month", "mahine", "mahina", "saal", "year", "aaj", "today", "kal", "yesterday", "pichle", "pichhle",
         "last", "kharcha", "kharch", "expense", "expenses", "hisaab", "hisab", "balance", "baqi", "baki", "bacha", "bache",
         "kul", "sum", "abhi", "tak", "ab", "mujhe", "maine", "mene", "men", "my", "mera", "meri", "mere", "wapis", "wapas",
-        "lena", "dena", "hai?", "so", "far", "all", "time", "sab", "poora", "pura", "income", "aamdani", "kamaya", "kamai"
+        "lena", "dena", "hai?", "so", "far", "all", "time", "sab", "poora", "pura", "income", "aamdani", "kamaya", "kamai",
+        "aayi", "aaya", "aaye", "ayi", "aya", "laga", "lagi", "lage", "huwa", "hui", "lagaya", "kharchi", "kharcha?", "mahiny",
+        "mahinay", "total?", "ab", "tak", "es", "iss", "us", "is"
     )
 
     private enum class Period(val label: String) { TODAY("today"), YESTERDAY("yesterday"), MONTH("this month"), LAST_MONTH("last month"), YEAR("this year"), ALL("so far") }
@@ -45,7 +47,7 @@ object Questions {
             words.contains("kal") || words.contains("yesterday") -> Period.YESTERDAY
             (words.contains("pichle") || words.contains("pichhle") || words.contains("last")) &&
                 (words.contains("mahine") || words.contains("month")) -> Period.LAST_MONTH
-            words.contains("mahine") || words.contains("mahina") || words.contains("month") -> Period.MONTH
+            words.any { it in setOf("mahine", "mahina", "mahiny", "mahinay", "month") } -> Period.MONTH
             words.contains("saal") || words.contains("year") -> Period.YEAR
             else -> null
         }
@@ -84,24 +86,28 @@ object Questions {
             return Answer("Income ${period.label}: ${money(currency, sum)}", "income")
         }
 
-        // 3. A category or item ("food", "petrol", "roti")
+        // 3. A category or item ("food", "petrol", "cheeni", "eint", "mobile")
         if (rest.isNotEmpty()) {
             val query = rest.joinToString(" ")
             val byCat = Cat.entries.firstOrNull { c -> rest.any { w -> c.label.lowercase().split(" ", "&", "/").any { it == w } } }
+            // Exact words in the item or note come first ("cheeni" means cheeni, not all groceries).
+            val textHits = inPeriod.filter { e -> rest.any { w -> e.item.lowercase().contains(w) || e.note.lowercase().contains(w) } }
             val guess = Parser.guessCategory(query)
-            val spends = inPeriod.filter { it.type == Type.KHARCHA }
             val list = when {
-                byCat != null -> spends.filter { it.category == byCat }
-                guess != null -> spends.filter { e ->
-                    e.category == guess.first && (e.item == guess.second || matchEntries(listOf(e), query).isNotEmpty())
-                }
-                else -> spends.filter { matchEntries(listOf(it), query).isNotEmpty() }
+                byCat != null -> inPeriod.filter { it.category == byCat }
+                textHits.isNotEmpty() -> textHits
+                guess != null -> inPeriod.filter { it.type == Type.KHARCHA && it.category == guess.first }
+                else -> emptyList()
             }
             if (list.isEmpty() && byCat == null && guess == null) return null
-            val label = byCat?.label ?: guess?.second ?: query
-            val sum = list.sumOf { it.amount }
+            val label = byCat?.label ?: query.replaceFirstChar { it.uppercase() }
+            val spent = list.filter { it.type == Type.KHARCHA }.sumOf { it.amount }
+            val other = list.filter { it.type != Type.KHARCHA }.sumOf { it.amount }
+            val qty = list.filter { it.qty > 0 }.groupBy { it.unit }.map { (u, v) -> fmt(v.sumOf { it.qty }) + (if (u.isBlank()) "" else " $u") }
+            val qtyText = if (qty.isEmpty()) "" else " · qty " + qty.joinToString(", ")
+            val moneyText = if (spent > 0 || other == 0.0) money(currency, spent + other) else money(currency, other)
             return Answer(
-                "$label ${period.label}: ${money(currency, sum)} (${list.size} " + (if (list.size == 1) "entry" else "entries") + ")",
+                "$label ${period.label}: $moneyText$qtyText (${list.size} " + (if (list.size == 1) "entry" else "entries") + ")",
                 rest.first()
             )
         }

@@ -58,7 +58,7 @@ object Ai {
     private val catNames = mapOf(
         Cat.KHANA to "food", Cat.TRANSPORT to "transport", Cat.RENT to "rent", Cat.BIJLI to "bills",
         Cat.MOBILE to "mobile", Cat.GHAR to "home", Cat.SHOPPING to "shopping", Cat.SEHAT to "health",
-        Cat.PERSONAL to "personal", Cat.FEES to "fees", Cat.EDU to "education", Cat.CHARITY to "charity",
+        Cat.PERSONAL to "personal", Cat.ASSETS to "assets", Cat.FEES to "fees", Cat.EDU to "education", Cat.CHARITY to "charity",
         Cat.TANKHWAH to "income", Cat.UDHAAR to "loans", Cat.OTHER to "other"
     )
 
@@ -73,7 +73,7 @@ object Ai {
                     JSONObject().put("n", i + 1).put("date", day.format(Date(e.date)))
                         .put("type", typeNames[e.type]).put("amount", e.amount)
                         .put("category", catNames[e.category]).put("item", e.item)
-                        .put("person", e.person).put("note", e.note)
+                        .put("person", e.person).put("note", e.note).put("qty", e.qty)
                 )
             }
             val today = SimpleDateFormat("yyyy-MM-dd (EEEE)", Locale.US).format(Date())
@@ -87,9 +87,9 @@ Instruction: "${instruction.replace("\"", "'")}"
 
 Find the entries the instruction is about and say what to change. Change only what was asked.
 Return ONLY JSON:
-{"edits":[{"n":1,"type":"","amount":0,"category":"","item":"","person":"","date":"YYYY-MM-DD"}],"delete":[n,...],"message":"one short English sentence describing the change"}
+{"edits":[{"n":1,"type":"","amount":0,"category":"","item":"","qty":0,"person":"","date":"YYYY-MM-DD"}],"delete":[n,...],"message":"one short English sentence describing the change"}
 In edits include only fields that change. type: expense, income, gave, took, got_back, paid_back.
-category: food, transport, rent, bills, mobile, home, shopping, health, personal, fees, education, charity, other.
+category: food, transport, rent, bills, mobile, home, shopping, health, personal, assets, fees, education, charity, other.
 If nothing matches, return {"edits":[],"delete":[],"message":"I couldn't find that entry."}
 """.trim()
             val json = JSONObject(request(prompt, key, store))
@@ -106,9 +106,11 @@ If nothing matches, return {"edits":[],"delete":[],"message":"I couldn't find th
                 if (o.has("item")) o.optString("item").trim().takeIf { it.isNotEmpty() }?.let { e = e.copy(item = it) }
                 if (o.has("person")) e = e.copy(person = o.optString("person").trim().replaceFirstChar { it.uppercase() })
                 if (o.has("date")) parseDate(o.optString("date"))?.let { e = e.copy(date = it) }
+                if (o.has("qty")) o.optDouble("qty").takeIf { !it.isNaN() && it >= 0 }?.let { e = e.copy(qty = it) }
                 // keep category consistent with the type
                 e = when {
-                    isLoan(e.type) -> e.copy(category = Cat.UDHAAR, item = "Loans")
+                    isLoan(e.type) -> e.copy(category = Cat.UDHAAR, item = e.item.ifBlank { "Loans" })
+                    e.type == Type.AAMDANI && e.category == Cat.ASSETS -> e.copy(person = "")
                     e.type == Type.AAMDANI -> e.copy(category = Cat.TANKHWAH, person = "")
                     e.category == Cat.UDHAAR || e.category == Cat.TANKHWAH -> e.copy(category = Cat.OTHER, item = "Other", person = "")
                     else -> e.copy(person = "")
@@ -161,7 +163,7 @@ If nothing matches, return {"edits":[],"delete":[],"message":"I couldn't find th
 You turn what a person said about money into ledger entries. They may speak English, Roman Urdu, Urdu, Hindi or Arabic, often mixed. Amounts are in $currency.
 Today is $today.
 
-Return ONLY JSON: {"entries":[{"type":"","amount":0,"category":"","item":"","person":"","date":"YYYY-MM-DD","note":""}]}
+Return ONLY JSON: {"entries":[{"type":"","amount":0,"category":"","item":"","qty":0,"unit":"","rate":0,"person":"","date":"YYYY-MM-DD","note":""}]}
 
 type, one of:
 - "expense": they spent money on something
@@ -170,10 +172,16 @@ type, one of:
 - "took": they borrowed or received money from a person, and now owe it
 - "got_back": a person returned money they owed
 - "paid_back": they returned money they owed to a person
-category (expense only), one of: food, transport, rent, bills, mobile, home, shopping, health, personal, fees, education, charity, other
+category (expense and income), one of: food, transport, rent, bills, mobile, home, shopping, health, personal, assets, fees, education, charity, other
   (fees = visa, residence permit, fines, insurance, government or bank fees; charity = zakat, sadqa, gifts; home = money sent to family; transport includes petrol, taxi, car repair; food includes groceries, milk, roti, restaurants, drinks)
-item: 1 to 3 English words, e.g. "Petrol", "Milk", "Car repair", "Salary".
+item: the thing, 1 to 3 words. Keep the person's own words for goods, e.g. "Awwal eint", "Kachi eint", "Cheeni", "Mobile". Otherwise English, e.g. "Petrol", "Milk", "Salary".
+qty / unit / rate: how many, the unit (kg, pcs, ltr, bags; empty for bricks or items) and the price per unit, only if said, else 0 / "" / 0.
+  "1000 awal eint 17000 ki" = qty 1000, amount 17000. "1000 kachi eint, 1000 rate" = qty 1000, rate 1000, amount = the total if clear, else the rate.
+Goods on credit with a person: if the person took or received goods from them ("Ashraf ne li", "Ashraf ko di") use "gave" (the person owes them);
+  if the person delivered or gave goods to them ("Ashraf ne dali", "Ashraf se li") use "took" (they owe the person). Keep the goods in item.
+Assets: buying something lasting (mobile, laptop, car, bike, gold, furniture, land) is "expense" with category "assets"; selling it is "income" with category "assets" and item like "Mobile (sold)".
 person: the other person's name, capitalised, only for gave/took/got_back/paid_back, else "".
+Ignore sentences that are only remarks or questions.
 date: resolve words like kal, parson, 14 date, 13 oct. Default today.
 note: a short clean English summary, max 6 words.
 Make one entry per transaction. Skip anything without an amount. Number words count ("seven", "do sau" = 200, "dedh hazar" = 1500).
@@ -226,8 +234,13 @@ What they said: "${text.replace("\"", "'")}"
         val out = mutableListOf<Entry>()
         for (i in 0 until arr.length()) {
             val o = arr.optJSONObject(i) ?: continue
-            val amount = o.optDouble("amount", 0.0)
-            if (amount.isNaN() || amount <= 0) continue
+            var amount = o.optDouble("amount", 0.0)
+            if (amount.isNaN() || amount <= 0) {
+                val q = o.optDouble("qty", 0.0)
+                val r = o.optDouble("rate", 0.0)
+                amount = if (!q.isNaN() && !r.isNaN() && q > 0 && r > 0) q * r else 0.0
+            }
+            if (amount <= 0) continue
             val type = when (o.optString("type").lowercase()) {
                 "income" -> Type.AAMDANI
                 "gave" -> Type.DIYA
@@ -240,6 +253,7 @@ What they said: "${text.replace("\"", "'")}"
             if (isLoan(type) && person.isEmpty()) continue
             val cat = when {
                 isLoan(type) -> Cat.UDHAAR
+                type == Type.AAMDANI && o.optString("category").lowercase() == "assets" -> Cat.ASSETS
                 type == Type.AAMDANI -> Cat.TANKHWAH
                 else -> when (o.optString("category").lowercase()) {
                     "food" -> Cat.KHANA
@@ -251,6 +265,7 @@ What they said: "${text.replace("\"", "'")}"
                     "shopping" -> Cat.SHOPPING
                     "health" -> Cat.SEHAT
                     "personal" -> Cat.PERSONAL
+                    "assets" -> Cat.ASSETS
                     "fees" -> Cat.FEES
                     "education" -> Cat.EDU
                     "charity" -> Cat.CHARITY
@@ -258,9 +273,11 @@ What they said: "${text.replace("\"", "'")}"
                 }
             }
             val item = when {
-                isLoan(type) -> "Loans"
+                isLoan(type) -> o.optString("item").trim().ifBlank { "Loans" }
                 else -> o.optString("item").trim().ifBlank { if (type == Type.AAMDANI) "Income" else cat.label }
             }
+            val qty = o.optDouble("qty", 0.0).let { if (it.isNaN() || it < 0) 0.0 else it }
+            val rate = o.optDouble("rate", 0.0).let { if (it.isNaN() || it < 0) 0.0 else it }
             out += Entry(
                 id = "e" + System.nanoTime() + i,
                 type = type,
@@ -270,7 +287,10 @@ What they said: "${text.replace("\"", "'")}"
                 person = if (isLoan(type)) person else "",
                 note = o.optString("note").trim().ifBlank { said }.take(60),
                 date = parseDate(o.optString("date")) ?: now,
-                createdAt = now
+                createdAt = now,
+                qty = qty,
+                unit = o.optString("unit").trim().take(10),
+                rate = rate
             )
         }
         return out

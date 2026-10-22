@@ -916,6 +916,34 @@ fun ResultsScreen(
                 }
             }
         }
+        // Items with their quantities and totals ("Awal eint 1000 · 17,000 SAR")
+        val byItem = found.filter { it.item.isNotBlank() && it.item != "Loans" }
+            .groupBy { it.item }
+            .filter { (_, v) -> v.any { it.qty > 0 } || found.map { it.item }.distinct().size > 1 }
+        if (byItem.isNotEmpty()) {
+            item {
+                Panel(Modifier.fillMaxWidth(), padding = 14.dp) {
+                    SmallLabel("Items")
+                    Spacer(Modifier.height(6.dp))
+                    byItem.entries.sortedByDescending { e -> e.value.sumOf { it.amount } }.forEach { (name, list) ->
+                        val q = list.filter { it.qty > 0 }
+                        Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(name, fontWeight = FontWeight.SemiBold)
+                                if (q.isNotEmpty()) {
+                                    Text(
+                                        "Qty " + fmt(q.sumOf { it.qty }) + (q.first().unit.let { if (it.isBlank()) "" else " $it" }) +
+                                            " · ${list.size} " + (if (list.size == 1) "entry" else "entries"),
+                                        fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            Text(moneyA(currency, list.sumOf { it.amount }), fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
         if (found.isEmpty()) {
             item {
                 Text(
