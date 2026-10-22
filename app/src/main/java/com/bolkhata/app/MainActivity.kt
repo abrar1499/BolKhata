@@ -92,7 +92,6 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var adding by remember { mutableStateOf(false) }
     var pending by remember { mutableStateOf(listOf<Entry>()) }
     var moreFor by remember { mutableStateOf<Entry?>(null) }
-    var editPlan by remember { mutableStateOf<Ai.EditPlan?>(null) }
     var searching by remember { mutableStateOf(false) }
     var suggestions by remember { mutableStateOf(store.loadSuggestions()) }
     var reviewing by remember { mutableStateOf(false) }
@@ -226,6 +225,28 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
      * an "Other" expense, or no amount at all) and an AI key is set, the sentence goes to Gemini.
      * If the AI fails or there is no internet, the offline result is used as before.
      */
+    /** Applies an AI change straight away; Undo puts everything back. */
+    fun applyPlan(plan: Ai.EditPlan) {
+        val beforeEntries = entries
+        val beforeTrash = trash
+        val map = plan.changed.associate { it.first.id to it.second }
+        val gone = plan.deleted.map { it.id }.toSet()
+        save(entries.filter { it.id !in gone }.map { map[it.id] ?: it })
+        if (gone.isNotEmpty()) {
+            store.markTrashed(gone)
+            saveTrash(plan.deleted + trash.filter { it.id !in gone })
+        }
+        plan.changed.forEach { (b, a) -> learnFrom(b, a) }
+        scope.launch {
+            snackbar.currentSnackbarData?.dismiss()
+            val res = snackbar.showSnackbar("✓ " + plan.message, actionLabel = "Undo", duration = SnackbarDuration.Long)
+            if (res == SnackbarResult.ActionPerformed) {
+                save(beforeEntries)
+                saveTrash(beforeTrash)
+            }
+        }
+    }
+
     /** "hamza wali 500 ko 400 kar do", "last entry food mein daal do", "kal ka petrol 60 tha 50 nahi". */
     fun looksLikeEdit(text: String): Boolean {
         val t = " " + text.lowercase() + " "
@@ -252,7 +273,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     if (plan.changed.isEmpty() && plan.deleted.isEmpty()) {
                         toast(plan.message)
                     } else {
-                        editPlan = plan
+                        applyPlan(plan)
                     }
                 } catch (e: Exception) {
                     toast(e.message ?: "AI did not answer. Tap the entry to edit it.")
@@ -657,59 +678,6 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                             modifier = Modifier.weight(1f)
                         ) { Text("Add all ${suggestions.size}") }
                     }
-                }
-            }
-        }
-    }
-
-    editPlan?.let { plan ->
-        FormPopup(onDismiss = { editPlan = null }) {
-            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("✨ Change entries?", fontSize = 19.sp, fontWeight = FontWeight.Bold)
-                Text(plan.message, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Column(
-                    Modifier.heightIn(max = 380.dp).verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    plan.changed.forEach { (before, after) ->
-                        Column(
-                            Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                .padding(10.dp)
-                        ) {
-                            Text(
-                                entryTitle(before) + " · " + money(currency, before.amount) + " · " + shortDate(before.date),
-                                fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                "→ " + entryTitle(after) + " · " + money(currency, after.amount) + " · " + shortDate(after.date),
-                                fontWeight = FontWeight.SemiBold, color = signColor(after.type)
-                            )
-                        }
-                    }
-                    plan.deleted.forEach { d ->
-                        Text(
-                            "🗑️ " + entryTitle(d) + " · " + money(currency, d.amount) + " · " + shortDate(d.date),
-                            color = RedSpend, fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { editPlan = null }, shape = RoundedCornerShape(14.dp)) { Text("Cancel") }
-                    Button(
-                        onClick = {
-                            val map = plan.changed.associate { it.first.id to it.second }
-                            save(entries.map { map[it.id] ?: it })
-                            plan.changed.forEach { (b, a) -> learnFrom(b, a) }
-                            if (plan.deleted.isNotEmpty()) moveToTrash(plan.deleted.map { it.id }.toSet())
-                            else toast("✓ Updated")
-                            editPlan = null
-                        },
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier.weight(1f)
-                    ) { Text("Apply") }
                 }
             }
         }
