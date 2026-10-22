@@ -189,6 +189,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     }
 
     var aiKey by remember { mutableStateOf(store.aiKey) }
+    // The person's own key wins; otherwise the key built into the app is used.
+    val activeKey = aiKey.ifBlank { BuildConfig.GEMINI_KEY }
 
     // Keep the offline reader up to date with what the person taught it and who is in the khata.
     LaunchedEffect(Unit) { Parser.learned = store.loadLearned() }
@@ -228,14 +230,14 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         val r = Parser.parse(text)
         val unsure = r.unclear.isNotEmpty() || r.entries.isEmpty() ||
             r.entries.any { it.type == Type.KHARCHA && it.category == Cat.OTHER }
-        if (!unsure || aiKey.isBlank()) {
+        if (!unsure || activeKey.isBlank()) {
             addOffline(r)
             return
         }
         toast("✨ Understanding…")
         scope.launch {
             try {
-                val list = Ai.parse(text, aiKey, store, currency)
+                val list = Ai.parse(text, activeKey, store, currency)
                 if (list.isEmpty()) {
                     addOffline(r)
                 } else {
@@ -390,11 +392,12 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     bankOn = bankOn,
                     onBank = { bankHelp = true },
                     aiKey = aiKey,
+                    aiBuiltIn = BuildConfig.GEMINI_KEY.isNotBlank(),
                     onAiKey = { k ->
                         aiKey = k
                         store.aiKey = k
                         if (k.isBlank()) {
-                            toast("AI turned off")
+                            toast(if (BuildConfig.GEMINI_KEY.isNotBlank()) "Using the built-in AI" else "AI turned off")
                         } else {
                             toast("Checking key…")
                             scope.launch {

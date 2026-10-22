@@ -646,6 +646,7 @@ fun SettingsScreen(
     bankOn: Boolean = false,
     onBank: () -> Unit = {},
     aiKey: String = "",
+    aiBuiltIn: Boolean = false,
     onAiKey: (String) -> Unit = {}
 ) {
     var aiText by remember(aiKey) { mutableStateOf(aiKey) }
@@ -695,10 +696,11 @@ fun SettingsScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     SmallLabel("✨ AI help (Gemini)")
                     Spacer(Modifier.weight(1f))
+                    val aiOn = aiKey.isNotBlank() || aiBuiltIn
                     Text(
-                        if (aiKey.isBlank()) "Off" else "On",
+                        if (aiOn) "On" else "Off",
                         fontWeight = FontWeight.Bold,
-                        color = if (aiKey.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary
+                        color = if (aiOn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 Text(
@@ -707,9 +709,16 @@ fun SettingsScreen(
                     fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(8.dp))
+                if (aiBuiltIn && aiKey.isBlank()) {
+                    Text(
+                        "✓ AI is built in. You don't need a key. Add your own only if you want to use it instead.",
+                        fontSize = 12.sp, color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(Modifier.height(6.dp))
+                }
                 OutlinedTextField(
                     value = aiText, onValueChange = { aiText = it.trim() },
-                    singleLine = true, placeholder = { Text("Paste your Gemini API key") },
+                    singleLine = true, placeholder = { Text(if (aiBuiltIn) "Your own key (optional)" else "Paste your Gemini API key") },
                     visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier.fillMaxWidth()
