@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Wallet with a bill and a coin, in the app's own colours. Kept inside the 66dp safe zone. -->
+<!-- Wallet with bills, in the app's own colours. Kept inside the 66dp safe zone. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
@@ -19,12 +19,4 @@
     <path android:fillColor="#DDF5E7" android:pathData="M64,51 h17 v15 h-17 a5,5 0 0 1 -5,-5 v-5 a5,5 0 0 1 5,-5 z" />
     <!-- clasp -->
     <path android:fillColor="#E5484D" android:pathData="M67,58.5 m-3,0 a3,3 0 1 0 6,0 a3,3 0 1 0 -6,0" />
-    <!-- coinshadow -->
-    <path android:fillColor="#33000000" android:pathData="M41,74 m-10,0 a10,10 0 1 0 20,0 a10,10 0 1 0 -20,0" />
-    <!-- coin -->
-    <path android:fillColor="#E8892B" android:pathData="M40,72 m-10,0 a10,10 0 1 0 20,0 a10,10 0 1 0 -20,0" />
-    <!-- coininner -->
-    <path android:fillColor="#F4A961" android:pathData="M40,72 m-7,0 a7,7 0 1 0 14,0 a7,7 0 1 0 -14,0" />
-    <!-- coinmark -->
-    <path android:fillColor="#C96E17" android:pathData="M38.6,67.5 h2.8 v9 h-2.8 z" />
 </vector>
