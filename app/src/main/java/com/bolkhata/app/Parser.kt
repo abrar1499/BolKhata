@@ -96,7 +96,7 @@ object Parser {
         "bakala", "supermarket", "pump", "workshop", "hotel", "restaurant", "pharmacy", "mall", "us", "is", "un",
         "riyal", "riyals", "rupay", "rupee", "rupees", "sar", "pkr", "ka", "ki", "ke", "ko", "se", "ne", "to",
         "from", "give", "gave", "diye", "diya", "liye", "liya", "the", "and", "aur", "date", "tareekh", "hain",
-        "hai", "tha", "thay", "mein", "me", "for", "sab", "kuch", "paise", "paisay", "pay", "paid",
+        "hai", "tha", "thay", "mein", "me", "for", "sab", "sabko", "sabhi", "inko", "unko", "in", "all", "everyone", "kuch", "paise", "paisay", "pay", "paid",
         "گھر", "آج", "کل", "میں", "مجھے", "ریال", "روپے", "دکان"
     )
 
@@ -180,7 +180,18 @@ object Parser {
         val entries = mutableListOf<Entry>()
         val unclear = mutableListOf<Entry>()
 
-        for (raw in text.split(splitRegex).flatMap { splitClauses(it) }) {
+        val parts = text.split(splitRegex).flatMap { splitClauses(it) }
+
+        // "akram 500, afzal 100, nadir 2000 in sab ko diye": the verb at the end applies to every name before it.
+        val lastWords = parts.lastOrNull()?.lowercase()?.split(Regex("""[^\p{L}\p{N}]+"""))?.filter { it.isNotEmpty() }.orEmpty()
+        val groupType: Type? = when {
+            parts.size < 2 -> null
+            giveWords.any { it in lastWords } && ("ko" in lastWords || "to" in lastWords) -> Type.DIYA
+            takeWords.any { it in lastWords } && ("se" in lastWords || "from" in lastWords) -> Type.LIYA
+            else -> null
+        }
+
+        for (raw in parts) {
             val part = raw.trim().replace(Regex("""\s+"""), " ")
             if (part.isEmpty()) continue
             val num = moneyRegex.find(part)
@@ -236,9 +247,13 @@ object Parser {
                     entries += make(type, Cat.UDHAAR, "Loans", person)
                 }
                 else -> {
-                    // Not sure what this is: ask the user.
                     val guess = person.ifEmpty { guessName(words) }
-                    unclear += make(Type.KHARCHA, Cat.OTHER, "", guess)
+                    if (groupType != null && guess.isNotEmpty()) {
+                        entries += make(groupType, Cat.UDHAAR, "Loans", guess)
+                    } else {
+                        // Not sure what this is: ask the user.
+                        unclear += make(Type.KHARCHA, Cat.OTHER, "", guess)
+                    }
                 }
             }
         }
