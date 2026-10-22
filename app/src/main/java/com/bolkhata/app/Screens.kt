@@ -275,7 +275,7 @@ private fun BigTile(label: String, value: AnnotatedString, sub: String, color: C
             Box(
                 Modifier.size(32.dp).clip(CircleShape).background(color.copy(alpha = 0.16f)),
                 contentAlignment = Alignment.Center
-            ) { Text(if (color == RedSpend) "↓" else "↑", color = color, fontWeight = FontWeight.Bold, fontSize = 17.sp) }
+            ) { Text(if (color == RedSpend) "−" else "+", color = color, fontWeight = FontWeight.Bold, fontSize = 18.sp) }
         }
     }
 }
