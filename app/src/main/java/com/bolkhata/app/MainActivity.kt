@@ -313,10 +313,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit) {
 
     // "More options" from the quick question opens the full form.
     moreFor?.let { m ->
-        ModalBottomSheet(
-            onDismissRequest = { moreFor = null },
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-        ) {
+        FormPopup(onDismiss = { moreFor = null }) {
             EntryForm(
                 initial = m,
                 title = "What is this?",
@@ -354,10 +351,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit) {
     }
 
     editing?.let { e ->
-        ModalBottomSheet(
-            onDismissRequest = { editing = null },
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-        ) {
+        FormPopup(onDismiss = { editing = null }) {
             EntryForm(
                 initial = e,
                 title = "Edit entry",
@@ -382,10 +376,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit) {
     if (adding) {
         val fresh = remember { blankEntry() }
         var quick by remember { mutableStateOf("") }
-        ModalBottomSheet(
-            onDismissRequest = { adding = false },
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-        ) {
+        FormPopup(onDismiss = { adding = false }) {
             EntryForm(
                 initial = fresh,
                 title = "Add manually",
@@ -401,7 +392,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit) {
                 onDelete = null,
                 onCancel = { adding = false },
                 header = {
-                    Text("Quick add", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text("Quick add", fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         OutlinedTextField(
                             value = quick, onValueChange = { quick = it },
