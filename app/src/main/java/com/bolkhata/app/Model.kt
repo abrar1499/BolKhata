@@ -25,6 +25,9 @@ enum class Cat(val label: String, val icon: String) {
     PERSONAL("Personal care", "💈"),
     TANKHWAH("Income", "💰"),
     UDHAAR("Loans", "🤝"),
+    FEES("Fees & Govt", "🏛️"),
+    EDU("Education", "📚"),
+    CHARITY("Gifts & Charity", "🎁"),
     OTHER("Other", "📝")
 }
 
@@ -158,6 +161,24 @@ class Store(context: Context) {
     var name: String
         get() = prefs.getString("name", "") ?: ""
         set(v) = prefs.edit().putString("name", v).apply()
+
+    /** Words the person taught the app by correcting a category, e.g. "shawarma" -> Food. */
+    fun loadLearned(): Map<String, Pair<Cat, String>> = try {
+        val o = JSONObject(prefs.getString("learned", "{}") ?: "{}")
+        o.keys().asSequence().mapNotNull { k ->
+            val v = o.getString(k).split("|", limit = 2)
+            try { k to (Cat.valueOf(v[0]) to v.getOrElse(1) { "" }) } catch (e: Exception) { null }
+        }.toMap()
+    } catch (e: Exception) {
+        emptyMap()
+    }
+
+    fun learn(words: List<String>, cat: Cat, item: String) {
+        if (words.isEmpty()) return
+        val o = try { JSONObject(prefs.getString("learned", "{}") ?: "{}") } catch (e: Exception) { JSONObject() }
+        words.forEach { o.put(it, cat.name + "|" + item) }
+        prefs.edit().putString("learned", o.toString()).apply()
+    }
 
     var aiKey: String
         get() = prefs.getString("aiKey", "") ?: ""

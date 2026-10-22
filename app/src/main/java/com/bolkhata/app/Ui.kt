@@ -106,6 +106,9 @@ fun catColor(c: Cat): Color = when (c) {
     Cat.PERSONAL -> Color(0xFFF97316)
     Cat.TANKHWAH -> Color(0xFF22C55E)
     Cat.UDHAAR -> Color(0xFF64748B)
+    Cat.FEES -> Color(0xFF6366F1)
+    Cat.EDU -> Color(0xFF0EA5E9)
+    Cat.CHARITY -> Color(0xFFDB2777)
     Cat.OTHER -> Color(0xFF94A3B8)
 }
 

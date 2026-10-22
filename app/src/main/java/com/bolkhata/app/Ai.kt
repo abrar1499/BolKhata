@@ -71,8 +71,8 @@ type, one of:
 - "took": they borrowed or received money from a person, and now owe it
 - "got_back": a person returned money they owed
 - "paid_back": they returned money they owed to a person
-category (expense only), one of: food, transport, rent, bills, mobile, home, shopping, health, personal, other
-  (home = money sent to family; transport includes petrol, taxi, car repair; food includes groceries, milk, roti, restaurants, drinks)
+category (expense only), one of: food, transport, rent, bills, mobile, home, shopping, health, personal, fees, education, charity, other
+  (fees = iqama, visa, fines, insurance, government or bank fees; charity = zakat, sadqa, gifts; home = money sent to family; transport includes petrol, taxi, car repair; food includes groceries, milk, roti, restaurants, drinks)
 item: 1 to 3 English words, e.g. "Petrol", "Milk", "Car repair", "Salary".
 person: the other person's name, capitalised, only for gave/took/got_back/paid_back, else "".
 date: resolve words like kal, parson, 14 date, 13 oct. Default today.
@@ -152,6 +152,9 @@ What they said: "${text.replace("\"", "'")}"
                     "shopping" -> Cat.SHOPPING
                     "health" -> Cat.SEHAT
                     "personal" -> Cat.PERSONAL
+                    "fees" -> Cat.FEES
+                    "education" -> Cat.EDU
+                    "charity" -> Cat.CHARITY
                     else -> Cat.OTHER
                 }
             }

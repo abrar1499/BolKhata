@@ -190,6 +190,22 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
 
     var aiKey by remember { mutableStateOf(store.aiKey) }
 
+    // Keep the offline reader up to date with what the person taught it and who is in the khata.
+    LaunchedEffect(Unit) { Parser.learned = store.loadLearned() }
+    LaunchedEffect(entries) {
+        Parser.knownPeople = entries.mapNotNull { e -> e.person.trim().lowercase().takeIf { it.length >= 3 } }.toSet()
+    }
+
+    /** When the person fixes a category, remember the words so it is right next time. */
+    fun learnFrom(before: Entry?, after: Entry) {
+        if (after.type != Type.KHARCHA || after.category == Cat.OTHER) return
+        if (before != null && before.category == after.category && before.item == after.item) return
+        val words = Parser.learnWords(after.note)
+        if (words.isEmpty()) return
+        store.learn(words, after.category, after.item)
+        Parser.learned = store.loadLearned()
+    }
+
     fun addOffline(r: Parser.Result) {
         if (r.entries.isEmpty() && r.unclear.isEmpty()) {
             toast("No amount found. Please say or type an amount.")
@@ -424,6 +440,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 currency = currency,
                 saveLabel = "Save",
                 onSave = { e ->
+                    learnFrom(null, e)
                     save(listOf(e) + entries)
                     moreFor = null
                     toast("✓ Saved")
@@ -637,6 +654,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 currency = currency,
                 saveLabel = "Save",
                 onSave = { changed ->
+                    learnFrom(e, changed)
                     save(entries.map { if (it.id == changed.id) changed else it })
                     editing = null
                     toast("✓ Saved")

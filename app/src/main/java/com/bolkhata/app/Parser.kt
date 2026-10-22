@@ -24,6 +24,16 @@ object Parser {
     private val rules = listOf(
         r(Cat.GHAR, "Sent home", "ghar bhej", "bheje", "bheja", "bhejay", "bhejy", "bheji", "send home", "sent home", "بھیجے", "بھیجا"),
 
+        r(Cat.EDU, "School fees", "school fee", "school fees", "tuition", "tution", "admission"),
+        r(Cat.EDU, "Books & study", "books", "kitab", "kitaab", "kitabein", "copy", "stationery", "course", "college", "university", "uniform", "school"),
+        r(Cat.FEES, "Iqama & visa", "iqama", "iqaama", "visa", "muqeem", "jawazat", "passport", "reentry", "re-entry", "exit", "huroob", "اقامہ", "ویزا"),
+        r(Cat.FEES, "Fines", "fine", "fines", "challan", "mukhalfa", "mukhalafa", "saher", "violation"),
+        r(Cat.FEES, "Insurance", "insurance", "tameen", "tamin", "bupa", "tawuniya"),
+        r(Cat.FEES, "Fees & charges", "fee", "fees", "charges", "absher", "tax", "vat"),
+        r(Cat.CHARITY, "Charity", "zakat", "zakaat", "sadqa", "sadaqa", "sadqah", "khairat", "khayrat", "donation", "charity", "masjid", "mosque", "fitrana", "زکوۃ", "صدقہ"),
+        r(Cat.CHARITY, "Gifts", "gift", "gifts", "tohfa", "tohfay", "eidi", "salami"),
+        r(Cat.PERSONAL, "Gym & fitness", "gym", "fitness"),
+        r(Cat.PERSONAL, "Cigarettes", "cigarette", "cigarettes", "sigret", "cigrette", "shisha", "vape"),
         r(Cat.TRANSPORT, "Petrol", "petrol", "patrol", "petral", "petrool", "patrool", "fuel", "diesel", "deesal", "benzene", "aldrees", "sasco", "petromin", "naft", "پٹرول", "ڈیزل", "بنزين"),
         r(Cat.TRANSPORT, "Car repair", "mechanic", "workshop", "tyre", "tire", "tyres", "puncture", "oil change", "battery", "مستری"),
         r(Cat.TRANSPORT, "Car wash", "car wash", "wash"),
@@ -78,6 +88,7 @@ object Parser {
 
     private val loanWords = listOf("udhaar", "udhar", "qarz", "karz", "qarza", "loan", "lent", "borrowed", "ادھار", "قرض")
     private val returnWords = listOf("wapis", "wapas", "lauta", "lotaye", "return", "returned", "واپس", "لوٹا")
+    private val takeWords = listOf("liye", "liya", "li", "lia", "took", "borrowed", "لیے", "لیا")
     private val giveWords = listOf("give", "gave", "given", "diye", "diya", "diay", "dye", "de", "dia", "دیے", "دیا")
 
     private val notNames = setOf(
@@ -108,6 +119,18 @@ object Parser {
 
     private fun isNumber(w: String) = w.any { it.isDigit() }
 
+    /** "2 kilo", "3 packet": a count, not money. */
+    private val unitWords = setOf(
+        "kilo", "kg", "kgs", "kilogram", "gram", "grams", "gm", "liter", "litre", "liters", "ltr", "packet", "packets",
+        "pack", "piece", "pieces", "pcs", "dozen", "darjan", "dabba", "dabbe", "plate", "plates", "cup", "cups",
+        "glass", "box", "boxes", "carton", "bag", "bags", "pair", "kilos", "کلو", "پیکٹ", "درجن"
+    )
+
+    private fun isQuantity(text: String, numberEnd: Int): Boolean {
+        val next = text.substring(minOf(numberEnd + 1, text.length)).trim().split(Regex("""\s+""")).firstOrNull()?.lowercase()
+        return next != null && next in unitWords
+    }
+
     /**
      * Splits "40 hamza ko diye 10 ki roti khai 10 ki medicine li" into one piece per entry.
      * Cuts after a verb when both sides have an amount; a piece that still has two amounts
@@ -130,7 +153,7 @@ object Parser {
         val out = mutableListOf<String>()
         for (p in pieces) {
             val hasCurrency = p.any { it.lowercase() in currencyWords }
-            val numIdx = p.indices.filter { isNumber(p[it]) }
+            val numIdx = p.indices.filter { isNumber(p[it]) && p.getOrNull(it + 1)?.lowercase() !in unitWords }
             if (hasCurrency || numIdx.size < 2) {
                 out.add(p.joinToString(" "))
                 continue
@@ -160,7 +183,10 @@ object Parser {
         for (raw in text.split(splitRegex).flatMap { splitClauses(it) }) {
             val part = raw.trim().replace(Regex("""\s+"""), " ")
             if (part.isEmpty()) continue
-            val num = moneyRegex.find(part) ?: numberRegex.find(part) ?: continue
+            val num = moneyRegex.find(part)
+                ?: numberRegex.findAll(part).firstOrNull { !isQuantity(part, it.range.last) }
+                ?: numberRegex.find(part)
+                ?: continue
             var amount = num.groupValues[1].replace(",", "").toDoubleOrNull() ?: continue
             val mult = num.groupValues[2].lowercase()
             if (mult.isNotEmpty()) {
@@ -178,7 +204,10 @@ object Parser {
             val hasKo = padded.contains(" ko ") || padded.contains(" کو ") || padded.contains(" to ")
             val hasSe = padded.contains(" se ") || padded.contains(" سے ") || padded.contains(" from ")
             val hasNe = padded.contains(" ne ") || padded.contains(" نے ")
-            val person = findPerson(part)
+            val person = findPerson(part).ifEmpty {
+                words.firstOrNull { it in knownPeople }?.let { cap(it) } ?: ""
+            }
+            val takes = takeWords.any { words.contains(it) }
 
             fun make(type: Type, cat: Cat, item: String, who: String) = Entry(
                 id = "e" + System.nanoTime() + entries.size + unclear.size,
@@ -202,8 +231,8 @@ object Parser {
                 }
                 income != null -> entries += make(Type.AAMDANI, Cat.TANKHWAH, income.first, "")
                 spend != null -> entries += make(Type.KHARCHA, spend.first, spend.second, "")
-                person.isNotEmpty() && (hasKo || hasSe || hasNe || giveWords.any { words.contains(it) }) -> {
-                    val type = if (hasSe && !hasKo) Type.LIYA else Type.DIYA
+                person.isNotEmpty() && (hasKo || hasSe || hasNe || takes || giveWords.any { words.contains(it) }) -> {
+                    val type = if ((hasSe && !hasKo) || (takes && !hasKo)) Type.LIYA else Type.DIYA
                     entries += make(type, Cat.UDHAAR, "Loans", person)
                 }
                 else -> {
@@ -225,7 +254,27 @@ object Parser {
         return matchSpending(t, words)
     }
 
+    /** Words the person taught the app by correcting an entry. Checked before everything else. */
+    @Volatile var learned: Map<String, Pair<Cat, String>> = emptyMap()
+
+    /** Names of people already in the khata, lowercase. "1000 hamza diye" works even without "ko". */
+    @Volatile var knownPeople: Set<String> = emptySet()
+
+    private val learnStop = setOf(
+        "ka", "ki", "ke", "ko", "se", "ne", "aaj", "kal", "liya", "liye", "lia", "diya", "diye", "khaya", "khai", "khaye",
+        "kiya", "kiye", "hai", "hain", "tha", "the", "thay", "riyal", "riyals", "sar", "rupay", "rupees", "and", "for",
+        "from", "with", "mein", "par", "pay", "wala", "wali", "wale", "dala", "dali", "bheja", "bheje", "liye", "mila",
+        "mile", "sath", "saath", "mera", "meri", "mere", "apna", "apni", "today", "yesterday", "date"
+    )
+
+    /** Words from a note worth remembering for a category ("10 ki shawarma khai" -> ["shawarma"]). */
+    fun learnWords(note: String): List<String> =
+        note.lowercase().split(Regex("""[^\p{L}]+"""))
+            .filter { it.length >= 3 && it !in learnStop && it !in notNames && it !in knownPeople }
+            .distinct()
+
     private fun matchSpending(t: String, words: List<String>): Pair<Cat, String>? {
+        words.firstNotNullOfOrNull { learned[it] }?.let { return it }
         if (repairWords.any { matches(it, t, words) }) {
             return when {
                 carWords.any { matches(it, t, words) } -> Cat.TRANSPORT to "Car repair"
@@ -238,7 +287,10 @@ object Parser {
         if (phoneWords.any { matches(it, t, words) }) return Cat.MOBILE to "Mobile recharge"
         // Second pass: allow one wrong letter in longer words (petrl, bottel, choclate…)
         rules.firstOrNull { rule ->
-            rule.keys.any { k -> !k.contains(' ') && k.length >= 5 && words.any { w -> w.length >= 5 && near(w, k) } }
+            rule.keys.any { k ->
+                !k.contains(' ') && k.length >= 5 &&
+                    words.any { w -> w.length >= 5 && distance(w, k) <= (if (k.length >= 8) 2 else 1) }
+            }
         }?.let { return it.cat to it.item }
         return null
     }
@@ -251,6 +303,22 @@ object Parser {
     }
 
     /** True when the two words differ by at most one letter (edit distance ≤ 1). */
+    /** Number of single-letter changes to turn [a] into [b] (stops early above 2). */
+    private fun distance(a: String, b: String): Int {
+        if (kotlin.math.abs(a.length - b.length) > 2) return 3
+        var prev = IntArray(b.length + 1) { it }
+        for (i in 1..a.length) {
+            val cur = IntArray(b.length + 1)
+            cur[0] = i
+            for (j in 1..b.length) {
+                val cost = if (a[i - 1] == b[j - 1]) 0 else 1
+                cur[j] = minOf(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost)
+            }
+            prev = cur
+        }
+        return prev[b.length]
+    }
+
     private fun near(a: String, b: String): Boolean {
         if (kotlin.math.abs(a.length - b.length) > 1) return false
         var i = 0
