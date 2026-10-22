@@ -44,11 +44,13 @@ private fun shortType(t: Type) = when (t) {
     Type.LIYA -> "Took (to pay)"
     Type.WAPIS_MILA -> "Got back"
     Type.WAPIS_DIYA -> "Paid back"
+    Type.SALE -> "Sale"
+    Type.PURCHASE -> "Purchase"
 }
 
 private fun typeColor(t: Type) = when (t) {
-    Type.KHARCHA -> RedSpend
-    Type.AAMDANI, Type.WAPIS_MILA -> GreenIn
+    Type.KHARCHA, Type.PURCHASE -> RedSpend
+    Type.AAMDANI, Type.WAPIS_MILA, Type.SALE -> GreenIn
     else -> OrangeOwe
 }
 
@@ -163,10 +165,10 @@ fun EntryForm(
             }
         }
 
-        if (chosen != null && isLoan(chosen)) {
+        if (chosen != null && (isLoan(chosen) || isTrade(chosen))) {
             OutlinedTextField(
                 value = person, onValueChange = { person = it },
-                label = { Text("Person", fontSize = 12.sp) }, singleLine = true, textStyle = small,
+                label = { Text(if (isTrade(chosen)) "Customer / supplier (optional)" else "Person", fontSize = 12.sp) }, singleLine = true, textStyle = small,
                 shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()
             )
         }
@@ -176,7 +178,7 @@ fun EntryForm(
                 Modifier.horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Cat.entries.filter { it != Cat.UDHAAR && it != Cat.TANKHWAH }.forEach { c ->
+                Cat.entries.filter { it != Cat.UDHAAR && it != Cat.TANKHWAH && it != Cat.SALES && it != Cat.STOCK }.forEach { c ->
                     Pill("${c.icon} ${c.label}", cat == c, catColor(c)) { cat = c }
                 }
             }
@@ -189,7 +191,7 @@ fun EntryForm(
                     label = {
                         Text(
                             when {
-                                isLoan(chosen) -> "Goods (optional)"
+                                isLoan(chosen) || isTrade(chosen) -> "Goods (optional)"
                                 chosen == Type.AAMDANI -> "Item (Salary, Bonus…)"
                                 else -> "Item (Petrol, Milk…)"
                             },
@@ -235,6 +237,8 @@ fun EntryForm(
                 onClick = {
                     chosen?.let { t ->
                         val finalCat = when {
+                            t == Type.SALE -> Cat.SALES
+                            t == Type.PURCHASE -> Cat.STOCK
                             isLoan(t) -> Cat.UDHAAR
                             t == Type.AAMDANI && cat == Cat.ASSETS -> Cat.ASSETS
                             t == Type.AAMDANI -> Cat.TANKHWAH
@@ -242,6 +246,7 @@ fun EntryForm(
                         }
                         val finalItem = when {
                             isLoan(t) -> item.trim().ifBlank { "Loans" }
+                            isTrade(t) -> item.trim().ifBlank { if (t == Type.SALE) "Sale" else "Purchase" }
                             item.isNotBlank() -> item.trim()
                             t == Type.AAMDANI -> "Income"
                             else -> finalCat.label
@@ -253,7 +258,7 @@ fun EntryForm(
                                 category = finalCat,
                                 item = finalItem,
                                 qty = qty.toDoubleOrNull() ?: 0.0,
-                                person = if (isLoan(t)) person.trim() else "",
+                                person = if (isLoan(t) || isTrade(t)) person.trim() else "",
                                 date = date,
                                 note = note.trim().ifBlank { finalItem }
                             )

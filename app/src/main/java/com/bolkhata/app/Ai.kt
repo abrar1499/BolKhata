@@ -53,13 +53,13 @@ object Ai {
 
     private val typeNames = mapOf(
         Type.KHARCHA to "expense", Type.AAMDANI to "income", Type.DIYA to "gave", Type.LIYA to "took",
-        Type.WAPIS_MILA to "got_back", Type.WAPIS_DIYA to "paid_back"
+        Type.WAPIS_MILA to "got_back", Type.WAPIS_DIYA to "paid_back", Type.SALE to "sale", Type.PURCHASE to "purchase"
     )
     private val catNames = mapOf(
         Cat.KHANA to "food", Cat.TRANSPORT to "transport", Cat.RENT to "rent", Cat.BIJLI to "bills",
         Cat.MOBILE to "mobile", Cat.GHAR to "home", Cat.SHOPPING to "shopping", Cat.SEHAT to "health",
         Cat.PERSONAL to "personal", Cat.ASSETS to "assets", Cat.FEES to "fees", Cat.EDU to "education", Cat.CHARITY to "charity",
-        Cat.TANKHWAH to "income", Cat.UDHAAR to "loans", Cat.OTHER to "other"
+        Cat.TANKHWAH to "income", Cat.UDHAAR to "loans", Cat.SALES to "sales", Cat.STOCK to "purchases", Cat.OTHER to "other"
     )
 
     /** Asks Gemini which existing entries to change for an instruction like "hamza wali 500 ko 400 kar do". */
@@ -88,7 +88,7 @@ Instruction: "${instruction.replace("\"", "'")}"
 Find the entries the instruction is about and say what to change. Change only what was asked.
 Return ONLY JSON:
 {"edits":[{"n":1,"type":"","amount":0,"category":"","item":"","qty":0,"person":"","date":"YYYY-MM-DD"}],"delete":[n,...],"message":"one short English sentence describing the change"}
-In edits include only fields that change. type: expense, income, gave, took, got_back, paid_back.
+In edits include only fields that change. type: expense, income, gave, took, got_back, paid_back, sale, purchase.
 category: food, transport, rent, bills, mobile, home, shopping, health, personal, assets, fees, education, charity, other.
 If nothing matches, return {"edits":[],"delete":[],"message":"I couldn't find that entry."}
 """.trim()
@@ -109,10 +109,13 @@ If nothing matches, return {"edits":[],"delete":[],"message":"I couldn't find th
                 if (o.has("qty")) o.optDouble("qty").takeIf { !it.isNaN() && it >= 0 }?.let { e = e.copy(qty = it) }
                 // keep category consistent with the type
                 e = when {
+                    e.type == Type.SALE -> e.copy(category = Cat.SALES)
+                    e.type == Type.PURCHASE -> e.copy(category = Cat.STOCK)
                     isLoan(e.type) -> e.copy(category = Cat.UDHAAR, item = e.item.ifBlank { "Loans" })
                     e.type == Type.AAMDANI && e.category == Cat.ASSETS -> e.copy(person = "")
                     e.type == Type.AAMDANI -> e.copy(category = Cat.TANKHWAH, person = "")
-                    e.category == Cat.UDHAAR || e.category == Cat.TANKHWAH -> e.copy(category = Cat.OTHER, item = "Other", person = "")
+                    e.category == Cat.UDHAAR || e.category == Cat.TANKHWAH || e.category == Cat.SALES || e.category == Cat.STOCK ->
+                        e.copy(category = Cat.OTHER, item = "Other", person = "")
                     else -> e.copy(person = "")
                 }
                 if (isLoan(e.type) && e.person.isBlank()) continue
@@ -172,15 +175,19 @@ type, one of:
 - "took": they borrowed or received money from a person, and now owe it
 - "got_back": a person returned money they owed
 - "paid_back": they returned money they owed to a person
+- "sale": they sold goods (to a customer if named; on credit the customer then owes them)
+- "purchase": they bought goods or stock for a shop or business (from a supplier if named; on credit they then owe the supplier)
+  Everyday personal shopping (food, petrol, clothes) is "expense", not "purchase".
+  A part payment in the same sentence is a separate "got_back" (customer paid) or "paid_back" (they paid the supplier) entry.
 category (expense and income), one of: food, transport, rent, bills, mobile, home, shopping, health, personal, assets, fees, education, charity, other
   (fees = visa, residence permit, fines, insurance, government or bank fees; charity = zakat, sadqa, gifts; home = money sent to family; transport includes petrol, taxi, car repair; food includes groceries, milk, roti, restaurants, drinks)
 item: the thing, 1 to 3 words. Keep the person's own words for goods, e.g. "Awwal eint", "Kachi eint", "Cheeni", "Mobile". Otherwise English, e.g. "Petrol", "Milk", "Salary".
 qty / unit / rate: how many, the unit (kg, pcs, ltr, bags; empty for bricks or items) and the price per unit, only if said, else 0 / "" / 0.
   "1000 awal eint 17000 ki" = qty 1000, amount 17000. "1000 kachi eint, 1000 rate" = qty 1000, rate 1000, amount = the total if clear, else the rate.
-Goods on credit with a person: if the person took or received goods from them ("Ashraf ne li", "Ashraf ko di") use "gave" (the person owes them);
-  if the person delivered or gave goods to them ("Ashraf ne dali", "Ashraf se li") use "took" (they owe the person). Keep the goods in item.
+Goods with a person: if the person took or received goods from them ("Ashraf ne li", "Ashraf ko di", "Ahmed ko bechi") use "sale";
+  if the person delivered or gave goods to them ("Ashraf ne dali", "Ashraf se li", "supplier se kharida") use "purchase". Keep the goods in item.
 Assets: buying something lasting (mobile, laptop, car, bike, gold, furniture, land) is "expense" with category "assets"; selling it is "income" with category "assets" and item like "Mobile (sold)".
-person: the other person's name, capitalised, only for gave/took/got_back/paid_back, else "".
+person: the other person's name, capitalised, for gave/took/got_back/paid_back (required) and sale/purchase (if named), else "".
 Ignore sentences that are only remarks or questions.
 date: resolve words like kal, parson, 14 date, 13 oct. Default today.
 note: a short clean English summary, max 6 words.
@@ -242,6 +249,8 @@ What they said: "${text.replace("\"", "'")}"
             }
             if (amount <= 0) continue
             val type = when (o.optString("type").lowercase()) {
+                "sale" -> Type.SALE
+                "purchase" -> Type.PURCHASE
                 "income" -> Type.AAMDANI
                 "gave" -> Type.DIYA
                 "took" -> Type.LIYA
@@ -252,6 +261,8 @@ What they said: "${text.replace("\"", "'")}"
             val person = o.optString("person").trim().replaceFirstChar { it.uppercase() }
             if (isLoan(type) && person.isEmpty()) continue
             val cat = when {
+                type == Type.SALE -> Cat.SALES
+                type == Type.PURCHASE -> Cat.STOCK
                 isLoan(type) -> Cat.UDHAAR
                 type == Type.AAMDANI && o.optString("category").lowercase() == "assets" -> Cat.ASSETS
                 type == Type.AAMDANI -> Cat.TANKHWAH
@@ -274,6 +285,7 @@ What they said: "${text.replace("\"", "'")}"
             }
             val item = when {
                 isLoan(type) -> o.optString("item").trim().ifBlank { "Loans" }
+                isTrade(type) -> o.optString("item").trim().ifBlank { if (type == Type.SALE) "Sale" else "Purchase" }
                 else -> o.optString("item").trim().ifBlank { if (type == Type.AAMDANI) "Income" else cat.label }
             }
             val qty = o.optDouble("qty", 0.0).let { if (it.isNaN() || it < 0) 0.0 else it }
@@ -284,7 +296,7 @@ What they said: "${text.replace("\"", "'")}"
                 amount = amount,
                 category = cat,
                 item = item,
-                person = if (isLoan(type)) person else "",
+                person = if (isLoan(type) || isTrade(type)) person else "",
                 note = o.optString("note").trim().ifBlank { said }.take(60),
                 date = parseDate(o.optString("date")) ?: now,
                 createdAt = now,

@@ -151,7 +151,9 @@ object Parser {
     private val unitWords = setOf(
         "kilo", "kg", "kgs", "kilogram", "gram", "grams", "gm", "liter", "litre", "liters", "ltr", "packet", "packets",
         "pack", "piece", "pieces", "pcs", "dozen", "darjan", "dabba", "dabbe", "plate", "plates", "cup", "cups",
-        "glass", "box", "boxes", "carton", "bag", "bags", "pair", "kilos", "کلو", "پیکٹ", "درجن"
+        "glass", "box", "boxes", "carton", "bag", "bags", "pair", "kilos", "bori", "boriyan", "boriya", "ton", "tons",
+        "truck", "trucks", "trolley", "foot", "feet", "ft", "sqft", "meter", "meters", "roll", "rolls", "gaz", "maund", "mann",
+        "کلو", "پیکٹ", "درجن"
     )
 
     private fun isQuantity(text: String, numberEnd: Int): Boolean {
@@ -249,6 +251,8 @@ object Parser {
             else -> null
         }
 
+        var lastTrade: Entry? = null
+
         for (raw in parts) {
             val part = raw.trim().replace(Regex("""\s+"""), " ")
             if (part.isEmpty()) continue
@@ -316,6 +320,9 @@ object Parser {
             val asset = assetWords.entries.firstOrNull { (k, _) -> words.contains(k) }?.value
             val sells = sellWords.any { words.contains(it) }
             val buys = buyWords.any { words.contains(it) }
+            val trade = goods.isNotEmpty() && qty > 0
+            val before = entries.size
+            val owes = owed[person.lowercase()] ?: 0.0
 
             val spend = matchSpending(t, words)
             val income = incomeRules.firstOrNull { (_, keys) -> keys.any { matches(it, t, words) } }
@@ -323,11 +330,17 @@ object Parser {
             val isLoan = loanWords.any { matches(it, t, words) }
 
             when {
+                // "..., 10000 diye baqi udhaar" right after a sale or purchase: a part payment from or to that person.
+                person.isEmpty() && lastTrade?.person?.isNotEmpty() == true && paidWords.any { words.contains(it) } && !trade -> {
+                    val lt = lastTrade!!
+                    entries += make(if (lt.type == Type.SALE) Type.WAPIS_MILA else Type.WAPIS_DIYA, Cat.UDHAAR, "Loans", lt.person)
+                }
                 asset != null && sells -> entries += make(Type.AAMDANI, Cat.ASSETS, "$asset (sold)", "")
                 asset != null && buys && person.isEmpty() -> entries += make(Type.KHARCHA, Cat.ASSETS, asset, "")
-                sells && person.isEmpty() -> entries += make(
-                    Type.AAMDANI, Cat.TANKHWAH, if (goods.isNotEmpty()) "$goods (sold)" else "Sale", ""
-                )
+                sells && person.isEmpty() -> entries += make(Type.SALE, Cat.SALES, goods.ifEmpty { "Sale" }, "")
+                sells && person.isNotEmpty() -> entries += make(Type.SALE, Cat.SALES, goods.ifEmpty { "Sale" }, person)
+                buys && trade && person.isEmpty() && matchSpending(t, words) == null ->
+                    entries += make(Type.PURCHASE, Cat.STOCK, goods, "")
                 isReturn && person.isNotEmpty() -> {
                     val type = if (hasSe || hasNe || has(t, "mile", "mila", "ملے", "ملا", "received", "got")) Type.WAPIS_MILA else Type.WAPIS_DIYA
                     entries += make(type, Cat.UDHAAR, "Loans", person)
@@ -348,7 +361,16 @@ object Parser {
                         (hasSe && !hasKo) || (takes && !hasKo) -> Type.LIYA
                         else -> Type.DIYA
                     }
-                    entries += make(type, Cat.UDHAAR, "Loans", person)
+                    when {
+                        // Goods with a quantity are trade: a sale on credit or a purchase on credit.
+                        trade && type == Type.DIYA -> entries += make(Type.SALE, Cat.SALES, goods, person)
+                        trade && type == Type.LIYA -> entries += make(Type.PURCHASE, Cat.STOCK, goods, person)
+                        // "Ahmed ne 5000 diye" when Ahmed owes me: he is paying back.
+                        type == Type.LIYA && hasNe && owes > 0.005 -> entries += make(Type.WAPIS_MILA, Cat.UDHAAR, "Loans", person)
+                        // "Ahmed ko 5000 diye" when I owe Ahmed: I am paying back.
+                        type == Type.DIYA && hasKo && owes < -0.005 -> entries += make(Type.WAPIS_DIYA, Cat.UDHAAR, "Loans", person)
+                        else -> entries += make(type, Cat.UDHAAR, "Loans", person)
+                    }
                 }
                 else -> {
                     val guess = person.ifEmpty { guessName(words) }
@@ -360,6 +382,8 @@ object Parser {
                     }
                 }
             }
+            val newTrade = entries.drop(before).lastOrNull { isTrade(it.type) && it.person.isNotEmpty() }
+            if (newTrade != null) lastTrade = newTrade
         }
         return Result(entries, unclear)
     }
@@ -375,6 +399,11 @@ object Parser {
 
     /** Words the person taught the app by correcting an entry. Checked before everything else. */
     @Volatile var learned: Map<String, Pair<Cat, String>> = emptyMap()
+
+    /** What each person owes now (lowercase name), positive = they owe me. Used to read payments correctly. */
+    @Volatile var owed: Map<String, Double> = emptyMap()
+
+    private val paidWords = setOf("diye", "diya", "di", "d", "cash", "naqad", "nakad", "paid", "advance", "jama", "mile", "mila", "received", "payment")
 
     /** Names of people already in the khata, lowercase. "1000 hamza diye" works even without "ko". */
     @Volatile var knownPeople: Set<String> = emptySet()

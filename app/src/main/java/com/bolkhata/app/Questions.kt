@@ -16,7 +16,8 @@ object Questions {
 
     private val questionWords = listOf(
         "kitna", "kitne", "kitni", "kitnay", "kitny", "total", "how much", "how many", "hisaab", "hisab",
-        "balance", "baqi", "baki", "bacha", "bache", "kul", "sum", "کتنا", "کتنے", "کتنی"
+        "balance", "baqi", "baki", "bacha", "bache", "bachi", "kul", "sum", "stock", "nafa", "munafa", "profit", "faida",
+        "nuqsan", "loss", "کتنا", "کتنے", "کتنی"
     )
 
     private val filler = setOf(
@@ -50,6 +51,49 @@ object Questions {
             words.any { it in setOf("mahine", "mahina", "mahiny", "mahinay", "month") } -> Period.MONTH
             words.contains("saal") || words.contains("year") -> Period.YEAR
             else -> null
+        }
+
+        val period0 = asked ?: Period.MONTH
+        val inPeriod0 = entries.filter { inPeriod(it.date, period0) }
+
+        // Profit: "is mahine kitna nafa hua"
+        if (words.any { it in setOf("nafa", "munafa", "profit", "faida", "fayda", "nuqsan", "loss") }) {
+            val sales = inPeriod0.filter { it.type == Type.SALE }.sumOf { it.amount }
+            val income = inPeriod0.filter { it.type == Type.AAMDANI }.sumOf { it.amount }
+            val bought = inPeriod0.filter { it.type == Type.PURCHASE }.sumOf { it.amount }
+            val spent = inPeriod0.filter { it.type == Type.KHARCHA }.sumOf { it.amount }
+            val profit = sales + income - bought - spent
+            return Answer(
+                (if (profit >= 0) "Profit" else "Loss") + " ${period0.label}: ${money(currency, kotlin.math.abs(profit))} " +
+                    "(sales ${fmt(sales)} + income ${fmt(income)} − purchases ${fmt(bought)} − expenses ${fmt(spent)})",
+                null
+            )
+        }
+
+        // Stock: "eint kitni bachi", "stock kitna hai"
+        val stockWords = setOf("stock", "bacha", "bachi", "bache", "baqi", "baki", "remaining", "left")
+        if (words.any { it in stockWords } && entries.any { it.qty > 0 }) {
+            val lines = stock(entries)
+            val asked2 = words.filter { it !in filler && it !in stockWords && it.length >= 3 }
+            val pick = if (asked2.isEmpty()) lines else lines.filter { l -> asked2.any { l.name.lowercase().contains(it) } }
+            if (pick.isNotEmpty()) {
+                return Answer(
+                    "In stock: " + pick.joinToString(", ") { it.name + " " + fmt(it.qty) + (if (it.unit.isBlank()) "" else " " + it.unit) },
+                    asked2.firstOrNull()
+                )
+            }
+        }
+
+        // Sales or purchases total: "aaj kitni bikri hui", "is mahine kitni khareed hui"
+        val salesQ = words.any { it in setOf("bikri", "sale", "sales", "becha", "bechi") }
+        val buysQ = words.any { it in setOf("khareed", "kharid", "purchase", "purchases", "maal") }
+        if ((salesQ || buysQ) && entries.none { it.person.isNotBlank() && words.contains(it.person.trim().lowercase()) }) {
+            val t2 = if (salesQ) Type.SALE else Type.PURCHASE
+            val list = inPeriod0.filter { it.type == t2 }
+            return Answer(
+                (if (salesQ) "Sales" else "Purchases") + " ${period0.label}: ${money(currency, list.sumOf { it.amount })} (${list.size} entries)",
+                null
+            )
         }
 
         // 0. Loans overall: "maine total kitna karza liya / wapis karna hai", "mujhe kitne paise lene hain"
@@ -121,19 +165,23 @@ object Questions {
     }
 
     private fun personAnswer(person: String, entries: List<Entry>, currency: String, period: Period): Answer {
-        val mine = entries.filter { it.person.trim().equals(person, true) && isLoan(it.type) && inPeriod(it.date, period) }
+        val mine = entries.filter { it.person.trim().equals(person, true) && withPerson(it) && inPeriod(it.date, period) }
         fun sum(t: Type) = mine.filter { it.type == t }.sumOf { it.amount }
         val gave = sum(Type.DIYA)
         val took = sum(Type.LIYA)
         val gotBack = sum(Type.WAPIS_MILA)
         val paidBack = sum(Type.WAPIS_DIYA)
-        val all = entries.filter { it.person.trim().equals(person, true) && isLoan(it.type) }
+        val all = entries.filter { it.person.trim().equals(person, true) && withPerson(it) }
         val bal = balances(all)[person] ?: balances(all).entries.firstOrNull { it.key.equals(person, true) }?.value ?: 0.0
         val parts = mutableListOf<String>()
         if (gave > 0) parts += "you gave ${money(currency, gave)}"
         if (gotBack > 0) parts += "got back ${money(currency, gotBack)}"
         if (took > 0) parts += "you took ${money(currency, took)}"
         if (paidBack > 0) parts += "paid back ${money(currency, paidBack)}"
+        val sold = sum(Type.SALE)
+        val bought = sum(Type.PURCHASE)
+        if (sold > 0) parts += "sold ${money(currency, sold)}"
+        if (bought > 0) parts += "bought ${money(currency, bought)}"
         val head = if (parts.isEmpty()) "No entries with $person ${period.label}" else "$person ${period.label}: " + parts.joinToString(", ")
         val tail = when {
             bal > 0.005 -> ". $person will pay you ${money(currency, bal)}."

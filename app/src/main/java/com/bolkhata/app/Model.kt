@@ -10,7 +10,9 @@ enum class Type(val label: String) {
     DIYA("Lent"),
     LIYA("Borrowed"),
     WAPIS_MILA("Received back"),
-    WAPIS_DIYA("Paid back")
+    WAPIS_DIYA("Paid back"),
+    SALE("Sale"),
+    PURCHASE("Purchase")
 }
 
 enum class Cat(val label: String, val icon: String) {
@@ -29,6 +31,8 @@ enum class Cat(val label: String, val icon: String) {
     EDU("Education", "📚"),
     CHARITY("Gifts & Charity", "🎁"),
     ASSETS("Assets", "🏷️"),
+    SALES("Sales", "🧾"),
+    STOCK("Purchases", "📦"),
     OTHER("Other", "📝")
 }
 

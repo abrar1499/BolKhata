@@ -2,6 +2,8 @@ package com.bolkhata.app
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -68,6 +70,13 @@ fun HomeScreen(
     val monthSpent = entries.filter { it.type == Type.KHARCHA && inMonth(it.date) }.sumOf { it.amount }
     val yearSpent = entries.filter { it.type == Type.KHARCHA && inYear(it.date) }.sumOf { it.amount }
     val monthIncome = entries.filter { it.type == Type.AAMDANI && inMonth(it.date) }.sumOf { it.amount }
+    // Shop and business cards appear only once sales or purchases are used.
+    val trading = entries.any { isTrade(it.type) }
+    val todaySales = entries.filter { it.type == Type.SALE && sameDay(it.date, System.currentTimeMillis()) }.sumOf { it.amount }
+    val monthSales = entries.filter { it.type == Type.SALE && inMonth(it.date) }.sumOf { it.amount }
+    val monthPurchases = entries.filter { it.type == Type.PURCHASE && inMonth(it.date) }.sumOf { it.amount }
+    val monthProfit = monthSales + monthIncome - monthPurchases - monthSpent
+    val stockLines = if (trading) stock(entries).filter { kotlin.math.abs(it.qty) > 0.0001 } else emptyList()
     val bal = balances(entries)
     val receive = bal.values.filter { it > 0 }.sum()
     val pay = -bal.values.filter { it < 0 }.sum()
@@ -140,6 +149,20 @@ fun HomeScreen(
                                 valueSize = 18, valueColor = GreenIn, tinted = true
                             ) { onReports() }
                         }
+                        if (trading) {
+                            Spacer(Modifier.height(8.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                MiniTile(
+                                    "Sales today", moneyA(currency, todaySales), "🧾", Cat.SALES.let { catColor(it) }, Modifier.weight(1f),
+                                    valueSize = 16
+                                ) { onSeeAll() }
+                                MiniTile(
+                                    "Profit this month", moneyA(currency, monthProfit), if (monthProfit >= 0) "↑" else "↓",
+                                    if (monthProfit >= 0) GreenIn else RedSpend, Modifier.weight(1f),
+                                    valueSize = 16, valueColor = if (monthProfit >= 0) GreenIn else RedSpend
+                                ) { onReports() }
+                            }
+                        }
                     }
                 }
             }
@@ -194,6 +217,36 @@ fun HomeScreen(
         val todayList = sortedAll.filter { sameDay(it.date, nowMs) }
         val dayGroups = sortedAll.filter { !sameDay(it.date, nowMs) && inMonth(it.date) }.groupBy { dayKey(it.date) }
         val monthGroups = sortedAll.filter { !inMonth(it.date) }.groupBy { monthKey(it.date) }
+
+        if (stockLines.isNotEmpty()) {
+            item {
+                Box(Modifier.padding(horizontal = 16.dp).padding(top = 6.dp)) {
+                    SectionHeader("Stock", stockLines.size, "stock" in open, null) { toggle("stock") }
+                }
+            }
+            if ("stock" in open) {
+                item {
+                    Panel(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), padding = 12.dp) {
+                        stockLines.sortedBy { it.name.lowercase() }.forEach { line ->
+                            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text("📦", fontSize = 16.sp)
+                                Spacer(Modifier.width(10.dp))
+                                Text(line.name, Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+                                Text(
+                                    fmt(line.qty) + (if (line.unit.isBlank()) "" else " " + line.unit),
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (line.qty < 0) RedSpend else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                        Text(
+                            "Bought or received minus sold or given. Tap an entry to fix a quantity.",
+                            fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
 
         item {
             Box(Modifier.padding(horizontal = 16.dp).padding(top = 6.dp)) {
@@ -314,7 +367,7 @@ fun Avatar(name: String) {
 
 // ======================= TRANSACTIONS =======================
 
-enum class TxFilter(val label: String) { ALL("All"), EXPENSE("Expenses"), INCOME("Income"), LOANS("Loans") }
+enum class TxFilter(val label: String) { ALL("All"), EXPENSE("Expenses"), INCOME("Income"), LOANS("Loans"), TRADE("Sales & purchases") }
 
 @Composable
 fun TransactionsScreen(entries: List<Entry>, currency: String, onEdit: (Entry) -> Unit, onAdd: () -> Unit, onMenu: () -> Unit) {
@@ -329,6 +382,7 @@ fun TransactionsScreen(entries: List<Entry>, currency: String, onEdit: (Entry) -
                 TxFilter.EXPENSE -> it.type == Type.KHARCHA
                 TxFilter.INCOME -> it.type == Type.AAMDANI
                 TxFilter.LOANS -> isLoan(it.type)
+                TxFilter.TRADE -> isTrade(it.type)
             }
         }
         .filter { e ->
@@ -361,7 +415,7 @@ fun TransactionsScreen(entries: List<Entry>, currency: String, onEdit: (Entry) -
             )
         }
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 TxFilter.entries.forEach { f ->
                     FilterChip(selected = filter == f, onClick = { filter = f }, label = { Text(f.label) })
                 }
@@ -593,7 +647,7 @@ fun PeopleScreen(entries: List<Entry>, currency: String, receive: Boolean, onBac
         }
         items(bal, key = { it.first }) { (person, v) ->
             val expanded = person in open
-            val history = entries.filter { it.person.trim() == person && isLoan(it.type) }.sortedByDescending { it.date }
+            val history = entries.filter { it.person.trim() == person && withPerson(it) }.sortedByDescending { it.date }
             Panel(Modifier.fillMaxWidth(), onClick = { open = if (expanded) open - person else open + person }, padding = 12.dp) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Avatar(person)
@@ -834,7 +888,7 @@ fun ResultsScreen(
     // When the query is a person's name, show that person's khata.
     val person = entries.map { it.person.trim() }.firstOrNull { it.isNotEmpty() && it.equals(query.trim(), ignoreCase = true) }
     val found = if (person != null) {
-        entries.filter { it.person.trim().equals(person, ignoreCase = true) && isLoan(it.type) }
+        entries.filter { it.person.trim().equals(person, ignoreCase = true) && withPerson(it) }
             .sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt })
     } else {
         matchEntries(entries, query)
@@ -891,6 +945,13 @@ fun ResultsScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         KhataStat("You took", sum(Type.LIYA), currency, OrangeOwe, Modifier.weight(1f))
                         KhataStat("Paid back", sum(Type.WAPIS_DIYA), currency, RedSpend, Modifier.weight(1f))
+                    }
+                    if (found.any { isTrade(it.type) }) {
+                        Spacer(Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            KhataStat("Sold to them", sum(Type.SALE), currency, GreenIn, Modifier.weight(1f))
+                            KhataStat("Bought from them", sum(Type.PURCHASE), currency, RedSpend, Modifier.weight(1f))
+                        }
                     }
                     Spacer(Modifier.height(6.dp))
                     Text("${found.size} entries · tap one to change it", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)

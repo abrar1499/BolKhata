@@ -110,6 +110,8 @@ fun catColor(c: Cat): Color = when (c) {
     Cat.EDU -> Color(0xFF0EA5E9)
     Cat.CHARITY -> Color(0xFFDB2777)
     Cat.ASSETS -> Color(0xFF7C3AED)
+    Cat.SALES -> Color(0xFF16A34A)
+    Cat.STOCK -> Color(0xFF0891B2)
     Cat.OTHER -> Color(0xFF94A3B8)
 }
 
@@ -202,30 +204,54 @@ fun fromUtcMidnight(ms: Long): Long {
 
 fun isLoan(t: Type) = t == Type.DIYA || t == Type.LIYA || t == Type.WAPIS_MILA || t == Type.WAPIS_DIYA
 
+fun isTrade(t: Type) = t == Type.SALE || t == Type.PURCHASE
+
+/** True when this entry changes what a person owes: loans, and sales or purchases on credit. */
+fun withPerson(e: Entry) = e.person.isNotBlank() && (isLoan(e.type) || isTrade(e.type))
+
 /** Positive = they owe me, negative = I owe them. */
 fun balances(entries: List<Entry>): Map<String, Double> {
     val map = linkedMapOf<String, Double>()
     for (e in entries) {
-        if (e.person.isBlank() || !isLoan(e.type)) continue
+        if (!withPerson(e)) continue
         val p = e.person.trim()
         val v = map[p] ?: 0.0
         map[p] = when (e.type) {
-            Type.DIYA, Type.WAPIS_DIYA -> v + e.amount
+            Type.DIYA, Type.WAPIS_DIYA, Type.SALE -> v + e.amount
             else -> v - e.amount
         }
     }
     return map
 }
 
+/** Items in hand: bought or received minus sold or given, for entries with a quantity. */
+data class StockLine(val name: String, val unit: String, val qty: Double)
+
+fun stock(entries: List<Entry>): List<StockLine> {
+    val map = linkedMapOf<String, StockLine>()
+    for (e in entries) {
+        if (e.qty <= 0 || e.item.isBlank() || e.item == "Loans") continue
+        val sign = when (e.type) {
+            Type.PURCHASE, Type.LIYA -> 1.0
+            Type.SALE, Type.DIYA -> -1.0
+            else -> continue
+        }
+        val key = e.item.trim().lowercase()
+        val old = map[key]
+        map[key] = StockLine(old?.name ?: e.item.trim(), old?.unit?.ifBlank { e.unit } ?: e.unit, (old?.qty ?: 0.0) + sign * e.qty)
+    }
+    return map.values.toList()
+}
+
 fun signColor(t: Type) = when (t) {
-    Type.KHARCHA, Type.WAPIS_DIYA -> RedSpend
-    Type.AAMDANI, Type.WAPIS_MILA -> GreenIn
+    Type.KHARCHA, Type.WAPIS_DIYA, Type.PURCHASE -> RedSpend
+    Type.AAMDANI, Type.WAPIS_MILA, Type.SALE -> GreenIn
     Type.DIYA, Type.LIYA -> OrangeOwe
 }
 
 fun prefix(t: Type) = when (t) {
-    Type.KHARCHA, Type.WAPIS_DIYA -> "−"
-    Type.AAMDANI, Type.WAPIS_MILA -> "+"
+    Type.KHARCHA, Type.WAPIS_DIYA, Type.PURCHASE -> "−"
+    Type.AAMDANI, Type.WAPIS_MILA, Type.SALE -> "+"
     else -> ""
 }
 
@@ -238,6 +264,8 @@ fun typeLabel(t: Type, person: String): String {
         Type.LIYA -> if (p.isEmpty()) "Borrowed (I owe)" else "Took from $p"
         Type.WAPIS_MILA -> if (p.isEmpty()) "Got money back" else "$p returned"
         Type.WAPIS_DIYA -> if (p.isEmpty()) "Paid back" else "Returned to $p"
+        Type.SALE -> if (p.isEmpty()) "Sale" else "Sold to $p"
+        Type.PURCHASE -> if (p.isEmpty()) "Purchase" else "Bought from $p"
     }
 }
 
@@ -250,6 +278,8 @@ fun qtyText(e: Entry): String {
 
 fun entryTitle(e: Entry): String = when {
     isLoan(e.type) -> typeLabel(e.type, e.person)
+    isTrade(e.type) && e.person.isNotBlank() -> typeLabel(e.type, e.person)
+    isTrade(e.type) -> typeLabel(e.type, "") + (if (e.item.isNotBlank() && e.item != "Loans") ": " + e.item else "")
     e.item.isNotBlank() -> e.item
     else -> e.category.label
 }
@@ -336,7 +366,7 @@ fun TxRow(e: Entry, currency: String, onClick: () -> Unit) {
                 Text(entryTitle(e), fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
                     dayLabel(e.date) + " · " + qtyText(e).ifBlank {
-                        if (isLoan(e.type) && e.item.isNotBlank() && e.item != "Loans") e.item else e.note
+                        if ((isLoan(e.type) || isTrade(e.type)) && e.item.isNotBlank() && e.item != "Loans") e.item else e.note
                     },
                     fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1, overflow = TextOverflow.Ellipsis

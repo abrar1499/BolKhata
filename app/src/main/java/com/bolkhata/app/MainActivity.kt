@@ -197,6 +197,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     LaunchedEffect(Unit) { Parser.learned = store.loadLearned() }
     LaunchedEffect(entries) {
         Parser.knownPeople = entries.mapNotNull { e -> e.person.trim().lowercase().takeIf { it.length >= 3 } }.toSet()
+        Parser.owed = balances(entries).mapKeys { it.key.lowercase() }
     }
 
     /** When the person fixes a category, remember the words so it is right next time. */
