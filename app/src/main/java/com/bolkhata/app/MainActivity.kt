@@ -93,6 +93,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var pending by remember { mutableStateOf(listOf<Entry>()) }
     var moreFor by remember { mutableStateOf<Entry?>(null) }
     var searching by remember { mutableStateOf(false) }
+    var answerText by remember { mutableStateOf<String?>(null) }
     var suggestions by remember { mutableStateOf(store.loadSuggestions()) }
     var reviewing by remember { mutableStateOf(false) }
     var bankOn by remember { mutableStateOf(BankListener.isEnabled(context)) }
@@ -264,15 +265,15 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         if (Questions.isQuestion(text)) {
             val a = Questions.answer(text, entries, currency)
             if (a != null) {
-                scope.launch {
-                    snackbar.currentSnackbarData?.dismiss()
-                    val res = snackbar.showSnackbar(
-                        a.text, actionLabel = if (a.search != null) "Details" else null,
-                        duration = SnackbarDuration.Long, withDismissAction = a.search == null
-                    )
-                    if (res == SnackbarResult.ActionPerformed && a.search != null) {
-                        people = null
-                        results = a.search to false
+                if (a.search != null) {
+                    // Open the person's khata (or the matching entries) with the answer on top.
+                    people = null
+                    answerText = a.text
+                    results = a.search to false
+                } else {
+                    scope.launch {
+                        snackbar.currentSnackbarData?.dismiss()
+                        snackbar.showSnackbar(a.text, duration = SnackbarDuration.Long, withDismissAction = true)
                     }
                 }
                 return
@@ -371,6 +372,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     BackHandler(enabled = results != null || people != null || tab != Tab.HOME) {
         if (results != null) {
             results = null
+            answerText = null
         } else if (people != null) {
             people = null
         } else {
@@ -406,9 +408,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     val (q, editMode) = results!!
                     ResultsScreen(
                         query = q, editMode = editMode, entries = entries, currency = currency,
-                        onBack = { results = null },
+                        onBack = { results = null; answerText = null },
                         onEdit = { editing = it },
-                        onDeleteAll = { list -> askDelete(q, list) }
+                        onDeleteAll = { list -> askDelete(q, list) },
+                        answer = answerText
                     )
                 }
                 who != null -> PeopleScreen(entries, currency, who, onBack = { people = null }, onEdit = { editing = it })

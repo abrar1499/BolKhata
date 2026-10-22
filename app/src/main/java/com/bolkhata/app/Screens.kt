@@ -828,9 +828,17 @@ fun ResultsScreen(
     currency: String,
     onBack: () -> Unit,
     onEdit: (Entry) -> Unit,
-    onDeleteAll: (List<Entry>) -> Unit
+    onDeleteAll: (List<Entry>) -> Unit,
+    answer: String? = null
 ) {
-    val found = matchEntries(entries, query)
+    // When the query is a person's name, show that person's khata.
+    val person = entries.map { it.person.trim() }.firstOrNull { it.isNotEmpty() && it.equals(query.trim(), ignoreCase = true) }
+    val found = if (person != null) {
+        entries.filter { it.person.trim().equals(person, ignoreCase = true) && isLoan(it.type) }
+            .sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt })
+    } else {
+        matchEntries(entries, query)
+    }
     val spent = found.filter { it.type == Type.KHARCHA }.sumOf { it.amount }
     val owed = balances(found).filter { it.value.roundToLong() != 0L }
 
@@ -839,8 +847,56 @@ fun ResultsScreen(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        item { ScreenTitle((if (editMode) "Edit: " else "Search: ") + query, onBack) }
         item {
+            ScreenTitle(
+                when {
+                    person != null -> "$person's khata"
+                    editMode -> "Edit: $query"
+                    else -> "Search: $query"
+                },
+                onBack
+            )
+        }
+        if (answer != null && person == null) {
+            item {
+                Panel(Modifier.fillMaxWidth(), padding = 14.dp) {
+                    Text(answer, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                }
+            }
+        }
+        if (person != null) {
+            item {
+                val bal = owed.values.firstOrNull() ?: 0.0
+                fun sum(t: Type) = found.filter { it.type == t }.sumOf { it.amount }
+                Panel(Modifier.fillMaxWidth(), padding = 16.dp) {
+                    Text(
+                        when {
+                            bal > 0.005 -> "$person will pay you"
+                            bal < -0.005 -> "You will pay $person"
+                            else -> "All settled with $person"
+                        },
+                        fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        moneyA(currency, kotlin.math.abs(bal)),
+                        fontSize = 30.sp, fontWeight = FontWeight.ExtraBold,
+                        color = if (bal > 0.005) GreenIn else if (bal < -0.005) OrangeOwe else MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        KhataStat("You gave", sum(Type.DIYA), currency, OrangeOwe, Modifier.weight(1f))
+                        KhataStat("Got back", sum(Type.WAPIS_MILA), currency, GreenIn, Modifier.weight(1f))
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        KhataStat("You took", sum(Type.LIYA), currency, OrangeOwe, Modifier.weight(1f))
+                        KhataStat("Paid back", sum(Type.WAPIS_DIYA), currency, RedSpend, Modifier.weight(1f))
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text("${found.size} entries · tap one to change it", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        } else item {
             Panel(Modifier.fillMaxWidth(), padding = 16.dp) {
                 Text(
                     "${found.size} " + (if (found.size == 1) "entry" else "entries") + " found",
@@ -991,5 +1047,18 @@ private fun ThemeGroup(title: String, themes: List<HeaderTheme>, selected: Strin
                 Text(t.name, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
+    }
+}
+
+@Composable
+private fun KhataStat(label: String, amount: Double, currency: String, color: Color, modifier: Modifier) {
+    Column(
+        modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(color.copy(alpha = 0.10f))
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    ) {
+        Text(label, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(moneyA(currency, amount), fontWeight = FontWeight.Bold, fontSize = 16.sp, color = color)
     }
 }
