@@ -92,6 +92,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var adding by remember { mutableStateOf(false) }
     var pending by remember { mutableStateOf(listOf<Entry>()) }
     var moreFor by remember { mutableStateOf<Entry?>(null) }
+    var editPlan by remember { mutableStateOf<Ai.EditPlan?>(null) }
     var searching by remember { mutableStateOf(false) }
     var suggestions by remember { mutableStateOf(store.loadSuggestions()) }
     var reviewing by remember { mutableStateOf(false) }
@@ -225,8 +226,40 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
      * an "Other" expense, or no amount at all) and an AI key is set, the sentence goes to Gemini.
      * If the AI fails or there is no internet, the offline result is used as before.
      */
+    /** "hamza wali 500 ko 400 kar do", "last entry food mein daal do", "kal ka petrol 60 tha 50 nahi". */
+    fun looksLikeEdit(text: String): Boolean {
+        val t = " " + text.lowercase() + " "
+        val strong = listOf(
+            "change", "badal", "badlo", "update", "correct", "galat", "ghalat", "ki jagah", "ke bajaye", "instead",
+            "should be", "make it", "nahi tha", "nahi thi", "nahin tha", "fix", "theek kar", "thik kar", "sahi kar", " edit "
+        )
+        val soft = listOf("kar do", "kardo", "kr do", "krdo", "daal do", "dal do", "daldo", "kar dein", "kardein")
+        val refers = listOf("entry", "wali", "wala", "wale", "last", "pichli", "pichhli", "akhri", "aakhri", "category", "previous")
+        return strong.any { t.contains(it) } || (soft.any { t.contains(it) } && refers.any { t.contains(it) })
+    }
+
     fun handleText(text: String) {
         if (handleCommand(text)) return
+        if (looksLikeEdit(text) && entries.isNotEmpty()) {
+            if (activeKey.isBlank()) {
+                toast("Changing entries by voice needs AI. Turn it on in Settings, or tap the entry to edit.")
+                return
+            }
+            toast("✨ Finding the entry…")
+            scope.launch {
+                try {
+                    val plan = Ai.edit(text, entries, activeKey, store, currency)
+                    if (plan.changed.isEmpty() && plan.deleted.isEmpty()) {
+                        toast(plan.message)
+                    } else {
+                        editPlan = plan
+                    }
+                } catch (e: Exception) {
+                    toast(e.message ?: "AI did not answer. Tap the entry to edit it.")
+                }
+            }
+            return
+        }
         val r = Parser.parse(text)
         val unsure = r.unclear.isNotEmpty() || r.entries.isEmpty() ||
             r.entries.any { it.type == Type.KHARCHA && it.category == Cat.OTHER }
@@ -624,6 +657,59 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                             modifier = Modifier.weight(1f)
                         ) { Text("Add all ${suggestions.size}") }
                     }
+                }
+            }
+        }
+    }
+
+    editPlan?.let { plan ->
+        FormPopup(onDismiss = { editPlan = null }) {
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("✨ Change entries?", fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                Text(plan.message, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Column(
+                    Modifier.heightIn(max = 380.dp).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    plan.changed.forEach { (before, after) ->
+                        Column(
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .padding(10.dp)
+                        ) {
+                            Text(
+                                entryTitle(before) + " · " + money(currency, before.amount) + " · " + shortDate(before.date),
+                                fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                "→ " + entryTitle(after) + " · " + money(currency, after.amount) + " · " + shortDate(after.date),
+                                fontWeight = FontWeight.SemiBold, color = signColor(after.type)
+                            )
+                        }
+                    }
+                    plan.deleted.forEach { d ->
+                        Text(
+                            "🗑️ " + entryTitle(d) + " · " + money(currency, d.amount) + " · " + shortDate(d.date),
+                            color = RedSpend, fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { editPlan = null }, shape = RoundedCornerShape(14.dp)) { Text("Cancel") }
+                    Button(
+                        onClick = {
+                            val map = plan.changed.associate { it.first.id to it.second }
+                            save(entries.map { map[it.id] ?: it })
+                            plan.changed.forEach { (b, a) -> learnFrom(b, a) }
+                            if (plan.deleted.isNotEmpty()) moveToTrash(plan.deleted.map { it.id }.toSet())
+                            else toast("✓ Updated")
+                            editPlan = null
+                        },
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Apply") }
                 }
             }
         }

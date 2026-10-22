@@ -48,6 +48,105 @@ object Ai {
         throw Failure(lastError)
     }
 
+    /** A change the AI proposes; nothing is applied until the person taps Apply. */
+    class EditPlan(val changed: List<Pair<Entry, Entry>>, val deleted: List<Entry>, val message: String)
+
+    private val typeNames = mapOf(
+        Type.KHARCHA to "expense", Type.AAMDANI to "income", Type.DIYA to "gave", Type.LIYA to "took",
+        Type.WAPIS_MILA to "got_back", Type.WAPIS_DIYA to "paid_back"
+    )
+    private val catNames = mapOf(
+        Cat.KHANA to "food", Cat.TRANSPORT to "transport", Cat.RENT to "rent", Cat.BIJLI to "bills",
+        Cat.MOBILE to "mobile", Cat.GHAR to "home", Cat.SHOPPING to "shopping", Cat.SEHAT to "health",
+        Cat.PERSONAL to "personal", Cat.FEES to "fees", Cat.EDU to "education", Cat.CHARITY to "charity",
+        Cat.TANKHWAH to "income", Cat.UDHAAR to "loans", Cat.OTHER to "other"
+    )
+
+    /** Asks Gemini which existing entries to change for an instruction like "hamza wali 500 ko 400 kar do". */
+    suspend fun edit(instruction: String, all: List<Entry>, key: String, store: Store, currency: String): EditPlan =
+        withContext(Dispatchers.IO) {
+            val recent = all.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt }).take(80)
+            val day = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+            val list = JSONArray()
+            recent.forEachIndexed { i, e ->
+                list.put(
+                    JSONObject().put("n", i + 1).put("date", day.format(Date(e.date)))
+                        .put("type", typeNames[e.type]).put("amount", e.amount)
+                        .put("category", catNames[e.category]).put("item", e.item)
+                        .put("person", e.person).put("note", e.note)
+                )
+            }
+            val today = SimpleDateFormat("yyyy-MM-dd (EEEE)", Locale.US).format(Date())
+            val prompt = """
+You edit a personal money ledger. Today is $today. Amounts are in $currency.
+The person may write English, Roman Urdu, Urdu, Hindi or Arabic.
+Recent entries (n = number, newest first):
+$list
+
+Instruction: "${instruction.replace("\"", "'")}"
+
+Find the entries the instruction is about and say what to change. Change only what was asked.
+Return ONLY JSON:
+{"edits":[{"n":1,"type":"","amount":0,"category":"","item":"","person":"","date":"YYYY-MM-DD"}],"delete":[n,...],"message":"one short English sentence describing the change"}
+In edits include only fields that change. type: expense, income, gave, took, got_back, paid_back.
+category: food, transport, rent, bills, mobile, home, shopping, health, personal, fees, education, charity, other.
+If nothing matches, return {"edits":[],"delete":[],"message":"I couldn't find that entry."}
+""".trim()
+            val json = JSONObject(request(prompt, key, store))
+            val changed = mutableListOf<Pair<Entry, Entry>>()
+            val edits = json.optJSONArray("edits") ?: JSONArray()
+            for (i in 0 until edits.length()) {
+                val o = edits.optJSONObject(i) ?: continue
+                val old = recent.getOrNull(o.optInt("n", 0) - 1) ?: continue
+                var e = old
+                if (o.has("type")) typeNames.entries.firstOrNull { it.value == o.optString("type") }?.let { e = e.copy(type = it.key) }
+                if (o.has("amount")) o.optDouble("amount").takeIf { !it.isNaN() && it > 0 }?.let { e = e.copy(amount = it) }
+                if (o.has("category")) catNames.entries.firstOrNull { it.value == o.optString("category") && it.key != Cat.UDHAAR && it.key != Cat.TANKHWAH }
+                    ?.let { e = e.copy(category = it.key, item = if (o.has("item")) e.item else it.key.label) }
+                if (o.has("item")) o.optString("item").trim().takeIf { it.isNotEmpty() }?.let { e = e.copy(item = it) }
+                if (o.has("person")) e = e.copy(person = o.optString("person").trim().replaceFirstChar { it.uppercase() })
+                if (o.has("date")) parseDate(o.optString("date"))?.let { e = e.copy(date = it) }
+                // keep category consistent with the type
+                e = when {
+                    isLoan(e.type) -> e.copy(category = Cat.UDHAAR, item = "Loans")
+                    e.type == Type.AAMDANI -> e.copy(category = Cat.TANKHWAH, person = "")
+                    e.category == Cat.UDHAAR || e.category == Cat.TANKHWAH -> e.copy(category = Cat.OTHER, item = "Other", person = "")
+                    else -> e.copy(person = "")
+                }
+                if (isLoan(e.type) && e.person.isBlank()) continue
+                if (e != old) changed += old to e
+            }
+            val del = json.optJSONArray("delete") ?: JSONArray()
+            val deleted = (0 until del.length()).mapNotNull { recent.getOrNull(del.optInt(it, 0) - 1) }
+                .filter { d -> changed.none { it.first.id == d.id } }
+            EditPlan(changed, deleted, json.optString("message").ifBlank { "Here is the change." })
+        }
+
+    /** Sends [prompt] to the first model that answers and returns its JSON text. */
+    private fun request(prompt: String, key: String, store: Store): String {
+        val first = store.aiModel.takeIf { it in MODELS }
+        val order = listOfNotNull(first) + MODELS.filter { it != first }
+        var lastError = "AI did not answer"
+        for (model in order) {
+            val (code, body) = call(model, key, prompt)
+            when (code) {
+                200 -> {
+                    store.aiModel = model
+                    return readText(body)
+                }
+                400, 401, 403 -> {
+                    val msg = errorMessage(body)
+                    if (msg.contains("API key", ignoreCase = true) || code != 400) throw Failure("AI key not accepted. Check it in Settings.")
+                    lastError = msg
+                }
+                404 -> lastError = "Model not available"
+                429 -> throw Failure("AI daily limit reached. Try again later.")
+                else -> lastError = "AI error $code"
+            }
+        }
+        throw Failure(lastError)
+    }
+
     /** Sends a tiny request to check the key. Returns null when it works, else a message. */
     suspend fun test(key: String, store: Store): String? = try {
         parse("test 1 riyal chai", key, store, "SAR")
