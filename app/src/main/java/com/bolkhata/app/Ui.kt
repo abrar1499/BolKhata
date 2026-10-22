@@ -110,6 +110,9 @@ fun dayLabel(d: Long): String {
     }
 }
 
+/** Time the entry was added, e.g. "7:51 AM". */
+fun timeLabel(ms: Long): String = SimpleDateFormat("h:mm a", Locale.US).format(Date(ms))
+
 fun shortDate(d: Long): String = SimpleDateFormat("d MMM", Locale.US).format(Date(d))
 fun fullDate(d: Long): String = SimpleDateFormat("EEE, d MMM yyyy", Locale.US).format(Date(d))
 
@@ -259,7 +262,7 @@ fun TxRow(e: Entry, currency: String, onClick: () -> Unit) {
             Column(Modifier.weight(1f)) {
                 Text(entryTitle(e), fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
-                    dayLabel(e.date) + " · " + e.note,
+                    dayLabel(e.date) + ", " + timeLabel(e.createdAt) + " · " + e.note,
                     fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1, overflow = TextOverflow.Ellipsis
                 )
