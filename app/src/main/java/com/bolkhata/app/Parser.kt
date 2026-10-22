@@ -89,6 +89,64 @@ object Parser {
         "گھر", "آج", "کل", "میں", "مجھے", "ریال", "روپے", "دکان"
     )
 
+    /** Words that usually end one spoken entry: "40 hamza ko diye | 10 ki roti khai | ...". */
+    private val clauseEnd = setOf(
+        "diye", "diya", "di", "diay", "dye", "liye", "liya", "li", "lia", "le", "khai", "khaya", "khaye", "khaaya",
+        "khaai", "piya", "pi", "pee", "bheje", "bheja", "bheji", "bhejay", "dala", "dali", "dalwaya", "dalwaye",
+        "kharida", "kharide", "kharidi", "bharwaya", "karwaya", "karwayi", "mile", "mila", "mili", "aaye", "aya",
+        "gave", "paid", "spent", "bought", "took", "received", "sent", "returned", "lent", "borrowed",
+        "hai", "hain", "tha", "thay", "the", "دیے", "دیا", "لیے", "لیا", "کھائی", "کھایا", "بھیجے"
+    )
+
+    private val currencyWords = setOf("riyal", "riyals", "rial", "rials", "sar", "sr", "rupay", "rupaye", "rupees", "rupee", "rs", "ریال", "روپے")
+
+    /** A number written right before a currency word: "10 riyal". Preferred over other numbers. */
+    private val moneyRegex = Regex(
+        """(\d[\d,]*(?:\.\d+)?)\s*(?:riyals?|rials?|sar|sr|rupay|rupaye|rupees?|rs|ریال|روپے)(?!\p{L})""",
+        RegexOption.IGNORE_CASE
+    )
+
+    private fun isNumber(w: String) = w.any { it.isDigit() }
+
+    /**
+     * Splits "40 hamza ko diye 10 ki roti khai 10 ki medicine li" into one piece per entry.
+     * Cuts after a verb when both sides have an amount; a piece that still has two amounts
+     * and no currency word ("petrol 50 roti 10") is cut between the two amounts.
+     */
+    private fun splitClauses(s: String): List<String> {
+        val words = s.trim().split(Regex("""\s+""")).filter { it.isNotEmpty() }
+        val pieces = mutableListOf<List<String>>()
+        var cur = mutableListOf<String>()
+        words.forEachIndexed { i, w ->
+            cur.add(w)
+            val rest = words.subList(i + 1, words.size)
+            if (w.lowercase() in clauseEnd && cur.any { isNumber(it) } && rest.any { isNumber(it) }) {
+                pieces.add(cur)
+                cur = mutableListOf()
+            }
+        }
+        if (cur.isNotEmpty()) pieces.add(cur)
+
+        val out = mutableListOf<String>()
+        for (p in pieces) {
+            val hasCurrency = p.any { it.lowercase() in currencyWords }
+            val numIdx = p.indices.filter { isNumber(p[it]) }
+            if (hasCurrency || numIdx.size < 2) {
+                out.add(p.joinToString(" "))
+                continue
+            }
+            // "50 petrol 10 roti": cut before each later amount. "petrol 50 roti 10": cut after each amount.
+            val cuts = if (isNumber(p[0])) numIdx.drop(1) else numIdx.dropLast(1).map { it + 1 }
+            var start = 0
+            for (k in cuts) {
+                if (k > start) out.add(p.subList(start, k).joinToString(" "))
+                start = k
+            }
+            if (start < p.size) out.add(p.subList(start, p.size).joinToString(" "))
+        }
+        return out
+    }
+
     private val splitRegex = Regex("""[,\n،۔]|(?<!\d)\.(?!\d)|\baur\b|\bphir\b|\band\b| اور | پھر """, RegexOption.IGNORE_CASE)
     private val numberRegex = Regex("""(\d[\d,]*(?:\.\d+)?)(?:\s*(hazar|hazaar|hazzar|thousand|k|lakh|lac|hundred|sau|ہزار|لاکھ|سو)(?!\p{L}))?""", RegexOption.IGNORE_CASE)
 
@@ -99,10 +157,10 @@ object Parser {
         val entries = mutableListOf<Entry>()
         val unclear = mutableListOf<Entry>()
 
-        for (raw in text.split(splitRegex)) {
+        for (raw in text.split(splitRegex).flatMap { splitClauses(it) }) {
             val part = raw.trim().replace(Regex("""\s+"""), " ")
             if (part.isEmpty()) continue
-            val num = numberRegex.find(part) ?: continue
+            val num = moneyRegex.find(part) ?: numberRegex.find(part) ?: continue
             var amount = num.groupValues[1].replace(",", "").toDoubleOrNull() ?: continue
             val mult = num.groupValues[2].lowercase()
             if (mult.isNotEmpty()) {
