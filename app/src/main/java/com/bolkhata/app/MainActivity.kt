@@ -13,6 +13,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -213,7 +215,11 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit) {
     ModalNavigationDrawer(
         drawerState = drawer,
         drawerContent = {
-            DrawerMenu(tab, name) { t ->
+            DrawerMenu(tab, name, currency, onCurrency = { c ->
+                currency = c
+                store.currency = c
+                toast("✓ Currency set to $c")
+            }) { t ->
                 tab = t
                 people = null
                 results = null
@@ -466,7 +472,8 @@ private fun InputBar(onSend: (String) -> Unit, onMic: () -> Unit) {
 }
 
 @Composable
-private fun DrawerMenu(tab: Tab, name: String, onPick: (Tab) -> Unit) {
+private fun DrawerMenu(tab: Tab, name: String, currency: String, onCurrency: (String) -> Unit, onPick: (Tab) -> Unit) {
+    var currencyOpen by remember { mutableStateOf(false) }
     ModalDrawerSheet(
         modifier = Modifier.width(250.dp),
         drawerContainerColor = MaterialTheme.colorScheme.surface
@@ -505,6 +512,45 @@ private fun DrawerMenu(tab: Tab, name: String, onPick: (Tab) -> Unit) {
             label = { Text("Settings") }, selected = tab == Tab.SETTINGS, onClick = { onPick(Tab.SETTINGS) },
             icon = { Icon(Icons.Filled.Settings, contentDescription = null) }, modifier = itemPad
         )
+        HorizontalDivider(Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
+        NavigationDrawerItem(
+            label = { Text("Currency") },
+            badge = {
+                Text(
+                    "$currency ▾", fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            },
+            selected = false,
+            onClick = { currencyOpen = !currencyOpen },
+            icon = { Text("💱", fontSize = 20.sp) },
+            modifier = itemPad
+        )
+        if (currencyOpen) {
+            Column(
+                Modifier
+                    .padding(horizontal = 24.dp)
+                    .heightIn(max = 260.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                CURRENCIES.forEach { c ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable {
+                                onCurrency(c)
+                                currencyOpen = false
+                            }
+                            .padding(horizontal = 12.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(c, Modifier.weight(1f), fontWeight = if (c == currency) FontWeight.Bold else FontWeight.Normal)
+                        if (c == currency) Text("✓", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
     }
 }
 
