@@ -154,7 +154,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit) {
         if (handleCommand(text)) return
         val r = Parser.parse(text)
         if (r.entries.isEmpty() && r.unclear.isEmpty()) {
-            toast("No amount heard. Try: \"50 ka khana\"")
+            toast("No amount found. Please say or type an amount.")
             return
         }
         if (r.entries.isNotEmpty()) {
@@ -175,7 +175,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit) {
         val i = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, lang)
-            putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak… e.g. Hamza ko 1000 diye 14 date")
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak now…")
         }
         try {
             voice.launch(i)
@@ -355,7 +355,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit) {
                 Text("Search", fontSize = 19.sp, fontWeight = FontWeight.Bold)
                 OutlinedTextField(
                     value = q, onValueChange = { q = it },
-                    placeholder = { Text("Name, item or category… e.g. hamza, roti, food") },
+                    placeholder = { Text("Search by name, item or category") },
                     leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                     singleLine = true, shape = RoundedCornerShape(14.dp),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -476,7 +476,7 @@ private fun InputBar(onSend: (String) -> Unit, onMic: () -> Unit) {
             OutlinedTextField(
                 value = text,
                 onValueChange = { text = it },
-                placeholder = { Text("Type here… e.g. petrol 50") },
+                placeholder = { Text("Type here…") },
                 modifier = Modifier.weight(1f),
                 maxLines = 3,
                 shape = RoundedCornerShape(24.dp),

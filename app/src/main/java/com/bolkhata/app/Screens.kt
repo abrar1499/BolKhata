@@ -174,7 +174,7 @@ fun HomeScreen(
             if (todayList.isEmpty()) {
                 item {
                     Text(
-                        if (entries.isEmpty()) "No entries yet. Tap the green mic and speak, e.g. \"Aaj 35 ka khana khaya\"."
+                        if (entries.isEmpty()) "No entries yet. Tap the green mic and speak, or type below."
                         else "Nothing added today yet.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp,
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
@@ -662,7 +662,7 @@ fun SettingsScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(
                         value = nameText, onValueChange = { nameText = it },
-                        singleLine = true, placeholder = { Text("e.g. Abrar") },
+                        singleLine = true, placeholder = { Text("Your name") },
                         modifier = Modifier.weight(1f)
                     )
                     Spacer(Modifier.width(8.dp))
@@ -766,7 +766,7 @@ fun ResultsScreen(
         if (found.isEmpty()) {
             item {
                 Text(
-                    "Nothing found for \"$query\". Try a name, an item like roti, or a category like food.",
+                    "Nothing found for \"$query\". Try a name, an item or a category.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
