@@ -95,7 +95,8 @@ fun BolTheme(dark: Boolean, content: @Composable () -> Unit) {
 // ---------- formatting ----------
 
 /** 1,234 or 7.5 or 8.25 — decimals only when the amount has them. */
-fun fmt(n: Double): String = java.text.DecimalFormat("#,##0.##", java.text.DecimalFormatSymbols(Locale.US)).format(n)
+fun fmt(n: Double): String =
+    java.text.DecimalFormat("#,##0.##", java.text.DecimalFormatSymbols(Locale.US)).format(if (kotlin.math.abs(n) < 0.005) 0.0 else n)
 
 /** "15 SAR" as plain text, for sentences. */
 fun money(cur: String, n: Double) = "${fmt(n)} $cur"

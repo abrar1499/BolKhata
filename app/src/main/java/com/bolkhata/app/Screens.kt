@@ -115,15 +115,15 @@ fun HomeScreen(
                         ) { Icon(Icons.Filled.Add, contentDescription = "Add manually", tint = Color.White) }
                     }
                     Spacer(Modifier.height(18.dp))
-                    Panel(Modifier.fillMaxWidth(), onClick = onReports, padding = 16.dp) {
+                    Panel(Modifier.fillMaxWidth(), onClick = onReports, padding = 12.dp) {
                         Text("Spent in $monthName", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(moneyA(currency, monthSpent), fontSize = 30.sp, fontWeight = FontWeight.ExtraBold)
+                        Text(moneyA(currency, monthSpent), fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 30.sp)
                         Text(
                             "This year ${money(currency, yearSpent)}  ·  See report ›",
                             fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Spacer(Modifier.height(12.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Spacer(Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             MiniTile("To pay", moneyA(currency, pay), "−", OrangeOwe, Modifier.weight(1f)) { onPeople(false) }
                             MiniTile("To receive", moneyA(currency, receive), "+", GreenIn, Modifier.weight(1f)) { onPeople(true) }
                         }
@@ -151,7 +151,7 @@ fun HomeScreen(
 
         item {
             Row(
-                Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 BigTile("Expenses", moneyA(currency, monthSpent), "this month ›", RedSpend, Modifier.weight(1f)) { onReports() }
@@ -245,32 +245,35 @@ private fun MiniTile(label: String, value: AnnotatedString, glyph: String, color
             .clip(RoundedCornerShape(14.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .clickable { onClick() }
-            .padding(10.dp),
+            .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
-            Modifier.size(32.dp).clip(RoundedCornerShape(10.dp)).background(color.copy(alpha = 0.18f)),
+            Modifier.size(26.dp).clip(RoundedCornerShape(8.dp)).background(color.copy(alpha = 0.18f)),
             contentAlignment = Alignment.Center
         ) { Text(glyph, color = color, fontWeight = FontWeight.Bold) }
         Spacer(Modifier.width(8.dp))
         Column {
-            Text(label, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(value, fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(label, fontSize = 11.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(value, fontWeight = FontWeight.Bold, fontSize = 14.sp, lineHeight = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
 
 @Composable
 private fun BigTile(label: String, value: AnnotatedString, sub: String, color: Color, modifier: Modifier, onClick: () -> Unit) {
-    Panel(modifier, onClick = onClick, padding = 16.dp) {
-        Box(
-            Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)).background(color.copy(alpha = 0.18f)),
-            contentAlignment = Alignment.Center
-        ) { Text(if (color == RedSpend) "−" else "+", color = color, fontWeight = FontWeight.Bold, fontSize = 20.sp) }
-        Spacer(Modifier.height(10.dp))
-        Text(label, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(sub, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Panel(modifier, onClick = onClick, padding = 12.dp) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(26.dp).clip(RoundedCornerShape(8.dp)).background(color.copy(alpha = 0.18f)),
+                contentAlignment = Alignment.Center
+            ) { Text(if (color == RedSpend) "−" else "+", color = color, fontWeight = FontWeight.Bold, fontSize = 16.sp) }
+            Spacer(Modifier.width(8.dp))
+            Text(label, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(value, fontSize = 21.sp, lineHeight = 25.sp, fontWeight = FontWeight.ExtraBold, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(sub, fontSize = 11.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
