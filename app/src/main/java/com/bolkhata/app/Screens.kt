@@ -127,6 +127,17 @@ fun HomeScreen(
                             MiniTile("To pay", moneyA(currency, pay), "−", OrangeOwe, Modifier.weight(1f)) { onPeople(false) }
                             MiniTile("To receive", moneyA(currency, receive), "+", GreenIn, Modifier.weight(1f)) { onPeople(true) }
                         }
+                        Spacer(Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            MiniTile(
+                                "Expenses", moneyA(currency, monthSpent), "−", RedSpend, Modifier.weight(1f),
+                                valueSize = 18, valueColor = RedSpend
+                            ) { onReports() }
+                            MiniTile(
+                                "Income", moneyA(currency, monthIncome), "+", GreenIn, Modifier.weight(1f),
+                                valueSize = 18, valueColor = GreenIn
+                            ) { onReports() }
+                        }
                     }
                 }
             }
@@ -149,15 +160,7 @@ fun HomeScreen(
             }
         }
 
-        item {
-            Row(
-                Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                BigTile("Expenses", moneyA(currency, monthSpent), "this month ›", RedSpend, Modifier.weight(1f)) { onReports() }
-                BigTile("Income", moneyA(currency, monthIncome), "this month ›", GreenIn, Modifier.weight(1f)) { onReports() }
-            }
-        }
+        item { Spacer(Modifier.height(6.dp)) }
 
         val nowMs = System.currentTimeMillis()
         val sortedAll = entries.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt })
@@ -239,7 +242,16 @@ private fun spentLabel(currency: String, list: List<Entry>): String? {
 }
 
 @Composable
-private fun MiniTile(label: String, value: AnnotatedString, glyph: String, color: Color, modifier: Modifier, onClick: () -> Unit) {
+private fun MiniTile(
+    label: String,
+    value: AnnotatedString,
+    glyph: String,
+    color: Color,
+    modifier: Modifier,
+    valueSize: Int = 15,
+    valueColor: Color = Color.Unspecified,
+    onClick: () -> Unit
+) {
     Row(
         modifier
             .clip(RoundedCornerShape(14.dp))
@@ -250,38 +262,15 @@ private fun MiniTile(label: String, value: AnnotatedString, glyph: String, color
     ) {
         Column(Modifier.weight(1f)) {
             Text(label, fontSize = 11.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(value, fontWeight = FontWeight.Bold, fontSize = 15.sp, lineHeight = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                value, fontWeight = FontWeight.Bold, fontSize = valueSize.sp, lineHeight = (valueSize + 4).sp,
+                color = valueColor, maxLines = 1, overflow = TextOverflow.Ellipsis
+            )
         }
         Box(
             Modifier.size(28.dp).clip(CircleShape).background(color.copy(alpha = 0.18f)),
             contentAlignment = Alignment.Center
         ) { Text(glyph, color = color, fontWeight = FontWeight.Bold) }
-    }
-}
-
-@Composable
-private fun BigTile(label: String, value: AnnotatedString, sub: String, color: Color, modifier: Modifier, onClick: () -> Unit) {
-    Panel(modifier, onClick = onClick, padding = 0.dp) {
-        Row(
-            Modifier.padding(start = 12.dp, end = 10.dp, top = 8.dp, bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    "$label · ${sub.removeSuffix(" ›")}",
-                    fontSize = 11.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    value, fontSize = 19.sp, lineHeight = 23.sp, fontWeight = FontWeight.ExtraBold, color = color,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis
-                )
-            }
-            Box(
-                Modifier.size(28.dp).clip(CircleShape).background(color.copy(alpha = 0.16f)),
-                contentAlignment = Alignment.Center
-            ) { Text(if (color == RedSpend) "−" else "+", color = color, fontWeight = FontWeight.Bold, fontSize = 16.sp) }
-        }
     }
 }
 
