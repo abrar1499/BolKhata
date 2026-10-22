@@ -2,6 +2,7 @@ package com.bolkhata.app
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -87,31 +88,31 @@ fun HomeScreen(
                 ) { HeroBackground(Modifier.matchParentSize()) }
                 Column(Modifier.padding(horizontal = 16.dp).padding(top = 14.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = onMenu) { Icon(Icons.Filled.Menu, contentDescription = "Menu", tint = Color.White) }
+                        IconButton(onClick = onMenu) { Icon(Icons.Filled.Menu, contentDescription = "Menu", tint = LocalHeader.current.on) }
                         Spacer(Modifier.width(4.dp))
                         Box(
                             Modifier
                                 .size(44.dp)
                                 .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.22f)),
+                                .background(LocalHeader.current.chip),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(name.trim().take(1).uppercase().ifEmpty { "🙂" }, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                            Text(name.trim().take(1).uppercase().ifEmpty { "🙂" }, color = LocalHeader.current.on, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                         }
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(if (name.isBlank()) "Hello!" else "Hello, ${name.trim()}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                            Text(greeting, color = Color.White.copy(alpha = 0.85f), fontSize = 13.sp)
+                            Text(if (name.isBlank()) "Hello!" else "Hello, ${name.trim()}", color = LocalHeader.current.on, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                            Text(greeting, color = LocalHeader.current.on.copy(alpha = 0.8f), fontSize = 13.sp)
                         }
                         IconButton(
                             onClick = onSearch,
-                            modifier = Modifier.clip(CircleShape).background(Color.White.copy(alpha = 0.22f))
-                        ) { Icon(Icons.Filled.Search, contentDescription = "Search", tint = Color.White) }
+                            modifier = Modifier.clip(CircleShape).background(LocalHeader.current.chip)
+                        ) { Icon(Icons.Filled.Search, contentDescription = "Search", tint = LocalHeader.current.on) }
                         Spacer(Modifier.width(8.dp))
                         IconButton(
                             onClick = onAdd,
-                            modifier = Modifier.clip(CircleShape).background(Color.White.copy(alpha = 0.22f))
-                        ) { Icon(Icons.Filled.Add, contentDescription = "Add manually", tint = Color.White) }
+                            modifier = Modifier.clip(CircleShape).background(LocalHeader.current.chip)
+                        ) { Icon(Icons.Filled.Add, contentDescription = "Add manually", tint = LocalHeader.current.on) }
                     }
                     Spacer(Modifier.height(18.dp))
                     Panel(Modifier.fillMaxWidth(), onClick = onReports, padding = 12.dp) {
@@ -612,7 +613,9 @@ fun SettingsScreen(
     onLang: (String) -> Unit,
     onDark: (Boolean) -> Unit,
     onCheckUpdate: () -> Unit,
-    onMenu: () -> Unit
+    onMenu: () -> Unit,
+    themeName: String,
+    onTheme: (String) -> Unit
 ) {
     var nameText by remember(name) { mutableStateOf(name) }
     var currencyMenu by remember { mutableStateOf(false) }
@@ -623,12 +626,12 @@ fun SettingsScreen(
                 Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp))
-                    .background(HeroBrush)
+                    .background(LocalHeader.current.brush)
                     .padding(20.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onMenu) { Icon(Icons.Filled.Menu, contentDescription = "Menu", tint = Color.White) }
-                    Text("Settings", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    IconButton(onClick = onMenu) { Icon(Icons.Filled.Menu, contentDescription = "Menu", tint = LocalHeader.current.on) }
+                    Text("Settings", color = LocalHeader.current.on, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 }
                 Spacer(Modifier.height(10.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -638,10 +641,21 @@ fun SettingsScreen(
                     ) { Text(name.trim().take(1).uppercase().ifEmpty { "🙂" }, color = GreenDeep, fontWeight = FontWeight.Bold, fontSize = 24.sp) }
                     Spacer(Modifier.width(14.dp))
                     Column {
-                        Text(name.ifBlank { "Your name" }, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                        Text("Smart Expense $version", color = Color.White.copy(alpha = 0.85f), fontSize = 13.sp)
+                        Text(name.ifBlank { "Your name" }, color = LocalHeader.current.on, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        Text("Smart Expense $version", color = LocalHeader.current.on.copy(alpha = 0.8f), fontSize = 13.sp)
                     }
                 }
+            }
+        }
+        item {
+            Panel(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp)) {
+                SmallLabel("Theme")
+                Spacer(Modifier.height(4.dp))
+                Text(themeName, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(10.dp))
+                ThemeGroup("Light", HEADER_THEMES.filter { it.light }, themeName, onTheme)
+                Spacer(Modifier.height(8.dp))
+                ThemeGroup("Bold & dark", HEADER_THEMES.filter { !it.light }, themeName, onTheme)
             }
         }
         item {
@@ -847,5 +861,41 @@ fun TrashScreen(
             },
             dismissButton = { TextButton(onClick = { askEmpty = false }) { Text("Cancel") } }
         )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ThemeGroup(title: String, themes: List<HeaderTheme>, selected: String, onPick: (String) -> Unit) {
+    Text(title, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Spacer(Modifier.height(6.dp))
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        themes.forEach { t ->
+            val isOn = t.name == selected
+            Column(
+                Modifier
+                    .width(56.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { onPick(t.name) },
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Box(
+                    Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(t.brush)
+                        .border(
+                            if (isOn) 3.dp else 1.dp,
+                            if (isOn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                            CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) { if (isOn) Text("✓", color = t.on, fontWeight = FontWeight.Bold) }
+                Text(t.name, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
     }
 }

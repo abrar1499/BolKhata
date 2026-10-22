@@ -135,6 +135,10 @@ class Store(context: Context) {
         get() = prefs.getString("name", "") ?: ""
         set(v) = prefs.edit().putString("name", v).apply()
 
+    var theme: String
+        get() = prefs.getString("theme", "Sand") ?: "Sand"
+        set(v) = prefs.edit().putString("theme", v).apply()
+
     var dark: Boolean
         get() = prefs.getBoolean("dark", false)
         set(v) = prefs.edit().putBoolean("dark", v).apply()

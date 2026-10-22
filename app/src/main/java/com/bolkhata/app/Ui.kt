@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -52,11 +53,41 @@ val AccentBrush = Brush.linearGradient(
     end = Offset(160f, 160f)
 )
 
-/** Rich black gradient used by the header, drawer and profile banner. */
-val HeroBrush = Brush.linearGradient(
-    colors = listOf(Color(0xFF0B0B0F), Color(0xFF1F2937), Color(0xFF374151)),
-    start = Offset(0f, 0f),
-    end = Offset(1200f, 900f)
+/** One colour theme for the header, side menu and profile banner. */
+data class HeaderTheme(val name: String, val c1: Color, val c2: Color, val c3: Color, val light: Boolean) {
+    val brush: Brush
+        get() = Brush.linearGradient(listOf(c1, c2, c3), start = Offset(0f, 0f), end = Offset(1200f, 900f))
+
+    /** Text and icon colour on top of the header. */
+    val on: Color get() = if (light) Color(0xFF1F2937) else Color.White
+
+    /** Background for round buttons on the header. */
+    val chip: Color get() = if (light) Color.White.copy(alpha = 0.7f) else Color.White.copy(alpha = 0.22f)
+}
+
+private fun h(name: String, a: Long, b: Long, c: Long, light: Boolean) = HeaderTheme(name, Color(a), Color(b), Color(c), light)
+
+/** All themes the person can pick in Settings. The first one is the default. */
+val HEADER_THEMES = listOf(
+    h("Sand", 0xFFFED7AA, 0xFFFDE7CC, 0xFFFFF5EA, true),
+    h("Mint", 0xFFA7F3D0, 0xFFC6F6E0, 0xFFE3FBF1, true),
+    h("Sky", 0xFFBAE6FD, 0xFFD6EFFE, 0xFFEEF8FF, true),
+    h("Lavender", 0xFFDDD6FE, 0xFFE9E4FF, 0xFFF5F3FF, true),
+    h("Teal", 0xFF0D9488, 0xFF14B8A6, 0xFF5EEAD4, false),
+    h("Sky Blue", 0xFF0284C7, 0xFF0EA5E9, 0xFF7DD3FC, false),
+    h("Indigo", 0xFF4F46E5, 0xFF6366F1, 0xFFA5B4FC, false),
+    h("Violet", 0xFF7C3AED, 0xFF8B5CF6, 0xFFC4B5FD, false),
+    h("Green", 0xFF053D2B, 0xFF0B7A45, 0xFF19B36A, false),
+    h("Forest", 0xFF022C22, 0xFF064E3B, 0xFF0F766E, false),
+    h("Navy", 0xFF0F172A, 0xFF1E3A5F, 0xFF2C5282, false),
+    h("Plum", 0xFF2A1033, 0xFF4C1D5E, 0xFF6B2C7A, false),
+    h("Slate", 0xFF1E293B, 0xFF334155, 0xFF475569, false),
+    h("Black", 0xFF0B0B0F, 0xFF1F2937, 0xFF374151, false)
+)
+
+fun headerTheme(name: String): HeaderTheme = HEADER_THEMES.firstOrNull { it.name == name } ?: HEADER_THEMES.first()
+
+val LocalHeader = staticCompositionLocalOf { HEADER_THEMES.first() }
 )
 val Green = Color(0xFF10B981)
 val RedSpend = Color(0xFFE5484D)
@@ -365,11 +396,13 @@ fun ChartGlyph(color: Color, size: Dp = 24.dp) {
 /** Gradient header with soft light circles, for a premium feel. */
 @Composable
 fun HeroBackground(modifier: Modifier = Modifier) {
-    Canvas(modifier.background(HeroBrush)) {
+    val theme = LocalHeader.current
+    val k = if (theme.light) 5f else 1f
+    Canvas(modifier.background(theme.brush)) {
         val w = size.width
         val h = size.height
-        drawCircle(Color.White.copy(alpha = 0.07f), radius = w * 0.42f, center = Offset(w * 0.95f, h * 0.05f))
-        drawCircle(Color.White.copy(alpha = 0.05f), radius = w * 0.28f, center = Offset(w * 0.78f, h * 0.95f))
-        drawCircle(Color.White.copy(alpha = 0.04f), radius = w * 0.18f, center = Offset(w * 0.05f, h * 0.15f))
+        drawCircle(Color.White.copy(alpha = 0.07f * k), radius = w * 0.42f, center = Offset(w * 0.95f, h * 0.05f))
+        drawCircle(Color.White.copy(alpha = 0.05f * k), radius = w * 0.28f, center = Offset(w * 0.78f, h * 0.95f))
+        drawCircle(Color.White.copy(alpha = 0.04f * k), radius = w * 0.18f, center = Offset(w * 0.05f, h * 0.15f))
     }
 }

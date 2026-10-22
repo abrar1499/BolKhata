@@ -44,18 +44,29 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
+import androidx.core.view.WindowCompat
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        @Suppress("DEPRECATION")
-        window.statusBarColor = GreenNight.toArgb()
         val store = Store(this)
         setContent {
             var dark by remember { mutableStateOf(store.dark) }
-            BolTheme(dark) {
-                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    App(store, dark) { dark = it; store.dark = it }
+            var themeName by remember { mutableStateOf(store.theme) }
+            val header = headerTheme(themeName)
+            LaunchedEffect(header) {
+                @Suppress("DEPRECATION")
+                window.statusBarColor = header.c1.toArgb()
+                WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = header.light
+            }
+            CompositionLocalProvider(LocalHeader provides header) {
+                BolTheme(dark) {
+                    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                        App(
+                            store, dark, { dark = it; store.dark = it },
+                            themeName = themeName, onTheme = { themeName = it; store.theme = it }
+                        )
+                    }
                 }
             }
         }
@@ -66,7 +77,7 @@ enum class Tab { HOME, ENTRIES, REPORTS, TRASH, SETTINGS }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit) {
+fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: String, onTheme: (String) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
@@ -300,7 +311,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit) {
                             }
                         }
                     },
-                    onMenu = { openMenu() }
+                    onMenu = { openMenu() },
+                    themeName = themeName,
+                    onTheme = onTheme
                 )
             }
         }
@@ -576,13 +589,13 @@ private fun DrawerMenu(tab: Tab, name: String, currency: String, onCurrency: (St
         Column(
             Modifier
                 .fillMaxWidth()
-                .background(HeroBrush)
+                .background(LocalHeader.current.brush)
                 .padding(20.dp)
         ) {
-            Text("Smart Expense", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
+            Text("Smart Expense", color = LocalHeader.current.on, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
             Text(
                 if (name.isBlank()) "Speak it. Track it." else "Hello, ${name.trim()}",
-                color = Color.White.copy(alpha = 0.85f)
+                color = LocalHeader.current.on.copy(alpha = 0.8f)
             )
         }
         Spacer(Modifier.height(8.dp))
