@@ -42,16 +42,23 @@ import kotlin.math.roundToLong
 
 // ---------- colours & theme ----------
 
-val GreenDeep = Color(0xFF0B7A45)
-val GreenNight = Color(0xFF053D2B)
+val GreenDeep = Color(0xFF047857)
+val GreenNight = Color(0xFF0B0B0F)
 
-/** Rich emerald gradient used by the header, drawer and profile banner. */
+/** Emerald gradient for the mic and other accent buttons. */
+val AccentBrush = Brush.linearGradient(
+    colors = listOf(Color(0xFF047857), Color(0xFF10B981), Color(0xFF34D399)),
+    start = Offset(0f, 0f),
+    end = Offset(160f, 160f)
+)
+
+/** Rich black gradient used by the header, drawer and profile banner. */
 val HeroBrush = Brush.linearGradient(
-    colors = listOf(Color(0xFF053D2B), Color(0xFF0B7A45), Color(0xFF19B36A)),
+    colors = listOf(Color(0xFF0B0B0F), Color(0xFF1F2937), Color(0xFF374151)),
     start = Offset(0f, 0f),
     end = Offset(1200f, 900f)
 )
-val Green = Color(0xFF16A05D)
+val Green = Color(0xFF10B981)
 val RedSpend = Color(0xFFE5484D)
 val GreenIn = Color(0xFF1FA463)
 val OrangeOwe = Color(0xFFE8892B)
@@ -74,24 +81,24 @@ fun catColor(c: Cat): Color = when (c) {
 @Composable
 fun BolTheme(dark: Boolean, content: @Composable () -> Unit) {
     val scheme = if (dark) darkColorScheme(
-        primary = Color(0xFF3CCB7F),
+        primary = Color(0xFF34D399),
         onPrimary = Color(0xFF00210F),
-        primaryContainer = Color(0xFF14432C),
-        onPrimaryContainer = Color(0xFFBDF2D3),
-        secondaryContainer = Color(0xFF1D4A33),
-        onSecondaryContainer = Color(0xFFBDF2D3),
+        primaryContainer = Color(0xFF064E3B),
+        onPrimaryContainer = Color(0xFFD1FAE5),
+        secondaryContainer = Color(0xFF064E3B),
+        onSecondaryContainer = Color(0xFFD1FAE5),
         background = Color(0xFF0E1311),
         surface = Color(0xFF171E1B),
         surfaceVariant = Color(0xFF232C28),
         onSurfaceVariant = Color(0xFFA3B1A9),
         outline = Color(0xFF3A4540)
     ) else lightColorScheme(
-        primary = Green,
+        primary = Color(0xFF059669),
         onPrimary = Color.White,
-        primaryContainer = Color(0xFFDDF5E7),
-        onPrimaryContainer = Color(0xFF0B4D2C),
-        secondaryContainer = Color(0xFFDDF5E7),
-        onSecondaryContainer = Color(0xFF0B4D2C),
+        primaryContainer = Color(0xFFD1FAE5),
+        onPrimaryContainer = Color(0xFF065F46),
+        secondaryContainer = Color(0xFFD1FAE5),
+        onSecondaryContainer = Color(0xFF065F46),
         background = Color(0xFFF2F6F3),
         surface = Color.White,
         surfaceVariant = Color(0xFFEDF2EF),

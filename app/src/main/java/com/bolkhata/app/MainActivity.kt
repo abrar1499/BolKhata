@@ -549,7 +549,7 @@ private fun InputBar(onSend: (String) -> Unit, onMic: () -> Unit) {
                     .size(56.dp)
                     .shadow(10.dp, CircleShape, spotColor = Green, ambientColor = Green)
                     .clip(CircleShape)
-                    .background(HeroBrush)
+                    .background(AccentBrush)
                     .clickable { if (text.isNotBlank()) send() else onMic() },
                 contentAlignment = Alignment.Center
             ) {
