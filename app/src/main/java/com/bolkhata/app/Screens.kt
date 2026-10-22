@@ -82,10 +82,9 @@ fun HomeScreen(
                 Box(
                     Modifier
                         .fillMaxWidth()
-                        .height(150.dp)
-                        .clip(RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp))
-                        .background(Brush.verticalGradient(listOf(GreenDeep, Green)))
-                )
+                        .height(160.dp)
+                        .clip(RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp))
+                ) { HeroBackground(Modifier.matchParentSize()) }
                 Column(Modifier.padding(horizontal = 16.dp).padding(top = 14.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = onMenu) { Icon(Icons.Filled.Menu, contentDescription = "Menu", tint = Color.White) }
@@ -117,7 +116,7 @@ fun HomeScreen(
                     Spacer(Modifier.height(18.dp))
                     Panel(Modifier.fillMaxWidth(), onClick = onReports, padding = 12.dp) {
                         Text("Spent in $monthName", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(moneyA(currency, monthSpent), fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 30.sp)
+                        Text(moneyA(currency, monthSpent), fontSize = 32.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 36.sp, letterSpacing = (-0.5).sp)
                         Text(
                             "This year ${money(currency, yearSpent)}  ·  See report ›",
                             fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -624,7 +623,7 @@ fun SettingsScreen(
                 Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp))
-                    .background(Brush.verticalGradient(listOf(GreenDeep, Green)))
+                    .background(HeroBrush)
                     .padding(20.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {

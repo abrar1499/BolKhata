@@ -49,7 +49,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         @Suppress("DEPRECATION")
-        window.statusBarColor = GreenDeep.toArgb()
+        window.statusBarColor = GreenNight.toArgb()
         val store = Store(this)
         setContent {
             var dark by remember { mutableStateOf(store.dark) }
@@ -519,7 +519,7 @@ private fun InputBar(onSend: (String) -> Unit, onMic: () -> Unit) {
             onSend(t)
         }
     }
-    Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 10.dp) {
+    Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 16.dp) {
         Row(
             Modifier
                 .fillMaxWidth()
@@ -533,7 +533,13 @@ private fun InputBar(onSend: (String) -> Unit, onMic: () -> Unit) {
                 placeholder = { Text("Type here…") },
                 modifier = Modifier.weight(1f),
                 maxLines = 3,
-                shape = RoundedCornerShape(24.dp),
+                shape = RoundedCornerShape(26.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    unfocusedBorderColor = Color.Transparent,
+                    focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
+                ),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(onSend = { send() })
             )
@@ -541,19 +547,19 @@ private fun InputBar(onSend: (String) -> Unit, onMic: () -> Unit) {
             Box(
                 Modifier
                     .size(56.dp)
-                    .shadow(6.dp, CircleShape)
+                    .shadow(10.dp, CircleShape, spotColor = Green, ambientColor = Green)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary)
+                    .background(HeroBrush)
                     .clickable { if (text.isNotBlank()) send() else onMic() },
                 contentAlignment = Alignment.Center
             ) {
                 if (text.isNotBlank()) {
                     Icon(
                         Icons.AutoMirrored.Filled.Send, contentDescription = "Send",
-                        tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(26.dp)
+                        tint = Color.White, modifier = Modifier.size(26.dp)
                     )
                 } else {
-                    MicGlyph(MaterialTheme.colorScheme.onPrimary, 28.dp)
+                    MicGlyph(Color.White, 28.dp)
                 }
             }
         }
@@ -570,7 +576,7 @@ private fun DrawerMenu(tab: Tab, name: String, currency: String, onCurrency: (St
         Column(
             Modifier
                 .fillMaxWidth()
-                .background(Brush.verticalGradient(listOf(GreenDeep, Green)))
+                .background(HeroBrush)
                 .padding(20.dp)
         ) {
             Text("Smart Expense", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)

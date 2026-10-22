@@ -19,6 +19,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -42,6 +43,14 @@ import kotlin.math.roundToLong
 // ---------- colours & theme ----------
 
 val GreenDeep = Color(0xFF0B7A45)
+val GreenNight = Color(0xFF053D2B)
+
+/** Rich emerald gradient used by the header, drawer and profile banner. */
+val HeroBrush = Brush.linearGradient(
+    colors = listOf(Color(0xFF053D2B), Color(0xFF0B7A45), Color(0xFF19B36A)),
+    start = Offset(0f, 0f),
+    end = Offset(1200f, 900f)
+)
 val Green = Color(0xFF16A05D)
 val RedSpend = Color(0xFFE5484D)
 val GreenIn = Color(0xFF1FA463)
@@ -205,13 +214,13 @@ fun Panel(
     padding: Dp = 14.dp,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val shape = RoundedCornerShape(18.dp)
+    val shape = RoundedCornerShape(22.dp)
     if (onClick != null) {
-        Surface(onClick = onClick, modifier = modifier, shape = shape, color = MaterialTheme.colorScheme.surface, shadowElevation = 1.dp) {
+        Surface(onClick = onClick, modifier = modifier, shape = shape, color = MaterialTheme.colorScheme.surface, shadowElevation = 2.dp) {
             Column(Modifier.padding(padding), content = content)
         }
     } else {
-        Surface(modifier = modifier, shape = shape, color = MaterialTheme.colorScheme.surface, shadowElevation = 1.dp) {
+        Surface(modifier = modifier, shape = shape, color = MaterialTheme.colorScheme.surface, shadowElevation = 2.dp) {
             Column(Modifier.padding(padding), content = content)
         }
     }
@@ -343,5 +352,17 @@ fun ChartGlyph(color: Color, size: Dp = 24.dp) {
             val bh = h * f * 0.8f
             drawRoundRect(color, topLeft = Offset(w * (0.12f + i * 0.28f), h * 0.9f - bh), size = Size(bw, bh), cornerRadius = CornerRadius(bw / 3))
         }
+    }
+}
+
+/** Gradient header with soft light circles, for a premium feel. */
+@Composable
+fun HeroBackground(modifier: Modifier = Modifier) {
+    Canvas(modifier.background(HeroBrush)) {
+        val w = size.width
+        val h = size.height
+        drawCircle(Color.White.copy(alpha = 0.07f), radius = w * 0.42f, center = Offset(w * 0.95f, h * 0.05f))
+        drawCircle(Color.White.copy(alpha = 0.05f), radius = w * 0.28f, center = Offset(w * 0.78f, h * 0.95f))
+        drawCircle(Color.White.copy(alpha = 0.04f), radius = w * 0.18f, center = Offset(w * 0.05f, h * 0.15f))
     }
 }
