@@ -88,7 +88,7 @@ val HEADER_THEMES = listOf(
 fun headerTheme(name: String): HeaderTheme = HEADER_THEMES.firstOrNull { it.name == name } ?: HEADER_THEMES.first()
 
 val LocalHeader = staticCompositionLocalOf { HEADER_THEMES.first() }
-)
+
 val Green = Color(0xFF10B981)
 val RedSpend = Color(0xFFE5484D)
 val GreenIn = Color(0xFF1FA463)
