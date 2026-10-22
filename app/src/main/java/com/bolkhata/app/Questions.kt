@@ -52,14 +52,14 @@ object Questions {
 
         // 0. Loans overall: "maine total kitna karza liya / wapis karna hai", "mujhe kitne paise lene hain"
         val loanTalk = words.any { it in setOf("karza", "karz", "qarz", "qarza", "udhaar", "udhar", "loan", "loans", "debt", "owe", "owed") } ||
-            t.contains("wapis karna") || t.contains("wapas karna") || t.contains("lene hain") || t.contains("lena hai") ||
+            Regex("""wap[ai]s\s*(karna|krna|kerna|dena)""").containsMatchIn(t) || t.contains("lene hain") || t.contains("lena hai") ||
             t.contains("dene hain") || t.contains("dena hai") || t.contains("milne hain") || t.contains("to pay") || t.contains("to receive")
         if (loanTalk && entries.none { it.person.isNotBlank() && words.contains(it.person.trim().lowercase()) }) {
             val bal = balances(entries)
             val pay = -bal.values.filter { it < 0 }.sum()
             val receive = bal.values.filter { it > 0 }.sum()
             val wantsPay = words.any { it in setOf("liya", "liye", "li", "took", "borrowed", "dena", "dene", "owe", "debt") } ||
-                t.contains("wapis karna") || t.contains("wapas karna") || t.contains("to pay")
+                Regex("""wap[ai]s\s*(karna|krna|kerna|dena)""").containsMatchIn(t) || t.contains("to pay")
             val wantsReceive = words.any { it in setOf("lena", "lene", "milne", "milna", "diya", "diye", "lent", "owed") } ||
                 t.contains("to receive")
             return when {
