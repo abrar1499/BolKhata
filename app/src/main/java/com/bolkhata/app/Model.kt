@@ -74,6 +74,30 @@ class Store(context: Context) {
 
     private fun now() = System.currentTimeMillis()
 
+    /** Payments found in bank notifications, waiting for the person to add or ignore. */
+    fun loadSuggestions(): List<Entry> = read("suggestions")
+
+    fun saveSuggestions(list: List<Entry>) = write("suggestions", list)
+
+    /** Adds a suggestion unless the same notification was already seen. */
+    @Synchronized
+    fun addSuggestion(e: Entry, key: String) {
+        val seen = (prefs.getString("seenBank", "") ?: "").split("\n").filter { it.isNotEmpty() }
+        val k = key.hashCode().toString()
+        if (k in seen) return
+        prefs.edit().putString("seenBank", (seen.takeLast(300) + k).joinToString("\n")).apply()
+        saveSuggestions(listOf(e) + loadSuggestions())
+    }
+
+    /** Calls [onChange] whenever suggestions change. Returns a function that stops listening. */
+    fun watchSuggestions(onChange: () -> Unit): () -> Unit {
+        val l = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == "suggestions") onChange()
+        }
+        prefs.registerOnSharedPreferenceChangeListener(l)
+        return { prefs.unregisterOnSharedPreferenceChangeListener(l) }
+    }
+
     private fun read(key: String): List<Entry> {
         val raw = prefs.getString(key, "[]") ?: "[]"
         return try {

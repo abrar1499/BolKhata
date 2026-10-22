@@ -52,7 +52,9 @@ fun HomeScreen(
     onEdit: (Entry) -> Unit,
     onPeople: (Boolean) -> Unit,
     onReports: () -> Unit,
-    onSeeAll: () -> Unit
+    onSeeAll: () -> Unit,
+    bankCount: Int = 0,
+    onReviewBank: () -> Unit = {}
 ) {
     var open by remember { mutableStateOf(setOf("today")) }
     fun toggle(k: String) {
@@ -138,6 +140,31 @@ fun HomeScreen(
                                 valueSize = 18, valueColor = GreenIn, tinted = true
                             ) { onReports() }
                         }
+                    }
+                }
+            }
+        }
+
+        if (bankCount > 0) {
+            item {
+                Panel(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                    onClick = onReviewBank, padding = 12.dp
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            Modifier.size(36.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
+                            contentAlignment = Alignment.Center
+                        ) { Text("🔔", fontSize = 18.sp) }
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                "$bankCount bank " + (if (bankCount == 1) "payment" else "payments") + " found",
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text("Tap to review and add", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Text("Review ›", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -615,7 +642,9 @@ fun SettingsScreen(
     onCheckUpdate: () -> Unit,
     onMenu: () -> Unit,
     themeName: String,
-    onTheme: (String) -> Unit
+    onTheme: (String) -> Unit,
+    bankOn: Boolean = false,
+    onBank: () -> Unit = {}
 ) {
     var nameText by remember(name) { mutableStateOf(name) }
     var currencyMenu by remember { mutableStateOf(false) }
@@ -696,6 +725,17 @@ fun SettingsScreen(
                 HorizontalDivider(Modifier.padding(vertical = 6.dp))
                 SettingRow("Dark mode", null) {
                     Switch(checked = dark, onCheckedChange = onDark)
+                }
+                HorizontalDivider(Modifier.padding(vertical = 6.dp))
+                SettingRow(
+                    "Bank alerts",
+                    if (bankOn) "On: payments from bank notifications are suggested" else "Off: turn on to catch card payments"
+                ) {
+                    if (bankOn) {
+                        Text("On ✓", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                    } else {
+                        Button(onClick = onBank) { Text("Turn on") }
+                    }
                 }
                 HorizontalDivider(Modifier.padding(vertical = 6.dp))
                 SettingRow("Updates", "Version $version") {

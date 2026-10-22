@@ -93,6 +93,32 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var pending by remember { mutableStateOf(listOf<Entry>()) }
     var moreFor by remember { mutableStateOf<Entry?>(null) }
     var searching by remember { mutableStateOf(false) }
+    var suggestions by remember { mutableStateOf(store.loadSuggestions()) }
+    var reviewing by remember { mutableStateOf(false) }
+    var bankOn by remember { mutableStateOf(BankListener.isEnabled(context)) }
+    var bankHelp by remember { mutableStateOf(false) }
+
+    DisposableEffect(Unit) {
+        val stop = store.watchSuggestions { suggestions = store.loadSuggestions() }
+        onDispose { stop() }
+    }
+    val lifecycle = androidx.compose.ui.platform.LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                bankOn = BankListener.isEnabled(context)
+                suggestions = store.loadSuggestions()
+            }
+        }
+        lifecycle.addObserver(obs)
+        onDispose { lifecycle.removeObserver(obs) }
+    }
+
+    fun dropSuggestions(ids: Set<String>) {
+        val left = suggestions.filter { it.id !in ids }
+        suggestions = left
+        store.saveSuggestions(left)
+    }
     var results by remember { mutableStateOf<Pair<String, Boolean>?>(null) }      // query, edit mode
     var confirm by remember { mutableStateOf<Pair<String, Set<String>>?>(null) }  // message, ids to delete  // entries the app did not understand
     var newVersion by remember { mutableStateOf<UpdateInfo?>(null) }
@@ -271,7 +297,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     name = name, entries = entries, currency = currency,
                     newVersion = null, progress = progress, onUpdate = { startUpdate() },
                     onAdd = { adding = true }, onMenu = { openMenu() }, onSearch = { searching = true }, onEdit = { editing = it },
-                    onPeople = { people = it }, onReports = { tab = Tab.REPORTS }, onSeeAll = { tab = Tab.ENTRIES }
+                    onPeople = { people = it }, onReports = { tab = Tab.REPORTS }, onSeeAll = { tab = Tab.ENTRIES },
+                    bankCount = suggestions.size, onReviewBank = { reviewing = true }
                 )
                 tab == Tab.ENTRIES -> TransactionsScreen(entries, currency, onEdit = { editing = it }, onAdd = { adding = true }, onMenu = { openMenu() })
                 tab == Tab.REPORTS -> ReportsScreen(entries, currency, onMenu = { openMenu() })
@@ -313,7 +340,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     },
                     onMenu = { openMenu() },
                     themeName = themeName,
-                    onTheme = onTheme
+                    onTheme = onTheme,
+                    bankOn = bankOn,
+                    onBank = { bankHelp = true }
                 )
             }
         }
@@ -435,6 +464,102 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.fillMaxWidth().height(48.dp)
                     ) { Text("Update now", fontWeight = FontWeight.Bold) }
+                }
+            }
+        }
+    }
+
+    if (bankHelp) {
+        AlertDialog(
+            onDismissRequest = { bankHelp = false },
+            title = { Text("Turn on bank alerts") },
+            text = {
+                Text(
+                    "On the next screen, find Smart Expense and switch it on.\n\n" +
+                        "If Android says \"Restricted setting\": open Settings → Apps → Smart Expense → ⋮ (top right) → " +
+                        "Allow restricted settings, then try again.\n\n" +
+                        "Only payment messages are read, and nothing leaves your phone."
+                )
+            },
+            confirmButton = {
+                Button(onClick = {
+                    bankHelp = false
+                    try {
+                        context.startActivity(
+                            Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        )
+                    } catch (e: Exception) {
+                        toast("Open Settings → Notifications → Device & app notifications")
+                    }
+                }) { Text("Open settings") }
+            },
+            dismissButton = { TextButton(onClick = { bankHelp = false }) { Text("Later") } }
+        )
+    }
+
+    if (reviewing) {
+        FormPopup(onDismiss = { reviewing = false }) {
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Bank payments", fontSize = 19.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { reviewing = false }) { Text("Close") }
+                }
+                if (suggestions.isEmpty()) {
+                    Text("All done. New payments will show up here.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Column(
+                    Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    suggestions.forEach { e ->
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            CatBubble(e.category, 38.dp)
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(e.note, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                                Text(
+                                    entryTitle(e) + " · " + dayLabel(e.date) + " " + timeLabel(e.date),
+                                    fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1
+                                )
+                                Text(moneyA(currency, e.amount, prefix(e.type)), color = signColor(e.type), fontWeight = FontWeight.Bold)
+                            }
+                            IconButton(onClick = { dropSuggestions(setOf(e.id)) }) {
+                                Text("✕", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 18.sp)
+                            }
+                            IconButton(onClick = {
+                                save(listOf(e.copy(id = "e" + System.nanoTime())) + entries)
+                                dropSuggestions(setOf(e.id))
+                                toast("✓ Added " + fmt(e.amount))
+                            }) { Text("✓", color = GreenIn, fontSize = 22.sp, fontWeight = FontWeight.Bold) }
+                        }
+                    }
+                }
+                if (suggestions.size > 1) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = { dropSuggestions(suggestions.map { it.id }.toSet()) },
+                            shape = RoundedCornerShape(14.dp)
+                        ) { Text("Ignore all") }
+                        Button(
+                            onClick = {
+                                val n = suggestions.size
+                                save(suggestions.mapIndexed { i, e -> e.copy(id = "e" + System.nanoTime() + i) } + entries)
+                                dropSuggestions(suggestions.map { it.id }.toSet())
+                                toast("✓ Added $n payments")
+                                reviewing = false
+                            },
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Add all ${suggestions.size}") }
+                    }
                 }
             }
         }

@@ -24,7 +24,7 @@ object Parser {
     private val rules = listOf(
         r(Cat.GHAR, "Sent home", "ghar bhej", "bheje", "bheja", "bhejay", "bhejy", "bheji", "send home", "sent home", "بھیجے", "بھیجا"),
 
-        r(Cat.TRANSPORT, "Petrol", "petrol", "patrol", "petral", "petrool", "patrool", "fuel", "diesel", "deesal", "benzene", "پٹرول", "ڈیزل"),
+        r(Cat.TRANSPORT, "Petrol", "petrol", "patrol", "petral", "petrool", "patrool", "fuel", "diesel", "deesal", "benzene", "aldrees", "sasco", "petromin", "naft", "پٹرول", "ڈیزل", "بنزين"),
         r(Cat.TRANSPORT, "Car repair", "mechanic", "workshop", "tyre", "tire", "tyres", "puncture", "oil change", "battery", "مستری"),
         r(Cat.TRANSPORT, "Car wash", "car wash", "wash"),
         r(Cat.TRANSPORT, "Parking", "parking"),
@@ -41,7 +41,7 @@ object Parser {
         r(Cat.MOBILE, "Mobile recharge", "recharge", "sawa", "stc", "mobily", "zain", "package", "balance", "ریچارج"),
         r(Cat.MOBILE, "Internet", "internet", "wifi", "net"),
 
-        r(Cat.SEHAT, "Medicine", "dawai", "dawa", "medicine", "pharmacy", "tablet", "tablets", "دوائی", "دوا"),
+        r(Cat.SEHAT, "Medicine", "dawai", "dawa", "medicine", "pharmacy", "tablet", "tablets", "nahdi", "aldawaa", "dawaa", "صيدلية", "دوائی", "دوا"),
         r(Cat.SEHAT, "Doctor", "doctor", "hospital", "clinic", "checkup", "ڈاکٹر"),
 
         r(Cat.PERSONAL, "Haircut", "haircut", "barber", "nai", "hajam", "baal", "حجام"),
@@ -50,15 +50,17 @@ object Parser {
 
         r(Cat.SHOPPING, "Clothes", "kapre", "kapray", "kapde", "kapry", "clothes", "shirt", "pant", "kurta", "کپڑے"),
         r(Cat.SHOPPING, "Shoes", "joote", "jootay", "joota", "shoes", "chappal", "جوتے"),
-        r(Cat.SHOPPING, "Electronics", "charger", "headphone", "earphone", "laptop"),
+        r(Cat.SHOPPING, "Electronics", "charger", "headphone", "earphone", "laptop", "jarir", "extra", "ehsan"),
+        r(Cat.SHOPPING, "Online shopping", "amazon", "noon", "shein", "namshi", "aliexpress", "temu"),
+        r(Cat.SHOPPING, "Stores", "ikea", "centrepoint", "centerpoint", "redtag", "homecentre"),
 
         r(Cat.KHANA, "Bread / Roti", "roti", "naan", "bread", "khubz", "kuboos", "khaboos", "paratha", "روٹی"),
         r(Cat.KHANA, "Milk & Dairy", "milk", "doodh", "dudh", "dood", "laban", "dahi", "yogurt", "cheese", "دودھ", "دہی"),
         r(Cat.KHANA, "Tea & Coffee", "chai", "tea", "coffee", "qahwa", "karak", "چائے"),
         r(Cat.KHANA, "Meat & Chicken", "chicken", "murgi", "murga", "gosht", "meat", "mutton", "beef", "fish", "machli", "گوشت", "مرغی"),
         r(Cat.KHANA, "Fruit & Vegetables", "sabzi", "sabji", "vegetable", "fruit", "phal", "tamatar", "aloo", "piaz", "pyaz", "kela", "apple", "سبزی", "پھل"),
-        r(Cat.KHANA, "Groceries", "grocery", "groceries", "atta", "aata", "chawal", "rice", "daal", "dal", "oil", "ghee", "cheeni", "sugar", "anday", "ande", "anda", "egg", "eggs", "masala", "namak", "baqala", "bakala", "آٹا", "چاول"),
-        r(Cat.KHANA, "Eating out", "restaurant", "hotel", "biryani", "kabsa", "shawarma", "broast", "pizza", "burger", "mandi", "albaik"),
+        r(Cat.KHANA, "Groceries", "grocery", "groceries", "atta", "aata", "chawal", "rice", "daal", "dal", "oil", "ghee", "cheeni", "sugar", "anday", "ande", "anda", "egg", "eggs", "masala", "namak", "baqala", "bakala", "panda", "lulu", "danube", "othaim", "carrefour", "tamimi", "bindawood", "nesto", "supermarket", "hypermarket", "آٹا", "چاول"),
+        r(Cat.KHANA, "Eating out", "restaurant", "hotel", "biryani", "kabsa", "shawarma", "broast", "pizza", "burger", "mandi", "albaik", "starbucks", "mcdonald", "mcdonalds", "kfc", "kudu", "herfy", "dunkin", "hungerstation", "jahez", "talabat", "mrsool", "toyou", "cafe", "مطعم"),
         r(Cat.KHANA, "Drinks", "bottle", "botel", "botal", "botl", "juice", "cold drink", "pepsi", "coke", "cola", "sprite", "7up", "drink", "drinks", "soda", "water", "paani", "pani", "پانی", "بوتل"),
         r(Cat.KHANA, "Snacks", "biscuit", "chips", "snacks", "mithai", "sweets", "chocolate", "ice cream", "icecream"),
         r(Cat.KHANA, "Meals", "khana", "khaana", "khaya", "khaaya", "khai", "food", "foos", "lunch", "dinner", "nashta", "breakfast", "meal", "کھانا", "کھایا", "ناشتہ"),
@@ -157,6 +159,13 @@ object Parser {
     }
 
     // ---------- spending ----------
+
+    /** Category for a shop or item name, e.g. "PANDA RETAIL" -> Groceries. Null if unknown. */
+    fun guessCategory(text: String): Pair<Cat, String>? {
+        val t = text.lowercase()
+        val words = t.split(Regex("""[^\p{L}\p{N}]+""")).filter { it.isNotEmpty() }
+        return matchSpending(t, words)
+    }
 
     private fun matchSpending(t: String, words: List<String>): Pair<Cat, String>? {
         if (repairWords.any { matches(it, t, words) }) {
