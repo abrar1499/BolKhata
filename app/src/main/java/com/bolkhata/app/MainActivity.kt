@@ -265,7 +265,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         if (Questions.isQuestion(text)) {
             val a = Questions.answer(text, entries, currency)
             if (a != null) {
-                if (a.search != null) {
+                if (a.search == Questions.PAY || a.search == Questions.RECEIVE) {
+                    results = null
+                    people = a.search == Questions.RECEIVE
+                } else if (a.search != null) {
                     // Open the person's khata (or the matching entries) with the answer on top.
                     people = null
                     answerText = a.text

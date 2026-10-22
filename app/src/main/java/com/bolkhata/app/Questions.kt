@@ -10,6 +10,10 @@ object Questions {
 
     class Answer(val text: String, val search: String?)
 
+    /** Special answers that open the "To pay" or "To receive" list instead of a search. */
+    const val PAY = "@pay"
+    const val RECEIVE = "@receive"
+
     private val questionWords = listOf(
         "kitna", "kitne", "kitni", "kitnay", "kitny", "total", "how much", "how many", "hisaab", "hisab",
         "balance", "baqi", "baki", "bacha", "bache", "kul", "sum", "کتنا", "کتنے", "کتنی"
@@ -44,6 +48,25 @@ object Questions {
             words.contains("mahine") || words.contains("mahina") || words.contains("month") -> Period.MONTH
             words.contains("saal") || words.contains("year") -> Period.YEAR
             else -> null
+        }
+
+        // 0. Loans overall: "maine total kitna karza liya / wapis karna hai", "mujhe kitne paise lene hain"
+        val loanTalk = words.any { it in setOf("karza", "karz", "qarz", "qarza", "udhaar", "udhar", "loan", "loans", "debt", "owe", "owed") } ||
+            t.contains("wapis karna") || t.contains("wapas karna") || t.contains("lene hain") || t.contains("lena hai") ||
+            t.contains("dene hain") || t.contains("dena hai") || t.contains("milne hain") || t.contains("to pay") || t.contains("to receive")
+        if (loanTalk && entries.none { it.person.isNotBlank() && words.contains(it.person.trim().lowercase()) }) {
+            val bal = balances(entries)
+            val pay = -bal.values.filter { it < 0 }.sum()
+            val receive = bal.values.filter { it > 0 }.sum()
+            val wantsPay = words.any { it in setOf("liya", "liye", "li", "took", "borrowed", "dena", "dene", "owe", "debt") } ||
+                t.contains("wapis karna") || t.contains("wapas karna") || t.contains("to pay")
+            val wantsReceive = words.any { it in setOf("lena", "lene", "milne", "milna", "diya", "diye", "lent", "owed") } ||
+                t.contains("to receive")
+            return when {
+                wantsPay && !wantsReceive -> Answer("You will pay ${money(currency, pay)} in total", PAY)
+                wantsReceive && !wantsPay -> Answer("People will pay you ${money(currency, receive)} in total", RECEIVE)
+                else -> Answer("You will pay ${money(currency, pay)} · People will pay you ${money(currency, receive)}", PAY)
+            }
         }
 
         // 1. A person in the khata
