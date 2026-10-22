@@ -22,10 +22,15 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -89,8 +94,17 @@ fun BolTheme(dark: Boolean, content: @Composable () -> Unit) {
 
 // ---------- formatting ----------
 
-fun fmt(n: Double): String = String.format(Locale.US, "%,d", n.roundToLong())
-fun money(cur: String, n: Double) = "$cur ${fmt(n)}"
+/** 1,234 or 7.5 or 8.25 — decimals only when the amount has them. */
+fun fmt(n: Double): String = java.text.DecimalFormat("#,##0.##", java.text.DecimalFormatSymbols(Locale.US)).format(n)
+
+/** "15 SAR" as plain text, for sentences. */
+fun money(cur: String, n: Double) = "${fmt(n)} $cur"
+
+/** "15 SAR" with the currency in small letters, for amounts shown on their own. */
+fun moneyA(cur: String, n: Double, prefix: String = ""): AnnotatedString = buildAnnotatedString {
+    append(prefix + fmt(n))
+    withStyle(SpanStyle(fontSize = 0.55.em, fontWeight = FontWeight.SemiBold)) { append(" $cur") }
+}
 fun plain(n: Double): String = if (n == Math.floor(n)) n.roundToLong().toString() else n.toString()
 
 fun cal(ms: Long): Calendar = Calendar.getInstance().apply { timeInMillis = ms }
@@ -274,7 +288,7 @@ fun TxRow(e: Entry, currency: String, onClick: () -> Unit) {
             }
             Spacer(Modifier.width(8.dp))
             Text(
-                prefix(e.type) + money(currency, e.amount),
+                moneyA(currency, e.amount, prefix(e.type)),
                 fontWeight = FontWeight.Bold, color = signColor(e.type), fontSize = 15.sp
             )
         }

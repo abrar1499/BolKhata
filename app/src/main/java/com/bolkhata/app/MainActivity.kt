@@ -529,7 +529,7 @@ private fun AskDialog(entry: Entry, currency: String, onPick: (Entry) -> Unit, o
                     contentAlignment = Alignment.Center
                 ) { Text("🤔", fontSize = 28.sp) }
                 Spacer(Modifier.height(12.dp))
-                Text(money(currency, entry.amount), fontSize = 26.sp, fontWeight = FontWeight.ExtraBold)
+                Text(moneyA(currency, entry.amount), fontSize = 26.sp, fontWeight = FontWeight.ExtraBold)
                 Text(
                     "\"${entry.note}\"",
                     color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp,

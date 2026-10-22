@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -110,15 +111,15 @@ fun HomeScreen(
                     Spacer(Modifier.height(18.dp))
                     Panel(Modifier.fillMaxWidth(), onClick = onReports, padding = 16.dp) {
                         Text("Spent in $monthName", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(money(currency, monthSpent), fontSize = 30.sp, fontWeight = FontWeight.ExtraBold)
+                        Text(moneyA(currency, monthSpent), fontSize = 30.sp, fontWeight = FontWeight.ExtraBold)
                         Text(
                             "This year ${money(currency, yearSpent)}  ·  See report ›",
                             fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(Modifier.height(12.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            MiniTile("To pay", money(currency, pay), "−", OrangeOwe, Modifier.weight(1f)) { onPeople(false) }
-                            MiniTile("To receive", money(currency, receive), "+", GreenIn, Modifier.weight(1f)) { onPeople(true) }
+                            MiniTile("To pay", moneyA(currency, pay), "−", OrangeOwe, Modifier.weight(1f)) { onPeople(false) }
+                            MiniTile("To receive", moneyA(currency, receive), "+", GreenIn, Modifier.weight(1f)) { onPeople(true) }
                         }
                     }
                 }
@@ -147,8 +148,8 @@ fun HomeScreen(
                 Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                BigTile("Expenses", money(currency, monthSpent), "this month ›", RedSpend, Modifier.weight(1f)) { onReports() }
-                BigTile("Income", money(currency, monthIncome), "this month ›", GreenIn, Modifier.weight(1f)) { onReports() }
+                BigTile("Expenses", moneyA(currency, monthSpent), "this month ›", RedSpend, Modifier.weight(1f)) { onReports() }
+                BigTile("Income", moneyA(currency, monthIncome), "this month ›", GreenIn, Modifier.weight(1f)) { onReports() }
             }
         }
 
@@ -232,7 +233,7 @@ private fun spentLabel(currency: String, list: List<Entry>): String? {
 }
 
 @Composable
-private fun MiniTile(label: String, value: String, glyph: String, color: Color, modifier: Modifier, onClick: () -> Unit) {
+private fun MiniTile(label: String, value: AnnotatedString, glyph: String, color: Color, modifier: Modifier, onClick: () -> Unit) {
     Row(
         modifier
             .clip(RoundedCornerShape(14.dp))
@@ -254,7 +255,7 @@ private fun MiniTile(label: String, value: String, glyph: String, color: Color, 
 }
 
 @Composable
-private fun BigTile(label: String, value: String, sub: String, color: Color, modifier: Modifier, onClick: () -> Unit) {
+private fun BigTile(label: String, value: AnnotatedString, sub: String, color: Color, modifier: Modifier, onClick: () -> Unit) {
     Panel(modifier, onClick = onClick, padding = 16.dp) {
         Box(
             Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)).background(color.copy(alpha = 0.18f)),
@@ -466,7 +467,7 @@ fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit) {
                     }
                 }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(money(currency, total), fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
+                    Text(moneyA(currency, total), fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
                     Text("Total expenses", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
@@ -493,7 +494,7 @@ fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit) {
                     Text("${c.icon} ${c.label}", Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
                     Text("${(share * 100).roundToLong()}%", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.width(12.dp))
-                    Text(money(currency, sum), fontWeight = FontWeight.Bold)
+                    Text(moneyA(currency, sum), fontWeight = FontWeight.Bold)
                 }
                 Spacer(Modifier.height(8.dp))
                 LinearProgressIndicator(
@@ -549,7 +550,7 @@ fun PeopleScreen(entries: List<Entry>, currency: String, receive: Boolean, onBac
         item {
             Panel(Modifier.fillMaxWidth(), padding = 16.dp) {
                 Text(if (receive) "People owe you" else "You owe people", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
-                Text(money(currency, total), fontSize = 30.sp, fontWeight = FontWeight.ExtraBold, color = color)
+                Text(moneyA(currency, total), fontSize = 30.sp, fontWeight = FontWeight.ExtraBold, color = color)
                 Text("${bal.size} " + if (bal.size == 1) "person" else "people", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
@@ -567,7 +568,7 @@ fun PeopleScreen(entries: List<Entry>, currency: String, receive: Boolean, onBac
                         Text(person, fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
                         Text("${history.size} entries · tap to " + if (expanded) "close" else "open", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Text(money(currency, abs(v)), fontWeight = FontWeight.Bold, color = color, fontSize = 17.sp)
+                    Text(moneyA(currency, abs(v)), fontWeight = FontWeight.Bold, color = color, fontSize = 17.sp)
                 }
                 if (expanded) {
                     HorizontalDivider(Modifier.padding(vertical = 8.dp))
