@@ -41,6 +41,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 
@@ -184,18 +185,25 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit) {
         }
     }
 
+    var updateMsg by remember { mutableStateOf<String?>(null) }
+
     fun startUpdate() {
         val info = newVersion ?: return
         if (Updater.needsPermission(context)) {
-            toast("Allow \"Install unknown apps\" for Smart Expense, then tap Update again.")
+            updateMsg = "Allow \"Install unknown apps\" for Smart Expense, then come back and tap Update now."
             Updater.openPermissionSettings(context)
             return
         }
         scope.launch {
+            updateMsg = null
             progress = 0
             val file = Updater.download(context, info) { progress = it }
             progress = -1
-            if (file != null) Updater.install(context, file) else toast("Download failed. Check internet and try again.")
+            if (file != null) {
+                Updater.install(context, file)
+            } else {
+                updateMsg = "Download failed. Check your internet and tap Update now again."
+            }
         }
     }
 
@@ -250,7 +258,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit) {
                 who != null -> PeopleScreen(entries, currency, who, onBack = { people = null }, onEdit = { editing = it })
                 tab == Tab.HOME -> HomeScreen(
                     name = name, entries = entries, currency = currency,
-                    newVersion = newVersion, progress = progress, onUpdate = { startUpdate() },
+                    newVersion = null, progress = progress, onUpdate = { startUpdate() },
                     onAdd = { adding = true }, onMenu = { openMenu() }, onSearch = { searching = true }, onEdit = { editing = it },
                     onPeople = { people = it }, onReports = { tab = Tab.REPORTS }, onSeeAll = { tab = Tab.ENTRIES }
                 )
@@ -368,6 +376,52 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit) {
                         onClick = { go() }, enabled = q.isNotBlank(),
                         shape = RoundedCornerShape(14.dp), modifier = Modifier.weight(1f)
                     ) { Text("Search") }
+                }
+            }
+        }
+    }
+
+    // A new version must be installed before the app can be used. No skip.
+    newVersion?.let { info ->
+        Dialog(
+            onDismissRequest = {},
+            properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
+        ) {
+            Surface(shape = RoundedCornerShape(26.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 12.dp) {
+                Column(
+                    Modifier.padding(24.dp).fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        Modifier.size(60.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
+                        contentAlignment = Alignment.Center
+                    ) { Text("⬆", fontSize = 28.sp, color = MaterialTheme.colorScheme.primary) }
+                    Text("Update available", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Version ${info.version} is ready. Your entries stay safe.",
+                        fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                    if (progress >= 0) {
+                        LinearProgressIndicator(
+                            progress = { progress / 100f },
+                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp))
+                        )
+                        Text("Downloading… $progress%", fontSize = 13.sp)
+                    }
+                    updateMsg?.let {
+                        Text(
+                            it, fontSize = 13.sp, color = RedSpend,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
+                    Button(
+                        onClick = { startUpdate() },
+                        enabled = progress < 0,
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.fillMaxWidth().height(48.dp)
+                    ) { Text("Update now", fontWeight = FontWeight.Bold) }
                 }
             }
         }
