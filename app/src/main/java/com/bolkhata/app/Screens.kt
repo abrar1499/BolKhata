@@ -633,7 +633,7 @@ fun SettingsScreen(
                     Spacer(Modifier.width(14.dp))
                     Column {
                         Text(name.ifBlank { "Your name" }, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                        Text("Bol Khata $version", color = Color.White.copy(alpha = 0.85f), fontSize = 13.sp)
+                        Text("Smart Expense $version", color = Color.White.copy(alpha = 0.85f), fontSize = 13.sp)
                     }
                 }
             }

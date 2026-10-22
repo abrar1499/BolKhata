@@ -1,4 +1,4 @@
-# Bol Khata (Android)
+# Smart Expense (Android)
 
 Bolo aur hisaab khud apni jagah chala jaye. 🎤 dabao, bolo "Ahmed ko 200 riyal udhaar diye", entry ban jayegi.
 

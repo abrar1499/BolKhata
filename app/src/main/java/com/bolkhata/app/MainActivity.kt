@@ -185,7 +185,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit) {
     fun startUpdate() {
         val info = newVersion ?: return
         if (Updater.needsPermission(context)) {
-            toast("Allow \"Install unknown apps\" for Bol Khata, then tap Update again.")
+            toast("Allow \"Install unknown apps\" for Smart Expense, then tap Update again.")
             Updater.openPermissionSettings(context)
             return
         }
@@ -484,9 +484,9 @@ private fun DrawerMenu(tab: Tab, name: String, currency: String, onCurrency: (St
                 .background(Brush.verticalGradient(listOf(GreenDeep, Green)))
                 .padding(20.dp)
         ) {
-            Text("Bol Khata", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
+            Text("Smart Expense", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
             Text(
-                if (name.isBlank()) "Bolo, hisaab ho jaye" else "Hello, ${name.trim()}",
+                if (name.isBlank()) "Speak it. Track it." else "Hello, ${name.trim()}",
                 color = Color.White.copy(alpha = 0.85f)
             )
         }
