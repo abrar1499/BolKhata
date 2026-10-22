@@ -261,21 +261,26 @@ private fun MiniTile(label: String, value: AnnotatedString, glyph: String, color
 
 @Composable
 private fun BigTile(label: String, value: AnnotatedString, sub: String, color: Color, modifier: Modifier, onClick: () -> Unit) {
-    Panel(modifier, onClick = onClick, padding = 12.dp) {
-        Row(verticalAlignment = Alignment.Top) {
+    Panel(modifier, onClick = onClick, padding = 0.dp) {
+        Row(
+            Modifier.padding(start = 12.dp, end = 10.dp, top = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Column(Modifier.weight(1f)) {
-                Text(label, fontSize = 13.sp, lineHeight = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(2.dp))
                 Text(
-                    value, fontSize = 21.sp, lineHeight = 25.sp, fontWeight = FontWeight.ExtraBold, color = color,
+                    "$label · ${sub.removeSuffix(" ›")}",
+                    fontSize = 11.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1, overflow = TextOverflow.Ellipsis
                 )
-                Text(sub, fontSize = 11.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    value, fontSize = 19.sp, lineHeight = 23.sp, fontWeight = FontWeight.ExtraBold, color = color,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis
+                )
             }
             Box(
-                Modifier.size(32.dp).clip(CircleShape).background(color.copy(alpha = 0.16f)),
+                Modifier.size(28.dp).clip(CircleShape).background(color.copy(alpha = 0.16f)),
                 contentAlignment = Alignment.Center
-            ) { Text(if (color == RedSpend) "−" else "+", color = color, fontWeight = FontWeight.Bold, fontSize = 18.sp) }
+            ) { Text(if (color == RedSpend) "−" else "+", color = color, fontWeight = FontWeight.Bold, fontSize = 16.sp) }
         }
     }
 }
