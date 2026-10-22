@@ -59,7 +59,7 @@ object Ai {
     private fun buildPrompt(text: String, currency: String): String {
         val today = SimpleDateFormat("yyyy-MM-dd (EEEE)", Locale.US).format(Date())
         return """
-You turn what a person said about money into ledger entries. They live in Saudi Arabia and speak Roman Urdu, Urdu, English or Arabic, often mixed. Amounts are in $currency.
+You turn what a person said about money into ledger entries. They may speak English, Roman Urdu, Urdu, Hindi or Arabic, often mixed. Amounts are in $currency.
 Today is $today.
 
 Return ONLY JSON: {"entries":[{"type":"","amount":0,"category":"","item":"","person":"","date":"YYYY-MM-DD","note":""}]}
@@ -72,7 +72,7 @@ type, one of:
 - "got_back": a person returned money they owed
 - "paid_back": they returned money they owed to a person
 category (expense only), one of: food, transport, rent, bills, mobile, home, shopping, health, personal, fees, education, charity, other
-  (fees = iqama, visa, fines, insurance, government or bank fees; charity = zakat, sadqa, gifts; home = money sent to family; transport includes petrol, taxi, car repair; food includes groceries, milk, roti, restaurants, drinks)
+  (fees = visa, residence permit, fines, insurance, government or bank fees; charity = zakat, sadqa, gifts; home = money sent to family; transport includes petrol, taxi, car repair; food includes groceries, milk, roti, restaurants, drinks)
 item: 1 to 3 English words, e.g. "Petrol", "Milk", "Car repair", "Salary".
 person: the other person's name, capitalised, only for gave/took/got_back/paid_back, else "".
 date: resolve words like kal, parson, 14 date, 13 oct. Default today.

@@ -67,7 +67,7 @@ private val catWords = mapOf(
     Cat.PERSONAL to "personal haircut",
     Cat.TANKHWAH to "income salary tankhwah",
     Cat.UDHAAR to "loans udhaar loan",
-    Cat.FEES to "fees iqama visa fine govt",
+    Cat.FEES to "fees visa permit fine govt",
     Cat.EDU to "education school books fees",
     Cat.CHARITY to "charity gift zakat sadqa",
     Cat.OTHER to "other"
