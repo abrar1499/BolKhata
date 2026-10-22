@@ -261,6 +261,23 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
 
     fun handleText(text: String) {
         if (handleCommand(text)) return
+        if (Questions.isQuestion(text)) {
+            val a = Questions.answer(text, entries, currency)
+            if (a != null) {
+                scope.launch {
+                    snackbar.currentSnackbarData?.dismiss()
+                    val res = snackbar.showSnackbar(
+                        a.text, actionLabel = if (a.search != null) "Details" else null,
+                        duration = SnackbarDuration.Long, withDismissAction = a.search == null
+                    )
+                    if (res == SnackbarResult.ActionPerformed && a.search != null) {
+                        people = null
+                        results = a.search to false
+                    }
+                }
+                return
+            }
+        }
         if (looksLikeEdit(text) && entries.isNotEmpty()) {
             if (activeKey.isBlank()) {
                 toast("Changing entries by voice needs AI. Turn it on in Settings, or tap the entry to edit.")
