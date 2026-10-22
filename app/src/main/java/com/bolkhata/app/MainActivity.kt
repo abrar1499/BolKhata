@@ -188,9 +188,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         return true
     }
 
-    fun handleText(text: String) {
-        if (handleCommand(text)) return
-        val r = Parser.parse(text)
+    var aiKey by remember { mutableStateOf(store.aiKey) }
+
+    fun addOffline(r: Parser.Result) {
         if (r.entries.isEmpty() && r.unclear.isEmpty()) {
             toast("No amount found. Please say or type an amount.")
             return
@@ -200,6 +200,36 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             toast("✓ Added " + r.entries.joinToString(", ") { entryTitle(it) + " " + fmt(it.amount) })
         }
         if (r.unclear.isNotEmpty()) pending = pending + r.unclear
+    }
+
+    /**
+     * Offline first. Only when the offline reader is unsure (something it could not place,
+     * an "Other" expense, or no amount at all) and an AI key is set, the sentence goes to Gemini.
+     * If the AI fails or there is no internet, the offline result is used as before.
+     */
+    fun handleText(text: String) {
+        if (handleCommand(text)) return
+        val r = Parser.parse(text)
+        val unsure = r.unclear.isNotEmpty() || r.entries.isEmpty() ||
+            r.entries.any { it.type == Type.KHARCHA && it.category == Cat.OTHER }
+        if (!unsure || aiKey.isBlank()) {
+            addOffline(r)
+            return
+        }
+        toast("✨ Understanding…")
+        scope.launch {
+            try {
+                val list = Ai.parse(text, aiKey, store, currency)
+                if (list.isEmpty()) {
+                    addOffline(r)
+                } else {
+                    save(list + entries)
+                    toast("✨ Added " + list.joinToString(", ") { entryTitle(it) + " " + fmt(it.amount) })
+                }
+            } catch (e: Exception) {
+                addOffline(r)
+            }
+        }
     }
 
     val voice = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
@@ -342,7 +372,21 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     themeName = themeName,
                     onTheme = onTheme,
                     bankOn = bankOn,
-                    onBank = { bankHelp = true }
+                    onBank = { bankHelp = true },
+                    aiKey = aiKey,
+                    onAiKey = { k ->
+                        aiKey = k
+                        store.aiKey = k
+                        if (k.isBlank()) {
+                            toast("AI turned off")
+                        } else {
+                            toast("Checking key…")
+                            scope.launch {
+                                val err = Ai.test(k, store)
+                                toast(if (err == null) "✓ AI is ready" else err)
+                            }
+                        }
+                    }
                 )
             }
         }

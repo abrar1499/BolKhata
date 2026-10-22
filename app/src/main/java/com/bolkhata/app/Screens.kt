@@ -644,8 +644,11 @@ fun SettingsScreen(
     themeName: String,
     onTheme: (String) -> Unit,
     bankOn: Boolean = false,
-    onBank: () -> Unit = {}
+    onBank: () -> Unit = {},
+    aiKey: String = "",
+    onAiKey: (String) -> Unit = {}
 ) {
+    var aiText by remember(aiKey) { mutableStateOf(aiKey) }
     var nameText by remember(name) { mutableStateOf(name) }
     var currencyMenu by remember { mutableStateOf(false) }
 
@@ -685,6 +688,48 @@ fun SettingsScreen(
                 ThemeGroup("Light", HEADER_THEMES.filter { it.light }, themeName, onTheme)
                 Spacer(Modifier.height(8.dp))
                 ThemeGroup("Bold & dark", HEADER_THEMES.filter { !it.light }, themeName, onTheme)
+            }
+        }
+        item {
+            Panel(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    SmallLabel("✨ AI help (Gemini)")
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        if (aiKey.isBlank()) "Off" else "On",
+                        fontWeight = FontWeight.Bold,
+                        color = if (aiKey.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary
+                    )
+                }
+                Text(
+                    "Simple entries are understood offline. Only sentences the app is unsure about are sent to Gemini. " +
+                        "Without internet the app works as before.",
+                    fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = aiText, onValueChange = { aiText = it.trim() },
+                    singleLine = true, placeholder = { Text("Paste your Gemini API key") },
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (aiKey.isNotBlank()) {
+                        OutlinedButton(onClick = { aiText = ""; onAiKey("") }) { Text("Remove") }
+                    }
+                    Button(
+                        onClick = { onAiKey(aiText) },
+                        enabled = aiText.isNotBlank() && aiText != aiKey,
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Save key") }
+                }
+                Text(
+                    "Get a free key at aistudio.google.com → Get API key. Keep it private.",
+                    fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 6.dp)
+                )
             }
         }
         item {

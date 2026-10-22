@@ -159,6 +159,14 @@ class Store(context: Context) {
         get() = prefs.getString("name", "") ?: ""
         set(v) = prefs.edit().putString("name", v).apply()
 
+    var aiKey: String
+        get() = prefs.getString("aiKey", "") ?: ""
+        set(v) = prefs.edit().putString("aiKey", v).apply()
+
+    var aiModel: String
+        get() = prefs.getString("aiModel", "") ?: ""
+        set(v) = prefs.edit().putString("aiModel", v).apply()
+
     var theme: String
         get() = prefs.getString("theme", "Sand") ?: "Sand"
         set(v) = prefs.edit().putString("theme", v).apply()
