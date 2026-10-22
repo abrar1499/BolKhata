@@ -272,7 +272,7 @@ object Parser {
                 rateQty = amount
                 amount = rateValue
             }
-            val mult = num.groupValues[2].lowercase()
+            val mult = num.groupValues.getOrElse(2) { "" }.lowercase()
             if (mult.isNotEmpty()) {
                 amount *= when {
                     mult.startsWith("l") || mult == "لاکھ" -> 100_000.0
@@ -332,7 +332,7 @@ object Parser {
             when {
                 // "..., 10000 diye baqi udhaar" right after a sale or purchase: a part payment from or to that person.
                 person.isEmpty() && lastTrade?.person?.isNotEmpty() == true && paidWords.any { words.contains(it) } && !trade -> {
-                    val lt = lastTrade!!
+                    val lt = lastTrade ?: return Result(entries, unclear)
                     entries += make(if (lt.type == Type.SALE) Type.WAPIS_MILA else Type.WAPIS_DIYA, Cat.UDHAAR, "Loans", lt.person)
                 }
                 asset != null && sells -> entries += make(Type.AAMDANI, Cat.ASSETS, "$asset (sold)", "")

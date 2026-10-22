@@ -262,6 +262,15 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     }
 
     fun handleText(text: String) {
+        try {
+            handleTextSafely(text)
+        } catch (e: Exception) {
+            // Never close the app because a sentence was not understood.
+            toast("Sorry, I couldn't read that. Tap + to add it by hand.")
+        }
+    }
+
+    fun handleTextSafely(text: String) {
         if (handleCommand(text)) return
         if (Questions.isQuestion(text)) {
             val a = Questions.answer(text, entries, currency)
