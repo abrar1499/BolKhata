@@ -131,11 +131,11 @@ fun HomeScreen(
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             MiniTile(
                                 "Expenses", moneyA(currency, monthSpent), "−", RedSpend, Modifier.weight(1f),
-                                valueSize = 18, valueColor = RedSpend
+                                valueSize = 18, valueColor = RedSpend, tinted = true
                             ) { onReports() }
                             MiniTile(
                                 "Income", moneyA(currency, monthIncome), "+", GreenIn, Modifier.weight(1f),
-                                valueSize = 18, valueColor = GreenIn
+                                valueSize = 18, valueColor = GreenIn, tinted = true
                             ) { onReports() }
                         }
                     }
@@ -250,12 +250,13 @@ private fun MiniTile(
     modifier: Modifier,
     valueSize: Int = 15,
     valueColor: Color = Color.Unspecified,
+    tinted: Boolean = false,
     onClick: () -> Unit
 ) {
     Row(
         modifier
             .clip(RoundedCornerShape(14.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .background(if (tinted) color.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant)
             .clickable { onClick() }
             .padding(start = 12.dp, end = 10.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically
