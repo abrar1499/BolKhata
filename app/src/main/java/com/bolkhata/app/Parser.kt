@@ -689,11 +689,11 @@ object Parser {
             if (ms != null) return ms to cut(m.range)
         }
         // 3 din pehle / 3 days ago
-        Regex("""(?<!\d)(\d{1,2})\s*(?:din|days?|دن)\s*(?:pehle|pehlay|pahle|ago|qabl|پہلے)""").find(lower)?.let { m ->
+        Regex("""(?<!\d)(\d{1,2})\s*(?:din|days?|دن)\s*(?:pehle|pehlay|pehly|pehli|pahle|pahly|phle|phly|pehley|ago|qabl|پہلے)""").find(lower)?.let { m ->
             return (now - m.groupValues[1].toLong() * 86_400_000L) to cut(m.range)
         }
         // parson / kal / yesterday
-        if (Regex("""(?<!\p{L})(?:parson|parso|پرسوں)(?!\p{L})""").containsMatchIn(lower)) return (now - 2 * 86_400_000L) to text
+        if (Regex("""(?<!\p{L})(?:parson|parso|parsu|parsun|parsoon|parsun|prso|prson|prsu|parsoun|پرسوں)(?!\p{L})""").containsMatchIn(lower)) return (now - 2 * 86_400_000L) to text
         if (Regex("""(?<!\p{L})(?:kal|kl|cal|kall|yesterday|کل)(?!\p{L})""").containsMatchIn(lower) && !lower.contains("aaj")) {
             return (now - 86_400_000L) to text
         }

@@ -302,7 +302,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         )
         val soft = listOf("kar do", "kardo", "kr do", "krdo", "daal do", "dal do", "daldo", "kar dein", "kardein")
         val refers = listOf("entry", "wali", "wala", "wale", "last", "pichli", "pichhli", "akhri", "aakhri", "category", "previous")
-        return strong.any { t.contains(it) } || (soft.any { t.contains(it) } && refers.any { t.contains(it) })
+        return t.contains(" entry ") || strong.any { t.contains(it) } || (soft.any { t.contains(it) } && refers.any { t.contains(it) })
     }
 
     fun handleTextSafely(text: String) {
@@ -327,6 +327,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 return
             }
         }
+        // Simple changes (date, amount) are done offline straight away, with Undo.
+        Edits.plan(text, entries)?.let { applyPlan(it); return }
         if (looksLikeEdit(text) && entries.isNotEmpty()) {
             if (activeKey.isBlank()) {
                 toast("Changing entries by voice needs AI. Turn it on in Settings, or tap the entry to edit.")
