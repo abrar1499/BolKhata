@@ -375,7 +375,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
 
     fun handleText(text: String) {
         try {
-            handleTextSafely(text)
+            handleTextSafely(Translit.toRoman(text))
         } catch (e: Exception) {
             // Never close the app because a sentence was not understood.
             toast("Sorry, I couldn't read that. Tap + to add it by hand.")
@@ -384,7 +384,12 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
 
     val voice = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
         if (res.resultCode == Activity.RESULT_OK) {
-            val said = res.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull().orEmpty()
+            // Google gives a few guesses; take the first one the app fully understands.
+            val guesses = res.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS).orEmpty()
+                .map { Translit.toRoman(it).trim() }.filter { it.isNotBlank() }
+            val said = guesses.firstOrNull { g ->
+                runCatching { Parser.parse(g).let { it.entries.isNotEmpty() && it.unclear.isEmpty() } }.getOrDefault(false)
+            } ?: guesses.firstOrNull().orEmpty()
             if (said.isNotBlank()) handleText(said)
         }
     }
@@ -394,6 +399,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, lang)
             putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak now…")
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
         }
         try {
             voice.launch(i)

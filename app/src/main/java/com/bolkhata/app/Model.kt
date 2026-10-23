@@ -171,8 +171,15 @@ class Store(context: Context) {
         prefs.edit().putString(key, arr.toString()).apply()
     }
 
+    /** Voice language. Hindi voice understands spoken Urdu best; its letters are turned into Roman Urdu. */
     var language: String
-        get() = prefs.getString("lang", "en-IN") ?: "en-IN"
+        get() {
+            // Move everyone from the old English voice to the better Hindi voice once.
+            if (!prefs.getBoolean("langV2", false)) {
+                prefs.edit().putBoolean("langV2", true).putString("lang", "hi-IN").apply()
+            }
+            return prefs.getString("lang", "hi-IN") ?: "hi-IN"
+        }
         set(v) = prefs.edit().putString("lang", v).apply()
 
     var currency: String

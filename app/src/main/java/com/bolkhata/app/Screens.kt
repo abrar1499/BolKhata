@@ -823,10 +823,19 @@ fun SettingsScreen(
                     }
                 }
                 HorizontalDivider(Modifier.padding(vertical = 6.dp))
-                SettingRow("Voice language", if (lang == "ur-PK") "Urdu script (اردو)" else "Roman Urdu / English") {
+                SettingRow(
+                    "Voice language",
+                    when (lang) {
+                        "ur-PK" -> "Urdu script (اردو)"
+                        "en-IN" -> "English only"
+                        else -> "Urdu / Hindi speech, written in Roman (best)"
+                    }
+                ) {
                     Row {
-                        FilterChip(selected = lang != "ur-PK", onClick = { onLang("en-IN") }, label = { Text("Roman") })
-                        Spacer(Modifier.width(6.dp))
+                        FilterChip(selected = lang != "ur-PK" && lang != "en-IN", onClick = { onLang("hi-IN") }, label = { Text("Roman") })
+                        Spacer(Modifier.width(4.dp))
+                        FilterChip(selected = lang == "en-IN", onClick = { onLang("en-IN") }, label = { Text("Eng") })
+                        Spacer(Modifier.width(4.dp))
                         FilterChip(selected = lang == "ur-PK", onClick = { onLang("ur-PK") }, label = { Text("اردو") })
                     }
                 }
