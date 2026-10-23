@@ -339,7 +339,7 @@ object Parser {
                 type = type, amount = amount, category = cat,
                 item = if (isLoan(type) && goods.isNotEmpty()) goods else item,
                 person = who,
-                note = part, date = date, createdAt = System.currentTimeMillis(),
+                note = cleanNote(part, who).ifBlank { item }, date = date, createdAt = System.currentTimeMillis(),
                 qty = if (qty > 0 && (goods.isNotEmpty() || unit.isNotEmpty())) qty else 0.0,
                 unit = unit, rate = rateValue
             )
@@ -407,7 +407,7 @@ object Parser {
                         entries += make(groupType, Cat.UDHAAR, "Loans", guess)
                     } else {
                         // Not sure what this is: ask the user.
-                        unclear += make(Type.KHARCHA, Cat.OTHER, goods, guess)
+                        unclear += make(Type.KHARCHA, Cat.OTHER, goods, guess).copy(note = part)
                     }
                 }
             }
@@ -425,7 +425,7 @@ object Parser {
                     unclear += m.copy(
                         type = type ?: Type.KHARCHA,
                         category = when (type) { Type.SALE -> Cat.SALES; Type.PURCHASE -> Cat.STOCK; else -> Cat.OTHER },
-                        item = goods.ifEmpty { m.item }, amount = 0.0, qty = amount, unit = unit
+                        item = goods.ifEmpty { m.item }, amount = 0.0, qty = amount, unit = unit, note = part
                     )
                 }
                 continue
@@ -482,6 +482,22 @@ object Parser {
         }
         val keys = words.filter { it.length >= 3 && it !in payStop }
         return PayStatus(paid, keys, findPerson(input), money)
+    }
+
+    private val noteDrop = goodsStop + clauseEnd + currencyWords + priceMarkers + cashWords + setOf(
+        "kiya", "kia", "kiye", "kie", "kar", "kr", "karna", "karo", "kardiya", "krdiya", "hua", "hui", "hue", "gaya", "gayi", "gae",
+        "kal", "kl", "cal", "kall", "parson", "parso", "today", "yesterday", "aj", "abhi", "abi", "mein", "me", "par", "pe", "pay",
+        "for", "on", "of", "a", "an", "i", "my", "mera", "meri", "mere", "mene", "maine", "main", "men", "mujhe", "apna", "apni",
+        "is", "was", "were", "it", "to", "from", "bhai", "sahab", "sahib", "k", "ky", "kay", "b", "bhi", "bi", "sath", "saath"
+    )
+
+    /** "cal 7 Riyal ka Subah nashta kiya tha" -> "Subah nashta": the sentence without amount, date and filler words. */
+    fun cleanNote(part: String, person: String = ""): String {
+        val keep = part.split(Regex("""\s+""")).map { it.trim('.', ',', '!', '?', ':', ';', '"', '\'') }.filter { w ->
+            val lw = w.lowercase()
+            lw.isNotEmpty() && lw.none { it.isDigit() } && lw !in noteDrop && lw !in unitWords && !lw.equals(person, true)
+        }
+        return keep.joinToString(" ").take(40).replaceFirstChar { it.uppercase() }
     }
 
     private val perThousand = setOf("eint", "eent", "int", "ent", "eenth", "brick", "bricks", "اینٹ", "اینٹیں")
@@ -678,7 +694,7 @@ object Parser {
         }
         // parson / kal / yesterday
         if (Regex("""(?<!\p{L})(?:parson|parso|پرسوں)(?!\p{L})""").containsMatchIn(lower)) return (now - 2 * 86_400_000L) to text
-        if (Regex("""(?<!\p{L})(?:kal|yesterday|کل)(?!\p{L})""").containsMatchIn(lower) && !lower.contains("aaj")) {
+        if (Regex("""(?<!\p{L})(?:kal|kl|cal|kall|yesterday|کل)(?!\p{L})""").containsMatchIn(lower) && !lower.contains("aaj")) {
             return (now - 86_400_000L) to text
         }
         return null to text

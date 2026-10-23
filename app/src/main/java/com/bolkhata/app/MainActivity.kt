@@ -552,7 +552,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         AskDialog(
             entry = ask,
             currency = currency,
-            onPick = { e ->
+            onPick = { picked ->
+                val e = picked.copy(note = Parser.cleanNote(picked.note, picked.person).ifBlank { picked.item })
                 save(listOf(e) + entries)
                 pending = pending.drop(1)
                 toast("✓ Saved: " + entryTitle(e) + " " + fmt(e.amount))
@@ -786,7 +787,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             EntryForm(
                 initial = e,
                 title = "Edit entry",
-                question = "You said: \"${e.note}\"",
+                question = null,
                 askType = false,
                 currency = currency,
                 saveLabel = "Save",
