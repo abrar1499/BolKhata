@@ -190,8 +190,10 @@ object Parser {
             // not an item ("diye | 10 ki roti khai").
             val priceNext = rest.size >= 2 && isNumber(rest[0]) && rest[1].lowercase() in priceMarkers &&
                 (rest[1].lowercase() == "rate" || rest.size == 2 || isNumber(rest[2]) || rest[2].lowercase() in clauseStart)
+            // "...dali rate 17000": the rate right after the verb belongs to this entry.
+            val rateNext = rest.size >= 2 && rest[0].lowercase() == "rate" && isNumber(rest[1])
             if (lw in clauseEnd && curHasNumber && rest.any { isNumber(it) }) {
-                if (priceNext) {
+                if (priceNext || rateNext) {
                     cutAt = i + 2
                 } else {
                     pieces.add(cur)
@@ -233,8 +235,22 @@ object Parser {
     private val splitRegex = Regex("""[,\n،۔]|(?<!\d)\.(?!\d)|\baur\b|\bar\b|\bphir\b|\band\b| اور | پھر """, RegexOption.IGNORE_CASE)
     private val numberRegex = Regex("""(\d[\d,]*(?:\.\d+)?)(?:\s*(hazar|hazaar|hazzar|thousand|k|lakh|lac|hundred|sau|ہزار|لاکھ|سو)(?!\p{L}))?""", RegexOption.IGNORE_CASE)
 
+    private val digitMult = Regex("""(\d[\d,]*(?:\.\d+)?)\s*(hazar|hazaar|hazzar|thousand|lakh|lac|hundred|sau|ہزار|لاکھ|سو)(?!\p{L})""", RegexOption.IGNORE_CASE)
+
     fun parse(input: String, now: Long = System.currentTimeMillis()): Result {
-        val found = extractDate(NumberWords.convert(normalizeDigits(input)), now)
+        // "2 hazar" -> "2000" before the number words are read, so it is not seen as "2" and "1000".
+        val joined = digitMult.replace(normalizeDigits(input)) { m ->
+            val n = m.groupValues[1].replace(",", "").toDoubleOrNull() ?: return@replace m.value
+            val w = m.groupValues[2].lowercase()
+            val x = when {
+                w.startsWith("l") || w == "لاکھ" -> 100_000.0
+                w == "hundred" || w == "sau" || w == "سو" -> 100.0
+                else -> 1_000.0
+            }
+            val v = n * x
+            if (v % 1.0 == 0.0) v.toLong().toString() else v.toString()
+        }
+        val found = extractDate(NumberWords.convert(joined), now)
         val date = found.first ?: now
         val text = found.second
         val entries = mutableListOf<Entry>()
@@ -265,13 +281,6 @@ object Parser {
                 ?: numberRegex.find(part)
                 ?: continue
             var amount = num.groupValues[1].replace(",", "").toDoubleOrNull() ?: continue
-            // "1000 kachi eint, 1000 rate": no price was said, so the number is how many and the rate is the price.
-            val priced = moneyRegex.containsMatchIn(part) || priceRegex.containsMatchIn(part)
-            var rateQty = 0.0
-            if (!priced && rateValue > 0 && rateMatch != null && !overlaps(num.range, rateMatch.range)) {
-                rateQty = amount
-                amount = rateValue
-            }
             val mult = num.groupValues.getOrElse(2) { "" }.lowercase()
             if (mult.isNotEmpty()) {
                 amount *= when {
@@ -279,6 +288,14 @@ object Parser {
                     mult == "hundred" || mult == "sau" || mult == "سو" -> 100.0
                     else -> 1_000.0
                 }
+            }
+            // "2000 awal eint, 17000 rate": no price was said, so the number is how many and the total is qty x rate
+            // (bricks are priced per 1000).
+            val priced = moneyRegex.containsMatchIn(part) || priceRegex.containsMatchIn(part)
+            var rateQty = 0.0
+            if (!priced && rateValue > 0 && rateMatch != null && !overlaps(num.range, rateMatch.range)) {
+                rateQty = amount
+                amount = total(rateQty, rateValue, part)
             }
             if (amount <= 0) continue
 
@@ -292,12 +309,22 @@ object Parser {
                 words.firstOrNull { it in knownPeople }?.let { cap(it) } ?: ""
             }
             val takes = takeWords.any { words.contains(it) }
+            // "1000 eint Ashraf ko di": the number is how many bricks, not money. The rate is asked for.
+            val firstAfter = part.substring(num.range.last + 1).trim().split(Regex("""\s+""")).filter { it.isNotEmpty() }
+                .let { w -> if (w.firstOrNull()?.lowercase() in unitWords) w.drop(1) else w }.firstOrNull()?.lowercase() ?: ""
+            val bareQty = !priced && rateMatch == null && numberRegex.findAll(part).count() == 1 && mult.isEmpty() &&
+                looksLikeGoods(firstAfter, person) &&
+                (person.isNotEmpty() || sellWords.any { words.contains(it) } || buyWords.any { words.contains(it) })
 
             // Another number that is not the price: a quantity, with the goods named after it ("1000 awal eint").
-            val qtyMatch = if (rateQty > 0) num else numberRegex.findAll(part).firstOrNull { m ->
+            val qtyMatch = if (rateQty > 0 || bareQty) num else numberRegex.findAll(part).firstOrNull { m ->
                 !overlaps(m.range, num.range) && (rateMatch == null || !overlaps(m.range, rateMatch.range))
             }
-            val qty = if (rateQty > 0) rateQty else qtyMatch?.groupValues?.get(1)?.replace(",", "")?.toDoubleOrNull() ?: 0.0
+            val qty = if (rateQty > 0) rateQty else if (bareQty) amount else qtyMatch?.groupValues?.get(1)?.replace(",", "")?.toDoubleOrNull() ?: 0.0
+            // "10 bori cement rate 1500": the number read was the rate, so the total is qty x rate.
+            if (!priced && rateQty == 0.0 && rateValue > 0 && qty > 0 && rateMatch != null && overlaps(num.range, rateMatch.range)) {
+                amount = total(qty, rateValue, part)
+            }
             val afterQty = qtyMatch?.let { part.substring(it.range.last + 1).trim().split(Regex("""\s+""")) }.orEmpty()
             val unit = afterQty.firstOrNull()?.lowercase()?.takeIf { it in unitWords } ?: ""
             val goods = (if (unit.isEmpty()) afterQty else afterQty.drop(1))
@@ -380,9 +407,28 @@ object Parser {
                         entries += make(groupType, Cat.UDHAAR, "Loans", guess)
                     } else {
                         // Not sure what this is: ask the user.
-                        unclear += make(Type.KHARCHA, Cat.OTHER, "", guess)
+                        unclear += make(Type.KHARCHA, Cat.OTHER, goods, guess)
                     }
                 }
+            }
+            if (bareQty) {
+                // Move what was just read to the questions, with the goods filled in and no amount yet.
+                val made = entries.drop(before)
+                repeat(made.size) { entries.removeAt(entries.size - 1) }
+                val lastUnclear = if (made.isEmpty() && unclear.isNotEmpty()) unclear.removeAt(unclear.size - 1) else null
+                (made.ifEmpty { listOfNotNull(lastUnclear) }).forEach { m ->
+                    val type = when (m.type) {
+                        Type.DIYA, Type.SALE -> Type.SALE
+                        Type.LIYA, Type.PURCHASE -> Type.PURCHASE
+                        else -> null
+                    }
+                    unclear += m.copy(
+                        type = type ?: Type.KHARCHA,
+                        category = when (type) { Type.SALE -> Cat.SALES; Type.PURCHASE -> Cat.STOCK; else -> Cat.OTHER },
+                        item = goods.ifEmpty { m.item }, amount = 0.0, qty = amount, unit = unit
+                    )
+                }
+                continue
             }
             val newTrade = entries.drop(before).lastOrNull { isTrade(it.type) && it.person.isNotEmpty() }
             if (newTrade != null) lastTrade = newTrade
@@ -436,6 +482,27 @@ object Parser {
         }
         val keys = words.filter { it.length >= 3 && it !in payStop }
         return PayStatus(paid, keys, findPerson(input), money)
+    }
+
+    private val perThousand = setOf("eint", "eent", "int", "ent", "eenth", "brick", "bricks", "اینٹ", "اینٹیں")
+
+    /** Total for [qty] at [rate]; bricks are priced per 1000. */
+    fun total(qty: Double, rate: Double, text: String): Double {
+        val words = text.lowercase().split(Regex("""[^\p{L}]+"""))
+        return if (words.any { it in perThousand }) qty * rate / 1000.0 else qty * rate
+    }
+
+    /** True when [w] is the name of goods ("eint", "cement"), not money, a person or a spending word. */
+    private fun looksLikeGoods(w: String, person: String): Boolean {
+        if (w.length < 3 || !w.all { it.isLetter() }) return false
+        if (w == person.lowercase() || w in knownPeople || w in notNames) return false
+        val blocked = listOf(goodsStop, clauseEnd, currencyWords, cashWords, creditWords, paidWords, sellWords, buyWords,
+            neGiveWords, giveWords.toSet(), takeWords.toSet(), returnWords.toSet(), loanWords.toSet())
+        if (blocked.any { w in it }) return false
+        if (learned.containsKey(w)) return false
+        if (matchSpending(w, listOf(w)) != null) return false
+        if (incomeRules.any { (_, keys) -> keys.any { matches(it, w, listOf(w)) } }) return false
+        return true
     }
 
     private val paidWords = setOf("diye", "diya", "di", "d", "cash", "naqad", "nakad", "paid", "advance", "jama", "mile", "mila", "received", "payment")

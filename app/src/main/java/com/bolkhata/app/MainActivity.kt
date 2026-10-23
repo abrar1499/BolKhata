@@ -349,7 +349,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         }
         val r = Parser.parse(text)
         if (r.entries.isEmpty() && r.unclear.isEmpty() && applyPayStatus(text)) return
-        val unsure = r.unclear.isNotEmpty() || r.entries.isEmpty() ||
+        // Goods said without a price are asked about here (the rate), not sent to the AI.
+        val askRate = r.unclear.isNotEmpty() && r.unclear.all { it.qty > 0 }
+        val unsure = !askRate && (r.unclear.isNotEmpty() || r.entries.isEmpty()) ||
             r.entries.any { it.type == Type.KHARCHA && it.category == Cat.OTHER }
         if (!unsure || activeKey.isBlank()) {
             addOffline(r)
@@ -988,38 +990,98 @@ private fun DrawerMenu(tab: Tab, name: String, currency: String, onCurrency: (St
 @Composable
 private fun AskDialog(entry: Entry, currency: String, onPick: (Entry) -> Unit, onMore: () -> Unit, onSkip: () -> Unit) {
     val who = entry.person.ifBlank { "Someone" }
+    val goods = entry.qty > 0
+    // Goods said without a price ("1000 eint Ashraf ko di"): ask the rate, the total is worked out.
+    val needRate = goods && entry.amount <= 0
+    val knownTrade = isTrade(entry.type) && (entry.category == Cat.SALES || entry.category == Cat.STOCK)
+    var rate by remember(entry.id) { mutableStateOf("") }
+    val rateValue = rate.toDoubleOrNull() ?: 0.0
+    val total = if (needRate) Parser.total(entry.qty, rateValue, entry.item + " " + entry.note) else entry.amount
+    val ready = total > 0
+    fun trade(t: Type) = entry.copy(
+        type = t, amount = total, category = if (t == Type.SALE) Cat.SALES else Cat.STOCK,
+        item = entry.item.ifBlank { if (t == Type.SALE) "Sale" else "Purchase" },
+        rate = if (needRate) rateValue else entry.rate
+    )
     Dialog(onDismissRequest = onSkip) {
         Surface(shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 12.dp) {
             Column(Modifier.padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(
                     Modifier.size(56.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
                     contentAlignment = Alignment.Center
-                ) { Text("🤔", fontSize = 28.sp) }
+                ) { Text(if (goods) "📦" else "🤔", fontSize = 28.sp) }
                 Spacer(Modifier.height(12.dp))
-                Text(moneyA(currency, entry.amount), fontSize = 26.sp, fontWeight = FontWeight.ExtraBold)
+                if (goods) {
+                    Text(qtyText(entry), fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
+                    if (!needRate) Text(moneyA(currency, entry.amount), fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                } else {
+                    Text(moneyA(currency, entry.amount), fontSize = 26.sp, fontWeight = FontWeight.ExtraBold)
+                }
                 Text(
                     "\"${entry.note}\"",
                     color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
-                Spacer(Modifier.height(6.dp))
-                Text("What is this?", fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
-                Spacer(Modifier.height(16.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    ChoiceTile("Expense", "I spent it", "−", RedSpend, Modifier.weight(1f)) {
-                        onPick(entry.copy(type = Type.KHARCHA, category = Cat.OTHER, item = "Other", person = ""))
-                    }
-                    ChoiceTile("Income", "I got paid", "+", GreenIn, Modifier.weight(1f)) {
-                        onPick(entry.copy(type = Type.AAMDANI, category = Cat.TANKHWAH, item = "Income", person = ""))
-                    }
+                if (needRate) {
+                    Spacer(Modifier.height(12.dp))
+                    val perK = Parser.total(1000.0, 1.0, entry.item) == 1.0
+                    OutlinedTextField(
+                        value = rate,
+                        onValueChange = { v -> rate = v.filter { it.isDigit() || it == '.' } },
+                        label = { Text(if (perK) "Rate per 1000 ($currency)" else "Rate per item ($currency)", fontSize = 12.sp) },
+                        keyboardOptions = KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
+                        singleLine = true,
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text(
+                        if (ready) "Total: " + money(currency, total) else "What is the rate?",
+                        fontWeight = FontWeight.SemiBold, fontSize = 15.sp, modifier = Modifier.padding(top = 6.dp)
+                    )
+                } else {
+                    Spacer(Modifier.height(6.dp))
+                    Text("What is this?", fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
                 }
-                Spacer(Modifier.height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    ChoiceTile("To pay", "I owe $who", "💸", OrangeOwe, Modifier.weight(1f)) {
-                        onPick(entry.copy(type = Type.LIYA, category = Cat.UDHAAR, item = "Loans", person = who))
+                Spacer(Modifier.height(14.dp))
+                when {
+                    knownTrade -> Button(
+                        onClick = { onPick(trade(entry.type)) },
+                        enabled = ready,
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.fillMaxWidth().height(48.dp)
+                    ) {
+                        Text(
+                            (if (entry.type == Type.SALE) "Save · sold" else "Save · bought") +
+                                (if (entry.person.isNotBlank()) (if (entry.type == Type.SALE) " to " else " from ") + entry.person else ""),
+                            fontWeight = FontWeight.Bold
+                        )
                     }
-                    ChoiceTile("To receive", "$who owes me", "🤝", GreenIn, Modifier.weight(1f)) {
-                        onPick(entry.copy(type = Type.DIYA, category = Cat.UDHAAR, item = "Loans", person = who))
+                    goods -> Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        ChoiceTile("Bought", if (entry.person.isBlank()) "Purchase" else "from $who", "📦", RedSpend, Modifier.weight(1f)) {
+                            if (ready) onPick(trade(Type.PURCHASE))
+                        }
+                        ChoiceTile("Sold", if (entry.person.isBlank()) "Sale" else "to $who", "🧾", GreenIn, Modifier.weight(1f)) {
+                            if (ready) onPick(trade(Type.SALE))
+                        }
+                    }
+                    else -> {
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            ChoiceTile("Expense", "I spent it", "−", RedSpend, Modifier.weight(1f)) {
+                                onPick(entry.copy(type = Type.KHARCHA, category = Cat.OTHER, item = "Other", person = ""))
+                            }
+                            ChoiceTile("Income", "I got paid", "+", GreenIn, Modifier.weight(1f)) {
+                                onPick(entry.copy(type = Type.AAMDANI, category = Cat.TANKHWAH, item = "Income", person = ""))
+                            }
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            ChoiceTile("To pay", "I owe $who", "💸", OrangeOwe, Modifier.weight(1f)) {
+                                onPick(entry.copy(type = Type.LIYA, category = Cat.UDHAAR, item = "Loans", person = who))
+                            }
+                            ChoiceTile("To receive", "$who owes me", "🤝", GreenIn, Modifier.weight(1f)) {
+                                onPick(entry.copy(type = Type.DIYA, category = Cat.UDHAAR, item = "Loans", person = who))
+                            }
+                        }
                     }
                 }
                 Spacer(Modifier.height(8.dp))
