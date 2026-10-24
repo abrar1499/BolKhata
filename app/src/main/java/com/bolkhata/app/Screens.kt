@@ -68,7 +68,6 @@ fun HomeScreen(
     fun inYear(ms: Long) = cal(ms).get(Calendar.YEAR) == now.get(Calendar.YEAR)
 
     val monthSpent = entries.filter { it.isCashOutFlow() && inMonth(it.date) }.sumOf { it.amount }
-    val yearSpent = entries.filter { it.isCashOutFlow() && inYear(it.date) }.sumOf { it.amount }
     val monthIncome = entries.filter { it.isCashInFlow() && inMonth(it.date) }.sumOf { it.amount }
     // Shop and business cards appear only once sales or purchases are used.
     val trading = entries.any { isTrade(it.type) }
@@ -125,41 +124,38 @@ fun HomeScreen(
                     }
                     Spacer(Modifier.height(18.dp))
                     Panel(Modifier.fillMaxWidth(), onClick = onReports, padding = 12.dp) {
-                        Text("Cash Out in $monthName", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(moneyA(currency, monthSpent), fontSize = 32.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 36.sp, letterSpacing = (-0.5).sp)
-                        Text(
-                            "Cash Out this year ${money(currency, yearSpent)}  ·  See report ›",
-                            fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Text("In $monthName", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(8.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            MiniTile("To pay", moneyA(currency, pay), "−", OrangeOwe, Modifier.weight(1f)) { onPeople(false) }
-                            MiniTile("To receive", moneyA(currency, receive), "+", GreenIn, Modifier.weight(1f)) { onPeople(true) }
+                            MainSummaryTile(
+                                "Expense", moneyA(currency, monthSpent), "↓", RedSpend,
+                                Modifier.weight(1f)
+                            ) { onReports() }
+                            MainSummaryTile(
+                                "Income", moneyA(currency, monthIncome), "↑", GreenIn,
+                                Modifier.weight(1f)
+                            ) { onReports() }
                         }
                         Spacer(Modifier.height(8.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             MiniTile(
-                                "Expense", moneyA(currency, monthSpent), "−", RedSpend, Modifier.weight(1f),
-                                valueSize = 18, valueColor = RedSpend, tinted = true
-                            ) { onReports() }
+                                "To pay", moneyA(currency, pay), "−", OrangeOwe, Modifier.weight(1f),
+                                valueSize = 13, compact = true
+                            ) { onPeople(false) }
                             MiniTile(
-                                "Income", moneyA(currency, monthIncome), "+", GreenIn, Modifier.weight(1f),
-                                valueSize = 18, valueColor = GreenIn, tinted = true
+                                "To receive", moneyA(currency, receive), "+", GreenIn, Modifier.weight(1f),
+                                valueSize = 13, compact = true
+                            ) { onPeople(true) }
+                            MiniTile(
+                                "Sales today", moneyA(currency, todaySales), "▤", Cat.SALES.let { catColor(it) },
+                                Modifier.weight(1f), valueSize = 12, compact = true
+                            ) { onSeeAll() }
+                            MiniTile(
+                                "Est. profit", moneyA(currency, monthProfit), if (monthProfit >= 0) "↗" else "↘",
+                                if (monthProfit >= 0) GreenIn else RedSpend, Modifier.weight(1f),
+                                valueSize = 12, valueColor = if (monthProfit >= 0) GreenIn else RedSpend,
+                                compact = true
                             ) { onReports() }
-                        }
-                        if (trading) {
-                            Spacer(Modifier.height(8.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                MiniTile(
-                                    "Sales today", moneyA(currency, todaySales), "🧾", Cat.SALES.let { catColor(it) }, Modifier.weight(1f),
-                                    valueSize = 16
-                                ) { onSeeAll() }
-                                MiniTile(
-                                    "Est. profit", moneyA(currency, monthProfit), if (monthProfit >= 0) "↑" else "↓",
-                                    if (monthProfit >= 0) GreenIn else RedSpend, Modifier.weight(1f),
-                                    valueSize = 16, valueColor = if (monthProfit >= 0) GreenIn else RedSpend
-                                ) { onReports() }
-                            }
                         }
                     }
                 }
@@ -384,14 +380,14 @@ private fun DailyCashHeader(
                 Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                DailyCashMetric("Cash Out", summary.cashOut, currency, RedSpend, Modifier.weight(1f))
+                DailyCashMetric("Out", summary.cashOut, currency, "▣", RedSpend, Modifier.weight(1f))
                 Box(
                     Modifier
                         .width(1.dp)
                         .height(32.dp)
                         .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
                 )
-                DailyCashMetric("Cash In", summary.cashIn, currency, GreenIn, Modifier.weight(1f))
+                DailyCashMetric("In", summary.cashIn, currency, "↙", GreenIn, Modifier.weight(1f))
                 Box(
                     Modifier
                         .width(1.dp)
@@ -399,11 +395,13 @@ private fun DailyCashHeader(
                         .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
                 )
                 DailyCashMetric(
-                    "Cash in Hand",
+                    "Cash In Hand",
                     summary.cashInHand,
                     currency,
-                    if (summary.cashInHand >= 0) MaterialTheme.colorScheme.onSurface else RedSpend,
-                    Modifier.weight(1f)
+                    "▣",
+                    MaterialTheme.colorScheme.onSurfaceVariant,
+                    Modifier.weight(1f),
+                    valueColor = if (summary.cashInHand >= 0) MaterialTheme.colorScheme.onSurface else RedSpend
                 )
             }
         }
@@ -415,32 +413,86 @@ private fun DailyCashMetric(
     label: String,
     amount: Double,
     currency: String,
+    glyph: String,
     color: Color,
-    modifier: Modifier
+    modifier: Modifier,
+    valueColor: Color = color
 ) {
-    Column(
-        modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+    Row(
+        modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(color.copy(alpha = 0.075f))
+            .padding(horizontal = 7.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            label,
-            fontSize = 10.sp,
-            lineHeight = 12.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Text(
-            moneyA(currency, amount),
-            fontSize = 12.sp,
-            lineHeight = 14.sp,
-            fontWeight = FontWeight.Bold,
-            color = color,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+        Column(Modifier.weight(1f)) {
+            Text(
+                label,
+                fontSize = 10.sp,
+                lineHeight = 12.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                moneyA(currency, amount),
+                fontSize = 12.sp,
+                lineHeight = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = valueColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Spacer(Modifier.width(3.dp))
+        Box(
+            Modifier.size(23.dp).clip(CircleShape).background(color.copy(alpha = 0.16f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(glyph, color = color, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        }
     }
 }
 
+
+@Composable
+private fun MainSummaryTile(
+    label: String,
+    value: AnnotatedString,
+    glyph: String,
+    color: Color,
+    modifier: Modifier,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier
+            .clip(RoundedCornerShape(18.dp))
+            .background(color.copy(alpha = 0.09f))
+            .clickable { onClick() }
+            .padding(horizontal = 10.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            Modifier.size(34.dp).clip(CircleShape).background(color.copy(alpha = 0.18f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(glyph, color = color, fontWeight = FontWeight.Bold, fontSize = 21.sp)
+        }
+        Spacer(Modifier.width(9.dp))
+        Column(Modifier.weight(1f)) {
+            Text(label, fontSize = 12.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                value,
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 21.sp,
+                lineHeight = 25.sp,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
 
 @Composable
 private fun MiniTile(
@@ -452,27 +504,53 @@ private fun MiniTile(
     valueSize: Int = 15,
     valueColor: Color = Color.Unspecified,
     tinted: Boolean = false,
+    compact: Boolean = false,
     onClick: () -> Unit
 ) {
     Row(
         modifier
-            .clip(RoundedCornerShape(14.dp))
-            .background(if (tinted) color.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant)
+            .clip(RoundedCornerShape(if (compact) 13.dp else 14.dp))
+            .background(
+                if (tinted) color.copy(alpha = 0.12f)
+                else color.copy(alpha = if (compact) 0.07f else 0.10f)
+            )
             .clickable { onClick() }
-            .padding(start = 12.dp, end = 10.dp, top = 8.dp, bottom = 8.dp),
+            .padding(
+                start = if (compact) 7.dp else 12.dp,
+                end = if (compact) 6.dp else 10.dp,
+                top = if (compact) 8.dp else 8.dp,
+                bottom = if (compact) 8.dp else 8.dp
+            ),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
-            Text(label, fontSize = 11.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(
-                value, fontWeight = FontWeight.Bold, fontSize = valueSize.sp, lineHeight = (valueSize + 4).sp,
-                color = valueColor, maxLines = 1, overflow = TextOverflow.Ellipsis
+                label,
+                fontSize = if (compact) 9.sp else 11.sp,
+                lineHeight = if (compact) 11.sp else 13.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                value,
+                fontWeight = FontWeight.Bold,
+                fontSize = valueSize.sp,
+                lineHeight = (valueSize + 3).sp,
+                color = valueColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
+        Spacer(Modifier.width(if (compact) 3.dp else 6.dp))
         Box(
-            Modifier.size(28.dp).clip(CircleShape).background(color.copy(alpha = 0.18f)),
+            Modifier.size(if (compact) 22.dp else 28.dp)
+                .clip(CircleShape)
+                .background(color.copy(alpha = 0.18f)),
             contentAlignment = Alignment.Center
-        ) { Text(glyph, color = color, fontWeight = FontWeight.Bold) }
+        ) {
+            Text(glyph, color = color, fontWeight = FontWeight.Bold, fontSize = if (compact) 11.sp else 14.sp)
+        }
     }
 }
 
