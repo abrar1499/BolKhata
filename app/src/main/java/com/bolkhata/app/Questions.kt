@@ -56,14 +56,14 @@ object Questions {
         val period0 = asked ?: Period.MONTH
         val inPeriod0 = entries.filter { inPeriod(it.date, period0) }
 
-        // Profit uses recorded purchase costs for sold items, plus other income minus expenses.
+        // Profit is calculated from costed sales minus item cost and Cash Out; other Cash In is separate.
         if (words.any { it in setOf("nafa", "munafa", "profit", "faida", "fayda", "nuqsan", "loss") }) {
             val p = profitBreakdown(entries, inPeriod0)
             val missingCost = if (p.salesWithoutCost > 0.005) "; sales without recorded cost ${fmt(p.salesWithoutCost)} are not included" else ""
             return Answer(
                 (if (p.netProfit >= 0) "Estimated profit" else "Estimated loss") +
                     " ${period0.label}: ${money(currency, kotlin.math.abs(p.netProfit))} " +
-                    "(costed sales ${fmt(p.costedSalesAmount)} − estimated item cost ${fmt(p.costOfGoods)} + other cash-in ${fmt(p.otherIncome)} − cash-out expenses ${fmt(p.expenses)}${missingCost})",
+                    "(costed sales ${fmt(p.costedSalesAmount)} − estimated item cost ${fmt(p.costOfGoods)} − Cash Out ${fmt(p.expenses)}; other Cash In excluded${missingCost})",
                 null
             )
         }

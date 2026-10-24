@@ -268,7 +268,7 @@ data class ProfitBreakdown(
     val items: List<ProfitItemBreakdown>
 )
 
-/** Estimated profit uses the weighted average recorded purchase cost before each sale. */
+/** Estimated business profit uses recorded item cost before each sale; other Cash In is kept separate. */
 fun profitBreakdown(allEntries: List<Entry>, periodEntries: List<Entry>): ProfitBreakdown {
     val sales = periodEntries.filter { it.type == Type.SALE }
     val costBySaleId = linkedMapOf<String, Double>()
@@ -314,7 +314,7 @@ fun profitBreakdown(allEntries: List<Entry>, periodEntries: List<Entry>): Profit
         salesWithoutCost = salesWithoutCost,
         otherIncome = otherIncome,
         expenses = expenses,
-        netProfit = costedSalesAmount - costOfGoods + otherIncome - expenses,
+        netProfit = costedSalesAmount - costOfGoods - expenses,
         items = itemLines
     )
 }

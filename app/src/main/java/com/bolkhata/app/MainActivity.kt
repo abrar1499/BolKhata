@@ -1231,7 +1231,7 @@ private fun AskDialog(entry: Entry, currency: String, onPick: (Entry) -> Unit, o
                                 onPick(entry.copy(type = Type.KHARCHA, category = Cat.OTHER, item = "Other", person = ""))
                             }
                             ChoiceTile("Cash In", "I got paid", "+", GreenIn, Modifier.weight(1f)) {
-                                onPick(entry.copy(type = Type.AAMDANI, category = Cat.TANKHWAH, item = "Income", person = ""))
+                                onPick(entry.copy(type = Type.AAMDANI, category = Cat.TANKHWAH, item = "Cash In", person = ""))
                             }
                         }
                         Spacer(Modifier.height(10.dp))

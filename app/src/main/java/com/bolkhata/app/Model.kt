@@ -25,7 +25,7 @@ enum class Cat(val label: String, val icon: String) {
     SHOPPING("Shopping", "🛍️"),
     SEHAT("Health", "💊"),
     PERSONAL("Personal care", "💈"),
-    TANKHWAH("Income", "💰"),
+    TANKHWAH("Cash In", "💰"),
     UDHAAR("Loans", "🤝"),
     FEES("Fees & Govt", "🏛️"),
     EDU("Education", "📚"),

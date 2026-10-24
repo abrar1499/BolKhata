@@ -155,7 +155,7 @@ fun HomeScreen(
                                     valueSize = 16
                                 ) { onSeeAll() }
                                 MiniTile(
-                                    "Profit this month", moneyA(currency, monthProfit), if (monthProfit >= 0) "↑" else "↓",
+                                    "Est. profit", moneyA(currency, monthProfit), if (monthProfit >= 0) "↑" else "↓",
                                     if (monthProfit >= 0) GreenIn else RedSpend, Modifier.weight(1f),
                                     valueSize = 16, valueColor = if (monthProfit >= 0) GreenIn else RedSpend
                                 ) { onReports() }
@@ -877,7 +877,7 @@ fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit) {
                         Text("Estimated net profit · $label", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text(moneyA(currency, profit.netProfit), fontSize = 30.sp, fontWeight = FontWeight.ExtraBold,
                             color = if (profit.netProfit >= 0) GreenIn else RedSpend)
-                        Text("Sales margin + other cash-in income − cash-out expenses", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Costed sales margin − Cash Out expenses (Cash In excluded)", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 item {
@@ -885,7 +885,7 @@ fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit) {
                         ProfitSummaryRow("Total sales", profit.salesAmount, currency, GreenIn)
                         ProfitSummaryRow("Sales with known cost", profit.costedSalesAmount, currency, MaterialTheme.colorScheme.onSurface)
                         ProfitSummaryRow("Estimated cost of sold items", -profit.costOfGoods, currency, RedSpend)
-                        ProfitSummaryRow("Other cash-in income", profit.otherIncome, currency, GreenIn)
+                        ProfitSummaryRow("Cash In (not included in profit)", profit.otherIncome, currency, GreenIn)
                         ProfitSummaryRow("Cash-out expenses", -profit.expenses, currency, RedSpend)
                         HorizontalDivider(Modifier.padding(vertical = 8.dp))
                         ProfitSummaryRow("Estimated net profit", profit.netProfit, currency, if (profit.netProfit >= 0) GreenIn else RedSpend, bold = true)
