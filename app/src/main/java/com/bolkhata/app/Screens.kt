@@ -481,358 +481,538 @@ private fun spanRange(span: Span, offset: Int): Triple<Long, Long, String> {
     }
 }
 
+private data class ReportGroup(
+    val key: String,
+    val title: String,
+    val icon: String,
+    val amount: Double,
+    val entries: List<Entry>,
+    val color: Color
+)
+
 private data class StockReportRow(
     val name: String,
     val unit: String,
     val currentQty: Double,
-    val boughtQty: Double,
-    val soldQty: Double,
+    val receivedQty: Double,
+    val givenQty: Double,
     val boughtAmount: Double,
     val soldAmount: Double,
     val history: List<Entry>
 )
 
-enum class ReportKind(val label: String) { EXPENSES("Expenses"), SALES("Sales"), STOCK("Stock") }
+enum class ReportKind(val label: String) {
+    CASH_OUT("Cash Out"), CASH_IN("Cash In"), SALES("Sales"), PURCHASES("Purchases"),
+    STOCK("Stock"), PROFIT("Profit"), CASH_BALANCE("Cash Balance"), DUES("Baqaya")
+}
+
+private fun Entry.isCashInFlow(): Boolean = when (type) {
+    Type.AAMDANI, Type.WAPIS_MILA, Type.LIYA -> true
+    Type.SALE -> person.isBlank() || paid
+    else -> false
+}
+
+private fun Entry.isCashOutFlow(): Boolean = when (type) {
+    Type.KHARCHA, Type.WAPIS_DIYA, Type.DIYA -> true
+    Type.PURCHASE -> person.isBlank() || paid
+    else -> false
+}
+
+private fun Entry.changesStock(): Boolean =
+    qty > 0.0 && item.isNotBlank() && item != "Loans" &&
+        type in setOf(Type.PURCHASE, Type.SALE, Type.DIYA, Type.LIYA)
+
+private fun cashFlowCategory(entry: Entry): Cat = when (entry.type) {
+    Type.SALE -> Cat.SALES
+    Type.PURCHASE -> Cat.STOCK
+    Type.DIYA, Type.LIYA, Type.WAPIS_MILA, Type.WAPIS_DIYA -> Cat.UDHAAR
+    else -> entry.category
+}
+
+private fun cashFlowGroupTitle(category: Cat, kind: ReportKind): String = when (category) {
+    Cat.SALES -> if (kind == ReportKind.CASH_IN) "Sales collected" else "Sales"
+    Cat.STOCK -> "Stock purchases"
+    Cat.UDHAAR -> if (kind == ReportKind.CASH_IN) "Borrowed / received back" else "Lent / paid back"
+    Cat.TANKHWAH -> "Other cash received"
+    else -> category.label
+}
+
+private fun flowGroups(entries: List<Entry>, kind: ReportKind): List<ReportGroup> =
+    entries.groupBy { cashFlowCategory(it) }
+        .map { (category, list) ->
+            ReportGroup(
+                key = category.name,
+                title = cashFlowGroupTitle(category, kind),
+                icon = category.icon,
+                amount = list.sumOf { it.amount },
+                entries = list.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt }),
+                color = catColor(category)
+            )
+        }
+        .sortedByDescending { it.amount }
+
+private val reportPalette = listOf(
+    Color(0xFF16A34A), Color(0xFF2563EB), Color(0xFFEA580C), Color(0xFF9333EA),
+    Color(0xFF0891B2), Color(0xFFDB2777), Color(0xFFCA8A04), Color(0xFF0F766E),
+    Color(0xFF4F46E5), Color(0xFF64748B), Color(0xFFB45309), Color(0xFFBE123C)
+)
+
+private fun itemGroups(entries: List<Entry>, kind: ReportKind): List<ReportGroup> =
+    entries.groupBy { it.item.trim().ifBlank { if (kind == ReportKind.SALES) "Sale" else "Purchase" } }
+        .toList()
+        .sortedByDescending { (_, list) -> list.sumOf { it.amount } }
+        .mapIndexed { index, (name, list) ->
+            ReportGroup(
+                key = name.lowercase(),
+                title = name,
+                icon = if (kind == ReportKind.SALES) "🧾" else "📦",
+                amount = list.sumOf { it.amount },
+                entries = list.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt }),
+                color = reportPalette[index % reportPalette.size]
+            )
+        }
+
+@Composable
+private fun ReportDonut(
+    currency: String,
+    chartTotal: Double,
+    centerValue: Double,
+    centerLabel: String,
+    groups: List<ReportGroup>
+) {
+    Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+        val ring = MaterialTheme.colorScheme.surfaceVariant
+        Canvas(Modifier.size(210.dp)) {
+            val stroke = 34.dp.toPx()
+            val inset = stroke / 2
+            val arcSize = androidx.compose.ui.geometry.Size(size.width - stroke, size.height - stroke)
+            val topLeft = androidx.compose.ui.geometry.Offset(inset, inset)
+            val positiveGroups = groups.filter { it.amount > 0.0 }
+            if (chartTotal <= 0.0 || positiveGroups.isEmpty()) {
+                drawArc(ring, 0f, 360f, false, topLeft = topLeft, size = arcSize, style = Stroke(stroke))
+            } else {
+                var startAngle = -90f
+                positiveGroups.forEach { group ->
+                    val sweep = (group.amount / chartTotal * 360f).toFloat()
+                    drawArc(group.color, startAngle, sweep, false, topLeft = topLeft, size = arcSize, style = Stroke(stroke, cap = StrokeCap.Butt))
+                    startAngle += sweep
+                }
+            }
+        }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(moneyA(currency, centerValue), fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
+            Text(centerLabel, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun ReportGroupCard(
+    group: ReportGroup,
+    total: Double,
+    currency: String,
+    expanded: Boolean,
+    onClick: () -> Unit
+) {
+    val share = if (total > 0.0) (group.amount / total).coerceIn(0.0, 1.0) else 0.0
+    Panel(Modifier.fillMaxWidth(), onClick = onClick, padding = 12.dp) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(12.dp).clip(CircleShape).background(group.color))
+            Spacer(Modifier.width(10.dp))
+            Text("${group.icon} ${group.title}", Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+            Text("${(share * 100).roundToLong()}%", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.width(10.dp))
+            Text(moneyA(currency, group.amount), fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.height(8.dp))
+        LinearProgressIndicator(
+            progress = { share.toFloat() },
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp)),
+            color = group.color,
+            trackColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+        Text("${group.entries.size} entries", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
+        if (expanded) {
+            HorizontalDivider(Modifier.padding(vertical = 6.dp))
+            group.entries.forEach { e ->
+                val item = e.item.takeIf { it.isNotBlank() && it != "Loans" }
+                val party = e.person.takeIf { it.isNotBlank() }?.let {
+                    when (e.type) {
+                        Type.SALE, Type.DIYA -> "to $it"
+                        Type.PURCHASE, Type.LIYA -> "from $it"
+                        else -> it
+                    }
+                }
+                val quantity = if (e.qty > 0.0) fmt(e.qty) + if (e.unit.isBlank()) "" else " ${e.unit}" else null
+                val detail = listOf(item, party, e.note.takeIf { it.isNotBlank() }, quantity)
+                    .filterNotNull().joinToString(" · ").ifBlank { typeLabel(e.type, e.person) }
+                Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(shortDate(e.date), Modifier.width(56.dp), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(detail, Modifier.weight(1f), fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(moneyA(currency, e.amount), fontSize = 12.sp)
+                }
+            }
+        } else {
+            Text("Tap to see every entry", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
 
 @Composable
 fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit) {
     var span by remember { mutableStateOf(Span.MONTH) }
     var offset by remember { mutableIntStateOf(0) }
-    var reportKind by remember { mutableStateOf(ReportKind.EXPENSES) }
-    var open by remember { mutableStateOf(setOf<Cat>()) }
-    var openTradeItems by remember { mutableStateOf(setOf<String>()) }
+    var reportKind by remember { mutableStateOf(ReportKind.CASH_OUT) }
+    var openGroups by remember { mutableStateOf(setOf<String>()) }
 
     val (start, end, label) = spanRange(span, offset)
     val inRange = entries.filter { it.date in start until end }
-    val spent = inRange.filter { it.type == Type.KHARCHA }
-    val income = inRange.filter { it.type == Type.AAMDANI }.sumOf { it.amount }
-    val total = spent.sumOf { it.amount }
-    val byCat = spent.groupBy { it.category }
-        .map { (c, list) -> Triple(c, list.sumOf { it.amount }, list) }
-        .sortedByDescending { it.second }
+    val cashInEntries = inRange.filter { it.isCashInFlow() }
+    val cashOutEntries = inRange.filter { it.isCashOutFlow() }
+    val cashInTotal = cashInEntries.sumOf { it.amount }
+    val cashOutTotal = cashOutEntries.sumOf { it.amount }
+    val allCashIn = entries.filter { it.isCashInFlow() }.sumOf { it.amount }
+    val allCashOut = entries.filter { it.isCashOutFlow() }.sumOf { it.amount }
+    val cashBalance = allCashIn - allCashOut
 
     val sales = inRange.filter { it.type == Type.SALE }
     val purchases = inRange.filter { it.type == Type.PURCHASE }
     val totalSales = sales.sumOf { it.amount }
     val totalPurchases = purchases.sumOf { it.amount }
-    val soldQty = sales.sumOf { it.qty }
-    val boughtQty = purchases.sumOf { it.qty }
-    val salesByItem = sales.groupBy { it.item.ifBlank { "Sale" } }
-        .toList()
-        .sortedByDescending { (_, list) -> list.sumOf { it.amount } }
+    val salesGroups = itemGroups(sales, ReportKind.SALES)
+    val purchaseGroups = itemGroups(purchases, ReportKind.PURCHASES)
+    val cashInGroups = flowGroups(cashInEntries, ReportKind.CASH_IN)
+    val cashOutGroups = flowGroups(cashOutEntries, ReportKind.CASH_OUT)
 
     val currentStock = stock(entries)
-    val currentStockByName = currentStock.associateBy { it.name.trim().lowercase() }
-    val stockNames = (currentStock.map { it.name } +
-        entries.filter { isTrade(it.type) && it.item.isNotBlank() }.map { it.item.trim() })
+    val stockByName = currentStock.associateBy { it.name.trim().lowercase() }
+    val stockNames = (currentStock.map { it.name } + entries.filter { it.changesStock() }.map { it.item.trim() })
         .distinctBy { it.trim().lowercase() }
         .sortedBy { it.lowercase() }
     val stockRows = stockNames.map { name ->
-        val history = inRange.filter {
-            isTrade(it.type) && it.item.trim().equals(name.trim(), ignoreCase = true)
-        }.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt })
-        val line = currentStockByName[name.trim().lowercase()]
+        val history = inRange.filter { it.changesStock() && it.item.trim().equals(name.trim(), ignoreCase = true) }
+            .sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt })
+        val line = stockByName[name.trim().lowercase()]
         val unit = line?.unit?.ifBlank { history.firstOrNull { it.unit.isNotBlank() }?.unit.orEmpty() }
             ?: history.firstOrNull { it.unit.isNotBlank() }?.unit.orEmpty()
         StockReportRow(
             name = name,
             unit = unit,
             currentQty = line?.qty ?: 0.0,
-            boughtQty = history.filter { it.type == Type.PURCHASE }.sumOf { it.qty },
-            soldQty = history.filter { it.type == Type.SALE }.sumOf { it.qty },
+            receivedQty = history.filter { it.type == Type.PURCHASE || it.type == Type.LIYA }.sumOf { it.qty },
+            givenQty = history.filter { it.type == Type.SALE || it.type == Type.DIYA }.sumOf { it.qty },
             boughtAmount = history.filter { it.type == Type.PURCHASE }.sumOf { it.amount },
             soldAmount = history.filter { it.type == Type.SALE }.sumOf { it.amount },
             history = history
         )
     }
+    val receivedQty = inRange.filter { (it.type == Type.PURCHASE || it.type == Type.LIYA) && it.changesStock() }.sumOf { it.qty }
+    val givenQty = inRange.filter { (it.type == Type.SALE || it.type == Type.DIYA) && it.changesStock() }.sumOf { it.qty }
 
-    LazyColumn(
-        Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
+    val profit = profitBreakdown(entries, inRange)
+    val outstanding = balances(entries).filterValues { kotlin.math.abs(it) > 0.005 }
+        .toList().sortedByDescending { kotlin.math.abs(it.second) }
+    val toReceive = outstanding.filter { it.second > 0 }.sumOf { it.second }
+    val toPay = outstanding.filter { it.second < 0 }.sumOf { -it.second }
+
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item { ScreenTitle("Reports", onMenu = onMenu) }
         item {
-            Row(
-                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 ReportKind.entries.forEach { kind ->
-                    FilterChip(
-                        selected = reportKind == kind,
-                        onClick = { reportKind = kind; openTradeItems = emptySet() },
-                        label = { Text(kind.label) }
-                    )
+                    FilterChip(selected = reportKind == kind, onClick = { reportKind = kind; openGroups = emptySet() }, label = { Text(kind.label) })
                 }
             }
         }
         item {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .padding(4.dp)
-            ) {
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surfaceVariant).padding(4.dp)) {
                 Span.entries.forEach { s ->
-                    val sel = s == span
-                    Box(
-                        Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(if (sel) MaterialTheme.colorScheme.primary else Color.Transparent)
-                            .clickable { span = s; offset = 0 }
-                            .padding(vertical = 9.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            s.label,
-                            color = if (sel) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontWeight = FontWeight.SemiBold
-                        )
+                    val selected = s == span
+                    Box(Modifier.weight(1f).clip(RoundedCornerShape(10.dp))
+                        .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent)
+                        .clickable { span = s; offset = 0 }.padding(vertical = 9.dp), contentAlignment = Alignment.Center) {
+                        Text(s.label, color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
         }
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { offset-- }) {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous")
-                }
-                Text(
-                    label,
-                    Modifier.weight(1f),
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 16.sp,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                )
-                IconButton(onClick = { offset++ }, enabled = offset < 0) {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next")
-                }
+                IconButton(onClick = { offset-- }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous") }
+                Text(label, Modifier.weight(1f), fontWeight = FontWeight.SemiBold, fontSize = 16.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                IconButton(onClick = { offset++ }, enabled = offset < 0) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next") }
             }
         }
 
-        if (reportKind == ReportKind.EXPENSES) {
-            item {
-                Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
-                    val ring = MaterialTheme.colorScheme.surfaceVariant
-                    Canvas(Modifier.size(210.dp)) {
-                        val stroke = 34.dp.toPx()
-                        val inset = stroke / 2
-                        val arcSize = androidx.compose.ui.geometry.Size(size.width - stroke, size.height - stroke)
-                        val topLeft = androidx.compose.ui.geometry.Offset(inset, inset)
-                        if (total <= 0) {
-                            drawArc(ring, 0f, 360f, false, topLeft = topLeft, size = arcSize, style = Stroke(stroke))
-                        } else {
-                            var startAngle = -90f
-                            byCat.forEach { (c, sum, _) ->
-                                val sweep = (sum / total * 360f).toFloat()
-                                drawArc(catColor(c), startAngle, sweep, false, topLeft = topLeft, size = arcSize, style = Stroke(stroke, cap = StrokeCap.Butt))
-                                startAngle += sweep
-                            }
-                        }
-                    }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(moneyA(currency, total), fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
-                        Text("Total expenses", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            }
-            if (income > 0) {
+        when (reportKind) {
+            ReportKind.CASH_OUT -> {
+                item { ReportDonut(currency, cashOutTotal, cashOutTotal, "Total Cash Out", cashOutGroups) }
                 item {
-                    Text(
-                        "Income ${money(currency, income)}  ·  Saved ${money(currency, income - total)}",
-                        color = if (income - total >= 0) GreenIn else RedSpend,
-                        fontSize = 13.sp,
-                        modifier = Modifier.fillMaxWidth(),
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                    )
+                    Panel(Modifier.fillMaxWidth(), padding = 14.dp) {
+                        Text("Cash Out · $label", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+                        Text(moneyA(currency, cashOutTotal), fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = RedSpend)
+                        Text("${cashOutEntries.size} entries, including expenses, paid purchases and money lent", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                if (cashOutGroups.isEmpty()) item { Text("No cash-out entries in this period.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                items(cashOutGroups, key = { it.key }) { group ->
+                    ReportGroupCard(group, cashOutTotal, currency, group.key in openGroups) {
+                        openGroups = if (group.key in openGroups) openGroups - group.key else openGroups + group.key
+                    }
                 }
             }
-            if (byCat.isEmpty()) {
-                item { Text("No expenses in this period.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            ReportKind.CASH_IN -> {
+                item { ReportDonut(currency, cashInTotal, cashInTotal, "Total Cash In", cashInGroups) }
+                item {
+                    Panel(Modifier.fillMaxWidth(), padding = 14.dp) {
+                        Text("Cash In · $label", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+                        Text(moneyA(currency, cashInTotal), fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = GreenIn)
+                        Text("${cashInEntries.size} entries, including other income, paid sales and money received back", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                if (cashInGroups.isEmpty()) item { Text("No cash-in entries in this period.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                items(cashInGroups, key = { it.key }) { group ->
+                    ReportGroupCard(group, cashInTotal, currency, group.key in openGroups) {
+                        openGroups = if (group.key in openGroups) openGroups - group.key else openGroups + group.key
+                    }
+                }
             }
-            items(byCat, key = { it.first.name }) { (c, sum, list) ->
-                val share = if (total > 0) sum / total else 0.0
-                val expanded = c in open
-                Panel(Modifier.fillMaxWidth(), onClick = { open = if (expanded) open - c else open + c }, padding = 12.dp) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(12.dp).clip(CircleShape).background(catColor(c)))
-                        Spacer(Modifier.width(10.dp))
-                        Text("${c.icon} ${c.label}", Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
-                        Text("${(share * 100).roundToLong()}%", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(Modifier.width(12.dp))
-                        Text(moneyA(currency, sum), fontWeight = FontWeight.Bold)
+            ReportKind.SALES -> {
+                item { ReportDonut(currency, totalSales, totalSales, "Total Sales", salesGroups) }
+                item {
+                    Panel(Modifier.fillMaxWidth(), padding = 14.dp) {
+                        Text("Sales · $label", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+                        Text(moneyA(currency, totalSales), fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = GreenIn)
+                        Text("${sales.size} sales entries · ${fmt(sales.sumOf { it.qty })} units sold", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Spacer(Modifier.height(8.dp))
-                    LinearProgressIndicator(
-                        progress = { share.toFloat() },
-                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp)),
-                        color = catColor(c),
-                        trackColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                    val byItem = list.groupBy { it.item.ifBlank { c.label } }
-                        .map { (k, v) -> k to v.sumOf { it.amount } }
-                        .sortedByDescending { it.second }
-                    Spacer(Modifier.height(6.dp))
-                    byItem.forEach { (n, amt) ->
-                        Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
-                            Text("•  $n", Modifier.weight(1f), fontSize = 14.sp)
-                            Text(fmt(amt), fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                        }
+                }
+                if (salesGroups.isEmpty()) item { Text("No sales in this period.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                items(salesGroups, key = { it.key }) { group ->
+                    ReportGroupCard(group, totalSales, currency, group.key in openGroups) {
+                        openGroups = if (group.key in openGroups) openGroups - group.key else openGroups + group.key
                     }
-                    if (expanded) {
-                        HorizontalDivider(Modifier.padding(vertical = 6.dp))
-                        list.sortedByDescending { it.date }.forEach { e ->
-                            Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-                                Text(shortDate(e.date), Modifier.width(56.dp), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text(e.note, Modifier.weight(1f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(fmt(e.amount), fontSize = 12.sp)
+                }
+            }
+            ReportKind.PURCHASES -> {
+                item { ReportDonut(currency, totalPurchases, totalPurchases, "Total Purchases", purchaseGroups) }
+                item {
+                    Panel(Modifier.fillMaxWidth(), padding = 14.dp) {
+                        Text("Purchases · $label", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+                        Text(moneyA(currency, totalPurchases), fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = catColor(Cat.STOCK))
+                        Text("${purchases.size} purchase entries · ${fmt(purchases.sumOf { it.qty })} units bought", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                if (purchaseGroups.isEmpty()) item { Text("No purchases in this period.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                items(purchaseGroups, key = { it.key }) { group ->
+                    ReportGroupCard(group, totalPurchases, currency, group.key in openGroups) {
+                        openGroups = if (group.key in openGroups) openGroups - group.key else openGroups + group.key
+                    }
+                }
+            }
+            ReportKind.STOCK -> {
+                item {
+                    Panel(Modifier.fillMaxWidth(), padding = 14.dp) {
+                        Text("Stock movement · $label", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Column(Modifier.weight(1f)) {
+                                Text("Received", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(fmt(receivedQty), fontWeight = FontWeight.Bold, color = catColor(Cat.STOCK))
+                            }
+                            Column(Modifier.weight(1f)) {
+                                Text("Sold / given", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(fmt(givenQty), fontWeight = FontWeight.Bold, color = GreenIn)
                             }
                         }
-                    } else {
-                        Text("Tap to see every entry", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        HorizontalDivider(Modifier.padding(vertical = 10.dp))
+                        Text("Current stock on hand", fontWeight = FontWeight.SemiBold)
+                        Text("Quantity remaining from all recorded stock movements.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                if (stockRows.isEmpty()) item { Text("No stock quantities recorded yet. Add item quantities to purchases or sales.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                items(stockRows, key = { it.name.trim().lowercase() }) { row ->
+                    val key = "stock:" + row.name.trim().lowercase()
+                    val expanded = key in openGroups
+                    val maxQty = stockRows.maxOfOrNull { kotlin.math.abs(it.currentQty) } ?: 0.0
+                    val share = if (maxQty > 0) (kotlin.math.abs(row.currentQty) / maxQty).coerceIn(0.0, 1.0) else 0.0
+                    Panel(Modifier.fillMaxWidth(), onClick = { openGroups = if (expanded) openGroups - key else openGroups + key }, padding = 12.dp) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("📦", fontSize = 18.sp)
+                            Spacer(Modifier.width(10.dp))
+                            Text(row.name, Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+                            Text(fmt(row.currentQty) + if (row.unit.isBlank()) "" else " ${row.unit}", fontWeight = FontWeight.Bold,
+                                color = if (row.currentQty < 0) RedSpend else MaterialTheme.colorScheme.onSurface)
+                        }
+                        Spacer(Modifier.height(7.dp))
+                        LinearProgressIndicator(progress = { share.toFloat() }, modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp)),
+                            color = if (row.currentQty < 0) RedSpend else GreenIn, trackColor = MaterialTheme.colorScheme.surfaceVariant)
+                        Text("Received ${fmt(row.receivedQty)} · Sold/given ${fmt(row.givenQty)}", fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
+                        Text("Purchase ${fmt(row.boughtAmount)} · Sales ${fmt(row.soldAmount)} $currency", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (expanded) {
+                            HorizontalDivider(Modifier.padding(vertical = 6.dp))
+                            if (row.history.isEmpty()) Text("No movement in this period.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            row.history.forEach { e ->
+                                val direction = when (e.type) {
+                                    Type.PURCHASE -> "Bought"
+                                    Type.LIYA -> "Received"
+                                    Type.SALE -> "Sold"
+                                    else -> "Given"
+                                }
+                                val party = e.person.takeIf { it.isNotBlank() }?.let { if (e.type == Type.PURCHASE || e.type == Type.LIYA) "from $it" else "to $it" }
+                                val quantity = fmt(e.qty) + if (e.unit.isBlank()) "" else " ${e.unit}"
+                                val detail = listOf(direction, party, quantity, e.note.takeIf { it.isNotBlank() }).filterNotNull().joinToString(" · ")
+                                Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Text(shortDate(e.date), Modifier.width(56.dp), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(detail, Modifier.weight(1f), fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    Text(moneyA(currency, e.amount), fontSize = 12.sp)
+                                }
+                            }
+                        } else Text("Tap to see stock movements", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
-        } else if (reportKind == ReportKind.SALES) {
-            item {
-                Panel(Modifier.fillMaxWidth(), padding = 16.dp) {
-                    Text("Total sales", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(moneyA(currency, totalSales), fontSize = 30.sp, fontWeight = FontWeight.ExtraBold, color = GreenIn)
-                    Text("${sales.size} sales entries · ${fmt(soldQty)} units sold", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            ReportKind.PROFIT -> {
+                item {
+                    Panel(Modifier.fillMaxWidth(), padding = 16.dp) {
+                        Text("Estimated net profit · $label", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(moneyA(currency, profit.netProfit), fontSize = 30.sp, fontWeight = FontWeight.ExtraBold,
+                            color = if (profit.netProfit >= 0) GreenIn else RedSpend)
+                        Text("Sales margin + other cash-in income − cash-out expenses", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                item {
+                    Panel(Modifier.fillMaxWidth(), padding = 14.dp) {
+                        ProfitSummaryRow("Total sales", profit.salesAmount, currency, GreenIn)
+                        ProfitSummaryRow("Sales with known cost", profit.costedSalesAmount, currency, MaterialTheme.colorScheme.onSurface)
+                        ProfitSummaryRow("Estimated cost of sold items", -profit.costOfGoods, currency, RedSpend)
+                        ProfitSummaryRow("Other cash-in income", profit.otherIncome, currency, GreenIn)
+                        ProfitSummaryRow("Cash-out expenses", -profit.expenses, currency, RedSpend)
+                        HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                        ProfitSummaryRow("Estimated net profit", profit.netProfit, currency, if (profit.netProfit >= 0) GreenIn else RedSpend, bold = true)
+                        if (profit.salesWithoutCost > 0.005) {
+                            Text("Sales without recorded item cost: ${money(currency, profit.salesWithoutCost)}. These sales are not included in estimated profit. Add purchase quantity and price for a better estimate.",
+                                fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+                        }
+                        Text("Stock purchases are not all deducted at once; only the estimated cost of items sold is deducted.", fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
+                    }
+                }
+                if (profit.items.isEmpty()) item { Text("No sales in this period. Add item quantities and purchase costs to calculate trade profit.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                items(profit.items, key = { "profit:" + it.item.lowercase() }) { line ->
+                    val key = "profit:" + line.item.lowercase()
+                    val expanded = key in openGroups
+                    val share = if (profit.salesAmount > 0) (line.salesAmount / profit.salesAmount).coerceIn(0.0, 1.0) else 0.0
+                    val colorIndex = (line.item.lowercase().hashCode().toLong().and(Long.MAX_VALUE) % reportPalette.size).toInt()
+                    Panel(Modifier.fillMaxWidth(), onClick = { openGroups = if (expanded) openGroups - key else openGroups + key }, padding = 12.dp) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("📊", fontSize = 17.sp)
+                            Spacer(Modifier.width(8.dp))
+                            Text(line.item, Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+                            Text(moneyA(currency, line.estimatedProfit), fontWeight = FontWeight.Bold,
+                                color = if (line.estimatedProfit >= 0) GreenIn else RedSpend)
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        LinearProgressIndicator(progress = { share.toFloat() }, modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp)),
+                            color = reportPalette[colorIndex], trackColor = MaterialTheme.colorScheme.surfaceVariant)
+                        Text("Sales ${fmt(line.salesAmount)} · Costed sales ${fmt(line.costedSalesAmount)} · Cost ${fmt(line.costOfGoods)} $currency",
+                            fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
+                        if (line.salesWithoutCost > 0.005) Text("Cost missing for sales: ${money(currency, line.salesWithoutCost)}", fontSize = 11.sp, color = RedSpend)
+                        if (expanded) {
+                            HorizontalDivider(Modifier.padding(vertical = 6.dp))
+                            line.entries.forEach { e ->
+                                val quantity = if (e.qty > 0) fmt(e.qty) + if (e.unit.isBlank()) "" else " ${e.unit}" else null
+                                val details = listOf(e.person.takeIf { it.isNotBlank() }?.let { "to $it" }, quantity,
+                                    e.note.takeIf { it.isNotBlank() }).filterNotNull().joinToString(" · ").ifBlank { "Sale" }
+                                Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Text(shortDate(e.date), Modifier.width(56.dp), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(details, Modifier.weight(1f), fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    Text(moneyA(currency, e.amount), fontSize = 12.sp)
+                                }
+                            }
+                        } else Text("Tap to see sale entries", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
-            if (salesByItem.isEmpty()) {
-                item { Text("No sales in this period.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            }
-            items(salesByItem, key = { it.first.lowercase() }) { (itemName, list) ->
-                val itemTotal = list.sumOf { it.amount }
-                val itemQty = list.sumOf { it.qty }
-                val share = if (totalSales > 0) itemTotal / totalSales else 0.0
-                val unit = list.firstOrNull { it.unit.isNotBlank() }?.unit.orEmpty()
-                val expanded = itemName in openTradeItems
-                Panel(
-                    Modifier.fillMaxWidth(),
-                    onClick = { openTradeItems = if (expanded) openTradeItems - itemName else openTradeItems + itemName },
-                    padding = 12.dp
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("🧾", fontSize = 17.sp)
-                        Spacer(Modifier.width(8.dp))
-                        Text(itemName, Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
-                        Text(moneyA(currency, itemTotal), fontWeight = FontWeight.Bold)
+            ReportKind.CASH_BALANCE -> {
+                val balanceGroups = listOf(
+                    ReportGroup("all-cash-in", "Cash In", "＋", allCashIn, emptyList(), GreenIn),
+                    ReportGroup("all-cash-out", "Cash Out", "−", allCashOut, emptyList(), RedSpend)
+                )
+                item { ReportDonut(currency, allCashIn + allCashOut, cashBalance, "Cash Balance", balanceGroups) }
+                item {
+                    Panel(Modifier.fillMaxWidth(), padding = 16.dp) {
+                        Text("Current cash balance · all recorded entries", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(moneyA(currency, cashBalance), fontSize = 30.sp, fontWeight = FontWeight.ExtraBold,
+                            color = if (cashBalance >= 0) GreenIn else RedSpend)
+                        HorizontalDivider(Modifier.padding(vertical = 10.dp))
+                        ProfitSummaryRow("Cash In (all time)", allCashIn, currency, GreenIn)
+                        ProfitSummaryRow("Cash Out (all time)", -allCashOut, currency, RedSpend)
+                        HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                        ProfitSummaryRow("Cash movement · $label", cashInTotal - cashOutTotal, currency,
+                            if (cashInTotal >= cashOutTotal) GreenIn else RedSpend, bold = true)
+                        Text("This balance is calculated from entries saved in the app. Any cash you had before recording entries is not included.", fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
                     }
-                    Spacer(Modifier.height(7.dp))
-                    LinearProgressIndicator(
-                        progress = { share.toFloat() },
-                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp)),
-                        color = GreenIn,
-                        trackColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                    Text(
-                        "${list.size} entries · ${fmt(itemQty)}${if (unit.isBlank()) "" else " $unit"} sold",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 6.dp)
-                    )
-                    if (expanded) {
-                        HorizontalDivider(Modifier.padding(vertical = 6.dp))
-                        list.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt }).forEach { e ->
-                            val personOrNote = listOf(
-                                e.person.takeIf { it.isNotBlank() }?.let { "To $it" },
-                                e.note.takeIf { it.isNotBlank() }
-                            ).filterNotNull().joinToString(" · ").ifBlank { "Sale" }
-                            val detail = if (e.qty > 0) "$personOrNote · ${fmt(e.qty)}${if (e.unit.isBlank()) "" else " ${e.unit}"}" else personOrNote
-                            Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Text(shortDate(e.date), Modifier.width(56.dp), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text(detail, Modifier.weight(1f), fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                Text(fmt(e.amount), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                }
+            }
+            ReportKind.DUES -> {
+                item {
+                    Panel(Modifier.fillMaxWidth(), padding = 14.dp) {
+                        Text("Current outstanding · all time", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Column(Modifier.weight(1f)) {
+                                Text("To receive", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(moneyA(currency, toReceive), fontWeight = FontWeight.Bold, color = GreenIn)
+                            }
+                            Column(Modifier.weight(1f)) {
+                                Text("To pay", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(moneyA(currency, toPay), fontWeight = FontWeight.Bold, color = OrangeOwe)
                             }
                         }
-                    } else {
-                        Text("Tap to see sales and customers", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("${outstanding.size} people with an outstanding balance", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
                     }
                 }
-            }
-        } else {
-            item {
-                Panel(Modifier.fillMaxWidth(), padding = 16.dp) {
-                    Text("Stock movement · $label", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Column(Modifier.weight(1f)) {
-                            Text("Purchased", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text(moneyA(currency, totalPurchases), fontWeight = FontWeight.Bold, color = Cat.STOCK.let { catColor(it) })
-                        }
-                        Column(Modifier.weight(1f)) {
-                            Text("Sales", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text(moneyA(currency, totalSales), fontWeight = FontWeight.Bold, color = GreenIn)
-                        }
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "Bought: ${fmt(boughtQty)} units · Sold: ${fmt(soldQty)} units",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    HorizontalDivider(Modifier.padding(vertical = 10.dp))
-                    Text("Current stock (all time)", fontWeight = FontWeight.SemiBold)
-                }
-            }
-            if (stockRows.isEmpty()) {
-                item { Text("No stock items yet. Add a purchase or sale with an item quantity.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            }
-            items(stockRows, key = { it.name.trim().lowercase() }) { row ->
-                val key = row.name.trim().lowercase()
-                val expanded = key in openTradeItems
-                Panel(
-                    Modifier.fillMaxWidth(),
-                    onClick = { openTradeItems = if (expanded) openTradeItems - key else openTradeItems + key },
-                    padding = 12.dp
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("📦", fontSize = 17.sp)
-                        Spacer(Modifier.width(8.dp))
-                        Text(row.name, Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
-                        Text(
-                            fmt(row.currentQty) + (if (row.unit.isBlank()) "" else " ${row.unit}"),
-                            fontWeight = FontWeight.Bold,
-                            color = if (row.currentQty < 0) RedSpend else MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                    Spacer(Modifier.height(5.dp))
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Bought ${fmt(row.boughtQty)}", Modifier.weight(1f), fontSize = 12.sp, color = Cat.STOCK.let { catColor(it) })
-                        Text("Sold ${fmt(row.soldQty)}", Modifier.weight(1f), fontSize = 12.sp, color = GreenIn)
-                    }
-                    Text(
-                        "Purchase ${fmt(row.boughtAmount)} · Sales ${fmt(row.soldAmount)} $currency",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 3.dp)
-                    )
-                    if (expanded) {
-                        HorizontalDivider(Modifier.padding(vertical = 6.dp))
-                        if (row.history.isEmpty()) {
-                            Text("No movement in this period.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        row.history.forEach { e ->
-                            val direction = if (e.type == Type.PURCHASE) "Bought" else "Sold"
-                            val party = e.person.takeIf { it.isNotBlank() }?.let { if (e.type == Type.PURCHASE) "from $it" else "to $it" }
-                            val detail = listOf(direction, party, e.note.takeIf { it.isNotBlank() }).filterNotNull().joinToString(" · ")
-                            val quantity = if (e.qty > 0) " · ${fmt(e.qty)}${if (e.unit.isBlank()) "" else " ${e.unit}"}" else ""
-                            Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Text(shortDate(e.date), Modifier.width(56.dp), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text(detail + quantity, Modifier.weight(1f), fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                Text(fmt(e.amount), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                if (outstanding.isEmpty()) item { Text("No outstanding balances.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                items(outstanding, key = { it.first.lowercase() }) { (person, balance) ->
+                    val key = "dues:" + person.lowercase()
+                    val expanded = key in openGroups
+                    val history = entries.filter { it.person.trim().equals(person, ignoreCase = true) && withPerson(it) }
+                        .sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt })
+                    Panel(Modifier.fillMaxWidth(), onClick = { openGroups = if (expanded) openGroups - key else openGroups + key }, padding = 12.dp) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Avatar(person)
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(person, fontWeight = FontWeight.SemiBold)
+                                Text(if (balance > 0) "They owe you" else "You owe them", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
+                            Text(moneyA(currency, kotlin.math.abs(balance)), fontWeight = FontWeight.Bold,
+                                color = if (balance > 0) GreenIn else OrangeOwe)
                         }
-                    } else {
-                        Text("Tap to see purchases and sales", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (expanded) {
+                            HorizontalDivider(Modifier.padding(vertical = 6.dp))
+                            history.forEach { e ->
+                                val detail = listOf(typeLabel(e.type, e.person), e.item.takeIf { it.isNotBlank() && it != "Loans" },
+                                    e.note.takeIf { it.isNotBlank() }).filterNotNull().joinToString(" · ")
+                                Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Text(shortDate(e.date), Modifier.width(56.dp), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(detail, Modifier.weight(1f), fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    Text(moneyA(currency, e.amount), fontSize = 12.sp)
+                                }
+                            }
+                        } else Text("Tap to see outstanding transactions", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ProfitSummaryRow(label: String, amount: Double, currency: String, color: Color, bold: Boolean = false) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, Modifier.weight(1f), fontSize = 13.sp, fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal)
+        Text(moneyA(currency, amount), fontSize = 13.sp, fontWeight = if (bold) FontWeight.Bold else FontWeight.Medium, color = color)
     }
 }
 
