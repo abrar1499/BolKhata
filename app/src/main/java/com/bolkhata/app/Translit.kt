@@ -30,15 +30,44 @@ object Translit {
     private const val VIRAMA = '्'
     private const val NUKTA = '़'
 
+    private val urduLetters = Regex("""[\u0621-\u064A\u066E-\u06D3\u06FA-\u06FF\u0750-\u077F]+|[^\u0621-\u064A\u066E-\u06D3\u06FA-\u06FF\u0750-\u077F]+""")
+
+    /** Common Urdu-script khata words returned by Urdu speech recognition. */
+    private val urduFixes = mapOf(
+        "پیسے" to "paise", "پیسہ" to "paisa", "پیسوں" to "paison",
+        "پیمنٹ" to "payment", "پےمنٹ" to "payment", "ادائیگی" to "adaigi",
+        "نہیں" to "nahi", "نہيں" to "nahi", "نہی" to "nahi", "ابھی" to "abhi", "اب" to "ab",
+        "آج" to "aaj", "کل" to "kal", "آخری" to "akhri", "پچھلی" to "pichli", "پچھلے" to "pichhle", "پچھلا" to "pichla",
+        "انٹری" to "entry", "اینٹری" to "entry", "اسٹاک" to "stock", "سٹاک" to "stock",
+        "سیل" to "sale", "سیلز" to "sales", "خرید" to "khareed", "خریدا" to "kharida",
+        "خریدی" to "kharidi", "خریدے" to "kharide", "خریداری" to "khareedari",
+        "بیچا" to "becha", "بیچی" to "bechi", "بیچے" to "beche",
+        "وصول" to "wasool", "وصولی" to "wasooli", "ریسیو" to "receive", "ریسیوڈ" to "received",
+        "ملا" to "mila", "ملی" to "mili", "ملے" to "mile", "ہوئی" to "hui", "ہوا" to "hua", "ہوئے" to "hue",
+        "دیے" to "diye", "دیا" to "diya", "دی" to "di", "دیں" to "dein",
+        "جو" to "jo", "اس" to "os", "اسکی" to "oski", "کی" to "ki", "کا" to "ka", "کے" to "ke",
+        "ہے" to "hai", "ہیں" to "hain", "میں" to "mein", "کو" to "ko", "سے" to "se", "پر" to "par",
+        "کر" to "kar", "کرو" to "karo", "خرچہ" to "kharcha", "آمدنی" to "aamdani",
+        "تنخواہ" to "tankhwah", "پٹرول" to "petrol", "کرایہ" to "kiraya", "کھانا" to "khana",
+        "رقم" to "raqam", "ادھار" to "udhaar", "نقد" to "naqad", "کیش" to "cash", "بینک" to "bank",
+        "ریال" to "riyal", "روپے" to "rupay", "درہم" to "dirham"
+    )
+
     fun hasDevanagari(s: String) = s.any { it in 'ऀ'..'ॿ' }
 
     fun toRoman(text: String): String {
-        if (!hasDevanagari(text)) return text
+        var input = text
+        if (input.any { it in '\u0600'..'\u06FF' || it in '\u0750'..'\u077F' }) {
+            input = urduLetters.replace(input) { match ->
+                urduFixes[match.value] ?: match.value
+            }
+        }
+        if (!hasDevanagari(input)) return input
         val sb = StringBuilder()
         var i = 0
         // Joins the base letter and the nukta dot into one letter first.
         val chars = mutableListOf<Char>()
-        for (c in text) {
+        for (c in input) {
             if (c == NUKTA && chars.isNotEmpty() && nuktaForms.containsKey(chars.last())) {
                 chars[chars.size - 1] = nuktaForms.getValue(chars.last())
             } else if (c != NUKTA) chars += c
@@ -80,7 +109,13 @@ object Translit {
         "ret" to "rate", "bil" to "bill", "mobail" to "mobile", "richarj" to "recharge", "mainne" to "maine",
         "die" to "diye", "lie" to "liye", "kie" to "kiye", "gae" to "gaye", "rupye" to "rupaye", "rupe" to "rupay",
         "selri" to "salary", "saileri" to "salary", "taiksi" to "taxi", "baink" to "bank", "kaish" to "cash",
-        "kredit" to "credit", "intarnet" to "internet", "fon" to "phone", "sim" to "sim", "kard" to "card"
+        "kredit" to "credit", "intarnet" to "internet", "fon" to "phone", "sim" to "sim", "kard" to "card",
+        "stok" to "stock", "stak" to "stock", "entri" to "entry", "entree" to "entry", "intree" to "entry",
+        "pement" to "payment", "paymant" to "payment", "peymant" to "payment", "piment" to "payment",
+        "risiv" to "receive", "risiiv" to "receive", "resiv" to "receive",
+        "risivd" to "received", "risiivd" to "received", "resivd" to "received",
+        "pichali" to "pichli", "pichhali" to "pichhli", "akhari" to "akhri",
+        "anpaid" to "unpaid", "unped" to "unpaid"
     )
 
     /**

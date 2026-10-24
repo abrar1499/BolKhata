@@ -3,6 +3,7 @@ package com.bolkhata.app
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.speech.RecognizerIntent
 import androidx.activity.ComponentActivity
@@ -478,24 +479,66 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         }
     }
 
+    /** Rank alternatives by how well they fit khata commands, not just their list position. */
+    fun voiceGuessScore(text: String, confidence: Float?): Int {
+        var score = confidence?.takeIf { it >= 0f }?.let { (it * 20f).toInt() } ?: 0
+        val parsed = runCatching { Parser.parse(text) }.getOrNull()
+        if (runCatching { Questions.isQuestion(text) }.getOrDefault(false)) score += 80
+        if (runCatching { Parser.payStatus(text) != null }.getOrDefault(false)) score += 100
+        if (runCatching { Commands.read(text) != null }.getOrDefault(false)) score += 100
+        if (runCatching { looksLikeEdit(text) }.getOrDefault(false)) score += 80
+        if (parsed != null && parsed.entries.isNotEmpty()) {
+            score += if (parsed.unclear.isEmpty()) 65 else 30
+        }
+        val lower = text.lowercase()
+        if (lower.any { it.isDigit() }) score += 8
+        val knownItemOrPerson = entries.any { entry ->
+            listOf(entry.item, entry.person).filter { it.isNotBlank() }.any { value ->
+                val v = value.lowercase()
+                lower.contains(v) || v.split(Regex("""\s+""")).any { word ->
+                    word.length >= 3 && lower.contains(word)
+                }
+            }
+        }
+        if (knownItemOrPerson) score += 15
+        if (text.length < 3) score -= 50
+        return score
+    }
+
     val voice = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
         if (res.resultCode == Activity.RESULT_OK) {
-            // Google gives a few guesses; take the first one the app fully understands.
-            val guesses = res.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS).orEmpty()
-                .map { Translit.toRoman(it).trim() }.filter { it.isNotBlank() }
-            val said = guesses.firstOrNull { g ->
-                runCatching { Parser.parse(g).let { it.entries.isNotEmpty() && it.unclear.isEmpty() } }.getOrDefault(false)
-            } ?: guesses.firstOrNull().orEmpty()
+            val rawGuesses = res.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS).orEmpty()
+            val confidenceScores = res.data?.getFloatArrayExtra(RecognizerIntent.EXTRA_CONFIDENCE_SCORES) ?: floatArrayOf()
+            val guesses = rawGuesses.mapIndexed { index, raw ->
+                val converted = Translit.toRoman(raw).trim()
+                converted to voiceGuessScore(converted, confidenceScores.getOrNull(index))
+            }.filter { it.first.isNotBlank() }
+            // Score every alternative: the first transcript can be fluent but still be the wrong words.
+            val said = guesses.maxByOrNull { it.second }?.first.orEmpty()
             if (said.isNotBlank()) handleText(said)
+            else toast("Awaaz samajh nahi aayi. Mic dobara dabao aur thora aahista bolo.")
         }
     }
 
     fun startVoice() {
+        val hints = buildList {
+            addAll(entries.take(30).flatMap { listOf(it.item, it.person) })
+            addAll(listOf(
+                "kharcha", "aamdani", "pese", "paise", "payment", "receive", "received", "nahi mili",
+                "nahi hui", "stock", "sale", "purchase", "udhaar", "cash", "bank", "salary", "petrol",
+                "kiraya", "grocery", "entry", "last entry", "pichli entry", "change entry", "badal do"
+            ))
+        }.map { it.trim() }.filter { it.length in 2..60 }.distinct().take(100)
+
         val i = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, lang)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, lang)
             putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak now…")
-            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 10)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && hints.isNotEmpty()) {
+                putExtra(RecognizerIntent.EXTRA_BIASING_STRINGS, ArrayList(hints))
+            }
         }
         try {
             voice.launch(i)
