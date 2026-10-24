@@ -73,7 +73,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-enum class Tab { HOME, ENTRIES, REPORTS, TRASH, SETTINGS }
+enum class Tab { HOME, CHAT, ENTRIES, REPORTS, TRASH, SETTINGS }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -87,6 +87,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var name by remember { mutableStateOf(store.name) }
     var lang by remember { mutableStateOf(store.language) }
     var tab by remember { mutableStateOf(Tab.HOME) }
+    var chatMessages by remember { mutableStateOf(store.loadChatMessages()) }
+    var chatLoading by remember { mutableStateOf(false) }
     var people by remember { mutableStateOf<Boolean?>(null) }   // true = to receive, false = to pay
     var editing by remember { mutableStateOf<Entry?>(null) }
     var adding by remember { mutableStateOf(false) }
@@ -192,6 +194,45 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var aiKey by remember { mutableStateOf(store.aiKey) }
     // The person's own key wins; otherwise the key built into the app is used.
     val activeKey = aiKey.ifBlank { BuildConfig.GEMINI_KEY }
+
+    /** Sends a question to the read-only AI chat, with recent conversation context. */
+    fun sendChat(text: String) {
+        val question = text.trim()
+        if (question.isEmpty() || chatLoading) return
+        val history = chatMessages.takeLast(12)
+        val userMessage = ChatMessage(
+            id = "chat-" + System.currentTimeMillis() + "-" + System.nanoTime(),
+            isUser = true,
+            text = question
+        )
+        val next = chatMessages + userMessage
+        chatMessages = next
+        store.saveChatMessages(next)
+        chatLoading = true
+        scope.launch {
+            try {
+                val reply = Ai.chat(question, history, entries, activeKey, store, currency)
+                val updated = chatMessages + ChatMessage(
+                    id = "chat-" + System.currentTimeMillis() + "-" + System.nanoTime(),
+                    isUser = false,
+                    text = reply
+                )
+                chatMessages = updated
+                store.saveChatMessages(updated)
+            } catch (e: Exception) {
+                val message = e.message?.takeIf { it.isNotBlank() } ?: "Sorry, I couldn't answer right now."
+                val updated = chatMessages + ChatMessage(
+                    id = "chat-" + System.currentTimeMillis() + "-" + System.nanoTime(),
+                    isUser = false,
+                    text = message
+                )
+                chatMessages = updated
+                store.saveChatMessages(updated)
+            } finally {
+                chatLoading = false
+            }
+        }
+    }
 
     // Keep the offline reader up to date with what the person taught it and who is in the khata.
     LaunchedEffect(Unit) { Parser.learned = store.loadLearned() }
@@ -465,7 +506,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     ) {
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
-        bottomBar = { InputBar(onSend = { handleText(it) }, onMic = { startVoice() }) },
+        bottomBar = { if (tab != Tab.CHAT) InputBar(onSend = { handleText(it) }, onMic = { startVoice() }) },
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { pad ->
@@ -507,6 +548,17 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     onEmpty = {
                         saveTrash(emptyList())
                         toast("Trash emptied")
+                    }
+                )
+                tab == Tab.CHAT -> ChatScreen(
+                    messages = chatMessages,
+                    loading = chatLoading,
+                    onMenu = { openMenu() },
+                    onSend = { sendChat(it) },
+                    onClear = {
+                        chatMessages = emptyList()
+                        store.saveChatMessages(emptyList())
+                        toast("Chat history cleared")
                     }
                 )
                 else -> SettingsScreen(
@@ -936,6 +988,10 @@ private fun DrawerMenu(tab: Tab, name: String, currency: String, onCurrency: (St
         NavigationDrawerItem(
             label = { Text("Home") }, selected = tab == Tab.HOME, onClick = { onPick(Tab.HOME) },
             icon = { Icon(Icons.Filled.Home, contentDescription = null) }, modifier = itemPad
+        )
+        NavigationDrawerItem(
+            label = { Text("Chat") }, selected = tab == Tab.CHAT, onClick = { onPick(Tab.CHAT) },
+            icon = { Text("💬", fontSize = 20.sp) }, modifier = itemPad
         )
         NavigationDrawerItem(
             label = { Text("Entries") }, selected = tab == Tab.ENTRIES, onClick = { onPick(Tab.ENTRIES) },

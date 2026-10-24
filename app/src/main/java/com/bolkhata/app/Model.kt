@@ -58,6 +58,13 @@ data class Entry(
     val paid: Boolean = false
 )
 
+data class ChatMessage(
+    val id: String,
+    val isUser: Boolean,
+    val text: String,
+    val timestamp: Long = System.currentTimeMillis()
+)
+
 /** Saves entries on the phone itself (no internet needed). */
 class Store(context: Context) {
     private val prefs = context.getSharedPreferences("bolkhata", Context.MODE_PRIVATE)
@@ -94,6 +101,39 @@ class Store(context: Context) {
     fun loadSuggestions(): List<Entry> = read("suggestions")
 
     fun saveSuggestions(list: List<Entry>) = write("suggestions", list)
+
+    /** Chat history stays on this phone, just like the khata entries. */
+    fun loadChatMessages(): List<ChatMessage> = try {
+        val arr = JSONArray(prefs.getString("chatMessages", "[]") ?: "[]")
+        (0 until arr.length()).mapNotNull { i ->
+            val o = arr.optJSONObject(i)
+            if (o == null) null else {
+                val text = o.optString("text")
+                if (text.isBlank()) null else ChatMessage(
+                    id = o.optString("id").ifBlank { "chat-" + i + "-" + o.optLong("timestamp", now()) },
+                    isUser = o.optBoolean("isUser"),
+                    text = text,
+                    timestamp = o.optLong("timestamp", now())
+                )
+            }
+        }.takeLast(100)
+    } catch (e: Exception) {
+        emptyList()
+    }
+
+    fun saveChatMessages(messages: List<ChatMessage>) {
+        val arr = JSONArray()
+        messages.takeLast(100).forEach { message ->
+            arr.put(
+                JSONObject()
+                    .put("id", message.id)
+                    .put("isUser", message.isUser)
+                    .put("text", message.text.take(8000))
+                    .put("timestamp", message.timestamp)
+            )
+        }
+        prefs.edit().putString("chatMessages", arr.toString()).apply()
+    }
 
     /** Adds a suggestion unless the same notification was already seen. */
     @Synchronized
