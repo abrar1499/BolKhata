@@ -246,6 +246,79 @@ fun stock(entries: List<Entry>): List<StockLine> {
     return map.values.toList()
 }
 
+
+data class ProfitItemBreakdown(
+    val item: String,
+    val salesAmount: Double,
+    val costedSalesAmount: Double,
+    val costOfGoods: Double,
+    val estimatedProfit: Double,
+    val salesWithoutCost: Double,
+    val entries: List<Entry>
+)
+
+data class ProfitBreakdown(
+    val salesAmount: Double,
+    val costedSalesAmount: Double,
+    val costOfGoods: Double,
+    val salesWithoutCost: Double,
+    val otherIncome: Double,
+    val expenses: Double,
+    val netProfit: Double,
+    val items: List<ProfitItemBreakdown>
+)
+
+/** Estimated profit uses the weighted average recorded purchase cost before each sale. */
+fun profitBreakdown(allEntries: List<Entry>, periodEntries: List<Entry>): ProfitBreakdown {
+    val sales = periodEntries.filter { it.type == Type.SALE }
+    val costBySaleId = linkedMapOf<String, Double>()
+    sales.forEach { sale ->
+        if (sale.qty <= 0.0 || sale.item.isBlank() || sale.item.equals("Sale", ignoreCase = true)) return@forEach
+        val purchases = allEntries.filter {
+            it.type == Type.PURCHASE &&
+                it.item.trim().equals(sale.item.trim(), ignoreCase = true) &&
+                it.qty > 0.0 && it.amount > 0.0 && it.date <= sale.date
+        }
+        val purchasedQty = purchases.sumOf { it.qty }
+        if (purchasedQty > 0.0) {
+            costBySaleId[sale.id] = sale.qty * (purchases.sumOf { it.amount } / purchasedQty)
+        }
+    }
+    val itemLines = sales.groupBy { it.item.trim().ifBlank { "Sale" } }
+        .map { (name, list) ->
+            val costed = list.filter { costBySaleId.containsKey(it.id) }
+            val costedSales = costed.sumOf { it.amount }
+            val cost = costed.sumOf { costBySaleId[it.id] ?: 0.0 }
+            val withoutCost = list.filterNot { costBySaleId.containsKey(it.id) }.sumOf { it.amount }
+            ProfitItemBreakdown(
+                item = name,
+                salesAmount = list.sumOf { it.amount },
+                costedSalesAmount = costedSales,
+                costOfGoods = cost,
+                estimatedProfit = costedSales - cost,
+                salesWithoutCost = withoutCost,
+                entries = list.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt })
+            )
+        }
+        .sortedByDescending { it.estimatedProfit }
+    val costedSalesAmount = sales.filter { costBySaleId.containsKey(it.id) }.sumOf { it.amount }
+    val costOfGoods = costBySaleId.values.sum()
+    val totalSales = sales.sumOf { it.amount }
+    val salesWithoutCost = (totalSales - costedSalesAmount).coerceAtLeast(0.0)
+    val otherIncome = periodEntries.filter { it.type == Type.AAMDANI }.sumOf { it.amount }
+    val expenses = periodEntries.filter { it.type == Type.KHARCHA }.sumOf { it.amount }
+    return ProfitBreakdown(
+        salesAmount = totalSales,
+        costedSalesAmount = costedSalesAmount,
+        costOfGoods = costOfGoods,
+        salesWithoutCost = salesWithoutCost,
+        otherIncome = otherIncome,
+        expenses = expenses,
+        netProfit = costedSalesAmount - costOfGoods + otherIncome - expenses,
+        items = itemLines
+    )
+}
+
 fun signColor(t: Type) = when (t) {
     Type.KHARCHA, Type.WAPIS_DIYA, Type.PURCHASE -> RedSpend
     Type.AAMDANI, Type.WAPIS_MILA, Type.SALE -> GreenIn
@@ -261,8 +334,8 @@ fun prefix(t: Type) = when (t) {
 fun typeLabel(t: Type, person: String): String {
     val p = person.trim()
     return when (t) {
-        Type.KHARCHA -> "Expense"
-        Type.AAMDANI -> "Income"
+        Type.KHARCHA -> "Cash Out"
+        Type.AAMDANI -> "Cash In"
         Type.DIYA -> if (p.isEmpty()) "Lent (they owe me)" else "Gave to $p"
         Type.LIYA -> if (p.isEmpty()) "Borrowed (I owe)" else "Took from $p"
         Type.WAPIS_MILA -> if (p.isEmpty()) "Got money back" else "$p returned"

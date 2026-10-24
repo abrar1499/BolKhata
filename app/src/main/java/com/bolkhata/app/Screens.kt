@@ -73,9 +73,7 @@ fun HomeScreen(
     // Shop and business cards appear only once sales or purchases are used.
     val trading = entries.any { isTrade(it.type) }
     val todaySales = entries.filter { it.type == Type.SALE && sameDay(it.date, System.currentTimeMillis()) }.sumOf { it.amount }
-    val monthSales = entries.filter { it.type == Type.SALE && inMonth(it.date) }.sumOf { it.amount }
-    val monthPurchases = entries.filter { it.type == Type.PURCHASE && inMonth(it.date) }.sumOf { it.amount }
-    val monthProfit = monthSales + monthIncome - monthPurchases - monthSpent
+    val monthProfit = profitBreakdown(entries, entries.filter { inMonth(it.date) }).netProfit
     val stockLines = if (trading) stock(entries).filter { kotlin.math.abs(it.qty) > 0.0001 } else emptyList()
     val bal = balances(entries)
     val receive = bal.values.filter { it > 0 }.sum()
@@ -127,7 +125,7 @@ fun HomeScreen(
                     }
                     Spacer(Modifier.height(18.dp))
                     Panel(Modifier.fillMaxWidth(), onClick = onReports, padding = 12.dp) {
-                        Text("Spent in $monthName", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Cash Out in $monthName", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text(moneyA(currency, monthSpent), fontSize = 32.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 36.sp, letterSpacing = (-0.5).sp)
                         Text(
                             "This year ${money(currency, yearSpent)}  ·  See report ›",
@@ -141,11 +139,11 @@ fun HomeScreen(
                         Spacer(Modifier.height(8.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             MiniTile(
-                                "Expenses", moneyA(currency, monthSpent), "−", RedSpend, Modifier.weight(1f),
+                                "Cash Out", moneyA(currency, monthSpent), "−", RedSpend, Modifier.weight(1f),
                                 valueSize = 18, valueColor = RedSpend, tinted = true
                             ) { onReports() }
                             MiniTile(
-                                "Income", moneyA(currency, monthIncome), "+", GreenIn, Modifier.weight(1f),
+                                "Cash In", moneyA(currency, monthIncome), "+", GreenIn, Modifier.weight(1f),
                                 valueSize = 18, valueColor = GreenIn, tinted = true
                             ) { onReports() }
                         }
@@ -367,7 +365,7 @@ fun Avatar(name: String) {
 
 // ======================= TRANSACTIONS =======================
 
-enum class TxFilter(val label: String) { ALL("All"), EXPENSE("Expenses"), INCOME("Income"), LOANS("Loans"), TRADE("Sales & purchases") }
+enum class TxFilter(val label: String) { ALL("All"), EXPENSE("Cash Out"), INCOME("Cash In"), LOANS("Loans"), TRADE("Sales & purchases") }
 
 @Composable
 fun TransactionsScreen(entries: List<Entry>, currency: String, onEdit: (Entry) -> Unit, onAdd: () -> Unit, onMenu: () -> Unit) {

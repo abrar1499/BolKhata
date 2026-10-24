@@ -56,16 +56,14 @@ object Questions {
         val period0 = asked ?: Period.MONTH
         val inPeriod0 = entries.filter { inPeriod(it.date, period0) }
 
-        // Profit: "is mahine kitna nafa hua"
+        // Profit uses recorded purchase costs for sold items, plus other income minus expenses.
         if (words.any { it in setOf("nafa", "munafa", "profit", "faida", "fayda", "nuqsan", "loss") }) {
-            val sales = inPeriod0.filter { it.type == Type.SALE }.sumOf { it.amount }
-            val income = inPeriod0.filter { it.type == Type.AAMDANI }.sumOf { it.amount }
-            val bought = inPeriod0.filter { it.type == Type.PURCHASE }.sumOf { it.amount }
-            val spent = inPeriod0.filter { it.type == Type.KHARCHA }.sumOf { it.amount }
-            val profit = sales + income - bought - spent
+            val p = profitBreakdown(entries, inPeriod0)
+            val missingCost = if (p.salesWithoutCost > 0.005) "; sales without recorded cost ${fmt(p.salesWithoutCost)} are not included" else ""
             return Answer(
-                (if (profit >= 0) "Profit" else "Loss") + " ${period0.label}: ${money(currency, kotlin.math.abs(profit))} " +
-                    "(sales ${fmt(sales)} + income ${fmt(income)} − purchases ${fmt(bought)} − expenses ${fmt(spent)})",
+                (if (p.netProfit >= 0) "Estimated profit" else "Estimated loss") +
+                    " ${period0.label}: ${money(currency, kotlin.math.abs(p.netProfit))} " +
+                    "(costed sales ${fmt(p.costedSalesAmount)} − estimated item cost ${fmt(p.costOfGoods)} + other cash-in ${fmt(p.otherIncome)} − cash-out expenses ${fmt(p.expenses)}${missingCost})",
                 null
             )
         }

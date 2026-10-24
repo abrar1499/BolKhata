@@ -1227,10 +1227,10 @@ private fun AskDialog(entry: Entry, currency: String, onPick: (Entry) -> Unit, o
                     }
                     else -> {
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            ChoiceTile("Expense", "I spent it", "−", RedSpend, Modifier.weight(1f)) {
+                            ChoiceTile("Cash Out", "I spent it", "−", RedSpend, Modifier.weight(1f)) {
                                 onPick(entry.copy(type = Type.KHARCHA, category = Cat.OTHER, item = "Other", person = ""))
                             }
-                            ChoiceTile("Income", "I got paid", "+", GreenIn, Modifier.weight(1f)) {
+                            ChoiceTile("Cash In", "I got paid", "+", GreenIn, Modifier.weight(1f)) {
                                 onPick(entry.copy(type = Type.AAMDANI, category = Cat.TANKHWAH, item = "Income", person = ""))
                             }
                         }

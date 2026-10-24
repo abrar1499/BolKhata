@@ -5,8 +5,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 enum class Type(val label: String) {
-    KHARCHA("Expense"),
-    AAMDANI("Income"),
+    KHARCHA("Cash Out"),
+    AAMDANI("Cash In"),
     DIYA("Lent"),
     LIYA("Borrowed"),
     WAPIS_MILA("Received back"),
