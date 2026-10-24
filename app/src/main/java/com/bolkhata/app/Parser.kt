@@ -454,22 +454,33 @@ object Parser {
     private val cashWords = setOf("cash", "naqad", "nakad", "naqd", "nakd")
     private val creditWords = setOf("udhaar", "udhar", "udhaari", "udhari", "credit", "baqi", "baki", "unpaid", "ادھار")
 
-    /** "kachi eint ke pese nahi diye abhi" / "Afzal ko eint ke pese de diye": says whether a sale or purchase is paid. */
+    /** "kachi eint ke pese nahi diye abhi" / "last stock entry ki payment receive nahi hui". */
     class PayStatus(val paid: Boolean, val keywords: List<String>, val person: String, val mentionsMoney: Boolean)
 
     private val noWords = setOf("ni", "nhi", "nahi", "nahin", "nai", "nahi.", "not", "na", "didnt", "nahe", "nhe")
     private val moneyTalk = setOf("pese", "paise", "paisay", "paisa", "pesa", "pesay", "payment", "rakam", "raqam", "adaigi", "money", "amount", "bill")
-    private val payVerbs = setOf("diye", "diya", "di", "dia", "dye", "mile", "mila", "mili", "paid", "pay", "ada", "chuka", "chukaye", "clear", "received")
+    private val payVerbs = setOf(
+        "diye", "diya", "di", "dia", "dye", "mil", "mile", "mila", "mili", "paid", "pay", "ada", "chuka", "chukaye",
+        "clear", "receive", "received", "recieve", "recieved", "receives", "vasool", "vasooli", "collected", "aayi", "aai", "aaya", "aaye"
+    )
+    private val latestPayRefs = setOf("last", "latest", "newest", "recent", "pichli", "pichhli", "akhri", "aakhri", "previous")
+    private val payEntryRefs = setOf("entry", "entries", "record", "transaction", "stock", "sale", "sales", "purchase", "purchases", "item", "payment")
     private val payStop = setOf(
         "abhi", "abi", "tak", "ke", "ka", "ki", "ko", "se", "ne", "hain", "hai", "the", "thay", "tha", "thi", "wale", "wali", "wala",
-        "mene", "maine", "men", "main", "mein", "me", "usne", "us", "os", "osne", "unhon", "unho", "kar", "kr", "de", "do", "diye", "diya",
-        "liye", "liya", "li", "mujhe", "abhi", "bhi", "bi", "b", "and", "the", "for", "yet", "still"
+        "mene", "maine", "men", "main", "mein", "me", "usne", "us", "os", "osne", "oski", "oska", "oske", "unhon", "unho", "kar", "kr",
+        "de", "do", "diye", "diya", "liye", "liya", "li", "mujhe", "bhi", "bi", "b", "and", "the", "for", "yet", "still",
+        "last", "latest", "newest", "recent", "pichli", "pichhli", "akhri", "aakhri", "previous", "entry", "entries", "record", "transaction",
+        "transactions", "stock", "sale", "sales", "purchase", "purchases", "item", "items", "jo", "jiski", "jiska", "jiske",
+        "dala", "daala", "dali", "daali", "hoi", "hua", "hue", "hui", "gayi", "gaya", "gaye", "customer", "buyer", "supplier", "vendor"
     ) + noWords + moneyTalk + payVerbs + creditWords + cashWords
 
     fun payStatus(input: String): PayStatus? {
         val t = input.lowercase().replace("didn't", "didnt")
-        if (t.any { it.isDigit() }) return null
         val words = t.split(Regex("""[^\p{L}]+""")).filter { it.isNotEmpty() }
+        val latestRef = words.any { it in latestPayRefs } && words.any { it in payEntryRefs }
+        // Digits normally mean a new transaction. Allow them only when the user explicitly points
+        // to an existing/latest entry, so "last 500 stock entry unpaid" remains an edit command.
+        if (t.any { it.isDigit() } && !latestRef) return null
         val neg = words.any { it in noWords }
         val money = words.any { it in moneyTalk }
         val verb = words.any { it in payVerbs }
@@ -480,10 +491,9 @@ object Parser {
             cash || (money && verb) || words.contains("paid") -> true
             else -> return null
         }
-        val keys = words.filter { it.length >= 3 && it !in payStop }
+        val keys = words.filter { it.length >= 3 && it !in payStop && it.none { c -> c.isDigit() } }
         return PayStatus(paid, keys, findPerson(input), money)
     }
-
     private val noteDrop = goodsStop + clauseEnd + currencyWords + priceMarkers + cashWords + setOf(
         "kiya", "kia", "kiye", "kie", "kar", "kr", "karna", "karo", "kardiya", "krdiya", "hua", "hui", "hue", "gaya", "gayi", "gae",
         "kal", "kl", "cal", "kall", "parson", "parso", "today", "yesterday", "aj", "abhi", "abi", "mein", "me", "par", "pe", "pay",

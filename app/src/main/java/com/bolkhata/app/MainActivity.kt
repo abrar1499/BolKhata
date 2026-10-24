@@ -296,17 +296,46 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
      */
     fun applyPayStatus(text: String): Boolean {
         val st = Parser.payStatus(text) ?: return false
+        val lower = text.lowercase()
+        val words = lower.split(Regex("""[^\p{L}]+""")).filter { it.isNotEmpty() }
+        val latestRef = words.any { it in setOf("last", "latest", "newest", "recent", "pichli", "pichhli", "akhri", "aakhri", "previous") } &&
+            words.any { it in setOf("entry", "entries", "record", "transaction", "stock", "sale", "sales", "purchase", "purchases", "item", "payment") }
+        val saysReceived = words.any { it in setOf("receive", "received", "recieve", "recieved", "mila", "mili", "mile", "aayi", "aai", "aaya", "aaye", "vasool", "vasooli", "collected") }
+        val saysSale = words.any { it in setOf("sale", "sales", "sold", "becha", "bechi", "customer", "buyer") }
+        val saysPurchase = words.any { it in setOf("purchase", "purchases", "purchased", "bought", "kharida", "khareeda", "kharidi", "supplier", "vendor") }
+        val saysNotPaid = words.any { it in setOf("nahi", "nahin", "nhi", "ni", "not", "didnt", "na") } &&
+            words.any { it in setOf("paid", "pay", "diye", "diya", "di", "ada", "chuka") }
+        val preferredType = when {
+            saysSale -> Type.SALE
+            saysPurchase -> Type.PURCHASE
+            saysReceived -> Type.SALE
+            saysNotPaid -> Type.PURCHASE
+            else -> null
+        }
         val trades = entries.filter { isTrade(it.type) }.sortedByDescending { it.createdAt }
-        if (trades.isEmpty()) return false
+        if (trades.isEmpty()) {
+            toast("No sale or stock purchase found to update. Add the entry first, then tell me its payment status.")
+            return true
+        }
+        val candidates = if (preferredType != null) trades.filter { it.type == preferredType } else trades
+        if (candidates.isEmpty()) {
+            toast(if (preferredType == Type.SALE) "I couldn't find a sale to update. Check the entry or mention the customer's name." else "I couldn't find a stock purchase to update. Check the entry or mention the supplier.")
+            return true
+        }
         fun hit(e: Entry, k: String) = e.person.equals(k, ignoreCase = true) ||
-            e.item.lowercase().split(" ").any { w -> w.length >= 3 && (w.startsWith(k) || k.startsWith(w)) }
-        val target = trades.firstOrNull { e -> st.keywords.isNotEmpty() && st.keywords.all { k -> hit(e, k) } }
-            ?: trades.firstOrNull { e -> st.keywords.any { k -> hit(e, k) } }
-            ?: (if (st.mentionsMoney && st.keywords.isEmpty()) trades.first() else null)
-            ?: return false
+            e.item.lowercase().split(Regex("""\s+""")).any { w -> w.length >= 3 && (w.startsWith(k) || k.startsWith(w)) }
+        val matched = if (st.keywords.isNotEmpty()) {
+            candidates.firstOrNull { e -> st.keywords.all { k -> hit(e, k) } }
+                ?: candidates.firstOrNull { e -> st.keywords.any { k -> hit(e, k) } }
+        } else null
+        val target = matched ?: if (st.keywords.isEmpty() && (latestRef || st.mentionsMoney)) candidates.firstOrNull() else null
+        if (target == null) {
+            toast("I couldn't match that payment to an entry. Mention the item or person, e.g. \"Kachi eint ki payment receive nahi hui\".")
+            return true
+        }
         val who = target.person.ifBlank { st.person }
-        if (!st.paid && who.isBlank()) {
-            toast("Who is it with? Say the name too, e.g. \"Afzal se li thi, pese nahi diye\"")
+        if (!st.paid && who.isBlank() && target.type == Type.PURCHASE) {
+            toast("Supplier ka naam bhi batao, e.g. \"last purchase ki payment abhi nahi di, supplier Aslam hai\".")
             return true
         }
         val updated = target.copy(paid = st.paid, person = who)
@@ -320,14 +349,18 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         val bal = balances(after).entries.firstOrNull { it.key.equals(who, true) }?.value ?: 0.0
         val owe = when {
             who.isBlank() -> ""
-            bal < -0.005 -> " · you will pay $who ${money(currency, -bal)}"
-            bal > 0.005 -> " · $who will pay you ${money(currency, bal)}"
-            else -> " · all settled with $who"
+            bal < -0.005 -> " · you will pay " + who + " " + money(currency, -bal)
+            bal > 0.005 -> " · " + who + " will pay you " + money(currency, bal)
+            else -> " · all settled with " + who
         }
         val label = target.item.ifBlank { if (target.type == Type.SALE) "Sale" else "Purchase" }
-        val msg = if (st.paid) "$label marked paid$owe" else "$label on credit$owe"
+        val msg = when {
+            st.paid -> label + " marked paid" + owe
+            target.type == Type.SALE && who.isBlank() -> label + " marked unpaid; add the customer's name to track who owes you"
+            else -> label + " marked on credit" + owe
+        }
         if (updated == target && undone.isEmpty()) {
-            toast(msg)
+            toast(if (target.type == Type.SALE && !st.paid && who.isBlank()) label + " is already unpaid. Add the customer's name to track the payment." else msg)
         } else {
             applyPlan(Ai.EditPlan(listOf(target to updated), undone, msg))
         }
@@ -347,6 +380,25 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     }
 
     fun handleTextSafely(text: String) {
+        // A vague "change an entry" is not enough information to edit safely; ask what to change.
+        val normalizedWords = text.lowercase().split(Regex("""[^\p{L}\p{N}]+""")).filter { it.isNotEmpty() }
+        val genericEditWords = setOf(
+            "koi", "koee", "any", "entry", "entries", "record", "transaction", "last", "latest", "newest", "recent",
+            "pichli", "pichhli", "akhri", "aakhri", "previous", "change", "edit", "update", "badlo", "badal",
+            "karo", "kar", "kr", "do", "dein", "krdo", "kardo", "please", "plz", "the", "a", "an", "meri", "my"
+        )
+        val hasEditVerb = normalizedWords.any { it in setOf("change", "edit", "update", "badlo", "badal", "correct", "fix", "theek", "thik") }
+        val hasEntryRef = normalizedWords.any { it in setOf("entry", "entries", "record", "transaction") }
+        val vagueEdit = hasEditVerb && hasEntryRef && text.none { it.isDigit() } && normalizedWords.all { it in genericEditWords }
+        if (vagueEdit) {
+            toast("Kaunsi entry aur kya change karna hai? Example: \"last entry 500 nahi 400 thi\" or \"petrol wali entry ki category food kar do\".")
+            return
+        }
+        // Process payment-status statements before stock questions, generic edit commands, or the new-entry parser.
+        // But never mutate an entry when the person is asking a question.
+        val statusQuestion = text.trim().endsWith("?") ||
+            normalizedWords.any { it in setOf("kya", "kia", "kitna", "kitne", "kitni", "how", "what", "who", "when", "where", "which", "whether") }
+        if (!statusQuestion && applyPayStatus(text)) return
         if (handleCommand(text)) return
         if (Questions.isQuestion(text)) {
             val a = Questions.answer(text, entries, currency)
@@ -391,7 +443,6 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             return
         }
         val r = Parser.parse(text)
-        if (r.entries.isEmpty() && r.unclear.isEmpty() && applyPayStatus(text)) return
         // Goods said without a price are asked about here (the rate), not sent to the AI.
         val askRate = r.unclear.isNotEmpty() && r.unclear.all { it.qty > 0 }
         val unsure = !askRate && (r.unclear.isNotEmpty() || r.entries.isEmpty()) ||
