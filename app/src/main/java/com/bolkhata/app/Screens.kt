@@ -477,23 +477,23 @@ private fun MainSummaryTile(
             .clip(RoundedCornerShape(18.dp))
             .background(color.copy(alpha = 0.09f))
             .clickable { onClick() }
-            .padding(horizontal = 10.dp, vertical = 12.dp),
+            .padding(horizontal = 12.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
-            Modifier.size(34.dp).clip(CircleShape).background(color.copy(alpha = 0.18f)),
+            Modifier.size(38.dp).clip(CircleShape).background(color.copy(alpha = 0.18f)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(glyph, contentDescription = null, tint = color, modifier = Modifier.size(22.dp))
+            Icon(glyph, contentDescription = null, tint = color, modifier = Modifier.size(24.dp))
         }
         Spacer(Modifier.width(9.dp))
         Column(Modifier.weight(1f)) {
-            Text(label, fontSize = 12.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(label, fontSize = 14.sp, lineHeight = 17.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(
                 value,
                 fontWeight = FontWeight.ExtraBold,
-                fontSize = 21.sp,
-                lineHeight = 25.sp,
+                fontSize = 23.sp,
+                lineHeight = 28.sp,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
