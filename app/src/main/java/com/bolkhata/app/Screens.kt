@@ -148,20 +148,20 @@ fun HomeScreen(
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             MiniTile(
                                 "To pay", moneyA(currency, pay), Icons.Filled.Remove, OrangeOwe, Modifier.weight(1f),
-                                valueSize = 10, compact = true
+                                valueSize = 9, compact = true
                             ) { onPeople(false) }
                             MiniTile(
                                 "To receive", moneyA(currency, receive), Icons.Filled.Add, GreenIn, Modifier.weight(1f),
-                                valueSize = 10, compact = true
+                                valueSize = 9, compact = true
                             ) { onPeople(true) }
                             MiniTile(
                                 "Sales today", moneyA(currency, todaySales), Icons.Filled.Receipt, Cat.SALES.let { catColor(it) },
-                                Modifier.weight(1f), valueSize = 10, compact = true
+                                Modifier.weight(1f), valueSize = 9, compact = true
                             ) { onSeeAll() }
                             MiniTile(
                                 "Est. profit", moneyA(currency, monthProfit), if (monthProfit >= 0) Icons.Filled.TrendingUp else Icons.Filled.TrendingDown,
                                 if (monthProfit >= 0) GreenIn else RedSpend, Modifier.weight(1f),
-                                valueSize = 9, valueColor = if (monthProfit >= 0) GreenIn else RedSpend,
+                                valueSize = 8, valueColor = if (monthProfit >= 0) GreenIn else RedSpend,
                                 compact = true
                             ) { onReports() }
                         }
@@ -524,8 +524,8 @@ private fun MiniTile(
             )
             .clickable { onClick() }
             .padding(
-                start = if (compact) 4.dp else 12.dp,
-                end = if (compact) 4.dp else 10.dp,
+                start = if (compact) 3.dp else 12.dp,
+                end = if (compact) 3.dp else 10.dp,
                 top = if (compact) 8.dp else 8.dp,
                 bottom = if (compact) 8.dp else 8.dp
             ),
@@ -534,8 +534,8 @@ private fun MiniTile(
         Column(Modifier.weight(1f)) {
             Text(
                 label,
-                fontSize = if (compact) 9.sp else 11.sp,
-                lineHeight = if (compact) 11.sp else 13.sp,
+                fontSize = if (compact) 8.sp else 11.sp,
+                lineHeight = if (compact) 10.sp else 13.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -550,14 +550,14 @@ private fun MiniTile(
                 overflow = TextOverflow.Ellipsis
             )
         }
-        Spacer(Modifier.width(if (compact) 2.dp else 6.dp))
+        Spacer(Modifier.width(if (compact) 1.dp else 6.dp))
         Box(
-            Modifier.size(if (compact) 16.dp else 28.dp)
+            Modifier.size(if (compact) 14.dp else 28.dp)
                 .clip(CircleShape)
                 .background(color.copy(alpha = 0.18f)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(glyph, contentDescription = null, tint = color, modifier = Modifier.size(if (compact) 11.dp else 16.dp))
+            Icon(glyph, contentDescription = null, tint = color, modifier = Modifier.size(if (compact) 9.dp else 16.dp))
         }
     }
 }
