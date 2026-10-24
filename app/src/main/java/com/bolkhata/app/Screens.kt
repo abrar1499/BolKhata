@@ -355,10 +355,8 @@ private fun DailyCashHeader(
     Column(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
             .then(if (onToggle != null) Modifier.clickable { onToggle() } else Modifier)
-            .padding(horizontal = 10.dp, vertical = 8.dp)
+            .padding(horizontal = 10.dp, vertical = 10.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(title, fontWeight = FontWeight.Bold, fontSize = 15.sp)
@@ -380,20 +378,34 @@ private fun DailyCashHeader(
                 )
             }
         }
-        Spacer(Modifier.height(6.dp))
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            DailyCashMetric("Cash In", summary.cashIn, currency, GreenIn, Modifier.weight(1f))
-            DailyCashMetric("Cash Out", summary.cashOut, currency, RedSpend, Modifier.weight(1f))
-            DailyCashMetric(
-                "Cash in Hand",
-                summary.cashInHand,
-                currency,
-                if (summary.cashInHand >= 0) MaterialTheme.colorScheme.onSurface else RedSpend,
-                Modifier.weight(1f)
-            )
+        if (expanded) {
+            Spacer(Modifier.height(6.dp))
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                DailyCashMetric("Cash Out", summary.cashOut, currency, RedSpend, Modifier.weight(1f))
+                Box(
+                    Modifier
+                        .width(1.dp)
+                        .height(32.dp)
+                        .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                )
+                DailyCashMetric("Cash In", summary.cashIn, currency, GreenIn, Modifier.weight(1f))
+                Box(
+                    Modifier
+                        .width(1.dp)
+                        .height(32.dp)
+                        .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                )
+                DailyCashMetric(
+                    "Cash in Hand",
+                    summary.cashInHand,
+                    currency,
+                    if (summary.cashInHand >= 0) MaterialTheme.colorScheme.onSurface else RedSpend,
+                    Modifier.weight(1f)
+                )
+            }
         }
     }
 }
@@ -407,23 +419,20 @@ private fun DailyCashMetric(
     modifier: Modifier
 ) {
     Column(
-        modifier
-            .clip(RoundedCornerShape(9.dp))
-            .background(color.copy(alpha = 0.09f))
-            .padding(horizontal = 6.dp, vertical = 5.dp)
+        modifier.padding(horizontal = 6.dp, vertical = 3.dp)
     ) {
         Text(
             label,
-            fontSize = 9.sp,
-            lineHeight = 11.sp,
+            fontSize = 10.sp,
+            lineHeight = 12.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
             moneyA(currency, amount),
-            fontSize = 11.sp,
-            lineHeight = 13.sp,
+            fontSize = 12.sp,
+            lineHeight = 14.sp,
             fontWeight = FontWeight.Bold,
             color = color,
             maxLines = 1,
