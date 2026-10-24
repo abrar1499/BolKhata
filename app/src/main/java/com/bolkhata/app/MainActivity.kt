@@ -308,6 +308,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         val preferredType = when {
             saysSale -> Type.SALE
             saysPurchase -> Type.PURCHASE
+            // "last stock entry ..." means the newest matching trade, regardless of direction.
+            latestRef -> null
             saysReceived -> Type.SALE
             saysNotPaid -> Type.PURCHASE
             else -> null
