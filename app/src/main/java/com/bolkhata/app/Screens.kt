@@ -67,9 +67,9 @@ fun HomeScreen(
     fun inMonth(ms: Long) = cal(ms).let { it.get(Calendar.YEAR) == now.get(Calendar.YEAR) && it.get(Calendar.MONTH) == now.get(Calendar.MONTH) }
     fun inYear(ms: Long) = cal(ms).get(Calendar.YEAR) == now.get(Calendar.YEAR)
 
-    val monthSpent = entries.filter { it.type == Type.KHARCHA && inMonth(it.date) }.sumOf { it.amount }
-    val yearSpent = entries.filter { it.type == Type.KHARCHA && inYear(it.date) }.sumOf { it.amount }
-    val monthIncome = entries.filter { it.type == Type.AAMDANI && inMonth(it.date) }.sumOf { it.amount }
+    val monthSpent = entries.filter { it.isCashOutFlow() && inMonth(it.date) }.sumOf { it.amount }
+    val yearSpent = entries.filter { it.isCashOutFlow() && inYear(it.date) }.sumOf { it.amount }
+    val monthIncome = entries.filter { it.isCashInFlow() && inMonth(it.date) }.sumOf { it.amount }
     // Shop and business cards appear only once sales or purchases are used.
     val trading = entries.any { isTrade(it.type) }
     val todaySales = entries.filter { it.type == Type.SALE && sameDay(it.date, System.currentTimeMillis()) }.sumOf { it.amount }
@@ -128,7 +128,7 @@ fun HomeScreen(
                         Text("Cash Out in $monthName", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text(moneyA(currency, monthSpent), fontSize = 32.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 36.sp, letterSpacing = (-0.5).sp)
                         Text(
-                            "This year ${money(currency, yearSpent)}  ·  See report ›",
+                            "Cash Out this year ${money(currency, yearSpent)}  ·  See report ›",
                             fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(Modifier.height(8.dp))
