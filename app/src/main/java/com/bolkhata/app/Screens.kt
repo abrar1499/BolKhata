@@ -139,11 +139,11 @@ fun HomeScreen(
                         Spacer(Modifier.height(8.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             MiniTile(
-                                "Cash Out", moneyA(currency, monthSpent), "−", RedSpend, Modifier.weight(1f),
+                                "Expense", moneyA(currency, monthSpent), "−", RedSpend, Modifier.weight(1f),
                                 valueSize = 18, valueColor = RedSpend, tinted = true
                             ) { onReports() }
                             MiniTile(
-                                "Cash In", moneyA(currency, monthIncome), "+", GreenIn, Modifier.weight(1f),
+                                "Income", moneyA(currency, monthIncome), "+", GreenIn, Modifier.weight(1f),
                                 valueSize = 18, valueColor = GreenIn, tinted = true
                             ) { onReports() }
                         }
@@ -248,7 +248,7 @@ fun HomeScreen(
 
         item {
             Box(Modifier.padding(horizontal = 16.dp).padding(top = 6.dp)) {
-                SectionHeader("Today", todayList.size, "today" in open, spentLabel(currency, todayList)) { toggle("today") }
+                DailyCashHeader("Today", todayList.size, "today" in open, dailyCashSummary(entries, todayList), currency) { toggle("today") }
             }
         }
         if ("today" in open) {
@@ -270,7 +270,7 @@ fun HomeScreen(
         dayGroups.forEach { (key, list) ->
             item(key = "dh-$key") {
                 Box(Modifier.padding(horizontal = 16.dp)) {
-                    SectionHeader(dayLabel(list.first().date), list.size, key in open, spentLabel(currency, list)) { toggle(key) }
+                    DailyCashHeader(dayLabel(list.first().date), list.size, key in open, dailyCashSummary(entries, list), currency) { toggle(key) }
                 }
             }
             if (key in open) {
@@ -290,20 +290,20 @@ fun HomeScreen(
                 }
             }
             if (key in open) {
-                var lastDay = ""
-                list.forEach { e ->
-                    val d = dayKey(e.date)
-                    if (d != lastDay) {
-                        lastDay = d
-                        item(key = "md-$key-$d") {
-                            Text(
-                                dayLabel(e.date), fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 24.dp).padding(top = 8.dp)
+                list.groupBy { dayKey(it.date) }.forEach { (day, dayList) ->
+                    item(key = "md-$key-$day") {
+                        Box(Modifier.padding(horizontal = 16.dp, vertical = 3.dp)) {
+                            DailyCashHeader(
+                                dayLabel(dayList.first().date),
+                                dayList.size,
+                                true,
+                                dailyCashSummary(entries, dayList),
+                                currency,
+                                onToggle = null
                             )
                         }
                     }
-                    item(key = e.id) {
+                    items(dayList, key = { it.id }) { e ->
                         Box(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) { TxRow(e, currency) { onEdit(e) } }
                     }
                 }
@@ -318,6 +318,120 @@ private fun spentLabel(currency: String, list: List<Entry>): String? {
     val spent = list.filter { it.type == Type.KHARCHA }.sumOf { it.amount }
     return if (spent > 0) money(currency, spent) else null
 }
+
+private data class DailyCashSummary(
+    val cashIn: Double,
+    val cashOut: Double,
+    val cashInHand: Double
+)
+
+private fun localDayStart(ms: Long): Long = cal(ms).apply {
+    set(Calendar.HOUR_OF_DAY, 0)
+    set(Calendar.MINUTE, 0)
+    set(Calendar.SECOND, 0)
+    set(Calendar.MILLISECOND, 0)
+}.timeInMillis
+
+/** Running cash balance through the selected local calendar day; only recorded cash flows are counted. */
+private fun dailyCashSummary(allEntries: List<Entry>, dayEntries: List<Entry>): DailyCashSummary {
+    val dayStart = localDayStart(dayEntries.firstOrNull()?.date ?: System.currentTimeMillis())
+    val cashIn = dayEntries.filter { it.isCashInFlow() }.sumOf { it.amount }
+    val cashOut = dayEntries.filter { it.isCashOutFlow() }.sumOf { it.amount }
+    val throughDay = allEntries.filter { localDayStart(it.date) <= dayStart }
+    val totalIn = throughDay.filter { it.isCashInFlow() }.sumOf { it.amount }
+    val totalOut = throughDay.filter { it.isCashOutFlow() }.sumOf { it.amount }
+    return DailyCashSummary(cashIn, cashOut, totalIn - totalOut)
+}
+
+@Composable
+private fun DailyCashHeader(
+    title: String,
+    count: Int,
+    expanded: Boolean,
+    summary: DailyCashSummary,
+    currency: String,
+    onToggle: (() -> Unit)?
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
+            .then(if (onToggle != null) Modifier.clickable { onToggle() } else Modifier)
+            .padding(horizontal = 10.dp, vertical = 8.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(title, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            Spacer(Modifier.width(8.dp))
+            Box(
+                Modifier
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primaryContainer)
+                    .padding(horizontal = 7.dp, vertical = 3.dp)
+            ) {
+                Text(count.toString(), fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+            }
+            Spacer(Modifier.weight(1f))
+            if (onToggle != null) {
+                Text(
+                    if (expanded) "⌃" else "⌄",
+                    fontSize = 18.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            DailyCashMetric("Cash In", summary.cashIn, currency, GreenIn, Modifier.weight(1f))
+            DailyCashMetric("Cash Out", summary.cashOut, currency, RedSpend, Modifier.weight(1f))
+            DailyCashMetric(
+                "Cash in Hand",
+                summary.cashInHand,
+                currency,
+                if (summary.cashInHand >= 0) MaterialTheme.colorScheme.onSurface else RedSpend,
+                Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun DailyCashMetric(
+    label: String,
+    amount: Double,
+    currency: String,
+    color: Color,
+    modifier: Modifier
+) {
+    Column(
+        modifier
+            .clip(RoundedCornerShape(9.dp))
+            .background(color.copy(alpha = 0.09f))
+            .padding(horizontal = 6.dp, vertical = 5.dp)
+    ) {
+        Text(
+            label,
+            fontSize = 9.sp,
+            lineHeight = 11.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            moneyA(currency, amount),
+            fontSize = 11.sp,
+            lineHeight = 13.sp,
+            fontWeight = FontWeight.Bold,
+            color = color,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
 
 @Composable
 private fun MiniTile(
