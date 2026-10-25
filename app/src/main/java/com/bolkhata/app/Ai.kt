@@ -71,7 +71,7 @@ object Ai {
         memory: List<String> = emptyList()
     ): AssistantResult = withContext(Dispatchers.IO) {
         if (key.isBlank()) throw Failure("AI is not configured.")
-        val newest = all.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt }).take(500)
+        val newest = all.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt }).take(350)
         // Entries dated far in the past or in the future are often mistakes; include them so they can be fixed.
         val nowMs = System.currentTimeMillis()
         val odd = all.filter { it !in newest && (it.date > nowMs + 86_400_000L || it.date < nowMs - 300L * 86_400_000L) }.take(30)
@@ -541,20 +541,31 @@ If nothing matches, return {"edits":[],"delete":[],"message":"I couldn't find th
         val first = prefer ?: store.aiModel.takeIf { it in MODELS }
         val order = listOfNotNull(first) + MODELS.filter { it != first }
         var lastError = "AI did not answer"
+        // If one model is busy, over its free limit, not allowed for this key, or too slow, the next one is tried,
+        // so the chat keeps working. Only a key that is really invalid stops right away.
         for (model in order) {
-            val (code, body) = call(model, key, prompt, file)
+            val (code, body) = try {
+                call(model, key, prompt, file)
+            } catch (e: Failure) {
+                lastError = e.message ?: lastError
+                continue
+            }
             when (code) {
                 200 -> {
                     if (prefer == null) store.aiModel = model
-                    return readText(body)
+                    val text = try { readText(body) } catch (e: Exception) { lastError = "AI sent an empty answer"; continue }
+                    if (text.isBlank()) { lastError = "AI sent an empty answer"; continue }
+                    return text
                 }
                 400, 401, 403 -> {
                     val msg = errorMessage(body)
-                    if (msg.contains("API key", ignoreCase = true) || code != 400) throw Failure("AI key not accepted. Check it in Settings.")
-                    lastError = msg
+                    if (msg.contains("API key not valid", ignoreCase = true) || msg.contains("API_KEY_INVALID", ignoreCase = true)) {
+                        throw Failure("AI key not accepted. Check it in Settings.")
+                    }
+                    lastError = "$model: $msg"
                 }
                 404 -> lastError = "Model not available"
-                429 -> throw Failure("AI daily limit reached. Try again later.")
+                429 -> lastError = "AI limit reached for now (free tier). Try again in a minute."
                 else -> lastError = "AI error $code"
             }
         }
@@ -618,7 +629,7 @@ Make one entry per transaction. Skip anything without an amount. Number words co
             conn.requestMethod = "POST"
             conn.connectTimeout = 15_000
             // Reading a whole statement takes longer than a sentence.
-            conn.readTimeout = if (file != null) 120_000 else 30_000
+            conn.readTimeout = if (file != null) 120_000 else 75_000
             conn.doOutput = true
             conn.setRequestProperty("Content-Type", "application/json")
             conn.setRequestProperty("x-goog-api-key", key)

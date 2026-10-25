@@ -554,7 +554,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     }
 
     /** Without AI (no key, or no internet): save clear entries, answer simple questions, never stay silent. */
-    fun chatOffline(text: String, roman: String, aiDown: Boolean) {
+    fun chatOffline(text: String, roman: String, aiDown: Boolean, why: String? = null) {
         val question = roman.endsWith("?") || runCatching { Questions.isQuestion(roman) }.getOrDefault(false)
         val parsed = runCatching { Parser.parse(roman) }.getOrNull()
         if (!question && parsed != null && (parsed.entries.isNotEmpty() || parsed.unclear.isNotEmpty())) {
@@ -564,7 +564,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         val answer = if (question) runCatching { Questions.answer(roman, entries, currency) }.getOrNull() else null
         postChat(
             answer?.text ?: if (aiDown) {
-                "AI is not reachable right now. I can still save entries like \"petrol 60\", and answer simple questions like \"how much this month?\"."
+                "AI didn't answer" + (if (!why.isNullOrBlank()) " ($why)" else "") +
+                    ". I can still save entries like \"petrol 60\", and answer simple questions like \"how much this month?\"."
             } else {
                 "Hi! Tell me an expense like \"petrol 60\", or ask \"how much did I spend this month?\". Turn on AI in Settings for full answers."
             },
@@ -640,7 +641,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     postChat("Remembered: " + res.remember.joinToString("; "), isUser = false)
                 }
             } catch (e: Exception) {
-                chatOffline(text, roman, aiDown = true)
+                chatOffline(text, roman, aiDown = true, why = e.message?.take(160))
             } finally {
                 chatLoading = false
             }
