@@ -114,6 +114,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var importDupes by remember { mutableStateOf(setOf<String>()) }
     // For each imported row that matches a saved entry: the saved entry's id.
     var importMatch by remember { mutableStateOf(mapOf<String, String>()) }
+    // Changes the chat AI wants to make to saved entries, shown for the person to Apply or Cancel.
+    var pendingPlan by remember { mutableStateOf<Ai.EditPlan?>(null) }
 
     DisposableEffect(Unit) {
         val stop = store.watchSuggestions { suggestions = store.loadSuggestions() }
@@ -608,16 +610,18 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 }
                 val reply = res.reply
                 val list = res.entries
-                // Corrections change the saved entry (with Undo) instead of adding a second one.
-                res.plan?.let { applyPlan(it) }
+                // Changes to saved entries wait for the person to tap Apply; nothing is edited or deleted silently.
+                if (res.plan != null) pendingPlan = res.plan
+                // If the AI says it did something but sent no change, say so instead of letting it look done.
+                val claims = Regex("""(?i)\b(kar (diya|di|diye|dein)|hata (diya|di|diye)|shift|darj|updated?|deleted?|changed|moved|removed|set kar)\b""")
+                val honest = if (list.isEmpty() && res.plan == null && claims.containsMatchIn(reply)) {
+                    "$reply\n\n(Nothing was changed yet. Tell me exactly what to change.)"
+                } else reply
                 if (list.isNotEmpty()) {
                     save(list + entries)
-                    postChat(reply.ifBlank { "Saved" }, isUser = false, entryIds = list.map { it.id })
-                } else if (res.plan != null) {
-                    // Undo for a change is on the bar at the bottom (it puts the old entry back).
-                    postChat("✓ " + reply.ifBlank { "Updated" }.removePrefix("✓ "), isUser = false)
+                    postChat(honest.ifBlank { "Saved" }, isUser = false, entryIds = list.map { it.id })
                 } else {
-                    postChat(reply, isUser = false)
+                    postChat(honest.ifBlank { "Here are the changes I'd make." }, isUser = false)
                 }
                 if (res.remember.isNotEmpty()) {
                     postChat("Remembered: " + res.remember.joinToString("; "), isUser = false)
@@ -1026,6 +1030,23 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                             imports = emptyList()
                             importDupes = emptySet()
                             importMatch = emptyMap()
+                        },
+                        pendingChanges = pendingPlan?.let { plan ->
+                            val df = java.text.SimpleDateFormat("d MMM", java.util.Locale.US)
+                            fun d(e: Entry) = df.format(java.util.Date(e.date)) + " · " + entryTitle(e) + " · " + fmt(e.amount)
+                            plan.deleted.map { "Delete: " + d(it) } +
+                                plan.changed.map { (a, b) ->
+                                    "Change: " + d(a) + "  →  " + d(b) + (if (a.category != b.category || a.type != b.type) " (" + b.type.label + ", " + b.category.label + ")" else "")
+                                }
+                        } ?: emptyList(),
+                        onApplyChanges = {
+                            pendingPlan?.let { applyPlan(it) }
+                            pendingPlan = null
+                            postChat("✓ Changes applied. Use Undo at the bottom if something is wrong.", isUser = false)
+                        },
+                        onCancelChanges = {
+                            pendingPlan = null
+                            postChat("Okay, nothing was changed.", isUser = false)
                         },
                         onUpdateSaved = {
                             val byImport = imports.associateBy { it.id }

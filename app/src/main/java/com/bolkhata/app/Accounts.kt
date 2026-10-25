@@ -40,10 +40,13 @@ object Accounts {
 
     private fun f(n: Double) = fmt(n)
 
+    /** A short code that stays the same for an entry across chat turns (unlike a list position). */
+    fun code(e: Entry): String = "e" + Integer.toString((e.id.hashCode() and 0x7fffffff) % 1_679_616, 36)
+
     /** One compact line per entry: cheaper for the AI to read than JSON, so far more entries fit. */
-    fun line(n: Int, e: Entry): String {
+    fun line(e: Entry): String {
         val d = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date(e.createdAt.takeIf { sameDay(it, e.date) } ?: e.date))
-        val parts = mutableListOf("n=$n", d, e.type.label, f(e.amount), e.category.label, e.item)
+        val parts = mutableListOf("id=" + code(e), d, e.type.label, f(e.amount), e.category.label, e.item)
         if (e.person.isNotBlank()) parts += "person:" + e.person
         if (e.note.isNotBlank() && !e.note.equals(e.item, ignoreCase = true)) parts += "note:" + e.note.take(50)
         if (e.qty > 0) parts += "qty:" + f(e.qty) + (if (e.unit.isNotBlank()) " " + e.unit else "")

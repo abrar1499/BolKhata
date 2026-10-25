@@ -21,11 +21,14 @@ object Ai {
     /** Tried in order; the first one that answers is remembered. */
     val MODELS = listOf("gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-2.5-flash")
 
+    /** Stronger model for the chat and for reading files; quick entry reading keeps the light model. */
+    const val CHAT_MODEL = "gemini-3.8-flash"
+
     class Failure(message: String) : Exception(message)
 
     /** Exact figures (worked out in code), the entries as compact numbered lines, and likely duplicates. */
     private fun ledgerContext(all: List<Entry>, recent: List<Entry>, currency: String): String {
-        val entryLines = recent.withIndex().joinToString("\n") { (i, e) -> Accounts.line(i + 1, e) }
+        val entryLines = recent.joinToString("\n") { e -> Accounts.line(e) }
         // Likely duplicates, worked out here so the AI doesn't have to spot them: same kind and amount, and either
         // within 3 days of each other or on the same day and month in another year (a misread date).
         val day = 86_400_000L
@@ -45,12 +48,12 @@ object Ai {
                     val sameDayOtherYear = ca.get(Calendar.MONTH) == cb.get(Calendar.MONTH) &&
                         kotlin.math.abs(ca.get(Calendar.DAY_OF_MONTH) - cb.get(Calendar.DAY_OF_MONTH)) <= 2 &&
                         ca.get(Calendar.YEAR) != cb.get(Calendar.YEAR)
-                    if (near || sameDayOtherYear) dupes += "n=${i + 1} and n=${j + 1} (${fmt(a.amount)})"
+                    if (near || sameDayOtherYear) dupes += "id=${Accounts.code(a)} and id=${Accounts.code(b)} (${fmt(a.amount)})"
                 }
             }
         val dupeText = if (dupes.isEmpty()) "none found" else dupes.joinToString("; ")
         return Accounts.facts(all, currency) +
-            "\n\nSaved entries, newest first (n is the number to use in edits and delete; columns: n | date time | kind | amount | category | item | extras):\n$entryLines" +
+            "\n\nSaved entries, newest first (id is the entry's fixed code to use in edits and delete; columns: id | date time | kind | amount | category | item | extras):\n$entryLines" +
             "\n\nPossible duplicates (same kind and amount, close dates or the same date in another year; check item and note): $dupeText"
     }
 
@@ -76,12 +79,12 @@ object Ai {
         val talkedAbout = history.takeLast(20).flatMap { it.entryIds }.toSet()
         val mentioned = all.filter { it.id in talkedAbout && it !in newest && it !in odd }
         val recent = newest + odd + mentioned
-        val numberOf = recent.withIndex().associate { (i, e) -> e.id to i + 1 }
+        val codeOf = recent.associate { e -> e.id to Accounts.code(e) }
         val today = SimpleDateFormat("yyyy-MM-dd (EEEE)", Locale.US).format(Date())
         val conversation = history.takeLast(20).joinToString("\n") { m ->
-            val refs = m.entryIds.mapNotNull { numberOf[it] }
-            (if (m.isUser) "User: " else "Assistant: ") + m.text.take(600) +
-                (if (refs.isNotEmpty()) " [these entries: n=" + refs.joinToString(", ") + "]" else "")
+            val refs = m.entryIds.mapNotNull { codeOf[it] }
+            (if (m.isUser) "User: " else "Assistant: ") + m.text.take(1500) +
+                (if (refs.isNotEmpty()) " [these entries: id=" + refs.joinToString(", ") + "]" else "")
         }.ifBlank { "(new conversation)" }
         val said = message.replace("\"", "'").take(2000)
         val prompt = """
@@ -93,8 +96,8 @@ A) It records NEW money that moved (spent, earned, lent, borrowed, returned, sol
    and set "reply" to one short line confirming it, e.g. "Saved: breakfast 7 $currency".
 B) It corrects, moves or removes money that is ALREADY in the saved entries: a different day ("aaj nahi kal tha", "that was yesterday"),
    a different amount, category, name or note, or "delete / hata do / galat hai". Do NOT add a new entry for it.
-   Put the change in "edits" (n from the saved entries, only the fields that change; "date" as YYYY-MM-DD for a new day)
-   or the n in "delete". Look at the previous conversation to know which entry they mean. The reply says what changed.
+   Put the change in "edits" (the entry's id, only the fields that change; "date" as YYYY-MM-DD for a new day)
+   or its id in "delete". The app shows the person your changes and applies them only when they tap Apply. Look at the previous conversation to know which entry they mean. The reply says what changed.
 C) Anything else: a greeting, a question, a report, a search, advice. Answer in "reply" with no entries, edits or deletes.
    A time can be set with "time" ("HH:MM"); "a bit before / after" another saved entry means a few minutes from that entry's time.
    If the same money was saved twice by mistake (same item and amount on two days, and they say it happened once), keep the one on
@@ -102,11 +105,20 @@ C) Anything else: a greeting, a question, a report, a search, advice. Answer in 
 If it is not clear which saved entry they mean, ask one short question and change nothing. But when they say "you check" /
 "tum check kar lo" / "jo date usme hai", decide yourself from the data (dates in notes, the conversation, the entry list) and act;
 don't ask the same question twice.
-"[these entries: n=...]" after a message in the conversation tells you exactly which saved entries that message added.
+"[these entries: id=...]" after a message in the conversation tells you exactly which saved entries that message added.
+Never show ids or "n=" to the person; describe entries by date, item and amount.
 For "find duplicates" list the pairs from "Possible duplicates" that really look the same (item, note, person), and ask whether to
-delete the extra ones; when they agree, put those n in "delete".
+delete the extra ones; when they agree, put those ids in "delete".
 Never say you added, changed or deleted something unless it is in "entries", "edits" or "delete" of THIS answer.
 If you could not do it, say so plainly and what you need.
+
+Long stories about money with a person (who paid what for whom, what was kept, what was sent back):
+- Work it out in "work": list every amount, who it belongs to, and the running balance with that person.
+- Then fix the ledger to match: wrong kinds become loans with that person (gave / took / got_back / paid_back),
+  things they paid for you become expenses (with the right category) plus "took" from that person, and so on.
+- Put new money in "entries" and changes to saved entries in "edits" / "delete", all in one answer, and say in "reply"
+  the final balance with that person ("Imran owes you X" or "you owe Imran X") and what you changed.
+- Never ask the person to repeat details they already gave in the conversation; use them.
 
 Getting numbers right (most important):
 - For any total, average, comparison or balance, take the number from EXACT FIGURES when it is there. Don't re-add entries.
@@ -148,11 +160,12 @@ $conversation
 
 Latest message: "$said"
 
-Return ONLY JSON: {"work":"","reply":"","entries":[],"edits":[{"n":1,"type":"","amount":0,"category":"","item":"","qty":0,"person":"","date":"YYYY-MM-DD","time":"","note":""}],"delete":[],"remember":[],"forget":[]}
+Return ONLY JSON: {"work":"","reply":"","entries":[],"edits":[{"id":"","type":"","amount":0,"category":"","item":"","qty":0,"person":"","date":"YYYY-MM-DD","time":"","note":""}],"delete":[],"remember":[],"forget":[]}
 ("work" is your private scratch space for working out numbers; the person never sees it. edits and delete are [] unless case B.)
 """.trim()
         val json = try {
-            JSONObject(request(prompt, key.trim(), store))
+            // The chat needs real reasoning (stories, settlements, corrections), so it uses the stronger Flash model.
+            JSONObject(request(prompt, key.trim(), store, prefer = CHAT_MODEL))
         } catch (e: Failure) {
             throw e
         } catch (e: Exception) {
@@ -221,7 +234,7 @@ ${entryRules()}
 Return ONLY JSON: {"entries":[{"type":"","amount":0,"category":"","item":"","qty":0,"unit":"","rate":0,"person":"","date":"YYYY-MM-DD","time":"","note":""}]}
 """.trim()
         val json = try {
-            request(prompt, key.trim(), store, mime to data)
+            request(prompt, key.trim(), store, mime to data, prefer = CHAT_MODEL)
         } catch (e: Failure) {
             throw e
         } catch (e: Exception) {
@@ -459,7 +472,8 @@ If nothing matches, return {"edits":[],"delete":[],"message":"I couldn't find th
         val edits = json.optJSONArray("edits") ?: JSONArray()
         for (i in 0 until edits.length()) {
             val o = edits.optJSONObject(i) ?: continue
-            val old = recent.getOrNull(o.optInt("n", 0) - 1) ?: continue
+            val byCode = o.optString("id").trim().takeIf { it.isNotEmpty() }?.let { c -> recent.firstOrNull { Accounts.code(it) == c } }
+            val old = byCode ?: recent.getOrNull(o.optInt("n", 0) - 1) ?: continue
             var e = old
             if (o.has("type")) typeNames.entries.firstOrNull { it.value == o.optString("type") }?.let { e = e.copy(type = it.key) }
             if (o.has("amount")) o.optDouble("amount").takeIf { !it.isNaN() && it > 0 }?.let { e = e.copy(amount = it) }
@@ -504,7 +518,11 @@ If nothing matches, return {"edits":[],"delete":[],"message":"I couldn't find th
             if (e != old) changed += old to e
         }
         val del = json.optJSONArray("delete") ?: JSONArray()
-        val deleted = (0 until del.length()).mapNotNull { recent.getOrNull(del.optInt(it, 0) - 1) }
+        val deleted = (0 until del.length()).mapNotNull { i ->
+            val v = del.opt(i)
+            if (v is String && v.toIntOrNull() == null) recent.firstOrNull { Accounts.code(it) == v.trim() }
+            else recent.getOrNull((v?.toString()?.toIntOrNull() ?: 0) - 1)
+        }.distinctBy { it.id }
             .filter { d -> changed.none { it.first.id == d.id } }
         return EditPlan(changed, deleted, message)
     }
@@ -512,15 +530,15 @@ If nothing matches, return {"edits":[],"delete":[],"message":"I couldn't find th
 
     /** Sends [prompt] to the first model that answers and returns its JSON text. */
     /** [file] is an attached image or PDF: its media type and base64 data. */
-    private fun request(prompt: String, key: String, store: Store, file: Pair<String, String>? = null): String {
-        val first = store.aiModel.takeIf { it in MODELS }
+    private fun request(prompt: String, key: String, store: Store, file: Pair<String, String>? = null, prefer: String? = null): String {
+        val first = prefer ?: store.aiModel.takeIf { it in MODELS }
         val order = listOfNotNull(first) + MODELS.filter { it != first }
         var lastError = "AI did not answer"
         for (model in order) {
             val (code, body) = call(model, key, prompt, file)
             when (code) {
                 200 -> {
-                    store.aiModel = model
+                    if (prefer == null) store.aiModel = model
                     return readText(body)
                 }
                 400, 401, 403 -> {

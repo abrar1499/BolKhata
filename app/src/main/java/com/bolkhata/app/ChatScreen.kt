@@ -54,15 +54,18 @@ fun ChatScreen(
     importDupes: Set<String> = emptySet(),
     onAddImports: (List<Entry>) -> Unit = {},
     onDropImports: () -> Unit = {},
-    onUpdateSaved: () -> Unit = {}
+    onUpdateSaved: () -> Unit = {},
+    pendingChanges: List<String> = emptyList(),
+    onApplyChanges: () -> Unit = {},
+    onCancelChanges: () -> Unit = {}
 ) {
     var confirmClear by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val byId = remember(entries) { entries.associateBy { it.id } }
     val itemCount = messages.size + (if (messages.isEmpty()) 1 else 0) + (if (loading) 1 else 0) +
-        (if (suggestions.isNotEmpty()) 1 else 0) + (if (imports.isNotEmpty()) 1 else 0)
+        (if (suggestions.isNotEmpty()) 1 else 0) + (if (imports.isNotEmpty()) 1 else 0) + (if (pendingChanges.isNotEmpty()) 1 else 0)
 
-    LaunchedEffect(messages.size, loading, suggestions.size, imports.size) {
+    LaunchedEffect(messages.size, loading, suggestions.size, imports.size, pendingChanges.size) {
         if (itemCount > 0) listState.animateScrollToItem(itemCount - 1)
     }
 
@@ -150,6 +153,29 @@ fun ChatScreen(
                         CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                         Spacer(Modifier.width(10.dp))
                         Text("Thinking…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+            if (pendingChanges.isNotEmpty()) {
+                item(key = "chat-changes") {
+                    Column(
+                        Modifier
+                            .fillMaxWidth(0.92f)
+                            .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 6.dp, bottomEnd = 18.dp))
+                            .background(MaterialTheme.colorScheme.surface)
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text("Apply these changes?", color = OrangeOwe, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        pendingChanges.forEach { line ->
+                            Text(line, fontSize = 13.sp, lineHeight = 18.sp, color = MaterialTheme.colorScheme.onSurface)
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = onApplyChanges, shape = RoundedCornerShape(12.dp), modifier = Modifier.weight(1f)) {
+                                Text("Apply")
+                            }
+                            OutlinedButton(onClick = onCancelChanges, shape = RoundedCornerShape(12.dp)) { Text("Cancel") }
+                        }
                     }
                 }
             }
