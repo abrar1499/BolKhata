@@ -194,8 +194,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             Commands.Action.EDIT -> { results = c.query to true; people = null }
             Commands.Action.DELETE -> askDelete(c.query, matchEntries(entries, c.query))
             Commands.Action.CLEAR_ALL -> {
-                if (entries.isEmpty()) toast("Khata is already empty")
-                else confirm = "Delete ALL ${entries.size} entries? This clears the whole khata." to entries.map { it.id }.toSet()
+                if (entries.isEmpty()) toast("There are no entries to delete")
+                else confirm = "Delete ALL ${entries.size} entries? This removes every entry." to entries.map { it.id }.toSet()
             }
         }
         return true
@@ -344,12 +344,12 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         } else null
         val target = matched ?: if (st.keywords.isEmpty() && (latestRef || st.mentionsMoney)) candidates.firstOrNull() else null
         if (target == null) {
-            toast("I couldn't match that payment to an entry. Mention the item or person, e.g. \"Kachi eint ki payment receive nahi hui\".")
+            toast("I couldn't match that payment to an entry. Mention the item or person, e.g. \"payment for kachi eint not received\".")
             return true
         }
         val who = target.person.ifBlank { st.person }
         if (!st.paid && who.isBlank() && target.type == Type.PURCHASE) {
-            toast("Supplier ka naam bhi batao, e.g. \"last purchase ki payment abhi nahi di, supplier Aslam hai\".")
+            toast("Please also say the supplier's name, e.g. \"last purchase not paid yet, supplier Aslam\".")
             return true
         }
         val updated = target.copy(paid = st.paid, person = who)
@@ -405,7 +405,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         val hasEntryRef = normalizedWords.any { it in setOf("entry", "entries", "record", "transaction") }
         val vagueEdit = hasEditVerb && hasEntryRef && text.none { it.isDigit() } && normalizedWords.all { it in genericEditWords }
         if (vagueEdit) {
-            toast("Kaunsi entry aur kya change karna hai? Example: \"last entry 500 nahi 400 thi\" or \"petrol wali entry ki category food kar do\".")
+            toast("Which entry, and what should change? For example: \"last entry was 400 not 500\" or \"change petrol entry category to food\".")
             return
         }
         // Process payment-status statements before stock questions, generic edit commands, or the new-entry parser.
@@ -696,7 +696,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             val said = guesses.maxByOrNull { it.second }?.first.orEmpty()
             if (said.isNotBlank()) {
                 if (voiceForChat) chatInput(said) else handleText(said)
-            } else toast("Awaaz samajh nahi aayi. Mic dobara dabao aur thora aahista bolo.")
+            } else toast("Couldn't catch that. Tap the mic again and speak a little slower.")
         }
     }
 

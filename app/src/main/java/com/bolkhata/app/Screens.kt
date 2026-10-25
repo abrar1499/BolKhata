@@ -813,7 +813,7 @@ private data class StockReportRow(
 
 enum class ReportKind(val label: String) {
     CASH_OUT("Cash Out"), CASH_IN("Cash In"), SALES("Sales"), PURCHASES("Purchases"),
-    STOCK("Stock"), PROFIT("Profit"), CASH_BALANCE("Cash Balance"), DUES("Baqaya")
+    STOCK("Stock"), PROFIT("Profit"), CASH_BALANCE("Cash Balance"), DUES("Dues")
 }
 
 private fun Entry.isCashInFlow(): Boolean = when (type) {
@@ -1621,7 +1621,7 @@ fun ResultsScreen(
         item {
             ScreenTitle(
                 when {
-                    person != null -> "$person's khata"
+                    person != null -> "$person's account"
                     editMode -> "Edit: $query"
                     else -> "Search: $query"
                 },
