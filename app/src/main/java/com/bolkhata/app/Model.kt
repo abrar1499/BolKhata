@@ -62,7 +62,9 @@ data class ChatMessage(
     val id: String,
     val isUser: Boolean,
     val text: String,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    /** Entries this message saved, shown as a card with Undo. */
+    val entryIds: List<String> = emptyList()
 )
 
 /** Saves entries on the phone itself (no internet needed). */
@@ -113,7 +115,10 @@ class Store(context: Context) {
                     id = o.optString("id").ifBlank { "chat-" + i + "-" + o.optLong("timestamp", now()) },
                     isUser = o.optBoolean("isUser"),
                     text = text,
-                    timestamp = o.optLong("timestamp", now())
+                    timestamp = o.optLong("timestamp", now()),
+                    entryIds = o.optJSONArray("entryIds")?.let { ids ->
+                        (0 until ids.length()).map { ids.optString(it) }.filter { it.isNotBlank() }
+                    } ?: emptyList()
                 )
             }
         }.takeLast(100)
@@ -130,6 +135,7 @@ class Store(context: Context) {
                     .put("isUser", message.isUser)
                     .put("text", message.text.take(8000))
                     .put("timestamp", message.timestamp)
+                    .put("entryIds", JSONArray(message.entryIds))
             )
         }
         prefs.edit().putString("chatMessages", arr.toString()).apply()

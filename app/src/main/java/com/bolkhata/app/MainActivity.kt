@@ -74,7 +74,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-enum class Tab { HOME, CHAT, ENTRIES, REPORTS, TRASH, SETTINGS }
+enum class Tab { HOME, STOCK, CHAT, ENTRIES, REPORTS, TRASH, SETTINGS }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -101,6 +101,11 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var reviewing by remember { mutableStateOf(false) }
     var bankOn by remember { mutableStateOf(BankListener.isEnabled(context)) }
     var bankHelp by remember { mutableStateOf(false) }
+    // A sale or purchase opened from the Stock tab, waiting to be confirmed in the form.
+    var trade by remember { mutableStateOf<Entry?>(null) }
+    // Ids of entries before a chat message was handled; new entries after that are shown in the chat.
+    var chatWatch by remember { mutableStateOf<Set<String>?>(null) }
+    var voiceForChat by remember { mutableStateOf(false) }
 
     DisposableEffect(Unit) {
         val stop = store.watchSuggestions { suggestions = store.loadSuggestions() }
@@ -197,18 +202,20 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     val activeKey = aiKey.ifBlank { BuildConfig.GEMINI_KEY }
 
     /** Sends a question to the read-only AI chat, with recent conversation context. */
-    fun sendChat(text: String) {
+    fun sendChat(text: String, addUser: Boolean = true) {
         val question = text.trim()
         if (question.isEmpty() || chatLoading) return
         val history = chatMessages.takeLast(12)
-        val userMessage = ChatMessage(
-            id = "chat-" + System.currentTimeMillis() + "-" + System.nanoTime(),
-            isUser = true,
-            text = question
-        )
-        val next = chatMessages + userMessage
-        chatMessages = next
-        store.saveChatMessages(next)
+        if (addUser) {
+            val userMessage = ChatMessage(
+                id = "chat-" + System.currentTimeMillis() + "-" + System.nanoTime(),
+                isUser = true,
+                text = question
+            )
+            val next = chatMessages + userMessage
+            chatMessages = next
+            store.saveChatMessages(next)
+        }
         chatLoading = true
         scope.launch {
             try {
@@ -479,6 +486,71 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         }
     }
 
+    /** Adds a message to the chat and keeps it on the phone. */
+    fun postChat(text: String, isUser: Boolean, entryIds: List<String> = emptyList()) {
+        val updated = chatMessages + ChatMessage(
+            id = "chat-" + System.currentTimeMillis() + "-" + System.nanoTime(),
+            isUser = isUser,
+            text = text,
+            entryIds = entryIds
+        )
+        chatMessages = updated
+        store.saveChatMessages(updated)
+    }
+
+    // When a chat message adds entries, show them in the chat as a saved card with Undo.
+    LaunchedEffect(entries) {
+        val before = chatWatch ?: return@LaunchedEffect
+        val added = entries.filter { it.id !in before }
+        if (added.isNotEmpty()) {
+            chatWatch = null
+            postChat(
+                "✓ " + added.size + " " + (if (added.size == 1) "entry" else "entries") + " saved",
+                isUser = false,
+                entryIds = added.map { it.id }
+            )
+        }
+    }
+
+    /**
+     * Chat input: questions are answered (offline first, then AI), everything else goes through the
+     * same reader as the home screen, so entries land in the khata straight away.
+     */
+    fun chatInput(raw: String) {
+        val text = raw.trim()
+        if (text.isEmpty() || chatLoading) return
+        val roman = runCatching { Translit.toRoman(text) }.getOrDefault(text)
+        val isQuestion = roman.endsWith("?") || runCatching { Questions.isQuestion(roman) }.getOrDefault(false)
+        postChat(text, isUser = true)
+        if (isQuestion) {
+            val offline = runCatching { Questions.answer(roman, entries, currency) }.getOrNull()
+            if (activeKey.isNotBlank()) {
+                sendChat(text, addUser = false)
+            } else if (offline != null) {
+                postChat(offline.text, isUser = false)
+            } else {
+                postChat("Turn on AI in Settings to ask questions like this.", isUser = false)
+            }
+            return
+        }
+        val token = entries.map { it.id }.toSet()
+        chatWatch = token
+        handleText(text)
+        // Stop waiting if nothing was added (a command, an edit, or a form that was cancelled).
+        scope.launch {
+            kotlinx.coroutines.delay(60_000)
+            if (chatWatch === token) chatWatch = null
+        }
+    }
+
+    /** One tap from the chat chips: the same entry again, dated now. */
+    fun quickAdd(e: Entry) {
+        val now = System.currentTimeMillis()
+        val copy = e.copy(id = "e" + System.nanoTime(), date = now, createdAt = now, person = if (withPerson(e)) e.person else "")
+        save(listOf(copy) + entries)
+        postChat("✓ 1 entry saved", isUser = false, entryIds = listOf(copy.id))
+    }
+
     /** Rank alternatives by how well they fit khata commands, not just their list position. */
     fun voiceGuessScore(text: String, confidence: Float?): Int {
         var score = confidence?.takeIf { it >= 0f }?.let { (it * 20f).toInt() } ?: 0
@@ -515,12 +587,14 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             }.filter { it.first.isNotBlank() }
             // Score every alternative: the first transcript can be fluent but still be the wrong words.
             val said = guesses.maxByOrNull { it.second }?.first.orEmpty()
-            if (said.isNotBlank()) handleText(said)
-            else toast("Awaaz samajh nahi aayi. Mic dobara dabao aur thora aahista bolo.")
+            if (said.isNotBlank()) {
+                if (voiceForChat) chatInput(said) else handleText(said)
+            } else toast("Awaaz samajh nahi aayi. Mic dobara dabao aur thora aahista bolo.")
         }
     }
 
-    fun startVoice() {
+    fun startVoice(forChat: Boolean = false) {
+        voiceForChat = forChat
         val hints = buildList {
             addAll(entries.take(30).flatMap { listOf(it.item, it.person) })
             addAll(listOf(
@@ -602,7 +676,14 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     ) {
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
-        bottomBar = { if (tab != Tab.CHAT) InputBar(onSend = { handleText(it) }, onMic = { startVoice() }) },
+        bottomBar = {
+            val main = results == null && people == null
+            if (main && tab == Tab.CHAT) {
+                InputBar(onSend = { chatInput(it) }, onMic = { startVoice(forChat = true) }, placeholder = "Speak, type or ask…")
+            } else {
+                InputBar(onSend = { handleText(it) }, onMic = { startVoice() })
+            }
+        },
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { pad ->
@@ -625,7 +706,12 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     newVersion = null, progress = progress, onUpdate = { startUpdate() },
                     onAdd = { adding = true }, onMenu = { openMenu() }, onSearch = { searching = true }, onEdit = { editing = it },
                     onPeople = { people = it }, onReports = { tab = Tab.REPORTS }, onSeeAll = { tab = Tab.ENTRIES },
-                    bankCount = suggestions.size, onReviewBank = { reviewing = true }
+                    chatBadge = suggestions.size, onTab = { tab = it }
+                )
+                tab == Tab.STOCK -> StockScreen(
+                    entries = entries, currency = currency, chatBadge = suggestions.size,
+                    onTab = { tab = it }, onMenu = { openMenu() },
+                    onTrade = { trade = it }, onReports = { tab = Tab.REPORTS }
                 )
                 tab == Tab.ENTRIES -> TransactionsScreen(entries, currency, onEdit = { editing = it }, onAdd = { adding = true }, onMenu = { openMenu() })
                 tab == Tab.REPORTS -> ReportsScreen(entries, currency, onMenu = { openMenu() })
@@ -646,17 +732,54 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         toast("Trash emptied")
                     }
                 )
-                tab == Tab.CHAT -> ChatScreen(
-                    messages = chatMessages,
-                    loading = chatLoading,
-                    onMenu = { openMenu() },
-                    onSend = { sendChat(it) },
-                    onClear = {
-                        chatMessages = emptyList()
-                        store.saveChatMessages(emptyList())
-                        toast("Chat history cleared")
-                    }
-                )
+                tab == Tab.CHAT -> {
+                    val monthStart = java.util.Calendar.getInstance().apply {
+                        set(java.util.Calendar.DAY_OF_MONTH, 1)
+                        set(java.util.Calendar.HOUR_OF_DAY, 0)
+                        set(java.util.Calendar.MINUTE, 0)
+                        set(java.util.Calendar.SECOND, 0)
+                        set(java.util.Calendar.MILLISECOND, 0)
+                    }.timeInMillis
+                    val monthSpent = entries.filter { it.date >= monthStart && it.type == Type.KHARCHA }.sumOf { it.amount }
+                    val monthName = java.text.SimpleDateFormat("MMM", java.util.Locale.US).format(java.util.Date())
+                    val quick = entries
+                        .filter { it.type == Type.KHARCHA && it.amount > 0 && it.date >= System.currentTimeMillis() - 60L * 86_400_000L }
+                        .groupBy { quickLabel(it).lowercase() + "|" + it.amount }
+                        .entries.sortedByDescending { it.value.size }
+                        .take(4).map { g -> g.value.maxBy { it.date } }
+                    ChatScreen(
+                        messages = chatMessages,
+                        loading = chatLoading,
+                        entries = entries,
+                        currency = currency,
+                        subtitle = "$monthName · ${fmt(monthSpent)} $currency spent",
+                        suggestions = suggestions,
+                        quick = quick,
+                        showStock = entries.any { isTrade(it.type) },
+                        onTab = { tab = it },
+                        onMenu = { openMenu() },
+                        onSend = { chatInput(it) },
+                        onClear = {
+                            chatMessages = emptyList()
+                            store.saveChatMessages(emptyList())
+                            toast("Chat history cleared")
+                        },
+                        onUndo = { ids -> moveToTrash(ids.toSet()) },
+                        onEditEntry = { editing = it },
+                        onAddSuggestions = { list ->
+                            val added = list.mapIndexed { i, e -> e.copy(id = "e" + System.nanoTime() + i) }
+                            save(added + entries)
+                            dropSuggestions(list.map { it.id }.toSet())
+                            postChat(
+                                "✓ " + added.size + " bank " + (if (added.size == 1) "payment" else "payments") + " added",
+                                isUser = false,
+                                entryIds = added.map { it.id }
+                            )
+                        },
+                        onIgnoreSuggestions = { ids -> dropSuggestions(ids) },
+                        onQuick = { quickAdd(it) }
+                    )
+                }
                 else -> SettingsScreen(
                     name = name, currency = currency, lang = lang, dark = dark,
                     version = BuildConfig.VERSION_NAME, checking = checking,
@@ -938,6 +1061,26 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         )
     }
 
+    trade?.let { t ->
+        FormPopup(onDismiss = { trade = null }) {
+            EntryForm(
+                initial = t,
+                title = if (t.type == Type.SALE) "Sold " + t.item else "Bought " + t.item,
+                question = null,
+                askType = false,
+                currency = currency,
+                saveLabel = "Save",
+                onSave = { e ->
+                    save(listOf(e) + entries)
+                    trade = null
+                    toast("✓ Saved")
+                },
+                onDelete = null,
+                onCancel = { trade = null }
+            )
+        }
+    }
+
     editing?.let { e ->
         FormPopup(onDismiss = { editing = null }) {
             EntryForm(
@@ -1004,7 +1147,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
 }
 
 @Composable
-private fun InputBar(onSend: (String) -> Unit, onMic: () -> Unit) {
+private fun InputBar(onSend: (String) -> Unit, onMic: () -> Unit, placeholder: String = "Type here…") {
     var text by rememberSaveable { mutableStateOf("") }
     fun send() {
         val t = text.trim()
@@ -1024,7 +1167,7 @@ private fun InputBar(onSend: (String) -> Unit, onMic: () -> Unit) {
             OutlinedTextField(
                 value = text,
                 onValueChange = { text = it },
-                placeholder = { Text("Type here…") },
+                placeholder = { Text(placeholder) },
                 modifier = Modifier.weight(1f),
                 maxLines = 3,
                 shape = RoundedCornerShape(26.dp),

@@ -63,8 +63,8 @@ fun HomeScreen(
     onPeople: (Boolean) -> Unit,
     onReports: () -> Unit,
     onSeeAll: () -> Unit,
-    bankCount: Int = 0,
-    onReviewBank: () -> Unit = {}
+    chatBadge: Int = 0,
+    onTab: (Tab) -> Unit = {}
 ) {
     var open by remember { mutableStateOf(setOf("today")) }
     fun toggle(k: String) {
@@ -72,19 +72,21 @@ fun HomeScreen(
     }
 
     val now = Calendar.getInstance()
+    val nowMs = System.currentTimeMillis()
     fun inMonth(ms: Long) = cal(ms).let { it.get(Calendar.YEAR) == now.get(Calendar.YEAR) && it.get(Calendar.MONTH) == now.get(Calendar.MONTH) }
-    fun inYear(ms: Long) = cal(ms).get(Calendar.YEAR) == now.get(Calendar.YEAR)
 
     val monthSpent = entries.filter { it.isCashOutFlow() && inMonth(it.date) }.sumOf { it.amount }
     val monthIncome = entries.filter { it.isCashInFlow() && inMonth(it.date) }.sumOf { it.amount }
-    // Shop and business cards appear only once sales or purchases are used.
+    // Shop and business parts appear only once sales or purchases are used.
     val trading = entries.any { isTrade(it.type) }
-    val todaySales = entries.filter { it.type == Type.SALE && sameDay(it.date, System.currentTimeMillis()) }.sumOf { it.amount }
-    val monthProfit = profitBreakdown(entries, entries.filter { inMonth(it.date) }).netProfit
-    val stockLines = if (trading) stock(entries).filter { kotlin.math.abs(it.qty) > 0.0001 } else emptyList()
+    val todayEntries = entries.filter { sameDay(it.date, nowMs) }
+    val todaySales = todayEntries.filter { it.type == Type.SALE }.sumOf { it.amount }
+    val todayBought = todayEntries.filter { it.type == Type.PURCHASE }.sumOf { it.amount }
+    val todayProfit = profitBreakdown(entries, todayEntries).netProfit
     val bal = balances(entries)
     val receive = bal.values.filter { it > 0 }.sum()
     val pay = -bal.values.filter { it < 0 }.sum()
+    val cashInHand = entries.filter { it.isCashInFlow() }.sumOf { it.amount } - entries.filter { it.isCashOutFlow() }.sumOf { it.amount }
     val hour = now.get(Calendar.HOUR_OF_DAY)
     val greeting = when {
         hour < 12 -> "Good morning"
@@ -99,7 +101,7 @@ fun HomeScreen(
                 Box(
                     Modifier
                         .fillMaxWidth()
-                        .height(160.dp)
+                        .height(214.dp)
                         .clip(RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp))
                 ) { HeroBackground(Modifier.matchParentSize()) }
                 Column(Modifier.padding(horizontal = 16.dp).padding(top = 14.dp)) {
@@ -130,17 +132,20 @@ fun HomeScreen(
                             modifier = Modifier.clip(CircleShape).background(LocalHeader.current.chip)
                         ) { Icon(Icons.Filled.Add, contentDescription = "Add manually", tint = LocalHeader.current.on) }
                     }
-                    Spacer(Modifier.height(18.dp))
+                    Spacer(Modifier.height(12.dp))
+                    TabSwitcher(Tab.HOME, trading, chatBadge, onTab)
+                    Spacer(Modifier.height(14.dp))
                     Panel(Modifier.fillMaxWidth(), onClick = onReports, padding = 12.dp) {
                         Text("In $monthName", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(8.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            // Money going out points up, money coming in points down.
                             MainSummaryTile(
-                                "Expense", moneyA(currency, monthSpent), Icons.Filled.ArrowDownward, RedSpend,
+                                "Expense", moneyA(currency, monthSpent), Icons.Filled.ArrowUpward, RedSpend,
                                 Modifier.weight(1f)
                             ) { onReports() }
                             MainSummaryTile(
-                                "Income", moneyA(currency, monthIncome), Icons.Filled.ArrowUpward, GreenIn,
+                                "Income", moneyA(currency, monthIncome), Icons.Filled.ArrowDownward, GreenIn,
                                 Modifier.weight(1f)
                             ) { onReports() }
                         }
@@ -148,48 +153,39 @@ fun HomeScreen(
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             MiniTile(
                                 "To pay", moneyA(currency, pay), Icons.Filled.Remove, OrangeOwe, Modifier.weight(1f),
-                                valueSize = 10, compact = true
+                                valueSize = 12, compact = true
                             ) { onPeople(false) }
                             MiniTile(
                                 "To receive", moneyA(currency, receive), Icons.Filled.Add, GreenIn, Modifier.weight(1f),
-                                valueSize = 10, compact = true
+                                valueSize = 12, compact = true
                             ) { onPeople(true) }
                             MiniTile(
-                                "Sales today", moneyA(currency, todaySales), Icons.Filled.Receipt, Cat.SALES.let { catColor(it) },
-                                Modifier.weight(1f), valueSize = 10, compact = true
-                            ) { onSeeAll() }
-                            MiniTile(
-                                "Est. profit", moneyA(currency, monthProfit), if (monthProfit >= 0) Icons.Filled.TrendingUp else Icons.Filled.TrendingDown,
-                                if (monthProfit >= 0) GreenIn else RedSpend, Modifier.weight(1f),
-                                valueSize = 9, valueColor = if (monthProfit >= 0) GreenIn else RedSpend,
+                                "Cash in hand", moneyA(currency, cashInHand), Icons.Filled.AccountBalanceWallet,
+                                MaterialTheme.colorScheme.onSurfaceVariant, Modifier.weight(1f),
+                                valueSize = 12, valueColor = if (cashInHand >= 0) Color.Unspecified else RedSpend,
                                 compact = true
-                            ) { onReports() }
+                            ) { onSeeAll() }
                         }
                     }
                 }
             }
         }
 
-        if (bankCount > 0) {
+        if (trading) {
             item {
                 Panel(
-                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
-                    onClick = onReviewBank, padding = 12.dp
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 12.dp),
+                    onClick = { onTab(Tab.STOCK) }, padding = 12.dp
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            Modifier.size(36.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
-                            contentAlignment = Alignment.Center
-                        ) { Text("🔔", fontSize = 18.sp) }
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                "$bankCount bank " + (if (bankCount == 1) "payment" else "payments") + " found",
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Text("Tap to review and add", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        Text("Review ›", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                        BizFigure("↓ Sales", fmt(todaySales), GreenIn, Modifier.weight(1f))
+                        BizFigure("↑ Bought", fmt(todayBought), RedSpend, Modifier.weight(1f))
+                        BizFigure(
+                            "Profit", (if (todayProfit > 0) "+" else "") + fmt(todayProfit),
+                            MaterialTheme.colorScheme.onSurfaceVariant, Modifier.weight(1f),
+                            valueColor = if (todayProfit >= 0) GreenIn else RedSpend
+                        )
+                        Text("Stock ›", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
                 }
             }
@@ -212,68 +208,39 @@ fun HomeScreen(
             }
         }
 
-        item { Spacer(Modifier.height(6.dp)) }
+        item { Spacer(Modifier.height(10.dp)) }
 
-        val nowMs = System.currentTimeMillis()
         val sortedAll = entries.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt })
         val todayList = sortedAll.filter { sameDay(it.date, nowMs) }
         val dayGroups = sortedAll.filter { !sameDay(it.date, nowMs) && inMonth(it.date) }.groupBy { dayKey(it.date) }
         val monthGroups = sortedAll.filter { !inMonth(it.date) }.groupBy { monthKey(it.date) }
 
-        if (stockLines.isNotEmpty()) {
+        if (entries.isEmpty()) {
             item {
-                Box(Modifier.padding(horizontal = 16.dp).padding(top = 6.dp)) {
-                    SectionHeader("Stock", stockLines.size, "stock" in open, null) { toggle("stock") }
-                }
-            }
-            if ("stock" in open) {
-                item {
-                    Panel(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), padding = 12.dp) {
-                        stockLines.sortedBy { it.name.lowercase() }.forEach { line ->
-                            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Text("📦", fontSize = 16.sp)
-                                Spacer(Modifier.width(10.dp))
-                                Text(line.name, Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
-                                Text(
-                                    fmt(line.qty) + (if (line.unit.isBlank()) "" else " " + line.unit),
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (line.qty < 0) RedSpend else MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                        }
-                        Text(
-                            "Bought or received minus sold or given. Tap an entry to fix a quantity.",
-                            fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
+                Text(
+                    "No entries yet. Tap the green mic and speak, or type below.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                )
             }
         }
 
-        item {
-            Box(Modifier.padding(horizontal = 16.dp).padding(top = 6.dp)) {
-                DailyCashHeader("Today", todayList.size, "today" in open, dailyCashSummary(entries, todayList), currency) { toggle("today") }
-            }
-        }
-        if ("today" in open) {
-            if (todayList.isEmpty()) {
-                item {
-                    Text(
-                        if (entries.isEmpty()) "No entries yet. Tap the green mic and speak, or type below."
-                        else "Nothing added today yet.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
-                    )
+        if (todayList.isNotEmpty()) {
+            item {
+                Box(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                    DailyCashHeader("Today", todayList.size, "today" in open, dailyCashSummary(entries, todayList), currency) { toggle("today") }
                 }
             }
-            items(todayList, key = { it.id }) { e ->
-                Box(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) { TxRow(e, currency) { onEdit(e) } }
+            if ("today" in open) {
+                items(todayList, key = { it.id }) { e ->
+                    Box(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) { TxRow(e, currency) { onEdit(e) } }
+                }
             }
         }
 
         dayGroups.forEach { (key, list) ->
             item(key = "dh-$key") {
-                Box(Modifier.padding(horizontal = 16.dp)) {
+                Box(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                     DailyCashHeader(dayLabel(list.first().date), list.size, key in open, dailyCashSummary(entries, list), currency) { toggle(key) }
                 }
             }
@@ -316,6 +283,69 @@ fun HomeScreen(
     }
 }
 
+/** Overview | Stock | Chat switch shown at the top of the main screens. Stock only appears for shops. */
+@Composable
+fun TabSwitcher(current: Tab, showStock: Boolean, chatBadge: Int, onTab: (Tab) -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(CircleShape)
+            .background(LocalHeader.current.chip)
+            .padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        TabSegment("Overview", current == Tab.HOME, 0, Modifier.weight(1f)) { onTab(Tab.HOME) }
+        if (showStock) TabSegment("Stock", current == Tab.STOCK, 0, Modifier.weight(1f)) { onTab(Tab.STOCK) }
+        TabSegment("Chat", current == Tab.CHAT, chatBadge, Modifier.weight(1f)) { onTab(Tab.CHAT) }
+    }
+}
+
+@Composable
+private fun TabSegment(label: String, selected: Boolean, badge: Int, modifier: Modifier, onClick: () -> Unit) {
+    Row(
+        modifier
+            .height(40.dp)
+            .clip(CircleShape)
+            .background(if (selected) MaterialTheme.colorScheme.surface else Color.Transparent)
+            .clickable { onClick() },
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            label,
+            color = if (selected) MaterialTheme.colorScheme.primary else LocalHeader.current.on,
+            fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.SemiBold,
+            fontSize = 14.sp
+        )
+        if (badge > 0) {
+            Spacer(Modifier.width(6.dp))
+            Box(
+                Modifier.clip(CircleShape).background(OrangeOwe).padding(horizontal = 7.dp, vertical = 1.dp),
+                contentAlignment = Alignment.Center
+            ) { Text(badge.toString(), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+        }
+    }
+}
+
+@Composable
+private fun BizFigure(label: String, value: String, labelColor: Color, modifier: Modifier, valueColor: Color = Color.Unspecified) {
+    Column(modifier) {
+        Text(label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = labelColor, maxLines = 1)
+        Text(value, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = valueColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** Small "↑ 214" / "↓ 50" pill used on day headers. */
+@Composable
+private fun FlowChip(text: String, color: Color) {
+    Box(
+        Modifier
+            .clip(CircleShape)
+            .background(color.copy(alpha = 0.12f))
+            .padding(horizontal = 9.dp, vertical = 4.dp)
+    ) { Text(text, color = color, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1) }
+}
+
 private fun dayKey(ms: Long): String = cal(ms).let { "d" + it.get(Calendar.YEAR) + "-" + it.get(Calendar.DAY_OF_YEAR) }
 private fun monthKey(ms: Long): String = cal(ms).let { "m" + it.get(Calendar.YEAR) + "-" + it.get(Calendar.MONTH) }
 private fun spentLabel(currency: String, list: List<Entry>): String? {
@@ -356,62 +386,37 @@ private fun DailyCashHeader(
     currency: String,
     onToggle: (() -> Unit)?
 ) {
-    Column(
+    Row(
         Modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(MaterialTheme.colorScheme.surface)
             .then(if (onToggle != null) Modifier.clickable { onToggle() } else Modifier)
-            .padding(horizontal = 10.dp, vertical = 10.dp)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(title, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-            Spacer(Modifier.width(8.dp))
-            Box(
-                Modifier
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer)
-                    .padding(horizontal = 7.dp, vertical = 3.dp)
-            ) {
-                Text(count.toString(), fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
-            }
-            Spacer(Modifier.weight(1f))
-            if (onToggle != null) {
-                Text(
-                    if (expanded) "⌃" else "⌄",
-                    fontSize = 18.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+        Text(title, fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1)
+        Spacer(Modifier.width(8.dp))
+        Box(
+            Modifier
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primaryContainer)
+                .padding(horizontal = 7.dp, vertical = 3.dp)
+        ) {
+            Text(count.toString(), fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
         }
-        if (expanded) {
-            Spacer(Modifier.height(6.dp))
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                DailyCashMetric("Out", summary.cashOut, currency, Icons.Filled.ArrowDownward, RedSpend, Modifier.weight(1f))
-                Box(
-                    Modifier
-                        .width(1.dp)
-                        .height(32.dp)
-                        .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
-                )
-                DailyCashMetric("In", summary.cashIn, currency, Icons.Filled.ArrowUpward, GreenIn, Modifier.weight(1f))
-                Box(
-                    Modifier
-                        .width(1.dp)
-                        .height(32.dp)
-                        .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
-                )
-                DailyCashMetric(
-                    "Cash In Hand",
-                    summary.cashInHand,
-                    currency,
-                    Icons.Filled.AccountBalanceWallet,
-                    MaterialTheme.colorScheme.onSurfaceVariant,
-                    Modifier.weight(1f),
-                    valueColor = if (summary.cashInHand >= 0) MaterialTheme.colorScheme.onSurface else RedSpend
-                )
-            }
+        Spacer(Modifier.weight(1f))
+        // Money out points up (red), money in points down (green). Only what happened that day is shown.
+        if (summary.cashOut > 0) FlowChip("↑ " + fmt(summary.cashOut), RedSpend)
+        if (summary.cashOut > 0 && summary.cashIn > 0) Spacer(Modifier.width(6.dp))
+        if (summary.cashIn > 0) FlowChip("↓ " + fmt(summary.cashIn), GreenIn)
+        if (onToggle != null) {
+            Spacer(Modifier.width(6.dp))
+            Text(
+                if (expanded) "⌃" else "⌄",
+                fontSize = 18.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
