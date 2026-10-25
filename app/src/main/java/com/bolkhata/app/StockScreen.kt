@@ -7,6 +7,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -14,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -86,7 +89,7 @@ fun StockScreen(
     val today = entries.filter { sameDay(it.date, nowMs) }
     val sales = today.filter { it.type == Type.SALE }.sumOf { it.amount }
     val bought = today.filter { it.type == Type.PURCHASE }.sumOf { it.amount }
-    val profit = profitBreakdown(entries, today).netProfit
+    val profit = profitBreakdown(entries, today).let { it.costedSalesAmount - it.costOfGoods }
     val stockList = stockItems(entries)
     val value = stockList.sumOf { if (it.line.qty > 0) it.line.qty * it.buyRate else 0.0 }
 
@@ -105,7 +108,7 @@ fun StockScreen(
                         Spacer(Modifier.width(8.dp))
                         Column(Modifier.weight(1f)) {
                             Text("Stock", color = LocalHeader.current.on, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                            Text("${stockList.size} items in stock", color = LocalHeader.current.on.copy(alpha = 0.8f), fontSize = 13.sp)
+                            Text(if (stockList.size == 1) "1 item in stock" else "${stockList.size} items in stock", color = LocalHeader.current.on.copy(alpha = 0.8f), fontSize = 13.sp)
                         }
                     }
                     Spacer(Modifier.height(12.dp))
@@ -115,8 +118,8 @@ fun StockScreen(
                         Text("Today in business", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(8.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            StockFigure("↓ Sales", fmt(sales), GreenIn, Modifier.weight(1f))
-                            StockFigure("↑ Bought", fmt(bought), RedSpend, Modifier.weight(1f))
+                            StockFigure("Sales", fmt(sales), GreenIn, Modifier.weight(1f), icon = Icons.Filled.ArrowDownward)
+                            StockFigure("Bought", fmt(bought), RedSpend, Modifier.weight(1f), icon = Icons.Filled.ArrowUpward)
                             StockFigure(
                                 "Profit", (if (profit > 0) "+" else "") + fmt(profit),
                                 MaterialTheme.colorScheme.onSurfaceVariant, Modifier.weight(1f),
@@ -200,24 +203,46 @@ private fun StockCard(s: StockItem, currency: String, onSold: () -> Unit, onBoug
             FilledTonalButton(
                 onClick = onSold, modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.filledTonalButtonColors(containerColor = GreenIn.copy(alpha = 0.14f), contentColor = GreenIn)
-            ) { Text("↓ Sold", fontWeight = FontWeight.Bold) }
+            ) {
+                Icon(Icons.Filled.ArrowDownward, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Sold", fontWeight = FontWeight.Bold)
+            }
             FilledTonalButton(
                 onClick = onBought, modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.filledTonalButtonColors(containerColor = RedSpend.copy(alpha = 0.12f), contentColor = RedSpend)
-            ) { Text("↑ Bought", fontWeight = FontWeight.Bold) }
+            ) {
+                Icon(Icons.Filled.ArrowUpward, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Bought", fontWeight = FontWeight.Bold)
+            }
         }
     }
 }
 
 @Composable
-private fun StockFigure(label: String, value: String, labelColor: Color, modifier: Modifier, valueColor: Color = Color.Unspecified) {
+private fun StockFigure(
+    label: String,
+    value: String,
+    labelColor: Color,
+    modifier: Modifier,
+    valueColor: Color = Color.Unspecified,
+    icon: ImageVector? = null
+) {
     Column(
         modifier
             .clip(RoundedCornerShape(14.dp))
             .background(labelColor.copy(alpha = 0.08f))
             .padding(horizontal = 10.dp, vertical = 10.dp)
     ) {
-        Text(label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = labelColor, maxLines = 1)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (icon != null) {
+                Icon(icon, contentDescription = null, tint = labelColor, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(4.dp))
+            }
+            Text(label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = labelColor, maxLines = 1)
+        }
+        Spacer(Modifier.height(4.dp))
         Text(value, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = valueColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }

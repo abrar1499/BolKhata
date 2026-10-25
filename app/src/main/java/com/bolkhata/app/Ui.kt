@@ -1,5 +1,7 @@
 package com.bolkhata.app
 
+import androidx.compose.foundation.BorderStroke
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -371,11 +373,11 @@ fun Panel(
 ) {
     val shape = RoundedCornerShape(22.dp)
     if (onClick != null) {
-        Surface(onClick = onClick, modifier = modifier, shape = shape, color = MaterialTheme.colorScheme.surface, shadowElevation = 2.dp) {
+        Surface(onClick = onClick, modifier = modifier, shape = shape, color = MaterialTheme.colorScheme.surface, shadowElevation = 0.dp, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))) {
             Column(Modifier.padding(padding), content = content)
         }
     } else {
-        Surface(modifier = modifier, shape = shape, color = MaterialTheme.colorScheme.surface, shadowElevation = 2.dp) {
+        Surface(modifier = modifier, shape = shape, color = MaterialTheme.colorScheme.surface, shadowElevation = 0.dp, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))) {
             Column(Modifier.padding(padding), content = content)
         }
     }

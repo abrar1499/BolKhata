@@ -16,6 +16,8 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Menu
@@ -82,7 +84,7 @@ fun HomeScreen(
     val todayEntries = entries.filter { sameDay(it.date, nowMs) }
     val todaySales = todayEntries.filter { it.type == Type.SALE }.sumOf { it.amount }
     val todayBought = todayEntries.filter { it.type == Type.PURCHASE }.sumOf { it.amount }
-    val todayProfit = profitBreakdown(entries, todayEntries).netProfit
+    val todayProfit = profitBreakdown(entries, todayEntries).let { it.costedSalesAmount - it.costOfGoods }
     val bal = balances(entries)
     val receive = bal.values.filter { it > 0 }.sum()
     val pay = -bal.values.filter { it < 0 }.sum()
@@ -178,14 +180,17 @@ fun HomeScreen(
                     onClick = { onTab(Tab.STOCK) }, padding = 12.dp
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        BizFigure("↓ Sales", fmt(todaySales), GreenIn, Modifier.weight(1f))
-                        BizFigure("↑ Bought", fmt(todayBought), RedSpend, Modifier.weight(1f))
+                        BizFigure("Sales", fmt(todaySales), GreenIn, Modifier.weight(1f), icon = Icons.Filled.ArrowDownward)
+                        BizFigure("Bought", fmt(todayBought), RedSpend, Modifier.weight(1f), icon = Icons.Filled.ArrowUpward)
                         BizFigure(
                             "Profit", (if (todayProfit > 0) "+" else "") + fmt(todayProfit),
                             MaterialTheme.colorScheme.onSurfaceVariant, Modifier.weight(1f),
                             valueColor = if (todayProfit >= 0) GreenIn else RedSpend
                         )
-                        Text("Stock ›", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Icon(
+                            Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Open stock",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                     }
                 }
             }
@@ -328,22 +333,44 @@ private fun TabSegment(label: String, selected: Boolean, badge: Int, modifier: M
 }
 
 @Composable
-private fun BizFigure(label: String, value: String, labelColor: Color, modifier: Modifier, valueColor: Color = Color.Unspecified) {
+private fun BizFigure(
+    label: String,
+    value: String,
+    labelColor: Color,
+    modifier: Modifier,
+    valueColor: Color = Color.Unspecified,
+    icon: ImageVector? = null
+) {
     Column(modifier) {
-        Text(label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = labelColor, maxLines = 1)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (icon != null) {
+                Box(
+                    Modifier.size(18.dp).clip(CircleShape).background(labelColor.copy(alpha = 0.14f)),
+                    contentAlignment = Alignment.Center
+                ) { Icon(icon, contentDescription = null, tint = labelColor, modifier = Modifier.size(12.dp)) }
+                Spacer(Modifier.width(5.dp))
+            }
+            Text(label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = labelColor, maxLines = 1)
+        }
+        Spacer(Modifier.height(2.dp))
         Text(value, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = valueColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
-/** Small "↑ 214" / "↓ 50" pill used on day headers. */
+/** Small out/in pill used on day headers: an arrow icon and the amount. */
 @Composable
-private fun FlowChip(text: String, color: Color) {
-    Box(
+private fun FlowChip(text: String, color: Color, icon: ImageVector) {
+    Row(
         Modifier
             .clip(CircleShape)
-            .background(color.copy(alpha = 0.12f))
-            .padding(horizontal = 9.dp, vertical = 4.dp)
-    ) { Text(text, color = color, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1) }
+            .background(color.copy(alpha = 0.10f))
+            .padding(start = 7.dp, end = 10.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(14.dp))
+        Spacer(Modifier.width(3.dp))
+        Text(text, color = color, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+    }
 }
 
 private fun dayKey(ms: Long): String = cal(ms).let { "d" + it.get(Calendar.YEAR) + "-" + it.get(Calendar.DAY_OF_YEAR) }
@@ -389,8 +416,9 @@ private fun DailyCashHeader(
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(22.dp))
             .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f), RoundedCornerShape(22.dp))
             .then(if (onToggle != null) Modifier.clickable { onToggle() } else Modifier)
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -407,15 +435,15 @@ private fun DailyCashHeader(
         }
         Spacer(Modifier.weight(1f))
         // Money out points up (red), money in points down (green). Only what happened that day is shown.
-        if (summary.cashOut > 0) FlowChip("↑ " + fmt(summary.cashOut), RedSpend)
+        if (summary.cashOut > 0) FlowChip(fmt(summary.cashOut), RedSpend, Icons.Filled.ArrowUpward)
         if (summary.cashOut > 0 && summary.cashIn > 0) Spacer(Modifier.width(6.dp))
-        if (summary.cashIn > 0) FlowChip("↓ " + fmt(summary.cashIn), GreenIn)
+        if (summary.cashIn > 0) FlowChip(fmt(summary.cashIn), GreenIn, Icons.Filled.ArrowDownward)
         if (onToggle != null) {
             Spacer(Modifier.width(6.dp))
-            Text(
-                if (expanded) "⌃" else "⌄",
-                fontSize = 18.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+            Icon(
+                if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                contentDescription = if (expanded) "Close" else "Open",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
