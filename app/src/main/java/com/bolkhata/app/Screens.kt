@@ -9,6 +9,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -249,27 +251,23 @@ fun HomeScreen(
 
         if (todayList.isNotEmpty()) {
             item {
-                Box(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                Box(Modifier.padding(horizontal = 16.dp)) {
                     DailyCashHeader("Today", todayList.size, "today" in open, dailyCashSummary(entries, todayList), currency) { toggle("today") }
                 }
             }
             if ("today" in open) {
-                items(todayList, key = { it.id }) { e ->
-                    Box(Modifier.padding(horizontal = 16.dp, vertical = 3.dp)) { TxRow(e, currency, showDate = false) { onEdit(e) } }
-                }
+                dayEntries(todayList, currency, onEdit)
             }
         }
 
         dayGroups.forEach { (key, list) ->
             item(key = "dh-$key") {
-                Box(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                Box(Modifier.padding(horizontal = 16.dp)) {
                     DailyCashHeader(dayLabel(list.first().date), list.size, key in open, dailyCashSummary(entries, list), currency) { toggle(key) }
                 }
             }
             if (key in open) {
-                items(list, key = { it.id }) { e ->
-                    Box(Modifier.padding(horizontal = 16.dp, vertical = 3.dp)) { TxRow(e, currency, showDate = false) { onEdit(e) } }
-                }
+                dayEntries(list, currency, onEdit)
             }
         }
 
@@ -296,9 +294,7 @@ fun HomeScreen(
                             )
                         }
                     }
-                    items(dayList, key = { it.id }) { e ->
-                        Box(Modifier.padding(horizontal = 16.dp, vertical = 3.dp)) { TxRow(e, currency, showDate = false) { onEdit(e) } }
-                    }
+                    dayEntries(dayList, currency, onEdit)
                 }
             }
         }
@@ -442,39 +438,78 @@ private fun DailyCashHeader(
     currency: String,
     onToggle: (() -> Unit)?
 ) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(22.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f), RoundedCornerShape(22.dp))
-            .then(if (onToggle != null) Modifier.clickable { onToggle() } else Modifier)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(title, fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1)
-        Spacer(Modifier.width(8.dp))
-        Box(
+    // A day is a plain label, not a card, so it never looks like an entry.
+    // An open day sits above its entries; a closed day is a single line with a divider.
+    Column(Modifier.fillMaxWidth()) {
+        Row(
             Modifier
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primaryContainer)
-                .padding(horizontal = 7.dp, vertical = 3.dp)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .then(if (onToggle != null) Modifier.clickable { onToggle() } else Modifier)
+                .padding(start = 4.dp, end = 0.dp, top = if (expanded) 16.dp else 11.dp, bottom = if (expanded) 8.dp else 11.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(count.toString(), fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                title,
+                fontWeight = if (expanded) FontWeight.ExtraBold else FontWeight.Bold,
+                fontSize = if (expanded) 17.sp else 15.sp,
+                maxLines = 1
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                if (count == 1) "1 entry" else "$count entries",
+                fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1
+            )
+            Spacer(Modifier.weight(1f))
+            // Money out points up (red), money in points down (green). Only what happened that day is shown.
+            if (summary.cashOut > 0) FlowChip(fmt(summary.cashOut), RedSpend, Icons.Filled.ArrowUpward)
+            if (summary.cashOut > 0 && summary.cashIn > 0) Spacer(Modifier.width(6.dp))
+            if (summary.cashIn > 0) FlowChip(fmt(summary.cashIn), GreenIn, Icons.Filled.ArrowDownward)
+            if (onToggle != null) {
+                Spacer(Modifier.width(4.dp))
+                Icon(
+                    if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                    contentDescription = if (expanded) "Close" else "Open",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
-        Spacer(Modifier.weight(1f))
-        // Money out points up (red), money in points down (green). Only what happened that day is shown.
-        if (summary.cashOut > 0) FlowChip(fmt(summary.cashOut), RedSpend, Icons.Filled.ArrowUpward)
-        if (summary.cashOut > 0 && summary.cashIn > 0) Spacer(Modifier.width(6.dp))
-        if (summary.cashIn > 0) FlowChip(fmt(summary.cashIn), GreenIn, Icons.Filled.ArrowDownward)
-        if (onToggle != null) {
-            Spacer(Modifier.width(6.dp))
-            Icon(
-                if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-                contentDescription = if (expanded) "Close" else "Open",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+        if (!expanded) {
+            HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+        }
+    }
+}
+
+/** All entries of one day inside a single card, with thin lines between them. */
+private fun LazyListScope.dayEntries(list: List<Entry>, currency: String, onEdit: (Entry) -> Unit) {
+    itemsIndexed(list, key = { _, e -> e.id }) { i, e ->
+        GroupedTxRow(e, currency, first = i == 0, last = i == list.lastIndex) { onEdit(e) }
+    }
+}
+
+@Composable
+private fun GroupedTxRow(e: Entry, currency: String, first: Boolean, last: Boolean, onClick: () -> Unit) {
+    val top = if (first) 20.dp else 0.dp
+    val bottom = if (last) 20.dp else 0.dp
+    val shape = RoundedCornerShape(topStart = top, topEnd = top, bottomStart = bottom, bottomEnd = bottom)
+    Column(
+        Modifier
+            .padding(horizontal = 16.dp)
+            .padding(bottom = if (last) 6.dp else 0.dp)
+            .fillMaxWidth()
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surface)
+            .clickable { onClick() }
+    ) {
+        if (!first) {
+            HorizontalDivider(
+                Modifier.padding(start = 59.dp),
+                thickness = 1.dp,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
             )
         }
+        TxRowContent(e, currency, showDate = false)
     }
 }
 

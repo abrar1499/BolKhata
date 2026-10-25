@@ -436,6 +436,14 @@ fun SectionHeader(title: String, count: Int?, expanded: Boolean, total: String? 
 
 @Composable
 fun TxRow(e: Entry, currency: String, showDate: Boolean = true, onClick: () -> Unit) {
+    Panel(Modifier.fillMaxWidth(), onClick = onClick, padding = 0.dp) {
+        TxRowContent(e, currency, showDate)
+    }
+}
+
+/** The inside of an entry row: icon, title, one line of details, amount. */
+@Composable
+fun TxRowContent(e: Entry, currency: String, showDate: Boolean) {
     val detail = qtyText(e).ifBlank {
         if ((isLoan(e.type) || isTrade(e.type)) && e.item.isNotBlank() && e.item != "Loans") e.item else e.note
     }
@@ -445,26 +453,24 @@ fun TxRow(e: Entry, currency: String, showDate: Boolean = true, onClick: () -> U
         timeLabel(e.createdAt),
         creditTag(e).takeIf { it.isNotEmpty() }
     ).joinToString(" · ")
-    Panel(Modifier.fillMaxWidth(), onClick = onClick, padding = 0.dp) {
-        Row(
-            Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            CatBubble(e.category, 36.dp)
-            Spacer(Modifier.width(11.dp))
-            Column(Modifier.weight(1f)) {
-                Text(entryTitle(e), fontWeight = FontWeight.SemiBold, fontSize = 15.sp, lineHeight = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(
-                    sub, fontSize = 12.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis
-                )
-            }
-            Spacer(Modifier.width(8.dp))
+    Row(
+        Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        CatBubble(e.category, 36.dp)
+        Spacer(Modifier.width(11.dp))
+        Column(Modifier.weight(1f)) {
+            Text(entryTitle(e), fontWeight = FontWeight.SemiBold, fontSize = 15.sp, lineHeight = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
-                moneyA(currency, e.amount, prefix(e.type)),
-                fontWeight = FontWeight.Bold, color = signColor(e.type), fontSize = 15.sp
+                sub, fontSize = 12.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1, overflow = TextOverflow.Ellipsis
             )
         }
+        Spacer(Modifier.width(8.dp))
+        Text(
+            moneyA(currency, e.amount, prefix(e.type)),
+            fontWeight = FontWeight.Bold, color = signColor(e.type), fontSize = 15.sp
+        )
     }
 }
 
