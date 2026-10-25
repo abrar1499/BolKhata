@@ -35,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -283,7 +284,7 @@ fun HomeScreen(
             if (key in open) {
                 list.groupBy { dayKey(it.date) }.forEach { (day, dayList) ->
                     item(key = "md-$key-$day") {
-                        Box(Modifier.padding(horizontal = 16.dp, vertical = 3.dp)) {
+                        Box(Modifier.padding(horizontal = 16.dp)) {
                             DailyCashHeader(
                                 dayLabel(dayList.first().date),
                                 dayList.size,
@@ -429,6 +430,14 @@ private fun dailyCashSummary(allEntries: List<Entry>, dayEntries: List<Entry>): 
     return DailyCashSummary(cashIn, cashOut, 0.0)
 }
 
+/** Neutral slate tones for day bars, so the red and green money chips stand out on any header theme. */
+@Composable
+private fun slateColors(): Triple<Color, Color, Color> {
+    val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    return if (dark) Triple(Color(0xFF2A313B), Color(0xFFE5E9EF), Color(0xFFAAB3BF))
+    else Triple(Color(0xFFECEFF3), Color(0xFF1F2A37), Color(0xFF4B5563))
+}
+
 @Composable
 private fun DailyCashHeader(
     title: String,
@@ -438,45 +447,40 @@ private fun DailyCashHeader(
     currency: String,
     onToggle: (() -> Unit)?
 ) {
-    // A day is a plain label, not a card, so it never looks like an entry.
-    // An open day sits above its entries; a closed day is a single line with a divider.
-    Column(Modifier.fillMaxWidth()) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .then(if (onToggle != null) Modifier.clickable { onToggle() } else Modifier)
-                .padding(start = 4.dp, end = 0.dp, top = if (expanded) 16.dp else 11.dp, bottom = if (expanded) 8.dp else 11.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                title,
-                fontWeight = if (expanded) FontWeight.ExtraBold else FontWeight.Bold,
-                fontSize = if (expanded) 17.sp else 15.sp,
-                maxLines = 1
+    // A day is a slate bar, never a white card, so it can't be mistaken for an entry.
+    // An open day's bar is the top of one card that holds its entries; a closed day is a single bar.
+    val (bar, ink, sub) = slateColors()
+    val shape = if (expanded) RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp) else RoundedCornerShape(16.dp)
+    Row(
+        Modifier
+            .padding(top = if (expanded) 12.dp else 8.dp)
+            .fillMaxWidth()
+            .clip(shape)
+            .background(bar)
+            .then(if (onToggle != null) Modifier.clickable { onToggle() } else Modifier)
+            .padding(start = 14.dp, end = 8.dp, top = 9.dp, bottom = 9.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(title, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, color = ink, maxLines = 1)
+        Spacer(Modifier.width(8.dp))
+        Text(
+            if (count == 1) "1 entry" else "$count entries",
+            fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = sub, maxLines = 1
+        )
+        Spacer(Modifier.weight(1f))
+        // Money out points up (red), money in points down (green). Only what happened that day is shown.
+        if (summary.cashOut > 0) FlowChip(fmt(summary.cashOut), RedSpend, Icons.Filled.ArrowUpward)
+        if (summary.cashOut > 0 && summary.cashIn > 0) Spacer(Modifier.width(6.dp))
+        if (summary.cashIn > 0) FlowChip(fmt(summary.cashIn), GreenIn, Icons.Filled.ArrowDownward)
+        if (onToggle != null) {
+            Spacer(Modifier.width(2.dp))
+            Icon(
+                if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                contentDescription = if (expanded) "Close" else "Open",
+                tint = ink
             )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                if (count == 1) "1 entry" else "$count entries",
-                fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1
-            )
-            Spacer(Modifier.weight(1f))
-            // Money out points up (red), money in points down (green). Only what happened that day is shown.
-            if (summary.cashOut > 0) FlowChip(fmt(summary.cashOut), RedSpend, Icons.Filled.ArrowUpward)
-            if (summary.cashOut > 0 && summary.cashIn > 0) Spacer(Modifier.width(6.dp))
-            if (summary.cashIn > 0) FlowChip(fmt(summary.cashIn), GreenIn, Icons.Filled.ArrowDownward)
-            if (onToggle != null) {
-                Spacer(Modifier.width(4.dp))
-                Icon(
-                    if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-                    contentDescription = if (expanded) "Close" else "Open",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-        if (!expanded) {
-            HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+        } else {
+            Spacer(Modifier.width(6.dp))
         }
     }
 }
@@ -490,7 +494,7 @@ private fun LazyListScope.dayEntries(list: List<Entry>, currency: String, onEdit
 
 @Composable
 private fun GroupedTxRow(e: Entry, currency: String, first: Boolean, last: Boolean, onClick: () -> Unit) {
-    val top = if (first) 20.dp else 0.dp
+    val top = 0.dp
     val bottom = if (last) 20.dp else 0.dp
     val shape = RoundedCornerShape(topStart = top, topEnd = top, bottomStart = bottom, bottomEnd = bottom)
     Column(
