@@ -237,6 +237,31 @@ object Parser {
 
     private val digitMult = Regex("""(\d[\d,]*(?:\.\d+)?)\s*(hazar|hazaar|hazzar|thousand|lakh|lac|hundred|sau|ہزار|لاکھ|سو)(?!\p{L})""", RegexOption.IGNORE_CASE)
 
+    /**
+     * The part of the day a sentence talks about, as a typical hour:
+     * morning / breakfast 8 AM, lunch 1 PM, evening / dinner 7 PM, night 9 PM. Null when no time is said.
+     */
+    fun dayPartHour(text: String): Int? {
+        val w = text.lowercase().split(Regex("""[^\p{L}]+""")).filter { it.isNotEmpty() }.toSet()
+        fun any(vararg k: String) = k.any { it in w }
+        return when {
+            any("raat", "rat", "night", "tonight", "رات") -> 21
+            any("dinner", "sham", "shaam", "shām", "evening", "شام") -> 19
+            any("dopahar", "dopehar", "dopehr", "dupehr", "dupahar", "dupehar", "dopahr", "dophar", "lunch", "noon", "afternoon", "دوپہر") -> 13
+            any("suba", "subah", "subha", "sobah", "morning", "nashta", "nashtay", "nashte", "breakfast", "صبح", "ناشتہ") -> 8
+            else -> null
+        }
+    }
+
+    /** The same day as [ms], at [hour]:00. */
+    fun atHour(ms: Long, hour: Int): Long = Calendar.getInstance().apply {
+        timeInMillis = ms
+        set(Calendar.HOUR_OF_DAY, hour)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+
     fun parse(input: String, now: Long = System.currentTimeMillis()): Result {
         // "2 hazar" -> "2000" before the number words are read, so it is not seen as "2" and "1000".
         val joined = digitMult.replace(normalizeDigits(input)) { m ->
@@ -253,6 +278,8 @@ object Parser {
         val found = extractDate(NumberWords.convert(joined), now)
         val date = found.first ?: now
         val text = found.second
+        // "subah nashta 7": the entry gets a morning time instead of the time it was typed.
+        val sentenceHour = dayPartHour(joined)
         val entries = mutableListOf<Entry>()
         val unclear = mutableListOf<Entry>()
 
@@ -334,12 +361,15 @@ object Parser {
                 }
                 .take(3).joinToString(" ").trim().replaceFirstChar { it.uppercase() }
 
+            val partHour = dayPartHour(part) ?: sentenceHour
+            val partDate = if (partHour != null) atHour(date, partHour) else date
             fun make(type: Type, cat: Cat, item: String, who: String) = Entry(
                 id = "e" + System.nanoTime() + entries.size + unclear.size,
                 type = type, amount = amount, category = cat,
                 item = if (isLoan(type) && goods.isNotEmpty()) goods else item,
                 person = who,
-                note = cleanNote(part, who).ifBlank { item }, date = date, createdAt = System.currentTimeMillis(),
+                note = cleanNote(part, who).ifBlank { item }, date = partDate,
+                createdAt = if (partHour != null) partDate else System.currentTimeMillis(),
                 qty = if (qty > 0 && (goods.isNotEmpty() || unit.isNotEmpty())) qty else 0.0,
                 unit = unit, rate = rateValue
             )

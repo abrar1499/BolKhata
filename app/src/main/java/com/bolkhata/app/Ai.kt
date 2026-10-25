@@ -388,6 +388,10 @@ What they said: "${text.replace("\"", "'")}"
             }
             val qty = o.optDouble("qty", 0.0).let { if (it.isNaN() || it < 0) 0.0 else it }
             val rate = o.optDouble("rate", 0.0).let { if (it.isNaN() || it < 0) 0.0 else it }
+            // A said part of the day ("subah", "lunch", "dinner") sets the entry's time.
+            val hour = Parser.dayPartHour(o.optString("note")) ?: Parser.dayPartHour(said)
+            val baseDate = parseDate(o.optString("date")) ?: now
+            val entryDate = if (hour != null) Parser.atHour(baseDate, hour) else baseDate
             out += Entry(
                 id = "e" + System.nanoTime() + i,
                 type = type,
@@ -396,8 +400,8 @@ What they said: "${text.replace("\"", "'")}"
                 item = item,
                 person = if (isLoan(type) || isTrade(type)) person else "",
                 note = o.optString("note").trim().ifBlank { said }.take(60),
-                date = parseDate(o.optString("date")) ?: now,
-                createdAt = now,
+                date = entryDate,
+                createdAt = if (hour != null) entryDate else now,
                 qty = qty,
                 unit = o.optString("unit").trim().take(10),
                 rate = rate
