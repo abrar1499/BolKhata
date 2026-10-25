@@ -160,7 +160,9 @@ $conversation
 
 Latest message: "$said"
 
-Return ONLY JSON: {"work":"","reply":"","entries":[],"edits":[{"id":"","type":"","amount":0,"category":"","item":"","qty":0,"person":"","date":"YYYY-MM-DD","time":"","note":""}],"delete":[],"remember":[],"forget":[]}
+Return ONLY JSON: {"work":"","reply":"","speech":"","entries":[],"edits":[{"id":"","type":"","amount":0,"category":"","item":"","qty":0,"person":"","date":"YYYY-MM-DD","time":"","note":""}],"delete":[],"remember":[],"forget":[]}
+"speech": the reply as you would SAY it in a phone call: 1 to 3 short natural sentences, no lists, no symbols, numbers as
+digits. If they write or speak Urdu or Roman Urdu, write "speech" in Urdu script (اردو) so an Urdu voice can read it; otherwise English.
 ("work" is your private scratch space for working out numbers; the person never sees it. edits and delete are [] unless case B.)
 """.trim()
         val json = try {
@@ -182,7 +184,10 @@ Return ONLY JSON: {"work":"","reply":"","entries":[],"edits":[{"id":"","type":""
         if (reply.isBlank() && list.isEmpty() && plan.changed.isEmpty() && plan.deleted.isEmpty() && remember.isEmpty()) {
             throw Failure("AI returned an empty answer.")
         }
-        AssistantResult(reply, list, plan.takeIf { it.changed.isNotEmpty() || it.deleted.isNotEmpty() }, remember, forget)
+        AssistantResult(
+            reply, list, plan.takeIf { it.changed.isNotEmpty() || it.deleted.isNotEmpty() }, remember, forget,
+            speech = json.optString("speech").trim()
+        )
     }
 
     class AssistantResult(
@@ -190,7 +195,9 @@ Return ONLY JSON: {"work":"","reply":"","entries":[],"edits":[{"id":"","type":""
         val entries: List<Entry>,
         val plan: EditPlan?,
         val remember: List<String> = emptyList(),
-        val forget: List<String> = emptyList()
+        val forget: List<String> = emptyList(),
+        /** The reply as it should be spoken aloud in voice mode. */
+        val speech: String = ""
     )
 
     /**

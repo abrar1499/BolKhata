@@ -107,6 +107,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     // The entries before a chat message was handled; what changes after that is reported in the chat.
     var chatWatch by remember { mutableStateOf<List<Entry>?>(null) }
     var voiceForChat by remember { mutableStateOf(false) }
+    // The assistant's last reply as it should be spoken (voice conversation).
+    var lastSpeech by remember { mutableStateOf("") }
     // Transactions read from an attached statement, receipt or bill, waiting to be ticked and added.
     var imports by remember { mutableStateOf(listOf<Entry>()) }
     // Which report opens: Expense opens Cash Out, Income opens Cash In.
@@ -602,6 +604,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         scope.launch {
             try {
                 val res = Ai.assistant(text, history, entries, activeKey, store, currency, store.memory)
+                lastSpeech = res.speech
                 // Lasting facts from the chat are kept on the phone and sent with every later question.
                 if (res.remember.isNotEmpty() || res.forget.isNotEmpty()) {
                     val gone = res.forget.map { it.lowercase() }.toSet()
@@ -779,6 +782,151 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         val granted = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_SMS) ==
             android.content.pm.PackageManager.PERMISSION_GRANTED
         if (granted) importSms(days) else smsPermission.launch(android.Manifest.permission.READ_SMS)
+    }
+
+    // ---------- Voice conversation: talk to the assistant hands-free ----------
+    var voiceOn by remember { mutableStateOf(false) }
+    var voiceStatus by remember { mutableStateOf("") }
+    var voicePartial by remember { mutableStateOf("") }
+    var voiceAwaiting by remember { mutableStateOf(false) }
+    var voiceMisses by remember { mutableIntStateOf(0) }
+    val ttsReady = remember { mutableStateOf(false) }
+    val tts = remember {
+        android.speech.tts.TextToSpeech(context) { status -> ttsReady.value = status == android.speech.tts.TextToSpeech.SUCCESS }
+    }
+    val recognizer = remember {
+        if (android.speech.SpeechRecognizer.isRecognitionAvailable(context)) android.speech.SpeechRecognizer.createSpeechRecognizer(context) else null
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            runCatching { recognizer?.destroy() }
+            runCatching { tts.shutdown() }
+        }
+    }
+
+    fun listenNow() {
+        val r = recognizer ?: return
+        if (!voiceOn) return
+        voicePartial = ""
+        voiceStatus = "Listening…"
+        val i = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, lang)
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
+            // Give the person time to finish a long story before it stops listening.
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2500L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2000L)
+        }
+        runCatching { r.cancel(); r.startListening(i) }
+    }
+
+    fun stopVoice(message: String? = null) {
+        voiceOn = false
+        voiceAwaiting = false
+        voiceStatus = ""
+        voicePartial = ""
+        runCatching { recognizer?.cancel() }
+        runCatching { tts.stop() }
+        if (message != null) toast(message)
+    }
+
+    /** Reads [text] aloud: Urdu script with an Urdu voice, otherwise English. Listens again when done. */
+    fun speak(text: String) {
+        val clean = text.replace(Regex("""[✓•*#_]"""), " ").replace(Regex("""(?m)^\s*-\s*"""), "").trim()
+        if (clean.isEmpty() || !ttsReady.value) {
+            listenNow()
+            return
+        }
+        val urduScript = clean.any { it in '\u0600'..'\u06FF' }
+        val wanted = if (urduScript) java.util.Locale("ur", "PK") else java.util.Locale("en", "IN")
+        val ok = tts.setLanguage(wanted)
+        if (ok == android.speech.tts.TextToSpeech.LANG_MISSING_DATA || ok == android.speech.tts.TextToSpeech.LANG_NOT_SUPPORTED) {
+            tts.setLanguage(java.util.Locale.ENGLISH)
+        }
+        voiceStatus = "Speaking…"
+        tts.speak(clean.take(3500), android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "reply-" + System.nanoTime())
+    }
+
+    DisposableEffect(tts) {
+        tts.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
+            override fun onStart(utteranceId: String?) {}
+            override fun onDone(utteranceId: String?) {
+                android.os.Handler(android.os.Looper.getMainLooper()).post { if (voiceOn) listenNow() }
+            }
+            @Deprecated("Deprecated in Java")
+            override fun onError(utteranceId: String?) {
+                android.os.Handler(android.os.Looper.getMainLooper()).post { if (voiceOn) listenNow() }
+            }
+        })
+        onDispose { }
+    }
+
+    DisposableEffect(recognizer) {
+        recognizer?.setRecognitionListener(object : android.speech.RecognitionListener {
+            override fun onReadyForSpeech(params: Bundle?) { voiceStatus = "Listening…" }
+            override fun onBeginningOfSpeech() {}
+            override fun onRmsChanged(rmsdB: Float) {}
+            override fun onBufferReceived(buffer: ByteArray?) {}
+            override fun onEndOfSpeech() { voiceStatus = "Thinking…" }
+            override fun onEvent(eventType: Int, params: Bundle?) {}
+            override fun onPartialResults(partialResults: Bundle?) {
+                partialResults?.getStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
+                    ?.let { voicePartial = it }
+            }
+            override fun onResults(results: Bundle?) {
+                val said = results?.getStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION)
+                    ?.firstOrNull()?.let { runCatching { Translit.toRoman(it) }.getOrDefault(it) }?.trim().orEmpty()
+                if (!voiceOn) return
+                if (said.isBlank()) { listenNow(); return }
+                voiceMisses = 0
+                voicePartial = said
+                voiceStatus = "Thinking…"
+                voiceAwaiting = true
+                chatInput(said)
+            }
+            override fun onError(error: Int) {
+                if (!voiceOn) return
+                when (error) {
+                    android.speech.SpeechRecognizer.ERROR_NO_MATCH, android.speech.SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> {
+                        voiceMisses++
+                        // Quiet for a while: stop instead of listening forever.
+                        if (voiceMisses >= 3) stopVoice("Voice chat paused. Tap the headset to talk again.") else listenNow()
+                    }
+                    android.speech.SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> stopVoice("Allow the microphone for Smart Expense to talk.")
+                    android.speech.SpeechRecognizer.ERROR_NETWORK, android.speech.SpeechRecognizer.ERROR_NETWORK_TIMEOUT ->
+                        stopVoice("No internet for voice. Try again when online.")
+                    else -> listenNow()
+                }
+            }
+        })
+        onDispose { }
+    }
+
+    // When the assistant has answered a spoken message, read the answer aloud, then listen again.
+    LaunchedEffect(chatLoading, chatMessages.size) {
+        if (!voiceOn || !voiceAwaiting || chatLoading) return@LaunchedEffect
+        val lastUser = chatMessages.indexOfLast { it.isUser }
+        val answers = chatMessages.drop(lastUser + 1).filter { !it.isUser }
+        if (answers.isEmpty()) return@LaunchedEffect
+        kotlinx.coroutines.delay(400) // let any follow-up line (changes, "Remembered") arrive
+        voiceAwaiting = false
+        val spoken = lastSpeech.takeIf { it.isNotBlank() } ?: answers.joinToString(". ") { it.text }
+        lastSpeech = ""
+        speak(spoken)
+    }
+
+    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        if (ok) { voiceOn = true; voiceMisses = 0; listenNow() }
+        else toast("Microphone permission is needed to talk to the assistant.")
+    }
+
+    fun toggleVoice() {
+        if (voiceOn) { stopVoice(); return }
+        if (recognizer == null) { toast("Speech recognition is not available on this phone."); return }
+        val granted = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (granted) { voiceOn = true; voiceMisses = 0; listenNow() } else micPermission.launch(android.Manifest.permission.RECORD_AUDIO)
     }
 
     /** One tap from the chat chips: the same entry again, dated now. */
@@ -980,6 +1128,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     }
                 )
                 tab == Tab.CHAT -> {
+                    DisposableEffect(Unit) { onDispose { if (voiceOn) stopVoice() } }
                     val monthStart = java.util.Calendar.getInstance().apply {
                         set(java.util.Calendar.DAY_OF_MONTH, 1)
                         set(java.util.Calendar.HOUR_OF_DAY, 0)
@@ -1027,6 +1176,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         },
                         onIgnoreSuggestions = { ids -> dropSuggestions(ids) },
                         onQuick = { quickAdd(it) },
+                        voiceOn = voiceOn,
+                        voiceStatus = voiceStatus,
+                        voicePartial = voicePartial,
+                        onVoiceToggle = { toggleVoice() },
                         imports = imports,
                         importDupes = importDupes,
                         onAddImports = { list ->
