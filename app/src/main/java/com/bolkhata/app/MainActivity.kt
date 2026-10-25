@@ -610,8 +610,17 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 }
                 val reply = res.reply
                 val list = res.entries
-                // Changes to saved entries wait for the person to tap Apply; nothing is edited or deleted silently.
-                if (res.plan != null) pendingPlan = res.plan
+                // Changes are applied straight away (the bar at the bottom has Undo), and listed in the chat
+                // so it's always clear exactly what changed.
+                val changeList = res.plan?.let { plan ->
+                    val df = java.text.SimpleDateFormat("d MMM", java.util.Locale.US)
+                    fun d(e: Entry) = df.format(java.util.Date(e.date)) + " · " + entryTitle(e) + " · " + fmt(e.amount)
+                    (plan.deleted.map { "- Deleted: " + d(it) } +
+                        plan.changed.map { (a, b) -> "- Changed: " + d(a) + "  →  " + d(b) +
+                            (if (a.category != b.category || a.type != b.type) " (" + b.type.label + ", " + b.category.label + ")" else "") })
+                        .joinToString("\n")
+                }
+                res.plan?.let { applyPlan(it) }
                 // If the AI says it did something but sent no change, say so instead of letting it look done.
                 val claims = Regex("""(?i)\b(kar (diya|di|diye|dein)|hata (diya|di|diye)|shift|darj|updated?|deleted?|changed|moved|removed|set kar)\b""")
                 val honest = if (list.isEmpty() && res.plan == null && claims.containsMatchIn(reply)) {
@@ -621,8 +630,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     save(list + entries)
                     postChat(honest.ifBlank { "Saved" }, isUser = false, entryIds = list.map { it.id })
                 } else {
-                    postChat(honest.ifBlank { "Here are the changes I'd make." }, isUser = false)
+                    postChat(honest.ifBlank { "Done." }, isUser = false)
                 }
+                if (!changeList.isNullOrBlank()) postChat(changeList, isUser = false)
                 if (res.remember.isNotEmpty()) {
                     postChat("Remembered: " + res.remember.joinToString("; "), isUser = false)
                 }
