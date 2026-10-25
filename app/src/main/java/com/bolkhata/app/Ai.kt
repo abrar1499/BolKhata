@@ -78,7 +78,26 @@ object Ai {
             "$monthName expenses by category: $byCat",
             "People balances (owes you = they must pay you): $balancesText"
         ).joinToString("\n")
-        return "Saved data summary:\n$lines\n\nSaved entries, newest first (up to 150; n is the number to use in edits and delete):\n$recentJson"
+        // Likely duplicates, worked out here so the AI doesn't have to spot them: same kind and amount, and either
+        // within 3 days of each other or on the same day and month in another year (a misread date).
+        val day = 86_400_000L
+        val dupes = mutableListOf<String>()
+        for (i in recent.indices) for (j in i + 1 until recent.size) {
+            val a = recent[i]
+            val b = recent[j]
+            if (a.type != b.type || kotlin.math.abs(a.amount - b.amount) > 0.01) continue
+            val ca = Calendar.getInstance().apply { timeInMillis = a.date }
+            val cb = Calendar.getInstance().apply { timeInMillis = b.date }
+            val near = kotlin.math.abs(a.date - b.date) <= 3 * day
+            val sameDayOtherYear = ca.get(Calendar.MONTH) == cb.get(Calendar.MONTH) &&
+                kotlin.math.abs(ca.get(Calendar.DAY_OF_MONTH) - cb.get(Calendar.DAY_OF_MONTH)) <= 2 &&
+                ca.get(Calendar.YEAR) != cb.get(Calendar.YEAR)
+            if (near || sameDayOtherYear) dupes += "n=${i + 1} and n=${j + 1} (${fmt(a.amount)})"
+            if (dupes.size >= 40) break
+        }
+        val dupeText = if (dupes.isEmpty()) "none found" else dupes.joinToString("; ")
+        return "Saved data summary:\n$lines\n\nSaved entries, newest first (n is the number to use in edits and delete):\n$recentJson" +
+            "\n\nPossible duplicates (same kind and amount, close dates or the same date in another year; check item and note): $dupeText"
     }
 
     /**
@@ -99,10 +118,16 @@ object Ai {
         // Entries dated far in the past or in the future are often mistakes; include them so they can be fixed.
         val nowMs = System.currentTimeMillis()
         val odd = all.filter { it !in newest && (it.date > nowMs + 86_400_000L || it.date < nowMs - 300L * 86_400_000L) }.take(30)
-        val recent = newest + odd
+        // Entries the recent chat talked about (saved from a file, a sentence or the bank) are always included.
+        val talkedAbout = history.takeLast(20).flatMap { it.entryIds }.toSet()
+        val mentioned = all.filter { it.id in talkedAbout && it !in newest && it !in odd }
+        val recent = newest + odd + mentioned
+        val numberOf = recent.withIndex().associate { (i, e) -> e.id to i + 1 }
         val today = SimpleDateFormat("yyyy-MM-dd (EEEE)", Locale.US).format(Date())
         val conversation = history.takeLast(20).joinToString("\n") { m ->
-            (if (m.isUser) "User: " else "Assistant: ") + m.text.take(600)
+            val refs = m.entryIds.mapNotNull { numberOf[it] }
+            (if (m.isUser) "User: " else "Assistant: ") + m.text.take(600) +
+                (if (refs.isNotEmpty()) " [these entries: n=" + refs.joinToString(", ") + "]" else "")
         }.ifBlank { "(new conversation)" }
         val said = message.replace("\"", "'").take(2000)
         val prompt = """
@@ -120,8 +145,14 @@ C) Anything else: a greeting, a question, a report, a search, advice. Answer in 
    A time can be set with "time" ("HH:MM"); "a bit before / after" another saved entry means a few minutes from that entry's time.
    If the same money was saved twice by mistake (same item and amount on two days, and they say it happened once), keep the one on
    the right day and put the other in "delete".
-If it is not clear which saved entry they mean, ask one short question and change nothing.
-Never say you added, changed or deleted something unless it is in "entries", "edits" or "delete".
+If it is not clear which saved entry they mean, ask one short question and change nothing. But when they say "you check" /
+"tum check kar lo" / "jo date usme hai", decide yourself from the data (dates in notes, the conversation, the entry list) and act;
+don't ask the same question twice.
+"[these entries: n=...]" after a message in the conversation tells you exactly which saved entries that message added.
+For "find duplicates" list the pairs from "Possible duplicates" that really look the same (item, note, person), and ask whether to
+delete the extra ones; when they agree, put those n in "delete".
+Never say you added, changed or deleted something unless it is in "entries", "edits" or "delete" of THIS answer.
+If you could not do it, say so plainly and what you need.
 
 How to reply:
 - Short and to the point. Lead with the answer. Usually 1 to 4 short lines.

@@ -581,10 +581,12 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         postChat(text, isUser = true)
         // With AI on, corrections go to the AI too: it understands "23 oct, a bit before Shahbaz's 315" and can
         // pick the right entry from the conversation. The offline edit reader is only the fallback without AI.
-        val changesExisting = runCatching {
+        // With AI on, everything in the chat (searches, edits, deletes) goes to the AI, which can see the
+        // conversation; the app's own command and edit readers are the fallback without AI.
+        val changesExisting = activeKey.isBlank() && runCatching {
             Commands.read(roman) != null || Parser.payStatus(roman) != null ||
-                (activeKey.isBlank() && (Edits.plan(roman, entries) != null ||
-                    (looksLikeEdit(roman) && entries.isNotEmpty() && roman.any { it.isDigit() })))
+                Edits.plan(roman, entries) != null ||
+                (looksLikeEdit(roman) && entries.isNotEmpty() && roman.any { it.isDigit() })
         }.getOrDefault(false)
         if (changesExisting) {
             chatViaReader(text)
