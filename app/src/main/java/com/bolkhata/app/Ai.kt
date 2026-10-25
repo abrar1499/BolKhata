@@ -91,7 +91,8 @@ object Ai {
         all: List<Entry>,
         key: String,
         store: Store,
-        currency: String
+        currency: String,
+        memory: List<String> = emptyList()
     ): AssistantResult = withContext(Dispatchers.IO) {
         if (key.isBlank()) throw Failure("AI is not configured.")
         val newest = all.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt }).take(150)
@@ -100,7 +101,7 @@ object Ai {
         val odd = all.filter { it !in newest && (it.date > nowMs + 86_400_000L || it.date < nowMs - 300L * 86_400_000L) }.take(30)
         val recent = newest + odd
         val today = SimpleDateFormat("yyyy-MM-dd (EEEE)", Locale.US).format(Date())
-        val conversation = history.takeLast(10).joinToString("\n") { m ->
+        val conversation = history.takeLast(20).joinToString("\n") { m ->
             (if (m.isUser) "User: " else "Assistant: ") + m.text.take(600)
         }.ifBlank { "(new conversation)" }
         val said = message.replace("\"", "'").take(2000)
@@ -142,12 +143,20 @@ Each entry: {"type":"","amount":0,"category":"","item":"","qty":0,"unit":"","rat
 
 ${ledgerContext(all, recent, currency)}
 
+What you remember about this person from earlier chats (use it; it may be out of date if they say otherwise):
+${if (memory.isEmpty()) "(nothing yet)" else memory.joinToString("\n") { "- $it" }}
+
+Memory: when the person tells you something lasting about themselves or their money — who someone is ("Shahbaz is my brother"),
+a regular payment ("mess 170 every month"), a habit, what a shop is ("Aldrees is petrol"), how they want answers — put a short
+fact in "remember" (max 15 words, English). When they correct or cancel a remembered fact, put its exact old text in "forget".
+Don't remember single transactions, one-off questions or anything already in memory. If they ask what you remember, list it.
+
 Previous conversation:
 $conversation
 
 Latest message: "$said"
 
-Return ONLY JSON: {"reply":"","entries":[],"edits":[{"n":1,"type":"","amount":0,"category":"","item":"","qty":0,"person":"","date":"YYYY-MM-DD","time":"","note":""}],"delete":[]}
+Return ONLY JSON: {"reply":"","entries":[],"edits":[{"n":1,"type":"","amount":0,"category":"","item":"","qty":0,"person":"","date":"YYYY-MM-DD","time":"","note":""}],"delete":[],"remember":[],"forget":[]}
 (edits and delete are [] unless case B.)
 """.trim()
         val json = try {
@@ -160,13 +169,24 @@ Return ONLY JSON: {"reply":"","entries":[],"edits":[{"n":1,"type":"","amount":0,
         val list = toEntries(json.toString(), message)
         val reply = json.optString("reply").trim()
         val plan = planFrom(json, recent, reply.ifBlank { "Updated." })
-        if (reply.isBlank() && list.isEmpty() && plan.changed.isEmpty() && plan.deleted.isEmpty()) {
+        fun strings(name: String): List<String> = json.optJSONArray(name)?.let { a ->
+            (0 until a.length()).map { a.optString(it).trim() }.filter { it.isNotEmpty() }
+        } ?: emptyList()
+        val remember = strings("remember").map { it.take(120) }
+        val forget = strings("forget")
+        if (reply.isBlank() && list.isEmpty() && plan.changed.isEmpty() && plan.deleted.isEmpty() && remember.isEmpty()) {
             throw Failure("AI returned an empty answer.")
         }
-        AssistantResult(reply, list, plan.takeIf { it.changed.isNotEmpty() || it.deleted.isNotEmpty() })
+        AssistantResult(reply, list, plan.takeIf { it.changed.isNotEmpty() || it.deleted.isNotEmpty() }, remember, forget)
     }
 
-    class AssistantResult(val reply: String, val entries: List<Entry>, val plan: EditPlan?)
+    class AssistantResult(
+        val reply: String,
+        val entries: List<Entry>,
+        val plan: EditPlan?,
+        val remember: List<String> = emptyList(),
+        val forget: List<String> = emptyList()
+    )
 
     /**
      * Reads a bank statement, receipt or bill (photo or PDF) and returns every transaction in it as entries.

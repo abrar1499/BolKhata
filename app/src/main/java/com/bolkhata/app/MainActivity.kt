@@ -577,7 +577,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         val text = raw.trim()
         if (text.isEmpty() || chatLoading) return
         val roman = runCatching { Translit.toRoman(text) }.getOrDefault(text)
-        val history = chatMessages.takeLast(10)
+        val history = chatMessages.takeLast(20)
         postChat(text, isUser = true)
         // With AI on, corrections go to the AI too: it understands "23 oct, a bit before Shahbaz's 315" and can
         // pick the right entry from the conversation. The offline edit reader is only the fallback without AI.
@@ -597,7 +597,13 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         chatLoading = true
         scope.launch {
             try {
-                val res = Ai.assistant(text, history, entries, activeKey, store, currency)
+                val res = Ai.assistant(text, history, entries, activeKey, store, currency, store.memory)
+                // Lasting facts from the chat are kept on the phone and sent with every later question.
+                if (res.remember.isNotEmpty() || res.forget.isNotEmpty()) {
+                    val gone = res.forget.map { it.lowercase() }.toSet()
+                    val kept = store.memory.filter { it.lowercase() !in gone }
+                    store.memory = (kept + res.remember.filter { r -> kept.none { it.equals(r, ignoreCase = true) } }).takeLast(80)
+                }
                 val reply = res.reply
                 val list = res.entries
                 // Corrections change the saved entry (with Undo) instead of adding a second one.
@@ -610,6 +616,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     postChat("✓ " + reply.ifBlank { "Updated" }.removePrefix("✓ "), isUser = false)
                 } else {
                     postChat(reply, isUser = false)
+                }
+                if (res.remember.isNotEmpty()) {
+                    postChat("Remembered: " + res.remember.joinToString("; "), isUser = false)
                 }
             } catch (e: Exception) {
                 chatOffline(text, roman, aiDown = true)

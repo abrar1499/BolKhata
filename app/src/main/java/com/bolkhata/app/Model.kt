@@ -267,6 +267,16 @@ class Store(context: Context) {
         prefs.edit().putString("learned", o.toString()).apply()
     }
 
+    /** Lasting facts the chat assistant was told to keep ("Shahbaz is my brother", "mess is paid monthly"). */
+    var memory: List<String>
+        get() = try {
+            val arr = JSONArray(prefs.getString("memory", "[]") ?: "[]")
+            (0 until arr.length()).map { arr.optString(it) }.filter { it.isNotBlank() }
+        } catch (e: Exception) {
+            emptyList()
+        }
+        set(v) = prefs.edit().putString("memory", JSONArray(v.takeLast(80)).toString()).apply()
+
     var aiKey: String
         get() = prefs.getString("aiKey", "") ?: ""
         set(v) = prefs.edit().putString("aiKey", v).apply()
