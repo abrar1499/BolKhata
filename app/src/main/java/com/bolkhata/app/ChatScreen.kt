@@ -2,6 +2,7 @@ package com.bolkhata.app
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -251,6 +252,23 @@ fun ChatScreen(
 
 fun quickLabel(e: Entry): String = e.item.ifBlank { e.note }.ifBlank { e.category.label }.take(18)
 
+/** Long-press a chat message to copy its whole text. */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+private fun Modifier.copyable(text: String): Modifier {
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    return this.combinedClickable(
+        onClick = {},
+        onLongClick = {
+            clipboard.setText(androidx.compose.ui.text.AnnotatedString(text))
+            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+            android.widget.Toast.makeText(context, "Copied", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    )
+}
+
 @Composable
 private fun UserBubble(text: String) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
@@ -261,6 +279,7 @@ private fun UserBubble(text: String) {
             modifier = Modifier
                 .widthIn(max = 300.dp)
                 .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 6.dp))
+                .copyable(text)
                 .background(MaterialTheme.colorScheme.primary)
                 .padding(horizontal = 14.dp, vertical = 10.dp)
         )
@@ -277,6 +296,7 @@ private fun AssistantBubble(text: String) {
             modifier = Modifier
                 .widthIn(max = 320.dp)
                 .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 6.dp, bottomEnd = 18.dp))
+                .copyable(text)
                 .background(MaterialTheme.colorScheme.surface)
                 .padding(horizontal = 14.dp, vertical = 10.dp)
         )
@@ -292,10 +312,12 @@ private fun SavedCard(
     onEditEntry: (Entry) -> Unit
 ) {
     val live = message.entryIds.mapNotNull { byId[it] }
+    val copyText = (listOf(message.text) + live.map { entryTitle(it) + " " + fmt(it.amount) + " " + currency }).joinToString("\n")
     Column(
         Modifier
             .fillMaxWidth(0.88f)
             .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 6.dp, bottomEnd = 18.dp))
+            .copyable(copyText)
             .background(MaterialTheme.colorScheme.surface)
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
