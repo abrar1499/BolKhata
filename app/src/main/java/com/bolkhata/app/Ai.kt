@@ -168,6 +168,12 @@ Turn every money movement in it into a ledger entry, using the date printed for 
   unless it is clearly a loan to a named person ("gave") or money returned to someone ("paid_back").
 - Money that came in (salary, deposit, refund, transfer in) is "income", unless it is clearly a named person repaying ("got_back").
 - A receipt or bill with several items is ONE expense for its total, with the shop name as item.
+- Transfers to or from a person (IPS, SARIE, internal transfer, "TO<NAME>", "/NAME" in the notes): item "Transfer",
+  note "To <Name>" or "From <Name>" with the person's name in normal capitals (e.g. "To Waleed Ali Ahmed", "From Zubair").
+  Never write only "Credit Transfer" when a name is shown.
+- Bank charges for a transfer: expense, category fees, item "Transfer fee", note "Fee: transfer to <Name>".
+- Shops and card purchases: item is the shop's clean name (e.g. "Sasco", "Express Food"), note the shop and city.
+- time: the time printed for the line as "HH:MM" (24-hour), else "".
 - Skip opening and closing balances, running balances, totals, and declined or reversed lines.
 - note: the merchant or a short clean description, max 6 words.
 ${if (note.isNotBlank()) "The person said about this file: \"" + note.replace("\"", "'").take(300) + "\"" else ""}
@@ -175,7 +181,7 @@ ${if (note.isNotBlank()) "The person said about this file: \"" + note.replace("\
 Entry rules:
 ${entryRules()}
 
-Return ONLY JSON: {"entries":[{"type":"","amount":0,"category":"","item":"","qty":0,"unit":"","rate":0,"person":"","date":"YYYY-MM-DD","note":""}]}
+Return ONLY JSON: {"entries":[{"type":"","amount":0,"category":"","item":"","qty":0,"unit":"","rate":0,"person":"","date":"YYYY-MM-DD","time":"","note":""}]}
 """.trim()
         val json = try {
             request(prompt, key.trim(), store, mime to data)
@@ -569,9 +575,21 @@ Make one entry per transaction. Skip anything without an amount. Number words co
             val qty = o.optDouble("qty", 0.0).let { if (it.isNaN() || it < 0) 0.0 else it }
             val rate = o.optDouble("rate", 0.0).let { if (it.isNaN() || it < 0) 0.0 else it }
             // A said part of the day ("subah", "lunch", "dinner") sets the entry's time.
+            // An exact time ("21:48", from a statement) wins over a said part of the day.
+            val exact = Regex("""^(\d{1,2}):(\d{2})""").find(o.optString("time").trim())
             val hour = Parser.dayPartHour(o.optString("note")) ?: Parser.dayPartHour(said)
             val baseDate = parseDate(o.optString("date")) ?: now
-            val entryDate = if (hour != null) Parser.atHour(baseDate, hour) else baseDate
+            val entryDate = when {
+                exact != null -> java.util.Calendar.getInstance().apply {
+                    timeInMillis = baseDate
+                    set(java.util.Calendar.HOUR_OF_DAY, exact.groupValues[1].toInt().coerceIn(0, 23))
+                    set(java.util.Calendar.MINUTE, exact.groupValues[2].toInt().coerceIn(0, 59))
+                    set(java.util.Calendar.SECOND, 0)
+                    set(java.util.Calendar.MILLISECOND, 0)
+                }.timeInMillis
+                hour != null -> Parser.atHour(baseDate, hour)
+                else -> baseDate
+            }
             out += Entry(
                 id = "e" + System.nanoTime() + i,
                 type = type,
@@ -581,7 +599,7 @@ Make one entry per transaction. Skip anything without an amount. Number words co
                 person = if (isLoan(type) || isTrade(type)) person else "",
                 note = o.optString("note").trim().ifBlank { said }.take(60),
                 date = entryDate,
-                createdAt = if (hour != null) entryDate else now,
+                createdAt = if (exact != null || hour != null) entryDate else now,
                 qty = qty,
                 unit = o.optString("unit").trim().take(10),
                 rate = rate

@@ -53,7 +53,8 @@ fun ChatScreen(
     imports: List<Entry> = emptyList(),
     importDupes: Set<String> = emptySet(),
     onAddImports: (List<Entry>) -> Unit = {},
-    onDropImports: () -> Unit = {}
+    onDropImports: () -> Unit = {},
+    onUpdateSaved: () -> Unit = {}
 ) {
     var confirmClear by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
@@ -163,7 +164,9 @@ fun ChatScreen(
                         currency = currency,
                         onAdd = onAddImports,
                         ignoreLabel = "Cancel",
-                        onIgnore = { onDropImports() }
+                        onIgnore = { onDropImports() },
+                        extraLabel = if (importDupes.isNotEmpty()) "Update details of ${importDupes.size} saved" else null,
+                        onExtra = onUpdateSaved
                     )
                 }
             }
@@ -318,7 +321,9 @@ private fun PickCard(
     currency: String,
     onAdd: (List<Entry>) -> Unit,
     ignoreLabel: String,
-    onIgnore: (Set<String>) -> Unit
+    onIgnore: (Set<String>) -> Unit,
+    extraLabel: String? = null,
+    onExtra: () -> Unit = {}
 ) {
     val suggestions = rows
     var picked by remember(rows.map { it.id }) { mutableStateOf(preselected) }
@@ -368,6 +373,12 @@ private fun PickCard(
                 enabled = picked.isNotEmpty() || ignoreLabel == "Cancel",
                 shape = RoundedCornerShape(12.dp)
             ) { Text(ignoreLabel) }
+        }
+        if (extraLabel != null) {
+            // Entries already saved get the clearer names, notes and times from the file, amounts unchanged.
+            FilledTonalButton(onClick = onExtra, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
+                Text(extraLabel)
+            }
         }
     }
 }

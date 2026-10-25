@@ -112,6 +112,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     // Which report opens: Expense opens Cash Out, Income opens Cash In.
     var reportStart by remember { mutableStateOf(ReportKind.CASH_OUT) }
     var importDupes by remember { mutableStateOf(setOf<String>()) }
+    // For each imported row that matches a saved entry: the saved entry's id.
+    var importMatch by remember { mutableStateOf(mapOf<String, String>()) }
 
     DisposableEffect(Unit) {
         val stop = store.watchSuggestions { suggestions = store.loadSuggestions() }
@@ -613,6 +615,22 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         it.type == e.type && kotlin.math.abs(it.amount - e.amount) < 0.01 && sameDay(it.date, e.date)
     }
 
+    /** Pairs each imported row with one saved entry it repeats (each saved entry used once). */
+    fun matchSaved(found: List<Entry>): Map<String, String> {
+        val used = mutableSetOf<String>()
+        val out = linkedMapOf<String, String>()
+        found.forEach { e ->
+            val hit = entries.firstOrNull {
+                it.id !in used && it.type == e.type && kotlin.math.abs(it.amount - e.amount) < 0.01 && sameDay(it.date, e.date)
+            }
+            if (hit != null) {
+                used += hit.id
+                out[e.id] = hit.id
+            }
+        }
+        return out
+    }
+
     /** Reads an attached photo or PDF with AI and shows what it found in the chat to tick and add. */
     fun readAttachment(uri: android.net.Uri) {
         if (chatLoading) return
@@ -645,7 +663,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     postChat("I couldn't find any transactions in this file.", isUser = false)
                 } else {
                     imports = found
-                    importDupes = found.filter { isDuplicate(it) }.map { it.id }.toSet()
+                    importMatch = matchSaved(found)
+                    importDupes = importMatch.keys
                     val dupes = importDupes.size
                     postChat(
                         "Found ${found.size} " + (if (found.size == 1) "transaction" else "transactions") +
@@ -697,7 +716,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     postChat("No bank payments found in your SMS for the last $days days.", isUser = false)
                 } else {
                     imports = found
-                    importDupes = found.filter { isDuplicate(it) }.map { it.id }.toSet()
+                    importMatch = matchSaved(found)
+                    importDupes = importMatch.keys
                     val dupes = importDupes.size
                     postChat(
                         "Found ${found.size} bank " + (if (found.size == 1) "payment" else "payments") + " in your SMS" +
@@ -985,6 +1005,29 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         onDropImports = {
                             imports = emptyList()
                             importDupes = emptySet()
+                            importMatch = emptyMap()
+                        },
+                        onUpdateSaved = {
+                            val byImport = imports.associateBy { it.id }
+                            val updates = importMatch.mapNotNull { (importId, savedId) ->
+                                byImport[importId]?.let { savedId to it }
+                            }.toMap()
+                            var changed = 0
+                            save(entries.map { old ->
+                                val src = updates[old.id] ?: return@map old
+                                changed++
+                                old.copy(
+                                    item = src.item.ifBlank { old.item },
+                                    note = src.note.ifBlank { old.note },
+                                    category = src.category,
+                                    date = src.date,
+                                    createdAt = src.createdAt
+                                )
+                            })
+                            imports = imports.filter { it.id !in importDupes }
+                            importDupes = emptySet()
+                            importMatch = emptyMap()
+                            postChat("✓ Updated names, notes and times of $changed saved entries. Amounts unchanged.", isUser = false)
                         }
                     )
                 }
