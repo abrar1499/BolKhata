@@ -112,6 +112,9 @@ B) It corrects, moves or removes money that is ALREADY in the saved entries: a d
    Put the change in "edits" (n from the saved entries, only the fields that change; "date" as YYYY-MM-DD for a new day)
    or the n in "delete". Look at the previous conversation to know which entry they mean. The reply says what changed.
 C) Anything else: a greeting, a question, a report, a search, advice. Answer in "reply" with no entries, edits or deletes.
+   A time can be set with "time" ("HH:MM"); "a bit before / after" another saved entry means a few minutes from that entry's time.
+   If the same money was saved twice by mistake (same item and amount on two days, and they say it happened once), keep the one on
+   the right day and put the other in "delete".
 If it is not clear which saved entry they mean, ask one short question and change nothing.
 Never say you added, changed or deleted something unless it is in "entries", "edits" or "delete".
 

@@ -579,10 +579,12 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         val roman = runCatching { Translit.toRoman(text) }.getOrDefault(text)
         val history = chatMessages.takeLast(10)
         postChat(text, isUser = true)
+        // With AI on, corrections go to the AI too: it understands "23 oct, a bit before Shahbaz's 315" and can
+        // pick the right entry from the conversation. The offline edit reader is only the fallback without AI.
         val changesExisting = runCatching {
             Commands.read(roman) != null || Parser.payStatus(roman) != null ||
-                Edits.plan(roman, entries) != null ||
-                (looksLikeEdit(roman) && entries.isNotEmpty() && roman.any { it.isDigit() })
+                (activeKey.isBlank() && (Edits.plan(roman, entries) != null ||
+                    (looksLikeEdit(roman) && entries.isNotEmpty() && roman.any { it.isDigit() })))
         }.getOrDefault(false)
         if (changesExisting) {
             chatViaReader(text)
