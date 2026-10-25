@@ -109,6 +109,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var voiceForChat by remember { mutableStateOf(false) }
     // Transactions read from an attached statement, receipt or bill, waiting to be ticked and added.
     var imports by remember { mutableStateOf(listOf<Entry>()) }
+    // Which report opens: Expense opens Cash Out, Income opens Cash In.
+    var reportStart by remember { mutableStateOf(ReportKind.CASH_OUT) }
     var importDupes by remember { mutableStateOf(setOf<String>()) }
 
     DisposableEffect(Unit) {
@@ -774,6 +776,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 store.currency = c
                 toast("✓ Currency set to $c")
             }) { t ->
+                if (t == Tab.REPORTS) reportStart = ReportKind.CASH_OUT
                 tab = t
                 people = null
                 results = null
@@ -815,16 +818,16 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     name = name, entries = entries, currency = currency,
                     newVersion = null, progress = progress, onUpdate = { startUpdate() },
                     onAdd = { adding = true }, onMenu = { openMenu() }, onSearch = { searching = true }, onEdit = { editing = it },
-                    onPeople = { people = it }, onReports = { tab = Tab.REPORTS }, onSeeAll = { tab = Tab.ENTRIES },
+                    onPeople = { people = it }, onReports = { reportStart = it; tab = Tab.REPORTS }, onSeeAll = { tab = Tab.ENTRIES },
                     chatBadge = suggestions.size, onTab = { tab = it }
                 )
                 tab == Tab.STOCK -> StockScreen(
                     entries = entries, currency = currency, chatBadge = suggestions.size,
                     onTab = { tab = it }, onMenu = { openMenu() },
-                    onTrade = { trade = it }, onReports = { tab = Tab.REPORTS }
+                    onTrade = { trade = it }, onReports = { reportStart = it; tab = Tab.REPORTS }
                 )
                 tab == Tab.ENTRIES -> TransactionsScreen(entries, currency, onEdit = { editing = it }, onAdd = { adding = true }, onMenu = { openMenu() })
-                tab == Tab.REPORTS -> ReportsScreen(entries, currency, onMenu = { openMenu() })
+                tab == Tab.REPORTS -> ReportsScreen(entries, currency, onMenu = { openMenu() }, startKind = reportStart)
                 tab == Tab.TRASH -> TrashScreen(
                     trash = trash, currency = currency, onMenu = { openMenu() },
                     onRestore = { e ->

@@ -66,7 +66,7 @@ fun HomeScreen(
     onSearch: () -> Unit,
     onEdit: (Entry) -> Unit,
     onPeople: (Boolean) -> Unit,
-    onReports: () -> Unit,
+    onReports: (ReportKind) -> Unit,
     onSeeAll: () -> Unit,
     chatBadge: Int = 0,
     onTab: (Tab) -> Unit = {}
@@ -157,7 +157,7 @@ fun HomeScreen(
                     Spacer(Modifier.height(12.dp))
                     TabSwitcher(Tab.HOME, trading, chatBadge, onTab)
                     Spacer(Modifier.height(14.dp))
-                    Panel(Modifier.fillMaxWidth(), onClick = onReports, padding = 12.dp) {
+                    Panel(Modifier.fillMaxWidth(), onClick = { onReports(ReportKind.CASH_OUT) }, padding = 12.dp) {
                         Text("In $monthName", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(8.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -165,11 +165,11 @@ fun HomeScreen(
                             MainSummaryTile(
                                 "Expense", moneyA(currency, monthSpent), Icons.Filled.ArrowUpward, RedSpend,
                                 Modifier.weight(1f)
-                            ) { onReports() }
+                            ) { onReports(ReportKind.CASH_OUT) }
                             MainSummaryTile(
                                 "Income", moneyA(currency, monthIncome), Icons.Filled.ArrowDownward, GreenIn,
                                 Modifier.weight(1f)
-                            ) { onReports() }
+                            ) { onReports(ReportKind.CASH_IN) }
                         }
                         Spacer(Modifier.height(8.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -969,14 +969,23 @@ private fun ReportGroupCard(
 }
 
 @Composable
-fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit) {
+fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit, startKind: ReportKind = ReportKind.CASH_OUT) {
     var span by remember { mutableStateOf(Span.MONTH) }
     var offset by remember { mutableIntStateOf(0) }
-    var reportKind by remember { mutableStateOf(ReportKind.CASH_OUT) }
+    var reportKind by remember(startKind) { mutableStateOf(startKind) }
     var openGroups by remember { mutableStateOf(setOf<String>()) }
 
     val (start, end, label) = spanRange(span, offset)
-    val inRange = entries.filter { it.date in start until end }
+    // Compared by calendar day, the same way the home screen counts the month.
+    val startDay = cal(start)
+    val inRange = entries.filter { e ->
+        val d = cal(e.date)
+        when (span) {
+            Span.MONTH -> d.get(Calendar.YEAR) == startDay.get(Calendar.YEAR) && d.get(Calendar.MONTH) == startDay.get(Calendar.MONTH)
+            Span.YEAR -> d.get(Calendar.YEAR) == startDay.get(Calendar.YEAR)
+            Span.WEEK -> e.date >= start && e.date < end
+        }
+    }
     val cashInEntries = inRange.filter { it.isCashInFlow() }
     val cashOutEntries = inRange.filter { it.isCashOutFlow() }
     val cashInTotal = cashInEntries.sumOf { it.amount }
