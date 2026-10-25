@@ -23,80 +23,34 @@ object Ai {
 
     class Failure(message: String) : Exception(message)
 
-    /** Totals, balances and recent entries the AI may use for answers. */
+    /** Exact figures (worked out in code), the entries as compact numbered lines, and likely duplicates. */
     private fun ledgerContext(all: List<Entry>, recent: List<Entry>, currency: String): String {
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-        val timeFormat = SimpleDateFormat("HH:mm", Locale.US)
-        val recentJson = JSONArray()
-        recent.forEachIndexed { i, entry ->
-            recentJson.put(
-                JSONObject()
-                    .put("n", i + 1)
-                    .put("date", dateFormat.format(Date(entry.date)))
-                    .put("time", timeFormat.format(Date(entry.createdAt)))
-                    .put("type", entry.type.label)
-                    .put("amount", entry.amount)
-                    .put("category", entry.category.label)
-                    .put("item", entry.item)
-                    .put("person", entry.person)
-                    .put("note", entry.note)
-                    .put("qty", entry.qty)
-                    .put("unit", entry.unit)
-            )
-        }
-        val now = Calendar.getInstance()
-        fun inMonth(e: Entry, back: Int): Boolean {
-            val c = Calendar.getInstance().apply { add(Calendar.MONTH, -back) }
-            val d = Calendar.getInstance().apply { timeInMillis = e.date }
-            return d.get(Calendar.YEAR) == c.get(Calendar.YEAR) && d.get(Calendar.MONTH) == c.get(Calendar.MONTH)
-        }
-        val monthName = SimpleDateFormat("MMMM", Locale.US).format(now.time)
-        val byCat = all.filter { it.type == Type.KHARCHA && inMonth(it, 0) }
-            .groupBy { it.category.label }.mapValues { g -> g.value.sumOf { it.amount } }
-            .entries.sortedByDescending { it.value }
-            .joinToString("; ") { it.key + " " + fmt(it.value) }.ifBlank { "none" }
-        val balancesText = balances(all).entries
-            .sortedByDescending { kotlin.math.abs(it.value) }
-            .joinToString("; ") { e ->
-                e.key + ": " + (if (e.value >= 0) "owes you " else "you owe ") + fmt(kotlin.math.abs(e.value))
-            }.ifBlank { "none" }
-        val todayStart = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-        }.timeInMillis
-        val todays = all.filter { it.date >= todayStart && it.date < todayStart + 86_400_000L }
-        val todayText = todays.joinToString("; ") { e ->
-            e.type.label + " " + fmt(e.amount) + " " + e.item.ifBlank { e.category.label } +
-                (if (e.note.isNotBlank()) " (" + e.note + ")" else "")
-        }.ifBlank { "nothing yet" }
-        val lines = listOf(
-            "Saved entries: " + all.size,
-            "Today's expenses: " + fmt(todays.filter { it.type == Type.KHARCHA }.sumOf { it.amount }) + " $currency",
-            "Today's entries: $todayText",
-            "$monthName expenses: " + fmt(all.filter { it.type == Type.KHARCHA && inMonth(it, 0) }.sumOf { it.amount }) + " $currency",
-            "$monthName income: " + fmt(all.filter { it.type == Type.AAMDANI && inMonth(it, 0) }.sumOf { it.amount }) + " $currency",
-            "Last month expenses: " + fmt(all.filter { it.type == Type.KHARCHA && inMonth(it, 1) }.sumOf { it.amount }) + " $currency",
-            "$monthName expenses by category: $byCat",
-            "People balances (owes you = they must pay you): $balancesText"
-        ).joinToString("\n")
+        val entryLines = recent.withIndex().joinToString("\n") { (i, e) -> Accounts.line(i + 1, e) }
         // Likely duplicates, worked out here so the AI doesn't have to spot them: same kind and amount, and either
         // within 3 days of each other or on the same day and month in another year (a misread date).
         val day = 86_400_000L
         val dupes = mutableListOf<String>()
-        for (i in recent.indices) for (j in i + 1 until recent.size) {
-            val a = recent[i]
-            val b = recent[j]
-            if (a.type != b.type || kotlin.math.abs(a.amount - b.amount) > 0.01) continue
-            val ca = Calendar.getInstance().apply { timeInMillis = a.date }
-            val cb = Calendar.getInstance().apply { timeInMillis = b.date }
-            val near = kotlin.math.abs(a.date - b.date) <= 3 * day
-            val sameDayOtherYear = ca.get(Calendar.MONTH) == cb.get(Calendar.MONTH) &&
-                kotlin.math.abs(ca.get(Calendar.DAY_OF_MONTH) - cb.get(Calendar.DAY_OF_MONTH)) <= 2 &&
-                ca.get(Calendar.YEAR) != cb.get(Calendar.YEAR)
-            if (near || sameDayOtherYear) dupes += "n=${i + 1} and n=${j + 1} (${fmt(a.amount)})"
-            if (dupes.size >= 40) break
-        }
+        // Only entries with the same kind and amount can be duplicates, so compare within those groups.
+        recent.withIndex()
+            .groupBy { (_, e) -> e.type.name + "|" + Math.round(e.amount * 100) }
+            .values.filter { it.size > 1 }
+            .forEach { group ->
+                for (x in group.indices) for (y in x + 1 until group.size) {
+                    if (dupes.size >= 40) return@forEach
+                    val (i, a) = group[x]
+                    val (j, b) = group[y]
+                    val ca = Calendar.getInstance().apply { timeInMillis = a.date }
+                    val cb = Calendar.getInstance().apply { timeInMillis = b.date }
+                    val near = kotlin.math.abs(a.date - b.date) <= 3 * day
+                    val sameDayOtherYear = ca.get(Calendar.MONTH) == cb.get(Calendar.MONTH) &&
+                        kotlin.math.abs(ca.get(Calendar.DAY_OF_MONTH) - cb.get(Calendar.DAY_OF_MONTH)) <= 2 &&
+                        ca.get(Calendar.YEAR) != cb.get(Calendar.YEAR)
+                    if (near || sameDayOtherYear) dupes += "n=${i + 1} and n=${j + 1} (${fmt(a.amount)})"
+                }
+            }
         val dupeText = if (dupes.isEmpty()) "none found" else dupes.joinToString("; ")
-        return "Saved data summary:\n$lines\n\nSaved entries, newest first (n is the number to use in edits and delete):\n$recentJson" +
+        return Accounts.facts(all, currency) +
+            "\n\nSaved entries, newest first (n is the number to use in edits and delete; columns: n | date time | kind | amount | category | item | extras):\n$entryLines" +
             "\n\nPossible duplicates (same kind and amount, close dates or the same date in another year; check item and note): $dupeText"
     }
 
@@ -114,7 +68,7 @@ object Ai {
         memory: List<String> = emptyList()
     ): AssistantResult = withContext(Dispatchers.IO) {
         if (key.isBlank()) throw Failure("AI is not configured.")
-        val newest = all.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt }).take(150)
+        val newest = all.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt }).take(500)
         // Entries dated far in the past or in the future are often mistakes; include them so they can be fixed.
         val nowMs = System.currentTimeMillis()
         val odd = all.filter { it !in newest && (it.date > nowMs + 86_400_000L || it.date < nowMs - 300L * 86_400_000L) }.take(30)
@@ -154,6 +108,13 @@ delete the extra ones; when they agree, put those n in "delete".
 Never say you added, changed or deleted something unless it is in "entries", "edits" or "delete" of THIS answer.
 If you could not do it, say so plainly and what you need.
 
+Getting numbers right (most important):
+- For any total, average, comparison or balance, take the number from EXACT FIGURES when it is there. Don't re-add entries.
+- If you must add entries yourself (a custom filter like "petrol in September"), first write the matching entries with their
+  amounts in "work", add them step by step there, and only then give the result in "reply". Count every matching line.
+- Say which period a number is for ("this month so far", "last week"). Show amounts with $currency.
+- If the data can't answer it (no entries for that), say so; never guess a figure.
+
 How to reply:
 - Short and to the point. Lead with the answer. Usually 1 to 4 short lines.
 - Reports and summaries: short lines like "- Food: 144 $currency", then one line with the total or main point.
@@ -187,8 +148,8 @@ $conversation
 
 Latest message: "$said"
 
-Return ONLY JSON: {"reply":"","entries":[],"edits":[{"n":1,"type":"","amount":0,"category":"","item":"","qty":0,"person":"","date":"YYYY-MM-DD","time":"","note":""}],"delete":[],"remember":[],"forget":[]}
-(edits and delete are [] unless case B.)
+Return ONLY JSON: {"work":"","reply":"","entries":[],"edits":[{"n":1,"type":"","amount":0,"category":"","item":"","qty":0,"person":"","date":"YYYY-MM-DD","time":"","note":""}],"delete":[],"remember":[],"forget":[]}
+("work" is your private scratch space for working out numbers; the person never sees it. edits and delete are [] unless case B.)
 """.trim()
         val json = try {
             JSONObject(request(prompt, key.trim(), store))
