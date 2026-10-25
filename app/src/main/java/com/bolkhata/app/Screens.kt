@@ -77,18 +77,35 @@ fun HomeScreen(
     val nowMs = System.currentTimeMillis()
     fun inMonth(ms: Long) = cal(ms).let { it.get(Calendar.YEAR) == now.get(Calendar.YEAR) && it.get(Calendar.MONTH) == now.get(Calendar.MONTH) }
 
-    val monthSpent = entries.filter { it.isCashOutFlow() && inMonth(it.date) }.sumOf { it.amount }
-    val monthIncome = entries.filter { it.isCashInFlow() && inMonth(it.date) }.sumOf { it.amount }
-    // Shop and business parts appear only once sales or purchases are used.
-    val trading = entries.any { isTrade(it.type) }
-    val todayEntries = entries.filter { sameDay(it.date, nowMs) }
-    val todaySales = todayEntries.filter { it.type == Type.SALE }.sumOf { it.amount }
-    val todayBought = todayEntries.filter { it.type == Type.PURCHASE }.sumOf { it.amount }
-    val todayProfit = profitBreakdown(entries, todayEntries).let { it.costedSalesAmount - it.costOfGoods }
-    val bal = balances(entries)
-    val receive = bal.values.filter { it > 0 }.sum()
-    val pay = -bal.values.filter { it < 0 }.sum()
-    val cashInHand = entries.filter { it.isCashInFlow() }.sumOf { it.amount } - entries.filter { it.isCashOutFlow() }.sumOf { it.amount }
+    // Everything below is worked out once per change to the entries, not on every frame.
+    val d = remember(entries) {
+        val todayEntries = entries.filter { sameDay(it.date, nowMs) }
+        val bal = balances(entries)
+        val sortedAll = entries.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt })
+        HomeData(
+            monthSpent = entries.filter { it.isCashOutFlow() && inMonth(it.date) }.sumOf { it.amount },
+            monthIncome = entries.filter { it.isCashInFlow() && inMonth(it.date) }.sumOf { it.amount },
+            trading = entries.any { isTrade(it.type) },
+            todaySales = todayEntries.filter { it.type == Type.SALE }.sumOf { it.amount },
+            todayBought = todayEntries.filter { it.type == Type.PURCHASE }.sumOf { it.amount },
+            todayProfit = profitBreakdown(entries, todayEntries).let { it.costedSalesAmount - it.costOfGoods },
+            receive = bal.values.filter { it > 0 }.sum(),
+            pay = -bal.values.filter { it < 0 }.sum(),
+            cashInHand = entries.filter { it.isCashInFlow() }.sumOf { it.amount } - entries.filter { it.isCashOutFlow() }.sumOf { it.amount },
+            todayList = sortedAll.filter { sameDay(it.date, nowMs) },
+            dayGroups = sortedAll.filter { !sameDay(it.date, nowMs) && inMonth(it.date) }.groupBy { dayKey(it.date) },
+            monthGroups = sortedAll.filter { !inMonth(it.date) }.groupBy { monthKey(it.date) }
+        )
+    }
+    val monthSpent = d.monthSpent
+    val monthIncome = d.monthIncome
+    val trading = d.trading
+    val todaySales = d.todaySales
+    val todayBought = d.todayBought
+    val todayProfit = d.todayProfit
+    val receive = d.receive
+    val pay = d.pay
+    val cashInHand = d.cashInHand
     val hour = now.get(Calendar.HOUR_OF_DAY)
     val greeting = when {
         hour < 12 -> "Good morning"
@@ -187,9 +204,10 @@ fun HomeScreen(
                             MaterialTheme.colorScheme.onSurfaceVariant, Modifier.weight(1f),
                             valueColor = if (todayProfit >= 0) GreenIn else RedSpend
                         )
+                        Text("Stock", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                         Icon(
-                            Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Open stock",
-                            tint = MaterialTheme.colorScheme.primary
+                            Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp)
                         )
                     }
                 }
@@ -215,10 +233,9 @@ fun HomeScreen(
 
         item { Spacer(Modifier.height(10.dp)) }
 
-        val sortedAll = entries.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt })
-        val todayList = sortedAll.filter { sameDay(it.date, nowMs) }
-        val dayGroups = sortedAll.filter { !sameDay(it.date, nowMs) && inMonth(it.date) }.groupBy { dayKey(it.date) }
-        val monthGroups = sortedAll.filter { !inMonth(it.date) }.groupBy { monthKey(it.date) }
+        val todayList = d.todayList
+        val dayGroups = d.dayGroups
+        val monthGroups = d.monthGroups
 
         if (entries.isEmpty()) {
             item {
@@ -238,7 +255,7 @@ fun HomeScreen(
             }
             if ("today" in open) {
                 items(todayList, key = { it.id }) { e ->
-                    Box(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) { TxRow(e, currency) { onEdit(e) } }
+                    Box(Modifier.padding(horizontal = 16.dp, vertical = 3.dp)) { TxRow(e, currency, showDate = false) { onEdit(e) } }
                 }
             }
         }
@@ -251,7 +268,7 @@ fun HomeScreen(
             }
             if (key in open) {
                 items(list, key = { it.id }) { e ->
-                    Box(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) { TxRow(e, currency) { onEdit(e) } }
+                    Box(Modifier.padding(horizontal = 16.dp, vertical = 3.dp)) { TxRow(e, currency, showDate = false) { onEdit(e) } }
                 }
             }
         }
@@ -280,7 +297,7 @@ fun HomeScreen(
                         }
                     }
                     items(dayList, key = { it.id }) { e ->
-                        Box(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) { TxRow(e, currency) { onEdit(e) } }
+                        Box(Modifier.padding(horizontal = 16.dp, vertical = 3.dp)) { TxRow(e, currency, showDate = false) { onEdit(e) } }
                     }
                 }
             }
@@ -373,6 +390,21 @@ private fun FlowChip(text: String, color: Color, icon: ImageVector) {
     }
 }
 
+private class HomeData(
+    val monthSpent: Double,
+    val monthIncome: Double,
+    val trading: Boolean,
+    val todaySales: Double,
+    val todayBought: Double,
+    val todayProfit: Double,
+    val receive: Double,
+    val pay: Double,
+    val cashInHand: Double,
+    val todayList: List<Entry>,
+    val dayGroups: Map<String, List<Entry>>,
+    val monthGroups: Map<String, List<Entry>>
+)
+
 private fun dayKey(ms: Long): String = cal(ms).let { "d" + it.get(Calendar.YEAR) + "-" + it.get(Calendar.DAY_OF_YEAR) }
 private fun monthKey(ms: Long): String = cal(ms).let { "m" + it.get(Calendar.YEAR) + "-" + it.get(Calendar.MONTH) }
 private fun spentLabel(currency: String, list: List<Entry>): String? {
@@ -395,13 +427,10 @@ private fun localDayStart(ms: Long): Long = cal(ms).apply {
 
 /** Running cash balance through the selected local calendar day; only recorded cash flows are counted. */
 private fun dailyCashSummary(allEntries: List<Entry>, dayEntries: List<Entry>): DailyCashSummary {
-    val dayStart = localDayStart(dayEntries.firstOrNull()?.date ?: System.currentTimeMillis())
+    // Only the day's own in and out are shown, so the running balance is not worked out here (it made long lists slow).
     val cashIn = dayEntries.filter { it.isCashInFlow() }.sumOf { it.amount }
     val cashOut = dayEntries.filter { it.isCashOutFlow() }.sumOf { it.amount }
-    val throughDay = allEntries.filter { localDayStart(it.date) <= dayStart }
-    val totalIn = throughDay.filter { it.isCashInFlow() }.sumOf { it.amount }
-    val totalOut = throughDay.filter { it.isCashOutFlow() }.sumOf { it.amount }
-    return DailyCashSummary(cashIn, cashOut, totalIn - totalOut)
+    return DailyCashSummary(cashIn, cashOut, 0.0)
 }
 
 @Composable

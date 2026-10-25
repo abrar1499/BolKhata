@@ -435,24 +435,28 @@ fun SectionHeader(title: String, count: Int?, expanded: Boolean, total: String? 
 }
 
 @Composable
-fun TxRow(e: Entry, currency: String, onClick: () -> Unit) {
-    Panel(Modifier.fillMaxWidth(), onClick = onClick, padding = 12.dp) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            CatBubble(e.category)
-            Spacer(Modifier.width(12.dp))
+fun TxRow(e: Entry, currency: String, showDate: Boolean = true, onClick: () -> Unit) {
+    val detail = qtyText(e).ifBlank {
+        if ((isLoan(e.type) || isTrade(e.type)) && e.item.isNotBlank() && e.item != "Loans") e.item else e.note
+    }
+    val sub = listOfNotNull(
+        if (showDate) dayLabel(e.date) else null,
+        detail.takeIf { it.isNotBlank() },
+        timeLabel(e.createdAt),
+        creditTag(e).takeIf { it.isNotEmpty() }
+    ).joinToString(" · ")
+    Panel(Modifier.fillMaxWidth(), onClick = onClick, padding = 0.dp) {
+        Row(
+            Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            CatBubble(e.category, 36.dp)
+            Spacer(Modifier.width(11.dp))
             Column(Modifier.weight(1f)) {
-                Text(entryTitle(e), fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(entryTitle(e), fontWeight = FontWeight.SemiBold, fontSize = 15.sp, lineHeight = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
-                    dayLabel(e.date) + " · " + qtyText(e).ifBlank {
-                        if ((isLoan(e.type) || isTrade(e.type)) && e.item.isNotBlank() && e.item != "Loans") e.item else e.note
-                    },
-                    fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    sub, fontSize = 12.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1, overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    timeLabel(e.createdAt) + creditTag(e).let { if (it.isEmpty()) "" else "  ·  $it" },
-                    fontSize = 9.sp, lineHeight = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                 )
             }
             Spacer(Modifier.width(8.dp))

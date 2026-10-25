@@ -36,7 +36,10 @@ android {
             signingConfig = signingConfigs.getByName("fixed")
         }
         release {
-            isMinifyEnabled = false
+            // Shrunk and optimised: the app starts and scrolls much faster than the debug build.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.getByName("fixed")
         }
     }

@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -90,7 +91,7 @@ fun StockScreen(
     val sales = today.filter { it.type == Type.SALE }.sumOf { it.amount }
     val bought = today.filter { it.type == Type.PURCHASE }.sumOf { it.amount }
     val profit = profitBreakdown(entries, today).let { it.costedSalesAmount - it.costOfGoods }
-    val stockList = stockItems(entries)
+    val stockList = remember(entries) { stockItems(entries) }
     val value = stockList.sumOf { if (it.line.qty > 0) it.line.qty * it.buyRate else 0.0 }
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {

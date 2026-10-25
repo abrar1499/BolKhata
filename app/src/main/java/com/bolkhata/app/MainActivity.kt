@@ -742,11 +742,13 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     }.timeInMillis
                     val monthSpent = entries.filter { it.date >= monthStart && it.type == Type.KHARCHA }.sumOf { it.amount }
                     val monthName = java.text.SimpleDateFormat("MMM", java.util.Locale.US).format(java.util.Date())
-                    val quick = entries
-                        .filter { it.type == Type.KHARCHA && it.amount > 0 && it.date >= System.currentTimeMillis() - 60L * 86_400_000L }
-                        .groupBy { quickLabel(it).lowercase() + "|" + it.amount }
-                        .entries.sortedByDescending { it.value.size }
-                        .take(4).map { g -> g.value.maxBy { it.date } }
+                    val quick = remember(entries) {
+                        entries
+                            .filter { it.type == Type.KHARCHA && it.amount > 0 && it.date >= System.currentTimeMillis() - 60L * 86_400_000L }
+                            .groupBy { quickLabel(it).lowercase() + "|" + it.amount }
+                            .entries.sortedByDescending { it.value.size }
+                            .take(4).map { g -> g.value.maxBy { it.date } }
+                    }
                     ChatScreen(
                         messages = chatMessages,
                         loading = chatLoading,
