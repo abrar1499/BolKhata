@@ -142,7 +142,15 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
 
     LaunchedEffect(Unit) { newVersion = Updater.check() }
 
+    // While a chat message is being handled, short messages go into the chat instead of a pop-up.
+    val chatSink = remember { arrayOfNulls<(String) -> Unit>(1) }
+
     fun toast(msg: String) {
+        val sink = chatSink[0]
+        if (tab == Tab.CHAT && chatWatch != null && sink != null) {
+            sink(msg)
+            return
+        }
         scope.launch {
             snackbar.currentSnackbarData?.dismiss()
             snackbar.showSnackbar(msg)
@@ -504,6 +512,11 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         store.saveChatMessages(updated)
     }
 
+    chatSink[0] = { m ->
+        chatWatch = null
+        postChat(m.removePrefix("✨ ").trim(), isUser = false)
+    }
+
     // When a chat message adds or changes entries, say so in the chat (new ones as a saved card with Undo).
     LaunchedEffect(entries) {
         val before = chatWatch ?: return@LaunchedEffect
@@ -566,7 +579,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         postChat(text, isUser = true)
         val changesExisting = runCatching {
             Commands.read(roman) != null || Parser.payStatus(roman) != null ||
-                Edits.plan(roman, entries) != null || (looksLikeEdit(roman) && entries.isNotEmpty())
+                Edits.plan(roman, entries) != null ||
+                (looksLikeEdit(roman) && entries.isNotEmpty() && roman.any { it.isDigit() })
         }.getOrDefault(false)
         if (changesExisting) {
             chatViaReader(text)
@@ -650,6 +664,67 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
 
     val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) readAttachment(uri)
+    }
+
+    /** Reads bank messages already in the phone's SMS inbox and offers the payments found to tick and add. */
+    fun importSms(days: Int) {
+        if (chatLoading) return
+        postChat("Import bank SMS · last $days days", isUser = true)
+        chatLoading = true
+        scope.launch {
+            try {
+                val since = System.currentTimeMillis() - days * 86_400_000L
+                val found = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    val out = mutableListOf<Entry>()
+                    context.contentResolver.query(
+                        android.net.Uri.parse("content://sms/inbox"),
+                        arrayOf("body", "date"),
+                        "date >= ?", arrayOf(since.toString()), "date DESC"
+                    )?.use { c ->
+                        val bodyCol = c.getColumnIndex("body")
+                        val dateCol = c.getColumnIndex("date")
+                        while (c.moveToNext()) {
+                            val body = c.getString(bodyCol) ?: continue
+                            val date = c.getLong(dateCol)
+                            BankParser.parse(body, date)?.let { e ->
+                                out += e.copy(id = "s" + date + "_" + out.size)
+                            }
+                        }
+                    }
+                    out
+                }
+                if (found.isEmpty()) {
+                    postChat("No bank payments found in your SMS for the last $days days.", isUser = false)
+                } else {
+                    imports = found
+                    importDupes = found.filter { isDuplicate(it) }.map { it.id }.toSet()
+                    val dupes = importDupes.size
+                    postChat(
+                        "Found ${found.size} bank " + (if (found.size == 1) "payment" else "payments") + " in your SMS" +
+                            (if (dupes > 0) ". $dupes look already saved, so I left them unticked." else ".") +
+                            " Check them below and tap Add.",
+                        isUser = false
+                    )
+                }
+            } catch (e: Exception) {
+                postChat("Could not read your SMS: " + (e.message ?: "unknown error"), isUser = false)
+            } finally {
+                chatLoading = false
+            }
+        }
+    }
+
+    var smsDays by remember { mutableIntStateOf(90) }
+    val smsPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        if (ok) importSms(smsDays)
+        else postChat("SMS permission was not given, so I can't read bank messages. You can attach a statement PDF instead.", isUser = false)
+    }
+
+    fun askSms(days: Int) {
+        smsDays = days
+        val granted = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_SMS) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (granted) importSms(days) else smsPermission.launch(android.Manifest.permission.READ_SMS)
     }
 
     /** One tap from the chat chips: the same entry again, dated now. */
@@ -791,7 +866,12 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             if (main && tab == Tab.CHAT) {
                 InputBar(
                     onSend = { chatInput(it) }, onMic = { startVoice(forChat = true) }, placeholder = "Speak, type or ask…",
-                    onAttach = { pickFile.launch(arrayOf("image/*", "application/pdf")) }
+                    attachOptions = listOf(
+                        "Statement, receipt or bill (photo / PDF)" to { pickFile.launch(arrayOf("image/*", "application/pdf")) },
+                        "Bank SMS · last month" to { askSms(31) },
+                        "Bank SMS · last 3 months" to { askSms(92) },
+                        "Bank SMS · last 6 months" to { askSms(183) }
+                    )
                 )
             } else {
                 InputBar(onSend = { handleText(it) }, onMic = { startVoice() })
@@ -1279,8 +1359,9 @@ private fun InputBar(
     onSend: (String) -> Unit,
     onMic: () -> Unit,
     placeholder: String = "Type here…",
-    onAttach: (() -> Unit)? = null
+    attachOptions: List<Pair<String, () -> Unit>>? = null
 ) {
+    var attachMenu by remember { mutableStateOf(false) }
     var text by rememberSaveable { mutableStateOf("") }
     fun send() {
         val t = text.trim()
@@ -1297,12 +1378,19 @@ private fun InputBar(
                 .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (onAttach != null) {
-                IconButton(onClick = onAttach) {
-                    Icon(
-                        Icons.Filled.AttachFile, contentDescription = "Attach a statement, receipt or bill",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+            if (attachOptions != null) {
+                Box {
+                    IconButton(onClick = { attachMenu = true }) {
+                        Icon(
+                            Icons.Filled.AttachFile, contentDescription = "Import a statement, bill or bank SMS",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    DropdownMenu(expanded = attachMenu, onDismissRequest = { attachMenu = false }) {
+                        attachOptions.forEach { (label, action) ->
+                            DropdownMenuItem(text = { Text(label) }, onClick = { attachMenu = false; action() })
+                        }
+                    }
                 }
                 Spacer(Modifier.width(2.dp))
             }

@@ -116,6 +116,9 @@ How to reply:
 - "aaj" / "today" means today only, "kal" yesterday, "is mahine" this month. Answer for exactly the period asked, and list what was spent on when they ask "kahan" / "where".
 - Use only the saved data for personal facts. Never invent entries or amounts. If the data does not have it, say so in one line.
 - Questions about things outside money: answer briefly and helpfully, then they can carry on.
+- App help, when they ask how to do something: the paperclip next to the message box imports a statement, receipt or bill (photo or PDF)
+  and old bank SMS (last month, 3 or 6 months); the Overview tab shows totals and days; Reports in the menu show Cash Out, Cash In,
+  Sales, Purchases, Stock, Profit, Cash Balance and Dues; tapping an entry edits it; "last entry was 400 not 500" changes an entry.
 
 Entry rules:
 ${entryRules()}
