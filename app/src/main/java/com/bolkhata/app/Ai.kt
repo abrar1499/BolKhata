@@ -216,9 +216,57 @@ Return ONLY JSON: {"entries":[{"type":"","amount":0,"category":"","item":"","qty
             throw Failure("Could not read this file. Try a clearer photo or another PDF.")
         }
         try {
-            toEntries(json, note)
+            fixDates(toEntries(json, note))
         } catch (e: Exception) {
             throw Failure("Could not read this file. Try a clearer photo or another PDF.")
+        }
+    }
+
+    /**
+     * Second check on dates read from a file, using the other lines as context. A date far from the rest
+     * (more than 45 days from the middle date) or in the future is probably a misread short date, so the
+     * other readings are tried: day and year swapped ("26/10/24" as 2026-10-24 instead of 2024-10-26), or
+     * the same day and month in the year the other lines use. The reading closest to the rest, and not in
+     * the future, is kept. The time of day stays as it was.
+     */
+    fun fixDates(list: List<Entry>, now: Long = System.currentTimeMillis()): List<Entry> {
+        if (list.isEmpty()) return list
+        val day = 86_400_000L
+        // Files are usually recent: the middle of the lines from the last 4 months is the reference;
+        // if none are that recent, the middle of all of them.
+        val recentDates = list.map { it.date }.filter { it in (now - 120 * day)..(now + day) }.sorted()
+        val allDates = list.map { it.date }.sorted()
+        val anchor = when {
+            recentDates.isNotEmpty() -> recentDates[recentDates.size / 2]
+            allDates.size >= 3 -> allDates[allDates.size / 2]
+            else -> now
+        }
+        val anchorYear = Calendar.getInstance().apply { timeInMillis = anchor }.get(Calendar.YEAR)
+        fun far(ms: Long) = kotlin.math.abs(ms - anchor) > 45 * day || ms > now + day
+        return list.map { e ->
+            if (!far(e.date)) return@map e
+            val c = Calendar.getInstance().apply { timeInMillis = e.date }
+            val y = c.get(Calendar.YEAR)
+            val m = c.get(Calendar.MONTH)
+            val d = c.get(Calendar.DAY_OF_MONTH)
+            fun at(year: Int, month: Int, dom: Int): Long? = try {
+                Calendar.getInstance().apply {
+                    isLenient = false
+                    timeInMillis = e.date
+                    set(Calendar.YEAR, year)
+                    set(Calendar.MONTH, month)
+                    set(Calendar.DAY_OF_MONTH, dom)
+                }.timeInMillis
+            } catch (x: Exception) {
+                null
+            }
+            val options = listOfNotNull(
+                at(2000 + d, m, y % 100),          // year and day swapped
+                at(anchorYear, m, d),              // same day and month, in the year of the other lines
+                at(anchorYear - 1, m, d)
+            ).filter { it <= now + day }
+            val best = (options + e.date).filter { it <= now + day }.minByOrNull { kotlin.math.abs(it - anchor) } ?: return@map e
+            if (best == e.date) e else e.copy(date = best, createdAt = e.createdAt - e.date + best)
         }
     }
 
