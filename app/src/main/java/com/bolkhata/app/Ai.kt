@@ -58,8 +58,18 @@ object Ai {
             .joinToString("; ") { e ->
                 e.key + ": " + (if (e.value >= 0) "owes you " else "you owe ") + fmt(kotlin.math.abs(e.value))
             }.ifBlank { "none" }
+        val todayStart = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        val todays = all.filter { it.date >= todayStart && it.date < todayStart + 86_400_000L }
+        val todayText = todays.joinToString("; ") { e ->
+            e.type.label + " " + fmt(e.amount) + " " + e.item.ifBlank { e.category.label } +
+                (if (e.note.isNotBlank()) " (" + e.note + ")" else "")
+        }.ifBlank { "nothing yet" }
         val lines = listOf(
             "Saved entries: " + all.size,
+            "Today's expenses: " + fmt(todays.filter { it.type == Type.KHARCHA }.sumOf { it.amount }) + " $currency",
+            "Today's entries: $todayText",
             "$monthName expenses: " + fmt(all.filter { it.type == Type.KHARCHA && inMonth(it, 0) }.sumOf { it.amount }) + " $currency",
             "$monthName income: " + fmt(all.filter { it.type == Type.AAMDANI && inMonth(it, 0) }.sumOf { it.amount }) + " $currency",
             "Last month expenses: " + fmt(all.filter { it.type == Type.KHARCHA && inMonth(it, 1) }.sumOf { it.amount }) + " $currency",
@@ -102,7 +112,8 @@ How to reply:
 - Searches ("petrol kab dala", "Ahmed ke sath kya hua"): list matching entries as "- 23 Oct · Petrol · 60", at most 10, newest first.
 - When they ask how to save or what to do, give 2 or 3 practical tips based on their own numbers.
 - Reply in the same language and script as their latest message (Roman Urdu if they write Roman Urdu).
-- Plain text only, no markdown headings or bold. Use "-" for lists.
+- Plain text only, no markdown headings or bold. Use "-" for lists, each item on its own line, never inside brackets.
+- "aaj" / "today" means today only, "kal" yesterday, "is mahine" this month. Answer for exactly the period asked, and list what was spent on when they ask "kahan" / "where".
 - Use only the saved data for personal facts. Never invent entries or amounts. If the data does not have it, say so in one line.
 - Questions about things outside money: answer briefly and helpfully, then they can carry on.
 
@@ -130,6 +141,51 @@ Return ONLY JSON: {"reply":"","entries":[]}
         val reply = json.optString("reply").trim()
         if (reply.isBlank() && list.isEmpty()) throw Failure("AI returned an empty answer.")
         reply to list
+    }
+
+    /**
+     * Reads a bank statement, receipt or bill (photo or PDF) and returns every transaction in it as entries.
+     * Nothing is saved here; the person reviews them first.
+     */
+    suspend fun readDocument(
+        bytes: ByteArray,
+        mime: String,
+        note: String,
+        key: String,
+        store: Store,
+        currency: String
+    ): List<Entry> = withContext(Dispatchers.IO) {
+        if (key.isBlank()) throw Failure("Reading statements needs AI. Turn it on in Settings.")
+        val today = SimpleDateFormat("yyyy-MM-dd (EEEE)", Locale.US).format(Date())
+        val data = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+        val prompt = """
+The attached file is a bank statement, card statement, receipt or bill. Today is $today. The person's currency is $currency.
+Turn every money movement in it into a ledger entry, using the date printed for each line.
+- Money taken from the account or paid (purchase, POS, mada, Apple Pay, ATM, transfer out, bill, fee) is "expense",
+  unless it is clearly a loan to a named person ("gave") or money returned to someone ("paid_back").
+- Money that came in (salary, deposit, refund, transfer in) is "income", unless it is clearly a named person repaying ("got_back").
+- A receipt or bill with several items is ONE expense for its total, with the shop name as item.
+- Skip opening and closing balances, running balances, totals, and declined or reversed lines.
+- note: the merchant or a short clean description, max 6 words.
+${if (note.isNotBlank()) "The person said about this file: \"" + note.replace("\"", "'").take(300) + "\"" else ""}
+
+Entry rules:
+${entryRules()}
+
+Return ONLY JSON: {"entries":[{"type":"","amount":0,"category":"","item":"","qty":0,"unit":"","rate":0,"person":"","date":"YYYY-MM-DD","note":""}]}
+""".trim()
+        val json = try {
+            request(prompt, key.trim(), store, mime to data)
+        } catch (e: Failure) {
+            throw e
+        } catch (e: Exception) {
+            throw Failure("Could not read this file. Try a clearer photo or another PDF.")
+        }
+        try {
+            toEntries(json, note)
+        } catch (e: Exception) {
+            throw Failure("Could not read this file. Try a clearer photo or another PDF.")
+        }
     }
 
     /** Answers questions about the saved khata without changing any entries. */
@@ -335,12 +391,13 @@ If nothing matches, return {"edits":[],"delete":[],"message":"I couldn't find th
         }
 
     /** Sends [prompt] to the first model that answers and returns its JSON text. */
-    private fun request(prompt: String, key: String, store: Store): String {
+    /** [file] is an attached image or PDF: its media type and base64 data. */
+    private fun request(prompt: String, key: String, store: Store, file: Pair<String, String>? = null): String {
         val first = store.aiModel.takeIf { it in MODELS }
         val order = listOfNotNull(first) + MODELS.filter { it != first }
         var lastError = "AI did not answer"
         for (model in order) {
-            val (code, body) = call(model, key, prompt)
+            val (code, body) = call(model, key, prompt, file)
             when (code) {
                 200 -> {
                     store.aiModel = model
@@ -409,18 +466,24 @@ note: a short clean English summary, max 6 words.
 Make one entry per transaction. Skip anything without an amount. Number words count ("seven", "do sau" = 200, "dedh hazar" = 1500).
 """.trim()
 
-    private fun call(model: String, key: String, prompt: String): Pair<Int, String> {
+    private fun call(model: String, key: String, prompt: String, file: Pair<String, String>? = null): Pair<Int, String> {
         val url = URL("https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent")
         val conn = url.openConnection() as HttpURLConnection
         return try {
             conn.requestMethod = "POST"
             conn.connectTimeout = 15_000
-            conn.readTimeout = 30_000
+            // Reading a whole statement takes longer than a sentence.
+            conn.readTimeout = if (file != null) 120_000 else 30_000
             conn.doOutput = true
             conn.setRequestProperty("Content-Type", "application/json")
             conn.setRequestProperty("x-goog-api-key", key)
             val body = JSONObject()
-                .put("contents", JSONArray().put(JSONObject().put("parts", JSONArray().put(JSONObject().put("text", prompt)))))
+                .put("contents", JSONArray().put(JSONObject().put("parts", JSONArray().apply {
+                    if (file != null) {
+                        put(JSONObject().put("inline_data", JSONObject().put("mime_type", file.first).put("data", file.second)))
+                    }
+                    put(JSONObject().put("text", prompt))
+                })))
                 .put("generationConfig", JSONObject().put("temperature", 0).put("responseMimeType", "application/json"))
             conn.outputStream.use { it.write(body.toString().toByteArray()) }
             val code = conn.responseCode

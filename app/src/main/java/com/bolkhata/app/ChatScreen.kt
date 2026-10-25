@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -48,15 +49,19 @@ fun ChatScreen(
     onEditEntry: (Entry) -> Unit,
     onAddSuggestions: (List<Entry>) -> Unit,
     onIgnoreSuggestions: (Set<String>) -> Unit,
-    onQuick: (Entry) -> Unit
+    onQuick: (Entry) -> Unit,
+    imports: List<Entry> = emptyList(),
+    importDupes: Set<String> = emptySet(),
+    onAddImports: (List<Entry>) -> Unit = {},
+    onDropImports: () -> Unit = {}
 ) {
     var confirmClear by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val byId = remember(entries) { entries.associateBy { it.id } }
     val itemCount = messages.size + (if (messages.isEmpty()) 1 else 0) + (if (loading) 1 else 0) +
-        (if (suggestions.isNotEmpty()) 1 else 0)
+        (if (suggestions.isNotEmpty()) 1 else 0) + (if (imports.isNotEmpty()) 1 else 0)
 
-    LaunchedEffect(messages.size, loading, suggestions.size) {
+    LaunchedEffect(messages.size, loading, suggestions.size, imports.size) {
         if (itemCount > 0) listState.animateScrollToItem(itemCount - 1)
     }
 
@@ -147,9 +152,33 @@ fun ChatScreen(
                     }
                 }
             }
+            if (imports.isNotEmpty()) {
+                item(key = "chat-import") {
+                    PickCard(
+                        title = "${imports.size} found in your file" +
+                            (if (importDupes.isNotEmpty()) " · ${importDupes.size} already saved (unticked)" else ""),
+                        titleColor = MaterialTheme.colorScheme.primary,
+                        rows = imports,
+                        preselected = imports.map { it.id }.toSet() - importDupes,
+                        currency = currency,
+                        onAdd = onAddImports,
+                        ignoreLabel = "Cancel",
+                        onIgnore = { onDropImports() }
+                    )
+                }
+            }
             if (suggestions.isNotEmpty()) {
                 item(key = "chat-bank") {
-                    BankCard(suggestions, currency, onAddSuggestions, onIgnoreSuggestions)
+                    PickCard(
+                        title = "${suggestions.size} " + (if (suggestions.size == 1) "payment" else "payments") + " from your bank",
+                        titleColor = OrangeOwe,
+                        rows = suggestions,
+                        preselected = suggestions.map { it.id }.toSet(),
+                        currency = currency,
+                        onAdd = onAddSuggestions,
+                        ignoreLabel = "Ignore",
+                        onIgnore = onIgnoreSuggestions
+                    )
                 }
             }
         }
@@ -279,14 +308,20 @@ private fun SavedCard(
     }
 }
 
+/** A list to tick and add: bank payments, or transactions read from a statement. */
 @Composable
-private fun BankCard(
-    suggestions: List<Entry>,
+private fun PickCard(
+    title: String,
+    titleColor: Color,
+    rows: List<Entry>,
+    preselected: Set<String>,
     currency: String,
     onAdd: (List<Entry>) -> Unit,
+    ignoreLabel: String,
     onIgnore: (Set<String>) -> Unit
 ) {
-    var picked by remember(suggestions.map { it.id }) { mutableStateOf(suggestions.map { it.id }.toSet()) }
+    val suggestions = rows
+    var picked by remember(rows.map { it.id }) { mutableStateOf(preselected) }
     Column(
         Modifier
             .fillMaxWidth(0.92f)
@@ -295,10 +330,10 @@ private fun BankCard(
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Text(
-            "${suggestions.size} " + (if (suggestions.size == 1) "payment" else "payments") + " from your bank",
-            color = OrangeOwe, fontWeight = FontWeight.Bold, fontSize = 13.sp
-        )
+        Text(title, color = titleColor, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+        Column(
+            Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())
+        ) {
         suggestions.forEach { e ->
             Row(
                 Modifier.fillMaxWidth().clickable {
@@ -320,6 +355,7 @@ private fun BankCard(
                 Text(moneyA(currency, e.amount, prefix(e.type)), color = signColor(e.type), fontWeight = FontWeight.Bold)
             }
         }
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
                 onClick = { onAdd(suggestions.filter { it.id in picked }) },
@@ -329,9 +365,9 @@ private fun BankCard(
             ) { Text(if (picked.size == suggestions.size && picked.size > 1) "Add all ${picked.size}" else "Add ${picked.size}") }
             OutlinedButton(
                 onClick = { onIgnore(picked) },
-                enabled = picked.isNotEmpty(),
+                enabled = picked.isNotEmpty() || ignoreLabel == "Cancel",
                 shape = RoundedCornerShape(12.dp)
-            ) { Text("Ignore") }
+            ) { Text(ignoreLabel) }
         }
     }
 }

@@ -23,6 +23,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
@@ -106,6 +107,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     // The entries before a chat message was handled; what changes after that is reported in the chat.
     var chatWatch by remember { mutableStateOf<List<Entry>?>(null) }
     var voiceForChat by remember { mutableStateOf(false) }
+    // Transactions read from an attached statement, receipt or bill, waiting to be ticked and added.
+    var imports by remember { mutableStateOf(listOf<Entry>()) }
+    var importDupes by remember { mutableStateOf(setOf<String>()) }
 
     DisposableEffect(Unit) {
         val stop = store.watchSuggestions { suggestions = store.loadSuggestions() }
@@ -588,6 +592,64 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         }
     }
 
+    /** An entry already in the khata on the same day with the same amount and kind is probably the same one. */
+    fun isDuplicate(e: Entry): Boolean = entries.any {
+        it.type == e.type && kotlin.math.abs(it.amount - e.amount) < 0.01 && sameDay(it.date, e.date)
+    }
+
+    /** Reads an attached photo or PDF with AI and shows what it found in the chat to tick and add. */
+    fun readAttachment(uri: android.net.Uri) {
+        if (chatLoading) return
+        val resolver = context.contentResolver
+        val mime = resolver.getType(uri) ?: "application/octet-stream"
+        if (!(mime.startsWith("image/") || mime == "application/pdf")) {
+            postChat("Please attach a photo or a PDF.", isUser = false)
+            return
+        }
+        val name = runCatching {
+            resolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+                if (c.moveToFirst()) c.getString(0) else null
+            }
+        }.getOrNull() ?: if (mime == "application/pdf") "Statement.pdf" else "Photo"
+        postChat("📎 $name", isUser = true)
+        if (activeKey.isBlank()) {
+            postChat("Reading statements and bills needs AI. Turn it on in Settings.", isUser = false)
+            return
+        }
+        chatLoading = true
+        scope.launch {
+            try {
+                val bytes = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    resolver.openInputStream(uri)?.use { it.readBytes() }
+                } ?: throw Ai.Failure("Could not open this file.")
+                if (bytes.size > 15 * 1024 * 1024) throw Ai.Failure("This file is too big (over 15 MB). Send a smaller PDF or a photo of one page.")
+                val found = Ai.readDocument(bytes, mime, "", activeKey, store, currency)
+                    .sortedByDescending { it.date }
+                if (found.isEmpty()) {
+                    postChat("I couldn't find any transactions in this file.", isUser = false)
+                } else {
+                    imports = found
+                    importDupes = found.filter { isDuplicate(it) }.map { it.id }.toSet()
+                    val dupes = importDupes.size
+                    postChat(
+                        "Found ${found.size} " + (if (found.size == 1) "transaction" else "transactions") +
+                            (if (dupes > 0) ". $dupes look already saved, so I left them unticked." else ".") +
+                            " Check them below and tap Add.",
+                        isUser = false
+                    )
+                }
+            } catch (e: Exception) {
+                postChat(e.message ?: "Could not read this file.", isUser = false)
+            } finally {
+                chatLoading = false
+            }
+        }
+    }
+
+    val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) readAttachment(uri)
+    }
+
     /** One tap from the chat chips: the same entry again, dated now. */
     fun quickAdd(e: Entry) {
         val now = System.currentTimeMillis()
@@ -724,7 +786,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         bottomBar = {
             val main = results == null && people == null
             if (main && tab == Tab.CHAT) {
-                InputBar(onSend = { chatInput(it) }, onMic = { startVoice(forChat = true) }, placeholder = "Speak, type or ask…")
+                InputBar(
+                    onSend = { chatInput(it) }, onMic = { startVoice(forChat = true) }, placeholder = "Speak, type or ask…",
+                    onAttach = { pickFile.launch(arrayOf("image/*", "application/pdf")) }
+                )
             } else {
                 InputBar(onSend = { handleText(it) }, onMic = { startVoice() })
             }
@@ -824,7 +889,20 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                             )
                         },
                         onIgnoreSuggestions = { ids -> dropSuggestions(ids) },
-                        onQuick = { quickAdd(it) }
+                        onQuick = { quickAdd(it) },
+                        imports = imports,
+                        importDupes = importDupes,
+                        onAddImports = { list ->
+                            val added = list.mapIndexed { i, e -> e.copy(id = "e" + System.nanoTime() + i) }
+                            save(added + entries)
+                            imports = emptyList()
+                            importDupes = emptySet()
+                            postChat("✓ Added from your file", isUser = false, entryIds = added.map { it.id })
+                        },
+                        onDropImports = {
+                            imports = emptyList()
+                            importDupes = emptySet()
+                        }
                     )
                 }
                 else -> SettingsScreen(
@@ -1194,7 +1272,12 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
 }
 
 @Composable
-private fun InputBar(onSend: (String) -> Unit, onMic: () -> Unit, placeholder: String = "Type here…") {
+private fun InputBar(
+    onSend: (String) -> Unit,
+    onMic: () -> Unit,
+    placeholder: String = "Type here…",
+    onAttach: (() -> Unit)? = null
+) {
     var text by rememberSaveable { mutableStateOf("") }
     fun send() {
         val t = text.trim()
@@ -1211,6 +1294,15 @@ private fun InputBar(onSend: (String) -> Unit, onMic: () -> Unit, placeholder: S
                 .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            if (onAttach != null) {
+                IconButton(onClick = onAttach) {
+                    Icon(
+                        Icons.Filled.AttachFile, contentDescription = "Attach a statement, receipt or bill",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(Modifier.width(2.dp))
+            }
             OutlinedTextField(
                 value = text,
                 onValueChange = { text = it },
