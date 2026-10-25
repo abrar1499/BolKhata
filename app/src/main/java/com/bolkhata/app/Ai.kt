@@ -94,7 +94,11 @@ object Ai {
         currency: String
     ): AssistantResult = withContext(Dispatchers.IO) {
         if (key.isBlank()) throw Failure("AI is not configured.")
-        val recent = all.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt }).take(150)
+        val newest = all.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt }).take(150)
+        // Entries dated far in the past or in the future are often mistakes; include them so they can be fixed.
+        val nowMs = System.currentTimeMillis()
+        val odd = all.filter { it !in newest && (it.date > nowMs + 86_400_000L || it.date < nowMs - 300L * 86_400_000L) }.take(30)
+        val recent = newest + odd
         val today = SimpleDateFormat("yyyy-MM-dd (EEEE)", Locale.US).format(Date())
         val conversation = history.takeLast(10).joinToString("\n") { m ->
             (if (m.isUser) "User: " else "Assistant: ") + m.text.take(600)
@@ -182,6 +186,9 @@ Return ONLY JSON: {"reply":"","entries":[],"edits":[{"n":1,"type":"","amount":0,
         val prompt = """
 The attached file is a bank statement, card statement, receipt or bill. Today is $today. The person's currency is $currency.
 Turn every money movement in it into a ledger entry, using the date printed for each line.
+Dates: short dates are ambiguous. "25/10/26" and "26/10/24" can be day/month/year or year/month/day, even inside the same file.
+Choose the reading that gives a date on or before today and closest to today (the newest possible), never a date a year or more
+back unless a 4-digit year says so. Labels a phone shows next to a message ("Today", "Yesterday", a weekday) win over the printed date.
 - Money taken from the account or paid (purchase, POS, mada, Apple Pay, ATM, transfer out, bill, fee) is "expense",
   unless it is clearly a loan to a named person ("gave") or money returned to someone ("paid_back").
 - Money that came in (salary, deposit, refund, transfer in) is "income", unless it is clearly a named person repaying ("got_back").
