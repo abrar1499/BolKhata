@@ -194,7 +194,20 @@ class Store(context: Context) {
 
     fun save(list: List<Entry>) = write("entries", list)
 
+    /** Saving happens on one background thread, in order, so the screen never waits for it. */
+    private val saver = java.util.concurrent.Executors.newSingleThreadExecutor()
+
     private fun write(key: String, list: List<Entry>) {
+        // Bank suggestions are also written by the notification reader, so they stay immediate.
+        if (key == "suggestions") {
+            writeNow(key, list)
+            return
+        }
+        val snapshot = list.toList()
+        saver.execute { writeNow(key, snapshot) }
+    }
+
+    private fun writeNow(key: String, list: List<Entry>) {
         val arr = JSONArray()
         list.forEach { e ->
             arr.put(

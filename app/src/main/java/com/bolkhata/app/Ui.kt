@@ -274,13 +274,13 @@ data class ProfitBreakdown(
 fun profitBreakdown(allEntries: List<Entry>, periodEntries: List<Entry>): ProfitBreakdown {
     val sales = periodEntries.filter { it.type == Type.SALE }
     val costBySaleId = linkedMapOf<String, Double>()
+    // Purchases grouped by item once, so a year of sales doesn't scan every entry for each sale.
+    val purchasesByItem = if (sales.isEmpty()) emptyMap() else allEntries
+        .filter { it.type == Type.PURCHASE && it.qty > 0.0 && it.amount > 0.0 }
+        .groupBy { it.item.trim().lowercase() }
     sales.forEach { sale ->
         if (sale.qty <= 0.0 || sale.item.isBlank() || sale.item.equals("Sale", ignoreCase = true)) return@forEach
-        val purchases = allEntries.filter {
-            it.type == Type.PURCHASE &&
-                it.item.trim().equals(sale.item.trim(), ignoreCase = true) &&
-                it.qty > 0.0 && it.amount > 0.0 && it.date <= sale.date
-        }
+        val purchases = purchasesByItem[sale.item.trim().lowercase()].orEmpty().filter { it.date <= sale.date }
         val purchasedQty = purchases.sumOf { it.qty }
         if (purchasedQty > 0.0) {
             costBySaleId[sale.id] = sale.qty * (purchases.sumOf { it.amount } / purchasedQty)

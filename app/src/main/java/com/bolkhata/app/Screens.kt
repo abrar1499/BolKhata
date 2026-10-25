@@ -98,7 +98,7 @@ fun HomeScreen(
             todayList = sortedAll.filter { sameDay(it.date, nowMs) },
             dayGroups = sortedAll.filter { !sameDay(it.date, nowMs) && inMonth(it.date) }.groupBy { dayKey(it.date) },
             monthGroups = sortedAll.filter { !inMonth(it.date) }.groupBy { monthKey(it.date) }
-        )
+        ).also { h -> h.monthDays = h.monthGroups.mapValues { m -> m.value.groupBy { dayKey(it.date) } } }
     }
     val monthSpent = d.monthSpent
     val monthIncome = d.monthIncome
@@ -282,7 +282,7 @@ fun HomeScreen(
                 }
             }
             if (key in open) {
-                list.groupBy { dayKey(it.date) }.forEach { (day, dayList) ->
+                (d.monthDays[key] ?: emptyMap()).forEach { (day, dayList) ->
                     item(key = "md-$key-$day") {
                         Box(Modifier.padding(horizontal = 16.dp)) {
                             DailyCashHeader(
@@ -400,7 +400,9 @@ private class HomeData(
     val todayList: List<Entry>,
     val dayGroups: Map<String, List<Entry>>,
     val monthGroups: Map<String, List<Entry>>
-)
+) {
+    var monthDays: Map<String, Map<String, List<Entry>>> = emptyMap()
+}
 
 private fun dayKey(ms: Long): String = cal(ms).let { "d" + it.get(Calendar.YEAR) + "-" + it.get(Calendar.DAY_OF_YEAR) }
 private fun monthKey(ms: Long): String = cal(ms).let { "m" + it.get(Calendar.YEAR) + "-" + it.get(Calendar.MONTH) }
@@ -683,7 +685,7 @@ fun TransactionsScreen(entries: List<Entry>, currency: String, onEdit: (Entry) -
     var filter by remember { mutableStateOf(TxFilter.ALL) }
 
     val q = query.trim().lowercase()
-    val shown = entries
+    val shown = remember(entries, filter, q) { entries
         .filter {
             when (filter) {
                 TxFilter.ALL -> true
@@ -696,7 +698,12 @@ fun TransactionsScreen(entries: List<Entry>, currency: String, onEdit: (Entry) -
         .filter { e ->
             q.isEmpty() || listOf(e.note, e.item, e.person, e.category.label, e.type.label).any { it.lowercase().contains(q) }
         }
-        .sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt })
+        .sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt }) }
+    // Month headings worked out once per list, with one date formatter, not one per row.
+    val monthOf = remember(shown) {
+        val f = SimpleDateFormat("MMMM yyyy", Locale.US)
+        shown.map { f.format(Date(it.date)) }
+    }
     val total = shown.sumOf { if (it.type == Type.KHARCHA || it.type == Type.WAPIS_DIYA) -it.amount else if (it.type == Type.AAMDANI || it.type == Type.WAPIS_MILA) it.amount else 0.0 }
 
     LazyColumn(
@@ -741,8 +748,8 @@ fun TransactionsScreen(entries: List<Entry>, currency: String, onEdit: (Entry) -
             item { Text("Nothing found.", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 12.dp)) }
         }
         var lastMonth = ""
-        shown.forEach { e ->
-            val m = SimpleDateFormat("MMMM yyyy", Locale.US).format(Date(e.date))
+        shown.forEachIndexed { i, e ->
+            val m = monthOf[i]
             if (m != lastMonth) {
                 lastMonth = m
                 item(key = "m-" + e.id) { Text(m, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp)) }
@@ -968,13 +975,41 @@ private fun ReportGroupCard(
     }
 }
 
-@Composable
-fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit, startKind: ReportKind = ReportKind.CASH_OUT) {
-    var span by remember { mutableStateOf(Span.MONTH) }
-    var offset by remember { mutableIntStateOf(0) }
-    var reportKind by remember(startKind) { mutableStateOf(startKind) }
-    var openGroups by remember { mutableStateOf(setOf<String>()) }
+/** Everything a report shows, worked out once per change of entries or period (not on every frame). */
+private class ReportData(
+    val start: Long,
+    val end: Long,
+    val label: String,
+    val startDay: Calendar,
+    val inRange: List<Entry>,
+    val cashInEntries: List<Entry>,
+    val cashOutEntries: List<Entry>,
+    val cashInTotal: Double,
+    val cashOutTotal: Double,
+    val allCashIn: Double,
+    val allCashOut: Double,
+    val cashBalance: Double,
+    val sales: List<Entry>,
+    val purchases: List<Entry>,
+    val totalSales: Double,
+    val totalPurchases: Double,
+    val salesGroups: List<ReportGroup>,
+    val purchaseGroups: List<ReportGroup>,
+    val cashInGroups: List<ReportGroup>,
+    val cashOutGroups: List<ReportGroup>,
+    val currentStock: List<StockLine>,
+    val stockByName: Map<String, StockLine>,
+    val stockNames: List<String>,
+    val stockRows: List<StockReportRow>,
+    val receivedQty: Double,
+    val givenQty: Double,
+    val profit: ProfitBreakdown,
+    val outstanding: List<Pair<String, Double>>,
+    val toReceive: Double,
+    val toPay: Double
+)
 
+private fun reportData(entries: List<Entry>, span: Span, offset: Int): ReportData {
     val (start, end, label) = spanRange(span, offset)
     // Compared by calendar day, the same way the home screen counts the month.
     val startDay = cal(start)
@@ -1033,6 +1068,47 @@ fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit, st
         .toList().sortedByDescending { kotlin.math.abs(it.second) }
     val toReceive = outstanding.filter { it.second > 0 }.sumOf { it.second }
     val toPay = outstanding.filter { it.second < 0 }.sumOf { -it.second }
+    return ReportData(start, end, label, startDay, inRange, cashInEntries, cashOutEntries, cashInTotal, cashOutTotal, allCashIn, allCashOut, cashBalance, sales, purchases, totalSales, totalPurchases, salesGroups, purchaseGroups, cashInGroups, cashOutGroups, currentStock, stockByName, stockNames, stockRows, receivedQty, givenQty, profit, outstanding, toReceive, toPay)
+}
+
+@Composable
+fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit, startKind: ReportKind = ReportKind.CASH_OUT) {
+    var span by remember { mutableStateOf(Span.MONTH) }
+    var offset by remember { mutableIntStateOf(0) }
+    var reportKind by remember(startKind) { mutableStateOf(startKind) }
+    var openGroups by remember { mutableStateOf(setOf<String>()) }
+
+    val rd = remember(entries, span, offset) { reportData(entries, span, offset) }
+    val start = rd.start
+    val end = rd.end
+    val label = rd.label
+    val startDay = rd.startDay
+    val inRange = rd.inRange
+    val cashInEntries = rd.cashInEntries
+    val cashOutEntries = rd.cashOutEntries
+    val cashInTotal = rd.cashInTotal
+    val cashOutTotal = rd.cashOutTotal
+    val allCashIn = rd.allCashIn
+    val allCashOut = rd.allCashOut
+    val cashBalance = rd.cashBalance
+    val sales = rd.sales
+    val purchases = rd.purchases
+    val totalSales = rd.totalSales
+    val totalPurchases = rd.totalPurchases
+    val salesGroups = rd.salesGroups
+    val purchaseGroups = rd.purchaseGroups
+    val cashInGroups = rd.cashInGroups
+    val cashOutGroups = rd.cashOutGroups
+    val currentStock = rd.currentStock
+    val stockByName = rd.stockByName
+    val stockNames = rd.stockNames
+    val stockRows = rd.stockRows
+    val receivedQty = rd.receivedQty
+    val givenQty = rd.givenQty
+    val profit = rd.profit
+    val outstanding = rd.outstanding
+    val toReceive = rd.toReceive
+    val toPay = rd.toPay
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item { ScreenTitle("Reports", onMenu = onMenu) }
