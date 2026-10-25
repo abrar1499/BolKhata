@@ -243,10 +243,14 @@ private fun SavedCard(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(
-            if (live.isEmpty()) "Removed" else message.text,
+            if (live.isEmpty()) "Removed" else "✓ " + live.size + (if (live.size == 1) " entry saved" else " entries saved"),
             color = if (live.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else GreenIn,
             fontWeight = FontWeight.Bold, fontSize = 13.sp
         )
+        // The assistant's own short line ("Saved: breakfast 7 SAR"), when it wrote one.
+        if (live.isNotEmpty() && !message.text.startsWith("✓")) {
+            Text(message.text, fontSize = 14.sp, lineHeight = 19.sp, color = MaterialTheme.colorScheme.onSurface)
+        }
         live.forEach { e ->
             Row(
                 Modifier

@@ -103,8 +103,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var bankHelp by remember { mutableStateOf(false) }
     // A sale or purchase opened from the Stock tab, waiting to be confirmed in the form.
     var trade by remember { mutableStateOf<Entry?>(null) }
-    // Ids of entries before a chat message was handled; new entries after that are shown in the chat.
-    var chatWatch by remember { mutableStateOf<Set<String>?>(null) }
+    // The entries before a chat message was handled; what changes after that is reported in the chat.
+    var chatWatch by remember { mutableStateOf<List<Entry>?>(null) }
     var voiceForChat by remember { mutableStateOf(false) }
 
     DisposableEffect(Unit) {
@@ -498,48 +498,93 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         store.saveChatMessages(updated)
     }
 
-    // When a chat message adds entries, show them in the chat as a saved card with Undo.
+    // When a chat message adds or changes entries, say so in the chat (new ones as a saved card with Undo).
     LaunchedEffect(entries) {
         val before = chatWatch ?: return@LaunchedEffect
-        val added = entries.filter { it.id !in before }
+        if (entries === before) return@LaunchedEffect
+        val ids = before.map { it.id }.toSet()
+        val added = entries.filter { it.id !in ids }
+        chatWatch = null
         if (added.isNotEmpty()) {
-            chatWatch = null
             postChat(
                 "✓ " + added.size + " " + (if (added.size == 1) "entry" else "entries") + " saved",
                 isUser = false,
                 entryIds = added.map { it.id }
             )
+        } else {
+            postChat("✓ Done. Your entries are updated.", isUser = false)
         }
     }
 
+    /** Hands a message to the home screen's reader and reports the result in the chat. */
+    fun chatViaReader(text: String) {
+        val snapshot = entries
+        chatWatch = snapshot
+        handleText(text)
+        // Stop waiting if nothing changed (a question box or form that was cancelled).
+        scope.launch {
+            kotlinx.coroutines.delay(60_000)
+            if (chatWatch === snapshot) chatWatch = null
+        }
+    }
+
+    /** Without AI (no key, or no internet): save clear entries, answer simple questions, never stay silent. */
+    fun chatOffline(text: String, roman: String, aiDown: Boolean) {
+        val question = roman.endsWith("?") || runCatching { Questions.isQuestion(roman) }.getOrDefault(false)
+        val parsed = runCatching { Parser.parse(roman) }.getOrNull()
+        if (!question && parsed != null && (parsed.entries.isNotEmpty() || parsed.unclear.isNotEmpty())) {
+            chatViaReader(text)
+            return
+        }
+        val answer = if (question) runCatching { Questions.answer(roman, entries, currency) }.getOrNull() else null
+        postChat(
+            answer?.text ?: if (aiDown) {
+                "AI is not reachable right now. I can still save entries like \"petrol 60\", and answer simple questions like \"how much this month?\"."
+            } else {
+                "Hi! Tell me an expense like \"petrol 60\", or ask \"how much did I spend this month?\". Turn on AI in Settings for full answers."
+            },
+            isUser = false
+        )
+    }
+
     /**
-     * Chat input: questions are answered (offline first, then AI), everything else goes through the
-     * same reader as the home screen, so entries land in the khata straight away.
+     * Chat input. AI comes first: one call either saves the money the person mentioned or answers them
+     * (questions, reports, searches, advice). Changes to existing entries use the app's own reader.
+     * Without AI, the offline reader and offline answers take over.
      */
     fun chatInput(raw: String) {
         val text = raw.trim()
         if (text.isEmpty() || chatLoading) return
         val roman = runCatching { Translit.toRoman(text) }.getOrDefault(text)
-        val isQuestion = roman.endsWith("?") || runCatching { Questions.isQuestion(roman) }.getOrDefault(false)
+        val history = chatMessages.takeLast(10)
         postChat(text, isUser = true)
-        if (isQuestion) {
-            val offline = runCatching { Questions.answer(roman, entries, currency) }.getOrNull()
-            if (activeKey.isNotBlank()) {
-                sendChat(text, addUser = false)
-            } else if (offline != null) {
-                postChat(offline.text, isUser = false)
-            } else {
-                postChat("Turn on AI in Settings to ask questions like this.", isUser = false)
-            }
+        val changesExisting = runCatching {
+            Commands.read(roman) != null || Parser.payStatus(roman) != null ||
+                Edits.plan(roman, entries) != null || (looksLikeEdit(roman) && entries.isNotEmpty())
+        }.getOrDefault(false)
+        if (changesExisting) {
+            chatViaReader(text)
             return
         }
-        val token = entries.map { it.id }.toSet()
-        chatWatch = token
-        handleText(text)
-        // Stop waiting if nothing was added (a command, an edit, or a form that was cancelled).
+        if (activeKey.isBlank()) {
+            chatOffline(text, roman, aiDown = false)
+            return
+        }
+        chatLoading = true
         scope.launch {
-            kotlinx.coroutines.delay(60_000)
-            if (chatWatch === token) chatWatch = null
+            try {
+                val (reply, list) = Ai.assistant(text, history, entries, activeKey, store, currency)
+                if (list.isNotEmpty()) {
+                    save(list + entries)
+                    postChat(reply.ifBlank { "Saved" }, isUser = false, entryIds = list.map { it.id })
+                } else {
+                    postChat(reply, isUser = false)
+                }
+            } catch (e: Exception) {
+                chatOffline(text, roman, aiDown = true)
+            } finally {
+                chatLoading = false
+            }
         }
     }
 

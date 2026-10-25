@@ -23,6 +23,115 @@ object Ai {
 
     class Failure(message: String) : Exception(message)
 
+    /** Totals, balances and recent entries the AI may use for answers. */
+    private fun ledgerContext(all: List<Entry>, currency: String): String {
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        val recent = all.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt }).take(150)
+        val recentJson = JSONArray()
+        recent.forEach { entry ->
+            recentJson.put(
+                JSONObject()
+                    .put("date", dateFormat.format(Date(entry.date)))
+                    .put("type", entry.type.label)
+                    .put("amount", entry.amount)
+                    .put("category", entry.category.label)
+                    .put("item", entry.item)
+                    .put("person", entry.person)
+                    .put("note", entry.note)
+                    .put("qty", entry.qty)
+                    .put("unit", entry.unit)
+            )
+        }
+        val now = Calendar.getInstance()
+        fun inMonth(e: Entry, back: Int): Boolean {
+            val c = Calendar.getInstance().apply { add(Calendar.MONTH, -back) }
+            val d = Calendar.getInstance().apply { timeInMillis = e.date }
+            return d.get(Calendar.YEAR) == c.get(Calendar.YEAR) && d.get(Calendar.MONTH) == c.get(Calendar.MONTH)
+        }
+        val monthName = SimpleDateFormat("MMMM", Locale.US).format(now.time)
+        val byCat = all.filter { it.type == Type.KHARCHA && inMonth(it, 0) }
+            .groupBy { it.category.label }.mapValues { g -> g.value.sumOf { it.amount } }
+            .entries.sortedByDescending { it.value }
+            .joinToString("; ") { it.key + " " + fmt(it.value) }.ifBlank { "none" }
+        val balancesText = balances(all).entries
+            .sortedByDescending { kotlin.math.abs(it.value) }
+            .joinToString("; ") { e ->
+                e.key + ": " + (if (e.value >= 0) "owes you " else "you owe ") + fmt(kotlin.math.abs(e.value))
+            }.ifBlank { "none" }
+        val lines = listOf(
+            "Saved entries: " + all.size,
+            "$monthName expenses: " + fmt(all.filter { it.type == Type.KHARCHA && inMonth(it, 0) }.sumOf { it.amount }) + " $currency",
+            "$monthName income: " + fmt(all.filter { it.type == Type.AAMDANI && inMonth(it, 0) }.sumOf { it.amount }) + " $currency",
+            "Last month expenses: " + fmt(all.filter { it.type == Type.KHARCHA && inMonth(it, 1) }.sumOf { it.amount }) + " $currency",
+            "$monthName expenses by category: $byCat",
+            "People balances (owes you = they must pay you): $balancesText"
+        ).joinToString("\n")
+        return "Saved data summary:\n$lines\n\nSaved entries, newest first (up to 150):\n$recentJson"
+    }
+
+    /**
+     * The chat assistant. One call decides what the message is: money to record (returned as entries,
+     * saved straight away) or anything else (a greeting, question, report, search or advice), answered briefly.
+     */
+    suspend fun assistant(
+        message: String,
+        history: List<ChatMessage>,
+        all: List<Entry>,
+        key: String,
+        store: Store,
+        currency: String
+    ): Pair<String, List<Entry>> = withContext(Dispatchers.IO) {
+        if (key.isBlank()) throw Failure("AI is not configured.")
+        val today = SimpleDateFormat("yyyy-MM-dd (EEEE)", Locale.US).format(Date())
+        val conversation = history.takeLast(10).joinToString("\n") { m ->
+            (if (m.isUser) "User: " else "Assistant: ") + m.text.take(600)
+        }.ifBlank { "(new conversation)" }
+        val said = message.replace("\"", "'").take(2000)
+        val prompt = """
+You are the assistant inside Smart Expense, a money diary app. Today is $today. Currency is $currency.
+The person writes English, Roman Urdu, Urdu, Hindi or Arabic, often mixed.
+
+Decide what their latest message is:
+A) It records money that moved (spent, earned, lent, borrowed, returned, sold, bought). Put it in "entries" using the entry rules below,
+   and set "reply" to one short line confirming it, e.g. "Saved: breakfast 7 $currency".
+B) Anything else: a greeting, a question, a report, a search, advice. Set "entries" to [] and answer in "reply".
+
+How to reply:
+- Short and to the point. Lead with the answer. Usually 1 to 4 short lines.
+- Reports and summaries: short lines like "- Food: 144 $currency", then one line with the total or main point.
+- Searches ("petrol kab dala", "Ahmed ke sath kya hua"): list matching entries as "- 23 Oct · Petrol · 60", at most 10, newest first.
+- When they ask how to save or what to do, give 2 or 3 practical tips based on their own numbers.
+- Reply in the same language and script as their latest message (Roman Urdu if they write Roman Urdu).
+- Plain text only, no markdown headings or bold. Use "-" for lists.
+- Use only the saved data for personal facts. Never invent entries or amounts. If the data does not have it, say so in one line.
+- Questions about things outside money: answer briefly and helpfully, then they can carry on.
+
+Entry rules:
+${entryRules()}
+Each entry: {"type":"","amount":0,"category":"","item":"","qty":0,"unit":"","rate":0,"person":"","date":"YYYY-MM-DD","note":""}
+
+${ledgerContext(all, currency)}
+
+Previous conversation:
+$conversation
+
+Latest message: "$said"
+
+Return ONLY JSON: {"reply":"","entries":[]}
+""".trim()
+        val json = try {
+            JSONObject(request(prompt, key.trim(), store))
+        } catch (e: Failure) {
+            throw e
+        } catch (e: Exception) {
+            throw Failure("AI returned an unreadable answer.")
+        }
+        val list = toEntries(json.toString(), message)
+        val reply = json.optString("reply").trim()
+        if (reply.isBlank() && list.isEmpty()) throw Failure("AI returned an empty answer.")
+        reply to list
+    }
+
     /** Answers questions about the saved khata without changing any entries. */
     suspend fun chat(
         question: String,
@@ -266,6 +375,14 @@ Today is $today.
 
 Return ONLY JSON: {"entries":[{"type":"","amount":0,"category":"","item":"","qty":0,"unit":"","rate":0,"person":"","date":"YYYY-MM-DD","note":""}]}
 
+${entryRules()}
+
+What they said: "${text.replace("\"", "'")}"
+""".trim()
+    }
+
+    /** How to turn a sentence into entries; shared by the entry reader and the chat assistant. */
+    private fun entryRules(): String = """
 type, one of:
 - "expense": they spent money on something
 - "income": salary or money earned
@@ -290,10 +407,7 @@ Ignore sentences that are only remarks or questions.
 date: resolve words like kal, parson, 14 date, 13 oct. Default today.
 note: a short clean English summary, max 6 words.
 Make one entry per transaction. Skip anything without an amount. Number words count ("seven", "do sau" = 200, "dedh hazar" = 1500).
-
-What they said: "${text.replace("\"", "'")}"
 """.trim()
-    }
 
     private fun call(model: String, key: String, prompt: String): Pair<Int, String> {
         val url = URL("https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent")
