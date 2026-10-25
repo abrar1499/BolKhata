@@ -595,10 +595,17 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         chatLoading = true
         scope.launch {
             try {
-                val (reply, list) = Ai.assistant(text, history, entries, activeKey, store, currency)
+                val res = Ai.assistant(text, history, entries, activeKey, store, currency)
+                val reply = res.reply
+                val list = res.entries
+                // Corrections change the saved entry (with Undo) instead of adding a second one.
+                res.plan?.let { applyPlan(it) }
                 if (list.isNotEmpty()) {
                     save(list + entries)
                     postChat(reply.ifBlank { "Saved" }, isUser = false, entryIds = list.map { it.id })
+                } else if (res.plan != null) {
+                    // Undo for a change is on the bar at the bottom (it puts the old entry back).
+                    postChat("✓ " + reply.ifBlank { "Updated" }.removePrefix("✓ "), isUser = false)
                 } else {
                     postChat(reply, isUser = false)
                 }

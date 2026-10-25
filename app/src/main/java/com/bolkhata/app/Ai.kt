@@ -24,14 +24,16 @@ object Ai {
     class Failure(message: String) : Exception(message)
 
     /** Totals, balances and recent entries the AI may use for answers. */
-    private fun ledgerContext(all: List<Entry>, currency: String): String {
+    private fun ledgerContext(all: List<Entry>, recent: List<Entry>, currency: String): String {
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-        val recent = all.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt }).take(150)
+        val timeFormat = SimpleDateFormat("HH:mm", Locale.US)
         val recentJson = JSONArray()
-        recent.forEach { entry ->
+        recent.forEachIndexed { i, entry ->
             recentJson.put(
                 JSONObject()
+                    .put("n", i + 1)
                     .put("date", dateFormat.format(Date(entry.date)))
+                    .put("time", timeFormat.format(Date(entry.createdAt)))
                     .put("type", entry.type.label)
                     .put("amount", entry.amount)
                     .put("category", entry.category.label)
@@ -76,7 +78,7 @@ object Ai {
             "$monthName expenses by category: $byCat",
             "People balances (owes you = they must pay you): $balancesText"
         ).joinToString("\n")
-        return "Saved data summary:\n$lines\n\nSaved entries, newest first (up to 150):\n$recentJson"
+        return "Saved data summary:\n$lines\n\nSaved entries, newest first (up to 150; n is the number to use in edits and delete):\n$recentJson"
     }
 
     /**
@@ -90,8 +92,9 @@ object Ai {
         key: String,
         store: Store,
         currency: String
-    ): Pair<String, List<Entry>> = withContext(Dispatchers.IO) {
+    ): AssistantResult = withContext(Dispatchers.IO) {
         if (key.isBlank()) throw Failure("AI is not configured.")
+        val recent = all.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt }).take(150)
         val today = SimpleDateFormat("yyyy-MM-dd (EEEE)", Locale.US).format(Date())
         val conversation = history.takeLast(10).joinToString("\n") { m ->
             (if (m.isUser) "User: " else "Assistant: ") + m.text.take(600)
@@ -102,9 +105,15 @@ You are the assistant inside Smart Expense, a money diary app. Today is $today. 
 The person writes English, Roman Urdu, Urdu, Hindi or Arabic, often mixed.
 
 Decide what their latest message is:
-A) It records money that moved (spent, earned, lent, borrowed, returned, sold, bought). Put it in "entries" using the entry rules below,
+A) It records NEW money that moved (spent, earned, lent, borrowed, returned, sold, bought). Put it in "entries" using the entry rules below,
    and set "reply" to one short line confirming it, e.g. "Saved: breakfast 7 $currency".
-B) Anything else: a greeting, a question, a report, a search, advice. Set "entries" to [] and answer in "reply".
+B) It corrects, moves or removes money that is ALREADY in the saved entries: a different day ("aaj nahi kal tha", "that was yesterday"),
+   a different amount, category, name or note, or "delete / hata do / galat hai". Do NOT add a new entry for it.
+   Put the change in "edits" (n from the saved entries, only the fields that change; "date" as YYYY-MM-DD for a new day)
+   or the n in "delete". Look at the previous conversation to know which entry they mean. The reply says what changed.
+C) Anything else: a greeting, a question, a report, a search, advice. Answer in "reply" with no entries, edits or deletes.
+If it is not clear which saved entry they mean, ask one short question and change nothing.
+Never say you added, changed or deleted something unless it is in "entries", "edits" or "delete".
 
 How to reply:
 - Short and to the point. Lead with the answer. Usually 1 to 4 short lines.
@@ -124,14 +133,15 @@ Entry rules:
 ${entryRules()}
 Each entry: {"type":"","amount":0,"category":"","item":"","qty":0,"unit":"","rate":0,"person":"","date":"YYYY-MM-DD","note":""}
 
-${ledgerContext(all, currency)}
+${ledgerContext(all, recent, currency)}
 
 Previous conversation:
 $conversation
 
 Latest message: "$said"
 
-Return ONLY JSON: {"reply":"","entries":[]}
+Return ONLY JSON: {"reply":"","entries":[],"edits":[{"n":1,"type":"","amount":0,"category":"","item":"","qty":0,"person":"","date":"YYYY-MM-DD","time":"","note":""}],"delete":[]}
+(edits and delete are [] unless case B.)
 """.trim()
         val json = try {
             JSONObject(request(prompt, key.trim(), store))
@@ -142,9 +152,14 @@ Return ONLY JSON: {"reply":"","entries":[]}
         }
         val list = toEntries(json.toString(), message)
         val reply = json.optString("reply").trim()
-        if (reply.isBlank() && list.isEmpty()) throw Failure("AI returned an empty answer.")
-        reply to list
+        val plan = planFrom(json, recent, reply.ifBlank { "Updated." })
+        if (reply.isBlank() && list.isEmpty() && plan.changed.isEmpty() && plan.deleted.isEmpty()) {
+            throw Failure("AI returned an empty answer.")
+        }
+        AssistantResult(reply, list, plan.takeIf { it.changed.isNotEmpty() || it.deleted.isNotEmpty() })
     }
+
+    class AssistantResult(val reply: String, val entries: List<Entry>, val plan: EditPlan?)
 
     /**
      * Reads a bank statement, receipt or bill (photo or PDF) and returns every transaction in it as entries.
@@ -365,39 +380,65 @@ category: food, transport, rent, bills, mobile, home, shopping, health, personal
 If nothing matches, return {"edits":[],"delete":[],"message":"I couldn't find that entry."}
 """.trim()
             val json = JSONObject(request(prompt, key, store))
-            val changed = mutableListOf<Pair<Entry, Entry>>()
-            val edits = json.optJSONArray("edits") ?: JSONArray()
-            for (i in 0 until edits.length()) {
-                val o = edits.optJSONObject(i) ?: continue
-                val old = recent.getOrNull(o.optInt("n", 0) - 1) ?: continue
-                var e = old
-                if (o.has("type")) typeNames.entries.firstOrNull { it.value == o.optString("type") }?.let { e = e.copy(type = it.key) }
-                if (o.has("amount")) o.optDouble("amount").takeIf { !it.isNaN() && it > 0 }?.let { e = e.copy(amount = it) }
-                if (o.has("category")) catNames.entries.firstOrNull { it.value == o.optString("category") && it.key != Cat.UDHAAR && it.key != Cat.TANKHWAH }
-                    ?.let { e = e.copy(category = it.key, item = if (o.has("item")) e.item else it.key.label) }
-                if (o.has("item")) o.optString("item").trim().takeIf { it.isNotEmpty() }?.let { e = e.copy(item = it) }
-                if (o.has("person")) e = e.copy(person = o.optString("person").trim().replaceFirstChar { it.uppercase() })
-                if (o.has("date")) parseDate(o.optString("date"))?.let { e = e.copy(date = it) }
-                if (o.has("qty")) o.optDouble("qty").takeIf { !it.isNaN() && it >= 0 }?.let { e = e.copy(qty = it) }
-                // keep category consistent with the type
-                e = when {
-                    e.type == Type.SALE -> e.copy(category = Cat.SALES)
-                    e.type == Type.PURCHASE -> e.copy(category = Cat.STOCK)
-                    isLoan(e.type) -> e.copy(category = Cat.UDHAAR, item = e.item.ifBlank { "Loans" })
-                    e.type == Type.AAMDANI && e.category == Cat.ASSETS -> e.copy(person = "")
-                    e.type == Type.AAMDANI -> e.copy(category = Cat.TANKHWAH, person = "")
-                    e.category == Cat.UDHAAR || e.category == Cat.TANKHWAH || e.category == Cat.SALES || e.category == Cat.STOCK ->
-                        e.copy(category = Cat.OTHER, item = "Other", person = "")
-                    else -> e.copy(person = "")
-                }
-                if (isLoan(e.type) && e.person.isBlank()) continue
-                if (e != old) changed += old to e
-            }
-            val del = json.optJSONArray("delete") ?: JSONArray()
-            val deleted = (0 until del.length()).mapNotNull { recent.getOrNull(del.optInt(it, 0) - 1) }
-                .filter { d -> changed.none { it.first.id == d.id } }
-            EditPlan(changed, deleted, json.optString("message").ifBlank { "Here is the change." })
+            planFrom(json, recent, json.optString("message").ifBlank { "Here is the change." })
         }
+
+    /** Turns {"edits":[{"n":..}], "delete":[n]} into changes, n counting from 1 in [recent]. */
+    private fun planFrom(json: JSONObject, recent: List<Entry>, message: String): EditPlan {
+            val changed = mutableListOf<Pair<Entry, Entry>>()
+        val edits = json.optJSONArray("edits") ?: JSONArray()
+        for (i in 0 until edits.length()) {
+            val o = edits.optJSONObject(i) ?: continue
+            val old = recent.getOrNull(o.optInt("n", 0) - 1) ?: continue
+            var e = old
+            if (o.has("type")) typeNames.entries.firstOrNull { it.value == o.optString("type") }?.let { e = e.copy(type = it.key) }
+            if (o.has("amount")) o.optDouble("amount").takeIf { !it.isNaN() && it > 0 }?.let { e = e.copy(amount = it) }
+            if (o.has("category")) catNames.entries.firstOrNull { it.value == o.optString("category") && it.key != Cat.UDHAAR && it.key != Cat.TANKHWAH }
+                ?.let { e = e.copy(category = it.key, item = if (o.has("item")) e.item else it.key.label) }
+            if (o.has("item")) o.optString("item").trim().takeIf { it.isNotEmpty() }?.let { e = e.copy(item = it) }
+            // Empty fields mean "no change".
+            o.optString("person").trim().takeIf { it.isNotEmpty() }?.let { v -> e = e.copy(person = v.replaceFirstChar { it.uppercase() }) }
+            // A new day keeps the entry's time of day.
+            if (o.has("date")) parseDate(o.optString("date"))?.let { d ->
+                val keep = Calendar.getInstance().apply { timeInMillis = e.date }
+                e = e.copy(date = Calendar.getInstance().apply {
+                    timeInMillis = d
+                    set(Calendar.HOUR_OF_DAY, keep.get(Calendar.HOUR_OF_DAY))
+                    set(Calendar.MINUTE, keep.get(Calendar.MINUTE))
+                }.timeInMillis)
+            }
+            if (o.has("qty")) o.optDouble("qty").takeIf { !it.isNaN() && it > 0 }?.let { e = e.copy(qty = it) }
+        if (o.has("note")) o.optString("note").trim().takeIf { it.isNotEmpty() }?.let { e = e.copy(note = it.take(60)) }
+        Regex("""^(\d{1,2}):(\d{2})""").find(o.optString("time").trim())?.let { m ->
+            val at = Calendar.getInstance().apply {
+                timeInMillis = e.date
+                set(Calendar.HOUR_OF_DAY, m.groupValues[1].toInt().coerceIn(0, 23))
+                set(Calendar.MINUTE, m.groupValues[2].toInt().coerceIn(0, 59))
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
+            e = e.copy(date = at, createdAt = at)
+        }
+            // keep category consistent with the type
+            e = when {
+                e.type == Type.SALE -> e.copy(category = Cat.SALES)
+                e.type == Type.PURCHASE -> e.copy(category = Cat.STOCK)
+                isLoan(e.type) -> e.copy(category = Cat.UDHAAR, item = e.item.ifBlank { "Loans" })
+                e.type == Type.AAMDANI && e.category == Cat.ASSETS -> e.copy(person = "")
+                e.type == Type.AAMDANI -> e.copy(category = Cat.TANKHWAH, person = "")
+                e.category == Cat.UDHAAR || e.category == Cat.TANKHWAH || e.category == Cat.SALES || e.category == Cat.STOCK ->
+                    e.copy(category = Cat.OTHER, item = "Other", person = "")
+                else -> e.copy(person = "")
+            }
+            if (isLoan(e.type) && e.person.isBlank()) continue
+            if (e != old) changed += old to e
+        }
+        val del = json.optJSONArray("delete") ?: JSONArray()
+        val deleted = (0 until del.length()).mapNotNull { recent.getOrNull(del.optInt(it, 0) - 1) }
+            .filter { d -> changed.none { it.first.id == d.id } }
+        return EditPlan(changed, deleted, message)
+    }
+
 
     /** Sends [prompt] to the first model that answers and returns its JSON text. */
     /** [file] is an attached image or PDF: its media type and base64 data. */
