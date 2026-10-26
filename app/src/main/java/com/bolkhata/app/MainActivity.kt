@@ -30,6 +30,8 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -1076,12 +1078,6 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             val acct = account
             CompositionLocalProvider(LocalAccountOpener provides { e: Entry -> account = accountOf(e) }) {
             when {
-                acct != null -> CompositionLocalProvider(LocalAccountOpener provides null) {
-                    AccountScreen(
-                        key = acct, entries = entries, currency = currency,
-                        onBack = { account = null }, onEdit = { editing = it }, onNew = { trade = it }
-                    )
-                }
                 results != null -> {
                     val (q, editMode) = results!!
                     ResultsScreen(
@@ -1297,6 +1293,20 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     }
                 )
             }
+            }
+            // The account opens over the list, so going back returns to the same place in the list.
+            if (acct != null) {
+                Box(
+                    Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
+                        .pointerInput(Unit) { detectTapGestures { } }
+                ) {
+                    CompositionLocalProvider(LocalAccountOpener provides null) {
+                        AccountScreen(
+                            key = acct, entries = entries, currency = currency,
+                            onBack = { account = null }, onEdit = { editing = it }, onNew = { trade = it }
+                        )
+                    }
+                }
             }
         }
     }

@@ -11,7 +11,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -67,13 +68,9 @@ private fun moneyIn(e: Entry) = when (e.type) {
     else -> false
 }
 
-private fun monthStart(back: Int): Long = Calendar.getInstance().apply {
-    set(Calendar.DAY_OF_MONTH, 1); set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
-    set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-    add(Calendar.MONTH, -back)
-}.timeInMillis
-
-private class Sub(val name: String, val list: List<Entry>, val loan: Double, val thisMonth: Double, val all: Double)
+private class Sub(val name: String, val list: List<Entry>, val inn: Double, val out: Double) {
+    val balance get() = inn - out
+}
 
 @Composable
 fun AccountScreen(
@@ -85,163 +82,126 @@ fun AccountScreen(
     onNew: (Entry) -> Unit
 ) {
     val people = key.main == PEOPLE
-    var focus by remember(key) { mutableStateOf(key.sub) }
     val data = remember(entries, key.main) {
-        val mine = entries.filter { accountOf(it).main == key.main }
-        val m0 = monthStart(0)
-        // Spellings of one name or shop ("Shahbaz" / "shahbaz") are one account.
-        mine.groupBy { accountOf(it).sub.lowercase() }.map { (_, list) ->
-            val name = list.groupingBy { accountOf(it).sub }.eachCount().maxByOrNull { it.value }?.key ?: ""
-            val spent = list.filter { !moneyIn(it) }
-            Sub(
-                name = name,
-                list = list.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt }),
-                loan = balances(list).values.sum(),
-                thisMonth = spent.filter { it.date >= m0 }.sumOf { it.amount },
-                all = if (people) list.sumOf { if (moneyIn(it)) it.amount else -it.amount } else spent.sumOf { it.amount }
-            )
-        }
+        entries.filter { accountOf(it).main == key.main }
+            // Spellings of one name or shop ("Shahbaz" / "shahbaz") are one account.
+            .groupBy { accountOf(it).sub.lowercase() }
+            .map { (_, list) ->
+                Sub(
+                    name = list.groupingBy { accountOf(it).sub }.eachCount().maxByOrNull { it.value }?.key ?: "",
+                    list = list.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt }),
+                    inn = list.filter { moneyIn(it) }.sumOf { it.amount },
+                    out = list.filter { !moneyIn(it) }.sumOf { it.amount }
+                )
+            }
     }
-    val m0 = monthStart(0)
-    val m1 = monthStart(1)
-    val allMine = data.flatMap { it.list }
-    val current = data.firstOrNull { it.name.equals(focus, true) }
-    val others = data.filter { it !== current }.sortedByDescending { if (people) kotlin.math.abs(it.loan) else it.all }
-    val df = SimpleDateFormat("d MMM", Locale.US)
-
-    val headBg = MaterialTheme.colorScheme.inverseSurface
-    val headFg = MaterialTheme.colorScheme.inverseOnSurface
+    // The order is fixed when the account opens (the tapped one first), so opening another never moves the list.
+    val order = remember(key) {
+        data.sortedWith(
+            compareByDescending<Sub> { it.name.equals(key.sub, true) }
+                .thenByDescending { it.list.firstOrNull()?.date ?: 0L }
+        ).map { it.name.lowercase() }
+    }
+    val subs = order.mapNotNull { n -> data.firstOrNull { it.name.lowercase() == n } } +
+        data.filter { it.name.lowercase() !in order }
+    var open by remember(key) { mutableStateOf(setOf(key.sub.lowercase())) }
+    val totalIn = data.sumOf { it.inn }
+    val totalOut = data.sumOf { it.out }
+    val df = SimpleDateFormat("d MMM yyyy", Locale.US)
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
         item {
-            Column(
-                Modifier.fillMaxWidth()
-                    .clip(RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp))
-                    .background(headBg)
-                    .padding(horizontal = 16.dp).padding(top = 12.dp, bottom = 18.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = headFg) }
-                    Spacer(Modifier.width(4.dp))
+            Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+                Column(Modifier.weight(1f)) {
+                    Text(key.main, fontWeight = FontWeight.ExtraBold, fontSize = 20.sp)
+                    Text(
+                        (if (subs.size == 1) "1 account" else "${subs.size} accounts") + " · " +
+                            (data.sumOf { it.list.size }.let { if (it == 1) "1 entry" else "$it entries" }),
+                        fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+        item {
+            Panel(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), padding = 12.dp) {
+                Totals(totalIn, totalOut, currency, people, big = true)
+            }
+        }
+        subs.forEach { s ->
+            val isOpen = s.name.lowercase() in open
+            item(key = "h-" + s.name.lowercase()) {
+                val shape = if (isOpen) RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp) else RoundedCornerShape(20.dp)
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 8.dp)
+                        .clip(shape).background(MaterialTheme.colorScheme.surfaceVariant)
+                        .clickable { open = if (isOpen) open - s.name.lowercase() else open + s.name.lowercase() }
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Column(Modifier.weight(1f)) {
-                        Text("Main account", color = headFg.copy(alpha = 0.7f), fontSize = 12.sp)
-                        Text(key.main, color = headFg, fontWeight = FontWeight.ExtraBold, fontSize = 20.sp)
+                        Text(s.name, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            if (s.list.size == 1) "1 entry" else "${s.list.size} entries",
+                            fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
-                    Text(if (data.size == 1) "1 account" else "${data.size} accounts", color = headFg.copy(alpha = 0.75f), fontSize = 12.sp)
-                }
-                Spacer(Modifier.height(14.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (people) {
-                        val owed = data.sumOf { if (it.loan > 0) it.loan else 0.0 }
-                        val owe = data.sumOf { if (it.loan < 0) -it.loan else 0.0 }
-                        HeadFigure("They owe you", money(currency, owed), headFg, Modifier.weight(1f))
-                        HeadFigure("You owe", money(currency, owe), headFg, Modifier.weight(1f))
-                    } else {
-                        val out = allMine.filter { !moneyIn(it) }
-                        val inn = allMine.filter { moneyIn(it) }
-                        val useIn = out.isEmpty() && inn.isNotEmpty()
-                        val src = if (useIn) inn else out
-                        HeadFigure("This month", money(currency, src.filter { it.date >= m0 }.sumOf { it.amount }), headFg, Modifier.weight(1f))
-                        HeadFigure("Last month", money(currency, src.filter { it.date in m1 until m0 }.sumOf { it.amount }), headFg, Modifier.weight(1f))
-                    }
+                    BalanceChip(s.balance, currency, people)
+                    Icon(
+                        if (isOpen) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                        contentDescription = if (isOpen) "Close" else "Open",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
-        }
-
-        if (current != null) {
-            item(key = "focus-head") {
-                Surface(
-                    Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 14.dp),
-                    shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
-                ) {
-                    Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Letter(current.name, people)
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(current.name, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (isOpen) {
+                item(key = "t-" + s.name.lowercase()) {
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).background(MaterialTheme.colorScheme.surface).padding(12.dp)) {
+                        Totals(s.inn, s.out, currency, people, big = false)
+                    }
+                }
+                items(s.list, key = { "e-" + it.id }) { e ->
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).background(MaterialTheme.colorScheme.surface)) {
+                        HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+                        Row(
+                            Modifier.fillMaxWidth().clickable { onEdit(e) }.padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(entryTitle(e), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                val note = if (e.note.isNotBlank() && !e.note.equals(e.item, true)) e.note else e.type.label
+                                Text(df.format(Date(e.date)) + " · " + note, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
                             Text(
-                                summary(current, people, currency), fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
-                                color = if (people && current.loan > 0.005) OrangeOwe else MaterialTheme.colorScheme.onSurfaceVariant
+                                (if (moneyIn(e)) "+" else "−") + fmt(e.amount),
+                                fontWeight = FontWeight.Bold, fontSize = 14.sp,
+                                color = if (moneyIn(e)) GreenIn else RedSpend
                             )
                         }
                     }
                 }
-            }
-            items(current.list, key = { "f-" + it.id }) { e ->
-                Surface(Modifier.fillMaxWidth().padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.surface) {
-                    Row(
-                        Modifier.fillMaxWidth().clickable { onEdit(e) }.padding(horizontal = 14.dp, vertical = 11.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                item(key = "f-" + s.name.lowercase()) {
+                    Column(
+                        Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                            .clip(RoundedCornerShape(bottomStart = 20.dp, bottomEnd = 20.dp))
+                            .background(MaterialTheme.colorScheme.surface)
                     ) {
-                        Text(df.format(Date(e.date)), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(52.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(entryTitle(e), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            val sub = (if (e.note.isNotBlank() && !e.note.equals(e.item, true)) e.note else e.type.label)
-                            Text(sub, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (people) {
+                            Row(Modifier.padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                FilledTonalButton(
+                                    onClick = { onNew(template(Type.DIYA, s.name)) }, modifier = Modifier.weight(1f).height(44.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.filledTonalButtonColors(containerColor = RedSpend.copy(alpha = 0.12f), contentColor = RedSpend)
+                                ) { Text("+ Gave", fontWeight = FontWeight.Bold) }
+                                FilledTonalButton(
+                                    onClick = { onNew(template(Type.WAPIS_MILA, s.name)) }, modifier = Modifier.weight(1f).height(44.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.filledTonalButtonColors(containerColor = GreenIn.copy(alpha = 0.14f), contentColor = GreenIn)
+                                ) { Text("+ Got back", fontWeight = FontWeight.Bold) }
+                            }
+                        } else {
+                            Spacer(Modifier.height(6.dp))
                         }
-                        Text(moneyA(currency, e.amount, prefix(e.type)), fontWeight = FontWeight.Bold, color = signColor(e.type), fontSize = 14.sp)
-                    }
-                }
-            }
-            item(key = "focus-foot") {
-                Surface(
-                    Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                    shape = RoundedCornerShape(bottomStart = 22.dp, bottomEnd = 22.dp),
-                    color = MaterialTheme.colorScheme.surface
-                ) {
-                    if (people) {
-                        Row(Modifier.padding(start = 14.dp, end = 14.dp, top = 6.dp, bottom = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            FilledTonalButton(
-                                onClick = { onNew(template(Type.DIYA, current.name)) }, modifier = Modifier.weight(1f).height(44.dp),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.filledTonalButtonColors(containerColor = RedSpend.copy(alpha = 0.12f), contentColor = RedSpend)
-                            ) { Text("+ Gave", fontWeight = FontWeight.Bold) }
-                            FilledTonalButton(
-                                onClick = { onNew(template(Type.WAPIS_MILA, current.name)) }, modifier = Modifier.weight(1f).height(44.dp),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.filledTonalButtonColors(containerColor = GreenIn.copy(alpha = 0.14f), contentColor = GreenIn)
-                            ) { Text("+ Got back", fontWeight = FontWeight.Bold) }
-                        }
-                    } else {
-                        Text(
-                            "Tap an entry to edit it.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
-                        )
-                    }
-                }
-            }
-        }
-
-        if (others.isNotEmpty()) {
-            item {
-                Text(
-                    "Other accounts in ${key.main}", fontSize = 13.sp, fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 20.dp, top = 18.dp, bottom = 6.dp)
-                )
-            }
-            items(others, key = { "o-" + it.name.lowercase() }) { s ->
-                Surface(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 3.dp), shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surface) {
-                    Row(
-                        Modifier.fillMaxWidth().clickable { focus = s.name }.padding(horizontal = 14.dp, vertical = 11.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Letter(s.name, people)
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(s.name, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(
-                                if (s.list.size == 1) "1 entry" else "${s.list.size} entries",
-                                fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Text(
-                            if (people) loanShort(s.loan) else fmt(s.all),
-                            fontSize = 13.sp, fontWeight = FontWeight.Bold,
-                            color = if (people && s.loan > 0.005) OrangeOwe else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -249,20 +209,57 @@ fun AccountScreen(
     }
 }
 
-private fun summary(s: Sub, people: Boolean, currency: String): String = if (people) {
-    when {
-        s.loan > 0.005 -> "Owes you " + money(currency, s.loan)
-        s.loan < -0.005 -> "You owe " + money(currency, -s.loan)
-        else -> "No loan · " + (if (s.list.size == 1) "1 entry" else "${s.list.size} entries")
+/** Total in, total out and the balance, side by side. */
+@Composable
+private fun Totals(inn: Double, out: Double, currency: String, people: Boolean, big: Boolean) {
+    val bal = inn - out
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Figure("Total in", "+" + fmt(inn), GreenIn, Modifier.weight(1f), big)
+        Figure("Total out", "−" + fmt(out), RedSpend, Modifier.weight(1f), big)
+        Figure(
+            if (people) (if (bal < -0.005) "They owe you" else if (bal > 0.005) "You owe" else "Balance") else "Balance",
+            if (people) fmt(kotlin.math.abs(bal)) else (if (bal > 0.005) "+" else if (bal < -0.005) "−" else "") + fmt(kotlin.math.abs(bal)),
+            if (people && bal < -0.005) OrangeOwe else MaterialTheme.colorScheme.onSurface,
+            Modifier.weight(1f), big
+        )
     }
-} else {
-    "This month " + fmt(s.thisMonth) + " · all time " + money(currency, s.all)
+    if (big) {
+        Text(
+            "Amounts in $currency",
+            fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp)
+        )
+    }
 }
 
-private fun loanShort(v: Double) = when {
-    v > 0.005 -> "Owes you " + fmt(v)
-    v < -0.005 -> "You owe " + fmt(-v)
-    else -> "Settled"
+@Composable
+private fun Figure(label: String, value: String, color: androidx.compose.ui.graphics.Color, modifier: Modifier, big: Boolean) {
+    Column(
+        modifier.clip(RoundedCornerShape(12.dp)).background(color.copy(alpha = 0.08f))
+            .padding(horizontal = 10.dp, vertical = if (big) 10.dp else 7.dp)
+    ) {
+        Text(label, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(value, fontSize = if (big) 17.sp else 14.sp, fontWeight = FontWeight.ExtraBold, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+private fun BalanceChip(bal: Double, currency: String, people: Boolean) {
+    val text = when {
+        people && bal < -0.005 -> "Owes you " + fmt(-bal)
+        people && bal > 0.005 -> "You owe " + fmt(bal)
+        people -> "Settled"
+        else -> (if (bal > 0.005) "+" else if (bal < -0.005) "−" else "") + fmt(kotlin.math.abs(bal))
+    }
+    val color = when {
+        people && bal < -0.005 -> OrangeOwe
+        !people && bal < -0.005 -> RedSpend
+        bal > 0.005 -> GreenIn
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Text(
+        text, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = color,
+        modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(color.copy(alpha = 0.10f)).padding(horizontal = 8.dp, vertical = 4.dp)
+    )
 }
 
 private fun template(type: Type, person: String): Entry {
@@ -271,23 +268,4 @@ private fun template(type: Type, person: String): Entry {
         id = "e" + System.nanoTime(), type = type, amount = 0.0, category = Cat.UDHAAR, item = "Loans",
         person = person, note = "", date = now, createdAt = now
     )
-}
-
-@Composable
-private fun Letter(name: String, round: Boolean) {
-    Box(
-        Modifier.size(38.dp).clip(if (round) CircleShape else RoundedCornerShape(11.dp))
-            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(name.trim().take(1).uppercase(), fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
-    }
-}
-
-@Composable
-private fun HeadFigure(label: String, value: String, fg: androidx.compose.ui.graphics.Color, modifier: Modifier) {
-    Column(modifier.clip(RoundedCornerShape(14.dp)).background(fg.copy(alpha = 0.10f)).padding(horizontal = 12.dp, vertical = 10.dp)) {
-        Text(label, color = fg.copy(alpha = 0.8f), fontSize = 12.sp)
-        Text(value, color = fg, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-    }
 }
