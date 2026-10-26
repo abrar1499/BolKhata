@@ -20,17 +20,14 @@ import java.util.Locale
  */
 object Ai {
 
-    /** Tried in order; the first one that answers is remembered. */
-    val MODELS = listOf("gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-flash-lite-latest", "gemini-2.5-flash-lite")
+    /** Gemini 3.8 Flash is the only Gemini model used for AI requests. */
+    val MODELS = listOf("gemini-3.8-flash")
 
-    /** Everything uses the fast Flash-Lite models; null = the one that last answered. */
+    /** null means use the configured model list; the last successful model is remembered. */
     val CHAT_MODEL: String? = null
 
-    /**
-     * Stronger models, used only when a message is long or asks for changes (edits, deletes, splitting a bill, settling up),
-     * or when the fast model's answer doesn't check out. They think a little before answering.
-     */
-    val STRONG = listOf("gemini-3.8-flash", "gemini-flash-latest", "gemini-2.5-flash")
+    /** The same Gemini 3.8 Flash model handles longer messages, corrections, and other reasoning-heavy requests. */
+    val STRONG = listOf("gemini-3.8-flash")
 
     /** Messages that need real reasoning: long ones, several numbers, or corrections and settlements. */
     private fun needsStrong(message: String): Boolean {
