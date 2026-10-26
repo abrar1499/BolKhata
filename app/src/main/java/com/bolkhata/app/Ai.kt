@@ -61,7 +61,10 @@ object Ai {
     class Failure(message: String) : Exception(message)
 
     /** Exact figures (worked out in code), the entries as compact numbered lines, and likely duplicates. */
-    private fun ledgerContext(all: List<Entry>, recent: List<Entry>, currency: String, compact: Boolean = false): String {
+    private fun ledgerContext(
+        all: List<Entry>, recent: List<Entry>, currency: String, compact: Boolean = false,
+        facts: Boolean = true, withDupes: Boolean = true
+    ): String {
         val entryLines = recent.joinToString("\n") { e -> Accounts.line(e) }
         // Likely duplicates, worked out here so the AI doesn't have to spot them: same kind and amount, and either
         // within 3 days of each other or on the same day and month in another year (a misread date).
@@ -86,9 +89,135 @@ object Ai {
                 }
             }
         val dupeText = if (dupes.isEmpty()) "none found" else dupes.joinToString("; ")
-        return Accounts.facts(all, currency, compact = compact) +
-            "\n\nSaved entries, newest first (id is the entry's fixed code to use in edits and delete; columns: id | date time | kind | amount | category | item | extras):\n$entryLines" +
-            "\n\nPossible duplicates (same kind and amount, close dates or the same date in another year; check item and note): $dupeText"
+        return (if (facts) Accounts.facts(all, currency, compact = compact) + "\n\n" else "") +
+            "Saved entries that matter for this message, newest first (only these are shown; there are ${all.size} saved in all. " +
+            "id is the entry's fixed code to use in edits and delete; columns: id | date time | kind | amount | category | item | extras):\n" +
+            entryLines.ifBlank { "(none)" } +
+            (if (withDupes) "\n\nPossible duplicates (same kind and amount, close dates or the same date in another year; check item and note): $dupeText" else "")
+    }
+
+    /** What a chat message is about, and the saved entries worth sending with it. */
+    class Focus(
+        val small: Boolean,
+        val newMoney: Boolean,
+        val edit: Boolean,
+        val question: Boolean,
+        val report: Boolean,
+        val story: Boolean,
+        val help: Boolean,
+        val dupes: Boolean,
+        val entries: List<Entry>
+    )
+
+    private val editRx = Regex(
+        """\b(minus|plus|hissa|hisa|share|split|delete|delet|hata|hatao|hatado|galat|ghalat|wrong|change|badal|badlo|instead|""" +
+            """theek kar|thek kar|correct|fix|shift|move|edit|update|nahi tha|nahin tha|nahi thi|merge|undo|remove|kam kar|zyada kar)\b"""
+    )
+    private val questionRx = Regex(
+        """\b(kitna|kitne|kitni|kab|kahan|kaha|total|report|summary|balance|hisab|hisaab|khata|kharch|kharcha|kharche|spent|spend|""" +
+            """income|aamdani|amdani|bacha|bachat|save|saving|owe|udhaar|udhar|lena|dena|baqi|baaki|list|search|find|show|dikhao|batao|""" +
+            """how much|when did|where did|compare|average|sab se zyada|most|least|transactions?|entries|entry)\b"""
+    )
+    private val reportRx = Regex("""\b(report|summary|mahine|month|monthly|week|hafte|hafta|saal|year|total|compare|average|category|categories)\b""")
+    private val helpRx = Regex("""\b(kaise|kese|how (do|to|can)|app|feature|option|button|settings?|import|statement|pdf)\b""")
+    private val dupeRx = Regex("""\b(duplicate|duplicates|double|do dafa|2 dafa|dobara|same entry|twice)\b""")
+    private val pronounRx = Regex("""\b(us|uska|uski|uske|unka|unki|unke|iska|iski|iske|is ka|us ka|his|her|their|him|them)\b""")
+    private val stopWords = setOf(
+        "kya", "kitna", "kitne", "kitni", "hai", "hain", "tha", "thi", "the", "aur", "mein", "main", "men", "wala", "wali", "wale",
+        "kar", "karo", "kro", "diya", "diye", "liya", "liye", "aaj", "kal", "abhi", "bhi", "nahi", "nahin", "yar", "yaar", "please",
+        "plz", "batao", "dikhao", "and", "for", "how", "much", "what", "this", "that", "with", "total", "kharch", "kharcha", "kharche",
+        "spent", "entry", "entries", "mahine", "month", "week", "hafte", "din", "sab", "kuch", "koi", "tum", "mujhe", "mera", "meri",
+        "mere", "hua", "hue", "hui", "gaya", "gaye", "gayi", "raha", "rahe", "rahi", "khata", "hisab", "hisaab", "balance", "kab",
+        "kahan", "kaha", "par", "per", "pay", "paid", "riyal", "riyals", "sar", "rupay", "rupees", "wapis", "dena", "lena", "baqi",
+        "baaki", "udhaar", "udhar", "report", "summary", "list", "show", "find", "search", "delete", "change", "edit", "galat",
+        "uska", "uski", "uske", "unka", "iska", "iski", "time", "date", "last", "pichla", "pichli", "agla", "kitny", "hoty", "hota",
+        "kiya", "kiye", "karna", "krna", "bheja", "bheje", "bheji", "send", "sent", "rahay", "hoon", "woh", "osne", "usne", "jab",
+        "phir", "phr", "abi", "ab", "sath", "saath", "liye", "lye", "wohi", "same", "day", "today", "yesterday", "week", "year"
+    )
+
+    private fun wordsOf(s: String) = s.lowercase().split(Regex("[^\\p{L}\\p{N}]+")).filter { it.length >= 3 }
+
+    /** Picks what to send for [message]: the matching person, item, shop or period, recent and talked-about entries. */
+    private fun focusOf(message: String, history: List<ChatMessage>, sorted: List<Entry>): Focus {
+        val m = message.lowercase()
+        val hasDigits = Regex("""\d""").containsMatchIn(m)
+        val edit = editRx.containsMatchIn(m)
+        val question = questionRx.containsMatchIn(m) || m.contains('?')
+        val report = reportRx.containsMatchIn(m)
+        val help = helpRx.containsMatchIn(m)
+        val dupes = dupeRx.containsMatchIn(m)
+        val story = m.length > 140
+
+        // People: names from entries (person, and "To X" / "From X" notes on transfers).
+        fun names(e: Entry): List<String> = wordsOf(e.person) +
+            (if (e.note.startsWith("To ") || e.note.startsWith("From ")) wordsOf(e.note.substringAfter(' ')) else emptyList())
+        val nameWords = sorted.flatMap { names(it) }.filter { it !in stopWords }.toSet()
+        var people = wordsOf(m).filter { it in nameWords }.toSet()
+        // "uska balance?" after talking about someone: use the name from the last messages.
+        if (people.isEmpty() && pronounRx.containsMatchIn(m)) {
+            val before = history.filter { it.isUser }.takeLast(3).joinToString(" ") { it.text }
+            people = wordsOf(before).filter { it in nameWords }.toSet()
+        }
+        val personEntries = if (people.isEmpty()) emptyList() else sorted.filter { e ->
+            val hay = (e.person + " " + e.note + " " + e.item).lowercase()
+            people.any { hay.contains(it) }
+        }.take(80)
+
+        // Items, shops, categories: other words of the message found in entries.
+        val keys = wordsOf(m).filter { it !in stopWords && it !in people && it.toDoubleOrNull() == null }
+        val itemEntries = if (keys.isEmpty()) emptyList() else sorted.filter { e ->
+            val hay = (e.item + " " + e.note + " " + e.category.label).lowercase()
+            keys.any { hay.contains(it) }
+        }.take(40)
+
+        // A period: today, yesterday, this / last week or month, or a month's name.
+        val now = Calendar.getInstance()
+        fun dayStart(c: Calendar) = (c.clone() as Calendar).apply {
+            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+        }
+        val today = dayStart(now).timeInMillis
+        val day = 86_400_000L
+        val months = listOf("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
+        val range: Pair<Long, Long>? = when {
+            Regex("""\b(aaj|aj|today)\b""").containsMatchIn(m) -> today to today + day
+            Regex("""\b(kal|yesterday)\b""").containsMatchIn(m) -> today - day to today
+            Regex("""\b(is hafte|this week|is week)\b""").containsMatchIn(m) -> today - 6 * day to today + day
+            Regex("""\b(pichle hafte|pichly hafte|last week)\b""").containsMatchIn(m) -> today - 13 * day to today - 6 * day
+            Regex("""\b(is mahine|is month|this month)\b""").containsMatchIn(m) ->
+                dayStart(now).apply { set(Calendar.DAY_OF_MONTH, 1) }.timeInMillis to today + day
+            Regex("""\b(pichle mahine|pichly mahine|last month)\b""").containsMatchIn(m) -> {
+                val a = dayStart(now).apply { set(Calendar.DAY_OF_MONTH, 1); add(Calendar.MONTH, -1) }
+                a.timeInMillis to (a.clone() as Calendar).apply { add(Calendar.MONTH, 1) }.timeInMillis
+            }
+            else -> months.indexOfFirst { mo -> Regex("""\b$mo[a-z]*\b""").containsMatchIn(m) }.takeIf { it >= 0 }?.let { mo ->
+                val a = dayStart(now).apply {
+                    set(Calendar.DAY_OF_MONTH, 1); set(Calendar.MONTH, mo)
+                    if (timeInMillis > today) add(Calendar.YEAR, -1)
+                }
+                a.timeInMillis to (a.clone() as Calendar).apply { add(Calendar.MONTH, 1) }.timeInMillis
+            }
+        }
+        val periodEntries = if (range == null) emptyList() else sorted.filter { it.date >= range.first && it.date < range.second }.take(60)
+
+        val newMoney = hasDigits && !question && !edit
+        val small = !hasDigits && !edit && !question && !report && !help && !dupes && !story &&
+            people.isEmpty() && itemEntries.isEmpty() && range == null
+        if (small) return Focus(true, false, false, false, false, false, false, false, emptyList())
+
+        // Entries the recent chat talked about, so "that one" / "wo wali" can be found.
+        val talked = history.takeLast(12).flatMap { it.entryIds }.toSet()
+        val talkedEntries = sorted.filter { it.id in talked }.take(20)
+        val newest = sorted.take(if (edit) 15 else 8)
+        val nowMs = System.currentTimeMillis()
+        val odd = if (edit || dupes) sorted.filter { it.date > nowMs + day || it.date < nowMs - 300L * day }.take(15) else emptyList()
+        val dupeScope = if (dupes) sorted.take(60) else emptyList()
+        val chosen = (newest + personEntries + itemEntries + periodEntries + talkedEntries + odd + dupeScope).distinctBy { it.id }
+            .sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt })
+        // A question names nothing specific ("kitna kharcha hua?"): the exact figures answer it.
+        return Focus(
+            small = false, newMoney = newMoney, edit = edit, question = question || report || people.isNotEmpty() || range != null,
+            report = report, story = story || (edit && people.isNotEmpty()), help = help, dupes = dupes, entries = chosen
+        )
     }
 
     /**
@@ -106,33 +235,43 @@ object Ai {
         voice: Boolean = false
     ): AssistantResult = withContext(Dispatchers.IO) {
         if (key.isBlank()) throw Failure("AI is not configured.")
-        // Fewer lines = a much faster answer. The newest 150, plus older ones the message names (shop, person, item).
-        val sorted = all.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt })
-        val words = message.lowercase().split(Regex("[^\\p{L}\\p{N}]+")).filter { it.length >= 3 }.toSet()
-        // Groq's free plan allows only 8,000 tokens a minute, so its requests carry fewer entries.
         val fastKey = store.fastKey.trim()
-        val limit = if (isGroq(fastKey)) 25 else 100
-        val named = if (words.isEmpty()) emptyList() else sorted.drop(limit).filter { e ->
-            val hay = (e.item + " " + e.person + " " + e.note).lowercase()
-            words.any { hay.contains(it) }
-        }.take(60)
-        val newest = sorted.take(limit) + named.take(if (isGroq(fastKey)) 15 else 60)
-        // Entries dated far in the past or in the future are often mistakes; include them so they can be fixed.
-        val nowMs = System.currentTimeMillis()
-        val odd = all.filter { it !in newest && (it.date > nowMs + 86_400_000L || it.date < nowMs - 300L * 86_400_000L) }.take(30)
-        // Entries the recent chat talked about (saved from a file, a sentence or the bank) are always included.
-        val talkedAbout = history.takeLast(20).flatMap { it.entryIds }.toSet()
-        val mentioned = all.filter { it.id in talkedAbout && it !in newest && it !in odd }
-        val recent = newest + odd + mentioned
+        val groq = isGroq(fastKey)
+        val sorted = all.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt })
+        // Only what this message needs goes to the AI: a greeting gets no data, "Imran ka khata" only Imran's entries,
+        // "aaj kitna" only today's. Smaller requests answer faster and fit free-plan limits.
+        val focus = focusOf(message, history, sorted)
+        val recent = focus.entries
         val codeOf = recent.associate { e -> e.id to Accounts.code(e) }
         val today = SimpleDateFormat("yyyy-MM-dd (EEEE)", Locale.US).format(Date())
-        val conversation = history.takeLast(if (isGroq(fastKey)) 6 else 12).joinToString("\n") { m ->
-            val refs = m.entryIds.mapNotNull { codeOf[it] }
-            (if (m.isUser) "User: " else "Assistant: ") + m.text.take(if (isGroq(fastKey)) 300 else 600) +
-                (if (refs.isNotEmpty()) " [these entries: id=" + refs.joinToString(", ") + "]" else "")
-        }.ifBlank { "(new conversation)" }
         val said = message.replace("\"", "'").take(2000)
-        val prompt = """
+        val memoryList = if (memory.isEmpty()) "(nothing yet)" else memory.joinToString("\n") { "- $it" }
+        val speechField = if (voice) ",\"speech\":\"\"" else ""
+        val speechRule = if (voice) "\"speech\": the reply as you would SAY it in a phone call: 1 to 3 short natural sentences, no lists, no symbols, numbers as\ndigits. If they write or speak Urdu or Roman Urdu, write \"speech\" in Urdu script (اردو) so an Urdu voice can read it; otherwise English.\n" else ""
+        val prompt = if (focus.small) {
+            val chat = history.takeLast(4).joinToString("\n") { m -> (if (m.isUser) "User: " else "Assistant: ") + m.text.take(200) }
+                .ifBlank { "(new conversation)" }
+            """
+You are the friendly assistant inside Smart Expense, a money diary app. Today is $today.
+Reply in 1 or 2 short lines, in the same language and script as the person (Roman Urdu if they write Roman Urdu). Plain text.
+If they seem to want something about their money, tell them they can just ask, e.g. "aaj kitna kharcha hua" or "chai 5".
+What you know about them: $memoryList
+
+Previous conversation:
+$chat
+
+Latest message: "$said"
+
+Return ONLY JSON: {"reply":""$speechField}
+$speechRule""".trim()
+        } else {
+            val conversation = history.takeLast(if (groq) 6 else 8).joinToString("\n") { m ->
+                val refs = m.entryIds.mapNotNull { codeOf[it] }
+                (if (m.isUser) "User: " else "Assistant: ") + m.text.take(if (groq) 300 else 400) +
+                    (if (refs.isNotEmpty()) " [these entries: id=" + refs.joinToString(", ") + "]" else "")
+            }.ifBlank { "(new conversation)" }
+            val sb = StringBuilder()
+            sb.append("""
 You are the assistant inside Smart Expense, a money diary app. Today is $today. Currency is $currency.
 The person writes English, Roman Urdu, Urdu, Hindi or Arabic, often mixed.
 
@@ -153,12 +292,15 @@ If it is not clear which saved entry they mean, ask one short question and chang
 don't ask the same question twice.
 "[these entries: id=...]" after a message in the conversation tells you exactly which saved entries that message added.
 Never show ids or "n=" to the person; describe entries by date, item and amount.
-For "find duplicates" list the pairs from "Possible duplicates" that really look the same (item, note, person), and ask whether to
+""")
+            if (focus.dupes) sb.append("""For "find duplicates" list the pairs from "Possible duplicates" that really look the same (item, note, person), and ask whether to
 delete the extra ones; when they agree, put those ids in "delete".
-Never say you added, changed or deleted something unless it is in "entries", "edits" or "delete" of THIS answer.
+""")
+            sb.append("""Never say you added, changed or deleted something unless it is in "entries", "edits" or "delete" of THIS answer.
 If you could not do it, say so plainly and what you need.
 
-Worked examples (follow the same pattern):
+""")
+            if (focus.edit || focus.story || focus.newMoney) sb.append("""Worked examples (follow the same pattern):
 1. "chai 5 aur sandwich 12" -> entries: expense 5 food Chai, expense 12 food Sandwich. reply "Saved: chai 5, sandwich 12 $currency".
 2. "kal wala petrol 60 nahi 65 tha" -> edits: [{"id":"<id of yesterday's Petrol 60>","amount":65}]. reply "Petrol on <date> changed from 60 to 65".
 3. "Shehryar ne 4 riyal bheje, wo usi din ke lunch mein uska hissa tha; lunch se minus karo aur Shehryar wali delete karo"
@@ -168,7 +310,8 @@ Worked examples (follow the same pattern):
 5. "is mahine khane pe kitna" -> no changes; reply with the food figure from EXACT FIGURES.
 When a message asks for two changes, do both in the same answer.
 
-Long stories about money with a person (who paid what for whom, what was kept, what was sent back):
+""")
+            if (focus.story) sb.append("""Long stories about money with a person (who paid what for whom, what was kept, what was sent back):
 - Work it out in "work": list every amount, who it belongs to, and the running balance with that person.
 - Then fix the ledger to match: wrong kinds become loans with that person (gave / took / got_back / paid_back),
   things they paid for you become expenses (with the right category) plus "took" from that person, and so on.
@@ -176,14 +319,16 @@ Long stories about money with a person (who paid what for whom, what was kept, w
   the final balance with that person ("Imran owes you X" or "you owe Imran X") and what you changed.
 - Never ask the person to repeat details they already gave in the conversation; use them.
 
-Getting numbers right (most important):
+""")
+            if (focus.question) sb.append("""Getting numbers right (most important):
 - For any total, average, comparison or balance, take the number from EXACT FIGURES when it is there. Don't re-add entries.
 - If you must add entries yourself (a custom filter like "petrol in September"), first write the matching entries with their
   amounts in "work", add them step by step there, and only then give the result in "reply". Count every matching line.
 - Say which period a number is for ("this month so far", "last week"). Show amounts with $currency.
 - If the data can't answer it (no entries for that), say so; never guess a figure.
 
-How to reply:
+""")
+            sb.append("""How to reply:
 - Short and to the point. Lead with the answer. Usually 1 to 4 short lines.
 - Reports and summaries: short lines like "- Food: 144 $currency", then one line with the total or main point.
 - Searches ("petrol kab dala", "Ahmed ke sath kya hua"): list matching entries as "- 23 Oct · Petrol · 60", at most 10, newest first.
@@ -193,31 +338,30 @@ How to reply:
 - "aaj" / "today" means today only, "kal" yesterday, "is mahine" this month. Answer for exactly the period asked, and list what was spent on when they ask "kahan" / "where".
 - Use only the saved data for personal facts. Never invent entries or amounts. If the data does not have it, say so in one line.
 - Questions about things outside money: answer briefly and helpfully, then they can carry on.
-- App help, when they ask how to do something: the paperclip next to the message box imports a statement, receipt or bill (photo or PDF); the Overview tab shows totals and days; Reports in the menu show Cash Out, Cash In,
+""")
+            if (focus.help) sb.append("""- App help, when they ask how to do something: the paperclip next to the message box imports a statement, receipt or bill (photo or PDF); the Overview tab shows totals and days; Reports in the menu show Cash Out, Cash In,
   Sales, Purchases, Stock, Profit, Cash Balance and Dues; tapping an entry edits it; "last entry was 400 not 500" changes an entry.
 
-Entry rules:
-${entryRules()}
-Each entry: {"type":"","amount":0,"category":"","item":"","qty":0,"unit":"","rate":0,"person":"","date":"YYYY-MM-DD","note":""}
-
-${ledgerContext(all, recent, currency, compact = isGroq(fastKey))}
-
-What you remember about this person from earlier chats (use it; it may be out of date if they say otherwise):
-${if (memory.isEmpty()) "(nothing yet)" else memory.joinToString("\n") { "- $it" }}
-
-Memory: when the person tells you something lasting about themselves or their money — who someone is ("Shahbaz is my brother"),
+""")
+            if (focus.newMoney || focus.edit || focus.story) {
+                sb.append("\nEntry rules:\n").append(entryRules())
+                sb.append("\nEach entry: {\"type\":\"\",\"amount\":0,\"category\":\"\",\"item\":\"\",\"qty\":0,\"unit\":\"\",\"rate\":0,\"person\":\"\",\"date\":\"YYYY-MM-DD\",\"note\":\"\"}\n")
+            }
+            sb.append("\n").append(ledgerContext(all, recent, currency, compact = groq || !focus.report, facts = focus.question, withDupes = focus.dupes))
+            sb.append("\n\nWhat you remember about this person from earlier chats (use it; it may be out of date if they say otherwise):\n")
+                .append(memoryList).append("\n\n")
+            sb.append("""Memory: when the person tells you something lasting about themselves or their money — who someone is ("Shahbaz is my brother"),
 a regular payment ("mess 170 every month"), a habit, what a shop is ("Aldrees is petrol"), how they want answers — put a short
 fact in "remember" (max 15 words, English). When they correct or cancel a remembered fact, put its exact old text in "forget".
 Don't remember single transactions, one-off questions or anything already in memory. If they ask what you remember, list it.
 
-Previous conversation:
-$conversation
-
-Latest message: "$said"
-
-Return ONLY JSON: {"work":"","reply":""${if (voice) ",\"speech\":\"\"" else ""},"entries":[],"edits":[{"id":"","type":"","amount":0,"category":"","item":"","qty":0,"person":"","date":"YYYY-MM-DD","time":"","note":""}],"delete":[],"remember":[],"forget":[]}
+""")
+            sb.append("Previous conversation:\n").append(conversation).append("\n\nLatest message: \"").append(said).append("\"\n\n")
+            sb.append("""Return ONLY JSON: {"work":"","reply":""${if (voice) ",\"speech\":\"\"" else ""},"entries":[],"edits":[{"id":"","type":"","amount":0,"category":"","item":"","qty":0,"person":"","date":"YYYY-MM-DD","time":"","note":""}],"delete":[],"remember":[],"forget":[]}
 ${if (voice) "\"speech\": the reply as you would SAY it in a phone call: 1 to 3 short natural sentences, no lists, no symbols, numbers as\ndigits. If they write or speak Urdu or Roman Urdu, write \"speech\" in Urdu script (اردو) so an Urdu voice can read it; otherwise English.\n" else ""}("work" is your private scratch space: keep it short, only for working out numbers; the person never sees it. edits and delete are [] unless case B.)
-""".trim()
+""")
+            sb.toString().trim()
+        }
         val knownCodes = recent.map { Accounts.code(it) }.toSet()
         val trace = StringBuilder()
         fun ask(strong: Boolean): JSONObject {
