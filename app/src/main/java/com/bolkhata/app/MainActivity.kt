@@ -222,6 +222,12 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var aiKey by remember { mutableStateOf(store.aiKey) }
     // The person's own key wins; otherwise the key built into the app is used.
     val activeKey = aiKey.ifBlank { BuildConfig.GEMINI_KEY }
+    // Open the connection to the AI as soon as the chat is on screen, so the first message is quicker.
+    LaunchedEffect(tab == Tab.CHAT, activeKey) {
+        if (tab == Tab.CHAT && activeKey.isNotBlank()) {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Ai.warmUp(activeKey) }
+        }
+    }
 
     /** Sends a question to the read-only AI chat, with recent conversation context. */
     fun sendChat(text: String, addUser: Boolean = true) {
@@ -585,6 +591,19 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     fun chatInput(raw: String) {
         val text = raw.trim()
         if (text.isEmpty() || chatLoading) return
+        // "speed test": measures each AI model with a tiny question, to see where time goes.
+        if (activeKey.isNotBlank() && Regex("""(?i)^\s*(speed ?test|ai ?test|test ?speed)\s*$""").matches(text)) {
+            postChat(text, isUser = true)
+            chatLoading = true
+            loadingLabel = "Testing each model…"
+            scope.launch {
+                val report = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Ai.speedTest(activeKey) }
+                postChat(report, isUser = false)
+                chatLoading = false
+                loadingLabel = "Thinking…"
+            }
+            return
+        }
         val roman = runCatching { Translit.toRoman(text) }.getOrDefault(text)
         val history = chatMessages.takeLast(20)
         postChat(text, isUser = true)

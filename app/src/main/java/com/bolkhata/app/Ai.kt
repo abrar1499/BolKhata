@@ -733,8 +733,19 @@ If nothing matches, return {"edits":[],"delete":[],"message":"I couldn't find th
                         continue
                     } catch (e: Exception) { lastError = "AI sent an empty answer"; continue }
                     if (text.isBlank()) { lastError = "AI sent an empty answer"; continue }
-                    trace?.append(shortName(model) + " · " + secs(started) +
-                        (if (skipped.isNotEmpty()) " (skipped: " + skipped.joinToString(", ") + ")" else ""))
+                    val tm = timing.get()!!
+                    val usage = runCatching { JSONObject(body).optJSONObject("usageMetadata") }.getOrNull()
+                    fun k(n: Int) = if (n >= 1000) String.format(Locale.US, "%.1fk", n / 1000.0) else n.toString()
+                    val tokens = usage?.let {
+                        " · in " + k(it.optInt("promptTokenCount")) + ", out " + k(it.optInt("candidatesTokenCount")) +
+                            (it.optInt("thoughtsTokenCount").takeIf { n -> n > 0 }?.let { n -> ", think " + k(n) } ?: "")
+                    } ?: ""
+                    trace?.append(
+                        shortName(model) + " · " + secs(started) +
+                            " (connect " + tm.connect + "ms, AI " + String.format(Locale.US, "%.1fs", tm.wait / 1000.0) + tokens +
+                            (if (model in plain) ", plain" else "") + ")" +
+                            (if (skipped.isNotEmpty()) " · skipped: " + skipped.joinToString(", ") else "")
+                    )
                     return text
                 }
                 400, 401, 403 -> {
@@ -828,14 +839,20 @@ Make one entry per transaction. Skip anything without an amount. Number words co
         return c
     }
 
+    /** Where the time of the last call on this thread went: opening the connection, waiting for the AI, reading. */
+    private class Timing(var connect: Long = 0, var wait: Long = 0, var read: Long = 0)
+    private val timing = ThreadLocal.withInitial { Timing() }
+
     private fun call(model: String, key: String, prompt: String, file: Pair<String, String>? = null, think: Boolean = true): Pair<Int, String> {
         val url = URL("https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent")
         val conn = url.openConnection() as HttpURLConnection
+        val tm = timing.get()!!
+        var ok = false
         return try {
             conn.requestMethod = "POST"
             conn.connectTimeout = 15_000
-            // Reading a whole statement takes longer than a sentence.
             // A model that hasn't answered by then is stuck; the next one is tried instead of waiting.
+            // Reading a whole statement takes longer than a sentence.
             conn.readTimeout = if (file != null) 90_000 else 30_000
             conn.doOutput = true
             conn.setRequestProperty("Content-Type", "application/json")
@@ -848,15 +865,60 @@ Make one entry per transaction. Skip anything without an amount. Number words co
                     put(JSONObject().put("text", prompt))
                 })))
                 .put("generationConfig", config(model, file != null, think))
+            val t0 = System.currentTimeMillis()
+            conn.connect()
+            val t1 = System.currentTimeMillis()
             conn.outputStream.use { it.write(body.toString().toByteArray()) }
             val code = conn.responseCode
+            val t2 = System.currentTimeMillis()
             val stream = if (code in 200..299) conn.inputStream else conn.errorStream
-            code to (stream?.bufferedReader()?.use { it.readText() } ?: "")
+            val text = stream?.bufferedReader()?.use { it.readText() } ?: ""
+            val t3 = System.currentTimeMillis()
+            tm.connect = t1 - t0; tm.wait = t2 - t1; tm.read = t3 - t2
+            ok = true
+            code to text
+        } catch (e: java.net.SocketTimeoutException) {
+            throw Failure("AI took too long to answer.")
         } catch (e: Exception) {
             throw Failure("No internet. Using offline mode.")
         } finally {
-            conn.disconnect()
+            // A fully read answer leaves the connection open for the next message (saves the secure handshake).
+            if (!ok) conn.disconnect()
         }
+    }
+
+    /** Opens the secure connection to Google early (when the chat opens), so the first message doesn't pay for it. */
+    fun warmUp(key: String) {
+        if (key.isBlank()) return
+        runCatching {
+            val conn = URL("https://generativelanguage.googleapis.com/v1beta/models?pageSize=1").openConnection() as HttpURLConnection
+            conn.connectTimeout = 10_000
+            conn.readTimeout = 10_000
+            conn.setRequestProperty("x-goog-api-key", key.trim())
+            val code = conn.responseCode
+            (if (code in 200..299) conn.inputStream else conn.errorStream)?.use { it.readBytes() }
+        }
+    }
+
+    /** Asks every model a tiny question and reports how long each takes. Typed in the chat as "speed test". */
+    fun speedTest(key: String): String {
+        val prompt = "Reply with exactly this JSON and nothing else: {\"ok\":1}"
+        val lines = (MODELS + STRONG).distinct().map { model ->
+            val t0 = System.currentTimeMillis()
+            val res = runCatching { call(model, key.trim(), prompt, think = model !in plain) }
+            val secs = String.format(Locale.US, "%.1fs", (System.currentTimeMillis() - t0) / 1000.0)
+            val tm = timing.get()!!
+            val r = res.getOrNull()
+            val status = when {
+                r == null -> res.exceptionOrNull()?.message ?: "failed"
+                r.first == 200 -> "OK"
+                r.first == 429 -> "busy (limit)"
+                else -> "error ${r.first}: " + errorMessage(r.second).take(80)
+            }
+            "- ${shortName(model)}: $secs, $status" +
+                (if (r != null) " (connect ${tm.connect}ms, AI ${tm.wait}ms)" else "")
+        }
+        return "Speed test (tiny question to each model):\n" + lines.joinToString("\n")
     }
 
     private fun errorMessage(body: String): String = try {
