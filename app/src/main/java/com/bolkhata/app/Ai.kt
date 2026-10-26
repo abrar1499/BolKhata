@@ -237,10 +237,12 @@ ${if (note.isNotBlank()) "The person said about this file: \"" + note.replace("\
 Entry rules:
 ${entryRules()}
 
-Return ONLY JSON: {"entries":[{"type":"","amount":0,"category":"","item":"","qty":0,"unit":"","rate":0,"person":"","date":"YYYY-MM-DD","time":"","note":""}]}
+Return ONLY JSON, one short row per transaction (statements can have hundreds, so keep rows compact):
+{"rows":[["type",amount,"category","item","person","YYYY-MM-DD","HH:MM","note"]]}
+Example row: ["expense",19,"food","Express Food","","2026-10-25","13:40","Express Food Jeddah"]
 """.trim()
         val json = try {
-            request(prompt, key.trim(), store, mime to data, prefer = CHAT_MODEL)
+            rowsToEntries(request(prompt, key.trim(), store, mime to data, prefer = CHAT_MODEL))
         } catch (e: Failure) {
             throw e
         } catch (e: Exception) {
@@ -251,6 +253,29 @@ Return ONLY JSON: {"entries":[{"type":"","amount":0,"category":"","item":"","qty
         } catch (e: Exception) {
             throw Failure("Could not read this file. Try a clearer photo or another PDF.")
         }
+    }
+
+    /** Turns the compact rows of a statement into the usual {"entries":[...]} JSON. */
+    private fun rowsToEntries(text: String): String {
+        val obj = JSONObject(text)
+        if (obj.has("entries")) return text
+        val rows = obj.optJSONArray("rows") ?: return text
+        val entries = JSONArray()
+        for (i in 0 until rows.length()) {
+            val r = rows.optJSONArray(i) ?: continue
+            entries.put(
+                JSONObject()
+                    .put("type", r.optString(0))
+                    .put("amount", r.optDouble(1, 0.0))
+                    .put("category", r.optString(2))
+                    .put("item", r.optString(3))
+                    .put("person", r.optString(4))
+                    .put("date", r.optString(5))
+                    .put("time", r.optString(6))
+                    .put("note", r.optString(7))
+            )
+        }
+        return JSONObject().put("entries", entries).toString()
     }
 
     /**
@@ -543,16 +568,23 @@ If nothing matches, return {"edits":[],"delete":[],"message":"I couldn't find th
         // If one model is busy, over its free limit, not allowed for this key, or too slow, the next one is tried,
         // so the chat keeps working. Only a key that is really invalid stops right away.
         for (model in order) {
-            val (code, body) = try {
+            var result = try {
                 call(model, key, prompt, file)
             } catch (e: Failure) {
                 lastError = e.message ?: lastError
                 continue
             }
+            if (result.first == 400 && errorMessage(result.second).contains("thinking", ignoreCase = true)) {
+                result = try { call(model, key, prompt, file, think = false) } catch (e: Failure) { lastError = e.message ?: lastError; continue }
+            }
+            val (code, body) = result
             when (code) {
                 200 -> {
                     if (prefer == null) store.aiModel = model
-                    val text = try { readText(body) } catch (e: Exception) { lastError = "AI sent an empty answer"; continue }
+                    val text = try { readText(body) } catch (e: CutOff) {
+                        lastError = "The file is too long for one go. Send fewer pages (for example one month) at a time."
+                        continue
+                    } catch (e: Exception) { lastError = "AI sent an empty answer"; continue }
                     if (text.isBlank()) { lastError = "AI sent an empty answer"; continue }
                     return text
                 }
@@ -621,14 +653,37 @@ note: a short clean English summary, max 6 words.
 Make one entry per transaction. Skip anything without an amount. Number words count ("seven", "do sau" = 200, "dedh hazar" = 1500).
 """.trim()
 
-    private fun call(model: String, key: String, prompt: String, file: Pair<String, String>? = null): Pair<Int, String> {
+    private class CutOff : Exception()
+
+    /**
+     * Settings per model family. Gemini 3 is made for temperature 1 (lower makes it loop and repeat) and is told to
+     * think briefly, which makes it several times faster. 2.5 models get a small thinking budget instead.
+     */
+    private fun config(model: String, file: Boolean, think: Boolean): JSONObject {
+        val c = JSONObject().put("responseMimeType", "application/json")
+            .put("maxOutputTokens", if (file) 65_536 else 8_192)
+        when {
+            model.startsWith("gemini-3") -> {
+                c.put("temperature", 1.0)
+                if (think) c.put("thinkingConfig", JSONObject().put("thinkingLevel", "low"))
+            }
+            model.startsWith("gemini-2.5") -> {
+                c.put("temperature", 0)
+                if (think) c.put("thinkingConfig", JSONObject().put("thinkingBudget", if (model.contains("lite")) 0 else 1024))
+            }
+            else -> c.put("temperature", 0)
+        }
+        return c
+    }
+
+    private fun call(model: String, key: String, prompt: String, file: Pair<String, String>? = null, think: Boolean = true): Pair<Int, String> {
         val url = URL("https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent")
         val conn = url.openConnection() as HttpURLConnection
         return try {
             conn.requestMethod = "POST"
             conn.connectTimeout = 15_000
             // Reading a whole statement takes longer than a sentence.
-            conn.readTimeout = if (file != null) 120_000 else 75_000
+            conn.readTimeout = if (file != null) 150_000 else 60_000
             conn.doOutput = true
             conn.setRequestProperty("Content-Type", "application/json")
             conn.setRequestProperty("x-goog-api-key", key)
@@ -639,7 +694,7 @@ Make one entry per transaction. Skip anything without an amount. Number words co
                     }
                     put(JSONObject().put("text", prompt))
                 })))
-                .put("generationConfig", JSONObject().put("temperature", 0).put("responseMimeType", "application/json"))
+                .put("generationConfig", config(model, file != null, think))
             conn.outputStream.use { it.write(body.toString().toByteArray()) }
             val code = conn.responseCode
             val stream = if (code in 200..299) conn.inputStream else conn.errorStream
@@ -658,8 +713,9 @@ Make one entry per transaction. Skip anything without an amount. Number words co
     }
 
     private fun readText(body: String): String {
-        val parts = JSONObject(body).getJSONArray("candidates").getJSONObject(0)
-            .getJSONObject("content").getJSONArray("parts")
+        val candidate = JSONObject(body).getJSONArray("candidates").getJSONObject(0)
+        if (candidate.optString("finishReason") == "MAX_TOKENS") throw CutOff()
+        val parts = candidate.getJSONObject("content").getJSONArray("parts")
         val sb = StringBuilder()
         for (i in 0 until parts.length()) sb.append(parts.getJSONObject(i).optString("text"))
         return sb.toString().trim().removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
