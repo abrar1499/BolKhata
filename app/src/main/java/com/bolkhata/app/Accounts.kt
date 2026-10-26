@@ -54,6 +54,61 @@ object Accounts {
     }
 
     /** [compact] gives a shorter version (fewer people and lists) for AI plans with small limits. */
+    private val dayFmt = SimpleDateFormat("d MMM yyyy", Locale.US)
+
+    /**
+     * One person's khata worked out by the app: every entry with them, money each way, and the loan balance.
+     * The AI only has to present it, so the numbers are always right.
+     */
+    fun personLedger(list: List<Entry>, label: String, currency: String): String {
+        val sorted = list.sortedBy { it.date }
+        val lines = sorted.joinToString("\n") { e ->
+            val sign = when { isIn(e) -> "+"; isOut(e) -> "-"; else -> " " }
+            "  " + dayFmt.format(Date(e.date)) + " | " + e.type.label + " | " + e.item +
+                (if (e.note.isNotBlank() && !e.note.equals(e.item, true)) " (" + e.note.take(40) + ")" else "") +
+                " | " + sign + f(e.amount) + " | id=" + code(e)
+        }
+        val got = list.filter { isIn(it) }.sumOf { it.amount }
+        val gave = list.filter { isOut(it) }.sumOf { it.amount }
+        val loan = balances(list).values.sum()
+        val loanText = when {
+            loan > 0.005 -> "they owe you ${f(loan)} $currency"
+            loan < -0.005 -> "you owe them ${f(-loan)} $currency"
+            else -> "nothing (settled or no loans)"
+        }
+        return """
+PERSON KHATA for $label (worked out by the app; use these lines and numbers exactly, never add entries that are not here):
+$lines
+- Came to you from them: ${f(got)} $currency (${list.count { isIn(it) }} entries)
+- Went from you to them: ${f(gave)} $currency (${list.count { isOut(it) }} entries)
+- Loan / credit balance: $loanText. Only entries saved as lent, borrowed, got back, paid back or credit sales count as loans;
+  a plain bank transfer is not a loan. If they ask "kitne dene hain" and only transfers exist, say so and offer to mark it as a loan.
+When they ask for this person's khata, hisab or details: list each line as "- 22 Oct · Transfer from Muhammad Imran · +3,500" (newest first),
+then one line with the totals and the balance.""".trim()
+    }
+
+    /** Totals for entries matching an item, shop or category, by month. */
+    fun itemSummary(list: List<Entry>, label: String, currency: String): String {
+        val out = list.filter { isOut(it) }
+        val inn = list.filter { isIn(it) }
+        val byMonth = out.groupBy { SimpleDateFormat("MMM yyyy", Locale.US).format(Date(it.date)) }
+            .entries.joinToString("; ") { (mo, g) -> "$mo ${f(g.sumOf { it.amount })} (${g.size}x)" }
+        return "SUMMARY for \"$label\" (worked out by the app, use as is): ${list.size} entries; money out ${f(out.sumOf { it.amount })} $currency" +
+            (if (inn.isNotEmpty()) ", money in ${f(inn.sumOf { it.amount })} $currency" else "") +
+            (if (byMonth.isNotBlank()) "; by month: $byMonth" else "") + "."
+    }
+
+    /** Totals for a period the person asked about. */
+    fun periodSummary(list: List<Entry>, label: String, currency: String): String {
+        val spent = list.filter { it.type == Type.KHARCHA }
+        val total = spent.sumOf { it.amount }
+        val cats = spent.groupBy { it.category.label }.mapValues { g -> g.value.sumOf { it.amount } }
+            .entries.sortedByDescending { it.value }.joinToString("; ") { "${it.key} ${f(it.value)}" }
+        return "PERIOD $label (worked out by the app, use as is): expenses ${f(total)} $currency in ${spent.size} entries" +
+            (if (cats.isNotBlank()) " ($cats)" else "") +
+            "; all money out ${f(list.filter { isOut(it) }.sumOf { it.amount })}, all money in ${f(list.filter { isIn(it) }.sumOf { it.amount })} $currency."
+    }
+
     fun facts(all: List<Entry>, currency: String, now: Long = System.currentTimeMillis(), compact: Boolean = false): String {
         val c = currency
         val today = startOfDay(now)

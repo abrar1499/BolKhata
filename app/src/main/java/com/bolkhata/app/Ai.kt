@@ -106,7 +106,9 @@ object Ai {
         val story: Boolean,
         val help: Boolean,
         val dupes: Boolean,
-        val entries: List<Entry>
+        val entries: List<Entry>,
+        /** Khata, item and period summaries worked out by the app. */
+        val worked: String = ""
     )
 
     private val editRx = Regex(
@@ -137,6 +139,92 @@ object Ai {
 
     private fun wordsOf(s: String) = s.lowercase().split(Regex("[^\\p{L}\\p{N}]+")).filter { it.length >= 3 }
 
+    @Volatile private var currencyNow = ""
+
+    private class Subject(
+        val people: List<Pair<String, List<Entry>>>,
+        val items: List<Entry>,
+        val itemLabel: String,
+        val range: Pair<Long, Long>?,
+        val rangeLabel: String,
+        val periodEntries: List<Entry>
+    ) {
+        fun isEmpty() = people.isEmpty() && items.isEmpty() && range == null
+    }
+
+    /** "muhammed" and "muhammad" are the same name. */
+    private fun sameWord(a: String, b: String) =
+        a == b || (a.length >= 5 && b.length >= 5 && a.take(5) == b.take(5) && kotlin.math.abs(a.length - b.length) <= 2)
+
+    private fun subjectOf(m: String, sorted: List<Entry>): Subject {
+        val msgWords = wordsOf(m)
+        // People: names on entries (person, and "To X" / "From X" notes on transfers).
+        fun namesOf(e: Entry): List<String> = listOfNotNull(
+            e.person.trim().takeIf { it.isNotEmpty() },
+            if (e.note.startsWith("To ") || e.note.startsWith("From ")) e.note.substringAfter(' ').trim().takeIf { it.isNotEmpty() } else null
+        )
+        val candidates = sorted.flatMap { namesOf(it) }.distinctBy { it.lowercase() }
+        // A name word shared by many people (Muhammad, Ahmed…) only counts together with another word of the name.
+        val wordUse = candidates.flatMap { c -> wordsOf(c).distinct() }.groupingBy { it }.eachCount()
+        val people = mutableListOf<Pair<String, List<Entry>>>()
+        val used = mutableSetOf<String>()
+        for (w in msgWords) {
+            if (w in stopWords) continue
+            val token = wordUse.keys.firstOrNull { sameWord(it, w) } ?: continue
+            if ((wordUse[token] ?: 0) > 2) continue
+            if (!used.add(token)) continue
+            val names = candidates.filter { c -> wordsOf(c).any { it == token } }
+            val list = sorted.filter { e -> namesOf(e).any { n -> names.any { it.equals(n, true) } } }.take(80)
+            if (list.isNotEmpty() && people.none { p -> p.second.map { it.id }.toSet() == list.map { it.id }.toSet() }) {
+                people += (names.maxByOrNull { it.length } ?: token) to list
+            }
+        }
+        val personWords = people.flatMap { p -> wordsOf(p.first) }.toSet()
+
+        // Items, shops, categories: other words of the message found in entries.
+        val keys = msgWords.filter { w -> w !in stopWords && personWords.none { sameWord(it, w) } && w.toDoubleOrNull() == null }
+        val items = if (keys.isEmpty()) emptyList() else sorted.filter { e ->
+            val hay = (e.item + " " + e.note + " " + e.category.label).lowercase()
+            keys.any { hay.contains(it) }
+        }.take(40)
+        val itemLabel = keys.filter { k -> items.any { e -> (e.item + " " + e.note + " " + e.category.label).lowercase().contains(k) } }.joinToString(" ")
+
+        // A period: today, yesterday, this / last week or month, or a month's name.
+        val now = Calendar.getInstance()
+        fun dayStart(c: Calendar) = (c.clone() as Calendar).apply {
+            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+        }
+        val today = dayStart(now).timeInMillis
+        val day = 86_400_000L
+        val months = listOf("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
+        var rangeLabel = ""
+        val range: Pair<Long, Long>? = when {
+            Regex("""\b(aaj|aj|today)\b""").containsMatchIn(m) -> { rangeLabel = "today"; today to today + day }
+            Regex("""\b(kal|yesterday)\b""").containsMatchIn(m) -> { rangeLabel = "yesterday"; today - day to today }
+            Regex("""\b(is hafte|this week|is week)\b""").containsMatchIn(m) -> { rangeLabel = "last 7 days"; today - 6 * day to today + day }
+            Regex("""\b(pichle hafte|pichly hafte|last week)\b""").containsMatchIn(m) -> { rangeLabel = "the 7 days before that"; today - 13 * day to today - 6 * day }
+            Regex("""\b(is mahine|is month|this month)\b""").containsMatchIn(m) -> {
+                rangeLabel = "this month so far"
+                dayStart(now).apply { set(Calendar.DAY_OF_MONTH, 1) }.timeInMillis to today + day
+            }
+            Regex("""\b(pichle mahine|pichly mahine|last month)\b""").containsMatchIn(m) -> {
+                val a = dayStart(now).apply { set(Calendar.DAY_OF_MONTH, 1); add(Calendar.MONTH, -1) }
+                rangeLabel = SimpleDateFormat("MMMM yyyy", Locale.US).format(a.time)
+                a.timeInMillis to (a.clone() as Calendar).apply { add(Calendar.MONTH, 1) }.timeInMillis
+            }
+            else -> months.indexOfFirst { mo -> Regex("""\b$mo[a-z]*\b""").containsMatchIn(m) }.takeIf { it >= 0 }?.let { mo ->
+                val a = dayStart(now).apply {
+                    set(Calendar.DAY_OF_MONTH, 1); set(Calendar.MONTH, mo)
+                    if (timeInMillis > today) add(Calendar.YEAR, -1)
+                }
+                rangeLabel = SimpleDateFormat("MMMM yyyy", Locale.US).format(a.time)
+                a.timeInMillis to (a.clone() as Calendar).apply { add(Calendar.MONTH, 1) }.timeInMillis
+            }
+        }
+        val periodEntries = if (range == null) emptyList() else sorted.filter { it.date >= range.first && it.date < range.second }
+        return Subject(people, items, itemLabel, range, rangeLabel, periodEntries)
+    }
+
     /** Picks what to send for [message]: the matching person, item, shop or period, recent and talked-about entries. */
     private fun focusOf(message: String, history: List<ChatMessage>, sorted: List<Entry>): Focus {
         val m = message.lowercase()
@@ -148,57 +236,20 @@ object Ai {
         val dupes = dupeRx.containsMatchIn(m)
         val story = m.length > 140
 
-        // People: names from entries (person, and "To X" / "From X" notes on transfers).
-        fun names(e: Entry): List<String> = wordsOf(e.person) +
-            (if (e.note.startsWith("To ") || e.note.startsWith("From ")) wordsOf(e.note.substringAfter(' ')) else emptyList())
-        val nameWords = sorted.flatMap { names(it) }.filter { it !in stopWords }.toSet()
-        var people = wordsOf(m).filter { it in nameWords }.toSet()
-        // "uska balance?" after talking about someone: use the name from the last messages.
-        if (people.isEmpty() && pronounRx.containsMatchIn(m)) {
-            val before = history.filter { it.isUser }.takeLast(3).joinToString(" ") { it.text }
-            people = wordsOf(before).filter { it in nameWords }.toSet()
-        }
-        val personEntries = if (people.isEmpty()) emptyList() else sorted.filter { e ->
-            val hay = (e.person + " " + e.note + " " + e.item).lowercase()
-            people.any { hay.contains(it) }
-        }.take(80)
-
-        // Items, shops, categories: other words of the message found in entries.
-        val keys = wordsOf(m).filter { it !in stopWords && it !in people && it.toDoubleOrNull() == null }
-        val itemEntries = if (keys.isEmpty()) emptyList() else sorted.filter { e ->
-            val hay = (e.item + " " + e.note + " " + e.category.label).lowercase()
-            keys.any { hay.contains(it) }
-        }.take(40)
-
-        // A period: today, yesterday, this / last week or month, or a month's name.
-        val now = Calendar.getInstance()
-        fun dayStart(c: Calendar) = (c.clone() as Calendar).apply {
-            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-        }
-        val today = dayStart(now).timeInMillis
-        val day = 86_400_000L
-        val months = listOf("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
-        val range: Pair<Long, Long>? = when {
-            Regex("""\b(aaj|aj|today)\b""").containsMatchIn(m) -> today to today + day
-            Regex("""\b(kal|yesterday)\b""").containsMatchIn(m) -> today - day to today
-            Regex("""\b(is hafte|this week|is week)\b""").containsMatchIn(m) -> today - 6 * day to today + day
-            Regex("""\b(pichle hafte|pichly hafte|last week)\b""").containsMatchIn(m) -> today - 13 * day to today - 6 * day
-            Regex("""\b(is mahine|is month|this month)\b""").containsMatchIn(m) ->
-                dayStart(now).apply { set(Calendar.DAY_OF_MONTH, 1) }.timeInMillis to today + day
-            Regex("""\b(pichle mahine|pichly mahine|last month)\b""").containsMatchIn(m) -> {
-                val a = dayStart(now).apply { set(Calendar.DAY_OF_MONTH, 1); add(Calendar.MONTH, -1) }
-                a.timeInMillis to (a.clone() as Calendar).apply { add(Calendar.MONTH, 1) }.timeInMillis
-            }
-            else -> months.indexOfFirst { mo -> Regex("""\b$mo[a-z]*\b""").containsMatchIn(m) }.takeIf { it >= 0 }?.let { mo ->
-                val a = dayStart(now).apply {
-                    set(Calendar.DAY_OF_MONTH, 1); set(Calendar.MONTH, mo)
-                    if (timeInMillis > today) add(Calendar.YEAR, -1)
-                }
-                a.timeInMillis to (a.clone() as Calendar).apply { add(Calendar.MONTH, 1) }.timeInMillis
+        // What the message is about: people, items / shops, a period. A short follow-up ("details batao", "dikhao",
+        // "ye kahan se aye") with nothing of its own is about what the last messages were about.
+        var subject = subjectOf(m, sorted)
+        if (subject.isEmpty() && !(hasDigits && !question) && wordsOf(m).size <= 7) {
+            for (prev in history.filter { it.isUser }.takeLast(3).reversed()) {
+                val s = subjectOf(prev.text.lowercase(), sorted)
+                if (!s.isEmpty()) { subject = s; break }
             }
         }
-        val periodEntries = if (range == null) emptyList() else sorted.filter { it.date >= range.first && it.date < range.second }.take(60)
-
+        val people = subject.people
+        val personEntries = people.flatMap { it.second }.distinctBy { it.id }
+        val itemEntries = subject.items
+        val range = subject.range
+        val periodEntries = subject.periodEntries
         val newMoney = hasDigits && !question && !edit
         val small = !hasDigits && !edit && !question && !report && !help && !dupes && !story &&
             people.isEmpty() && itemEntries.isEmpty() && range == null
@@ -207,16 +258,25 @@ object Ai {
         // Entries the recent chat talked about, so "that one" / "wo wali" can be found.
         val talked = history.takeLast(12).flatMap { it.entryIds }.toSet()
         val talkedEntries = sorted.filter { it.id in talked }.take(20)
-        val newest = sorted.take(if (edit) 15 else 8)
+        // With a clear subject (a person, item or period) only a few of the newest entries are added, so the
+        // answer sticks to that subject.
+        val newest = sorted.take(if (edit) 15 else if (!subject.isEmpty()) 3 else 8)
         val nowMs = System.currentTimeMillis()
+        val day = 86_400_000L
         val odd = if (edit || dupes) sorted.filter { it.date > nowMs + day || it.date < nowMs - 300L * day }.take(15) else emptyList()
         val dupeScope = if (dupes) sorted.take(60) else emptyList()
-        val chosen = (newest + personEntries + itemEntries + periodEntries + talkedEntries + odd + dupeScope).distinctBy { it.id }
+        val chosen = (newest + personEntries + itemEntries + periodEntries.take(60) + talkedEntries + odd + dupeScope).distinctBy { it.id }
             .sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt })
         // A question names nothing specific ("kitna kharcha hua?"): the exact figures answer it.
+        val worked = buildString {
+            people.forEach { (label, list) -> append(Accounts.personLedger(list, label, currencyNow)).append("\n\n") }
+            if (itemEntries.isNotEmpty() && subject.itemLabel.isNotBlank()) append(Accounts.itemSummary(itemEntries, subject.itemLabel, currencyNow)).append("\n")
+            if (range != null) append(Accounts.periodSummary(periodEntries, subject.rangeLabel, currencyNow)).append("\n")
+        }.trim()
         return Focus(
             small = false, newMoney = newMoney, edit = edit, question = question || report || people.isNotEmpty() || range != null,
-            report = report, story = story || (edit && people.isNotEmpty()), help = help, dupes = dupes, entries = chosen
+            report = report, story = story || (edit && people.isNotEmpty()), help = help, dupes = dupes, entries = chosen,
+            worked = worked
         )
     }
 
@@ -240,6 +300,7 @@ object Ai {
         val sorted = all.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt })
         // Only what this message needs goes to the AI: a greeting gets no data, "Imran ka khata" only Imran's entries,
         // "aaj kitna" only today's. Smaller requests answer faster and fit free-plan limits.
+        currencyNow = currency
         val focus = focusOf(message, history, sorted)
         val recent = focus.entries
         val codeOf = recent.associate { e -> e.id to Accounts.code(e) }
@@ -347,7 +408,8 @@ When a message asks for two changes, do both in the same answer.
                 sb.append("\nEntry rules:\n").append(entryRules())
                 sb.append("\nEach entry: {\"type\":\"\",\"amount\":0,\"category\":\"\",\"item\":\"\",\"qty\":0,\"unit\":\"\",\"rate\":0,\"person\":\"\",\"date\":\"YYYY-MM-DD\",\"note\":\"\"}\n")
             }
-            sb.append("\n").append(ledgerContext(all, recent, currency, compact = groq || !focus.report, facts = focus.question, withDupes = focus.dupes))
+            if (focus.worked.isNotBlank()) sb.append("\n").append(focus.worked).append("\n")
+            sb.append("\n").append(ledgerContext(all, recent, currency, compact = groq || !focus.report, facts = focus.question && focus.worked.isBlank() || focus.report, withDupes = focus.dupes))
             sb.append("\n\nWhat you remember about this person from earlier chats (use it; it may be out of date if they say otherwise):\n")
                 .append(memoryList).append("\n\n")
             sb.append("""Memory: when the person tells you something lasting about themselves or their money — who someone is ("Shahbaz is my brother"),
