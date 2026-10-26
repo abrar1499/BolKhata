@@ -91,6 +91,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var tab by remember { mutableStateOf(Tab.HOME) }
     var chatMessages by remember { mutableStateOf(store.loadChatMessages()) }
     var chatLoading by remember { mutableStateOf(false) }
+    var loadingLabel by remember { mutableStateOf("Thinking…") }
     var people by remember { mutableStateOf<Boolean?>(null) }   // true = to receive, false = to pay
     var editing by remember { mutableStateOf<Entry?>(null) }
     var adding by remember { mutableStateOf(false) }
@@ -697,8 +698,29 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 postChat(name, isUser = true, attachment = preview)
                 if (activeKey.isBlank()) throw Ai.Failure("Reading statements and bills needs AI. Turn it on in Settings.")
                 if (bytes.size > 15 * 1024 * 1024) throw Ai.Failure("This file is too big (over 15 MB). Send a smaller PDF or a photo of one page.")
-                val found = Ai.readDocument(bytes, mime, "", activeKey, store, currency)
-                    .sortedByDescending { it.date }
+                // A PDF is read page by page, several pages at once: a long statement takes about as long as one page.
+                val pages = if (mime == "application/pdf") {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Attachments.pdfPages(context, bytes) }
+                } else emptyList()
+                var failedPages = emptyList<Int>()
+                val found = (if (pages.size > 1) {
+                    loadingLabel = "Reading ${pages.size} pages…"
+                    val result = Ai.readPages(pages, "", activeKey, store, currency) { done, total ->
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { loadingLabel = "Reading pages… $done of $total" }
+                    }
+                    failedPages = result.failedPages
+                    result.entries
+                } else {
+                    loadingLabel = "Reading…"
+                    Ai.readDocument(bytes, mime, "", activeKey, store, currency)
+                }).sortedByDescending { it.date }
+                if (failedPages.isNotEmpty()) {
+                    postChat(
+                        "Couldn't read page " + failedPages.joinToString(", ") + ". Send a photo of " +
+                            (if (failedPages.size == 1) "that page" else "those pages") + " to add the rest.",
+                        isUser = false
+                    )
+                }
                 if (found.isEmpty()) {
                     postChat("I couldn't find any transactions in this file.", isUser = false)
                 } else {
@@ -717,6 +739,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 postChat(e.message ?: "Could not read this file.", isUser = false)
             } finally {
                 chatLoading = false
+                loadingLabel = "Thinking…"
             }
         }
     }
@@ -1084,6 +1107,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     ChatScreen(
                         messages = chatMessages,
                         loading = chatLoading,
+                        loadingLabel = loadingLabel,
                         entries = entries,
                         currency = currency,
                         subtitle = "$monthName · ${fmt(monthSpent)} $currency spent",

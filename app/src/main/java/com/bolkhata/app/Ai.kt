@@ -1,6 +1,8 @@
 package com.bolkhata.app
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -23,6 +25,12 @@ object Ai {
 
     /** Stronger model for the chat and for reading files; quick entry reading keeps the light model. */
     const val CHAT_MODEL = "gemini-3.8-flash"
+
+    /** Fastest model, for reading photos and statement pages (many pages are read at the same time). */
+    const val FILE_MODEL = "gemini-3.1-flash-lite"
+
+    /** Models that just failed (over the limit, too slow) are skipped for a while, so nobody waits on them again. */
+    private val resting = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
     class Failure(message: String) : Exception(message)
 
@@ -71,7 +79,14 @@ object Ai {
         memory: List<String> = emptyList()
     ): AssistantResult = withContext(Dispatchers.IO) {
         if (key.isBlank()) throw Failure("AI is not configured.")
-        val newest = all.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt }).take(350)
+        // Fewer lines = a much faster answer. The newest 150, plus older ones the message names (shop, person, item).
+        val sorted = all.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt })
+        val words = message.lowercase().split(Regex("[^\\p{L}\\p{N}]+")).filter { it.length >= 3 }.toSet()
+        val named = if (words.isEmpty()) emptyList() else sorted.drop(150).filter { e ->
+            val hay = (e.item + " " + e.person + " " + e.note).lowercase()
+            words.any { hay.contains(it) }
+        }.take(60)
+        val newest = sorted.take(150) + named
         // Entries dated far in the past or in the future are often mistakes; include them so they can be fixed.
         val nowMs = System.currentTimeMillis()
         val odd = all.filter { it !in newest && (it.date > nowMs + 86_400_000L || it.date < nowMs - 300L * 86_400_000L) }.take(30)
@@ -212,10 +227,52 @@ digits. If they write or speak Urdu or Roman Urdu, write "speech" in Urdu script
         currency: String
     ): List<Entry> = withContext(Dispatchers.IO) {
         if (key.isBlank()) throw Failure("Reading statements needs AI. Turn it on in Settings.")
-        val today = SimpleDateFormat("yyyy-MM-dd (EEEE)", Locale.US).format(Date())
+        fixDates(readOne(bytes, mime, note, key, store, currency))
+    }
+
+    class PagesResult(val entries: List<Entry>, val failedPages: List<Int>)
+
+    /**
+     * Reads a statement page by page, several pages at the same time, so a long statement takes about as long
+     * as one page. A page that fails is tried once more; pages that still fail are reported, the rest kept.
+     */
+    suspend fun readPages(
+        pages: List<ByteArray>,
+        note: String,
+        key: String,
+        store: Store,
+        currency: String,
+        onPage: suspend (done: Int, total: Int) -> Unit
+    ): PagesResult = kotlinx.coroutines.coroutineScope {
+        if (key.isBlank()) throw Failure("Reading statements needs AI. Turn it on in Settings.")
+        val gate = kotlinx.coroutines.sync.Semaphore(4)
+        val done = java.util.concurrent.atomic.AtomicInteger(0)
+        val results = pages.map { page ->
+            async(Dispatchers.IO) {
+                gate.acquire()
+                try {
+                    val r = runCatching { readOne(page, "image/jpeg", note, key, store, currency) }
+                        .recoverCatching { readOne(page, "image/jpeg", note, key, store, currency) }
+                    onPage(done.incrementAndGet(), pages.size)
+                    r
+                } finally {
+                    gate.release()
+                }
+            }
+        }.awaitAll()
+        val failed = results.withIndex().filter { it.value.isFailure }.map { it.index + 1 }
+        if (failed.size == pages.size) {
+            throw results.first().exceptionOrNull() ?: Failure("Could not read this file.")
+        }
+        PagesResult(fixDates(results.mapNotNull { it.getOrNull() }.flatten()), failed)
+    }
+
+    private fun readOne(bytes: ByteArray, mime: String, note: String, key: String, store: Store, currency: String): List<Entry> {
         val data = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+        val today = SimpleDateFormat("yyyy-MM-dd (EEEE)", Locale.US).format(Date())
         val prompt = """
-The attached file is a bank statement, card statement, receipt or bill. Today is $today. The person's currency is $currency.
+The attached file is a bank statement (or one page of it), card statement, receipt or bill. Today is $today.
+A page with no transactions (a cover or summary page) gives {"rows":[]}. The person's currency is $currency.
 Turn every money movement in it into a ledger entry, using the date printed for each line.
 Dates: short dates are ambiguous. "25/10/26" and "26/10/24" can be day/month/year or year/month/day, even inside the same file.
 Choose the reading that gives a date on or before today and closest to today (the newest possible), never a date a year or more
@@ -243,14 +300,14 @@ Every row MUST have "d", the transaction's own date from the file. Example:
 {"rows":[{"t":"expense","a":19,"c":"food","i":"Express Food","p":"","d":"2026-10-25","h":"13:40","n":"Express Food Jeddah"}]}
 """.trim()
         val json = try {
-            rowsToEntries(request(prompt, key.trim(), store, mime to data, prefer = CHAT_MODEL))
+            rowsToEntries(request(prompt, key.trim(), store, mime to data, prefer = FILE_MODEL))
         } catch (e: Failure) {
             throw e
         } catch (e: Exception) {
             throw Failure("Could not read this file. Try a clearer photo or another PDF.")
         }
-        try {
-            fixDates(toEntries(json, note))
+        return try {
+            toEntries(json, note)
         } catch (e: Exception) {
             throw Failure("Could not read this file. Try a clearer photo or another PDF.")
         }
@@ -456,27 +513,7 @@ Return ONLY valid JSON in this exact shape: {"reply":"your answer here"}
 
     suspend fun parse(text: String, key: String, store: Store, currency: String): List<Entry> = withContext(Dispatchers.IO) {
         val prompt = buildPrompt(text, currency)
-        val first = store.aiModel.takeIf { it in MODELS }
-        val order = listOfNotNull(first) + MODELS.filter { it != first }
-        var lastError = "AI did not answer"
-        for (model in order) {
-            val (code, body) = call(model, key, prompt)
-            when (code) {
-                200 -> {
-                    store.aiModel = model
-                    return@withContext toEntries(readText(body), text)
-                }
-                400, 401, 403 -> {
-                    val msg = errorMessage(body)
-                    if (msg.contains("API key", ignoreCase = true) || code != 400) throw Failure("AI key not accepted. Check it in Settings.")
-                    lastError = msg
-                }
-                404 -> lastError = "Model not available"
-                429 -> throw Failure("AI daily limit reached. Using offline mode.")
-                else -> lastError = "AI error $code"
-            }
-        }
-        throw Failure(lastError)
+        toEntries(request(prompt, key.trim(), store), text)
     }
 
     /** A change the AI proposes; nothing is applied until the person taps Apply. */
@@ -593,24 +630,31 @@ If nothing matches, return {"edits":[],"delete":[],"message":"I couldn't find th
     /** [file] is an attached image or PDF: its media type and base64 data. */
     private fun request(prompt: String, key: String, store: Store, file: Pair<String, String>? = null, prefer: String? = null): String {
         val first = prefer ?: store.aiModel.takeIf { it in MODELS }
-        val order = listOfNotNull(first) + MODELS.filter { it != first }
+        val all = listOfNotNull(first) + MODELS.filter { it != first }
+        // Skip models that just failed, unless every model is resting.
+        val now = System.currentTimeMillis()
+        val order = all.filter { (resting[it] ?: 0L) < now }.ifEmpty { all }
         var lastError = "AI did not answer"
         // If one model is busy, over its free limit, not allowed for this key, or too slow, the next one is tried,
         // so the chat keeps working. Only a key that is really invalid stops right away.
         for (model in order) {
+            fun rest(seconds: Int) { resting[model] = System.currentTimeMillis() + seconds * 1000L }
             var result = try {
                 call(model, key, prompt, file)
             } catch (e: Failure) {
                 lastError = e.message ?: lastError
+                rest(120)
                 continue
             }
+            // A model that doesn't take the short-thinking setting is asked again without it.
             if (result.first == 400 && errorMessage(result.second).contains("thinking", ignoreCase = true)) {
-                result = try { call(model, key, prompt, file, think = false) } catch (e: Failure) { lastError = e.message ?: lastError; continue }
+                result = try { call(model, key, prompt, file, think = false) } catch (e: Failure) { lastError = e.message ?: lastError; rest(120); continue }
             }
             val (code, body) = result
             when (code) {
                 200 -> {
                     if (prefer == null) store.aiModel = model
+                    resting.remove(model)
                     val text = try { readText(body) } catch (e: CutOff) {
                         lastError = "The file is too long for one go. Send fewer pages (for example one month) at a time."
                         continue
@@ -624,10 +668,11 @@ If nothing matches, return {"edits":[],"delete":[],"message":"I couldn't find th
                         throw Failure("AI key not accepted. Check it in Settings.")
                     }
                     lastError = "$model: $msg"
+                    rest(600)
                 }
-                404 -> lastError = "Model not available"
-                429 -> lastError = "AI limit reached for now (free tier). Try again in a minute."
-                else -> lastError = "AI error $code"
+                404 -> { lastError = "Model not available"; rest(3600) }
+                429 -> { lastError = "AI limit reached for now (free tier). Try again in a minute."; rest(60) }
+                else -> { lastError = "AI error $code"; rest(60) }
             }
         }
         throw Failure(lastError)
@@ -695,11 +740,12 @@ Make one entry per transaction. Skip anything without an amount. Number words co
         when {
             model.startsWith("gemini-3") -> {
                 c.put("temperature", 1.0)
-                if (think) c.put("thinkingConfig", JSONObject().put("thinkingLevel", "low"))
+                // "minimal" = answer almost straight away; the JSON's "work" field still gives room to work out numbers.
+                if (think) c.put("thinkingConfig", JSONObject().put("thinkingLevel", "minimal"))
             }
             model.startsWith("gemini-2.5") -> {
                 c.put("temperature", 0)
-                if (think) c.put("thinkingConfig", JSONObject().put("thinkingBudget", if (model.contains("lite")) 0 else 1024))
+                if (think) c.put("thinkingConfig", JSONObject().put("thinkingBudget", if (model.contains("lite")) 0 else 512))
             }
             else -> c.put("temperature", 0)
         }
@@ -713,7 +759,8 @@ Make one entry per transaction. Skip anything without an amount. Number words co
             conn.requestMethod = "POST"
             conn.connectTimeout = 15_000
             // Reading a whole statement takes longer than a sentence.
-            conn.readTimeout = if (file != null) 150_000 else 60_000
+            // A model that hasn't answered by then is stuck; the next one is tried instead of waiting.
+            conn.readTimeout = if (file != null) 90_000 else 30_000
             conn.doOutput = true
             conn.setRequestProperty("Content-Type", "application/json")
             conn.setRequestProperty("x-goog-api-key", key)

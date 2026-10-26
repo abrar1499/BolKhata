@@ -55,6 +55,38 @@ object Attachments {
         }
     }
 
+    /**
+     * Each page of a PDF as a JPEG, sharp enough to read small statement text. Empty if the PDF can't be opened
+     * (for example a password-protected one), in which case the whole PDF is sent as it is.
+     */
+    fun pdfPages(context: Context, bytes: ByteArray, maxPages: Int = 40): List<ByteArray> {
+        val tmp = File(context.cacheDir, "pages.pdf")
+        tmp.writeBytes(bytes)
+        return try {
+            ParcelFileDescriptor.open(tmp, ParcelFileDescriptor.MODE_READ_ONLY).use { fd ->
+                PdfRenderer(fd).use { renderer ->
+                    (0 until minOf(renderer.pageCount, maxPages)).map { i ->
+                        renderer.openPage(i).use { page ->
+                            val width = 1500
+                            val height = (width.toFloat() * page.height / page.width).toInt().coerceIn(1, 4000)
+                            val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                            bmp.eraseColor(Color.WHITE)
+                            page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                            val out = java.io.ByteArrayOutputStream()
+                            bmp.compress(Bitmap.CompressFormat.JPEG, 82, out)
+                            bmp.recycle()
+                            out.toByteArray()
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            emptyList()
+        } finally {
+            tmp.delete()
+        }
+    }
+
     /** Removes saved pictures no chat message uses any more. */
     fun cleanUp(context: Context, keep: Set<String>) {
         dir(context).listFiles()?.forEach { if (it.absolutePath !in keep) it.delete() }

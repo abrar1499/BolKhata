@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.sp
 fun ChatScreen(
     messages: List<ChatMessage>,
     loading: Boolean,
+    loadingLabel: String = "Thinking…",
     entries: List<Entry>,
     currency: String,
     subtitle: String,
@@ -172,7 +173,7 @@ fun ChatScreen(
                     ) {
                         CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                         Spacer(Modifier.width(10.dp))
-                        Text("Thinking…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(loadingLabel, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
