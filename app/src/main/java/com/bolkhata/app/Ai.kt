@@ -237,9 +237,10 @@ ${if (note.isNotBlank()) "The person said about this file: \"" + note.replace("\
 Entry rules:
 ${entryRules()}
 
-Return ONLY JSON, one short row per transaction (statements can have hundreds, so keep rows compact):
-{"rows":[["type",amount,"category","item","person","YYYY-MM-DD","HH:MM","note"]]}
-Example row: ["expense",19,"food","Express Food","","2026-10-25","13:40","Express Food Jeddah"]
+Return ONLY JSON, one short object per transaction with these short keys (statements can have hundreds, so keep it compact):
+{"rows":[{"t":"type","a":0,"c":"category","i":"item","p":"person","d":"YYYY-MM-DD","h":"HH:MM","n":"note"}]}
+Every row MUST have "d", the transaction's own date from the file. Example:
+{"rows":[{"t":"expense","a":19,"c":"food","i":"Express Food","p":"","d":"2026-10-25","h":"13:40","n":"Express Food Jeddah"}]}
 """.trim()
         val json = try {
             rowsToEntries(request(prompt, key.trim(), store, mime to data, prefer = CHAT_MODEL))
@@ -261,19 +262,48 @@ Example row: ["expense",19,"food","Express Food","","2026-10-25","13:40","Expres
         if (obj.has("entries")) return text
         val rows = obj.optJSONArray("rows") ?: return text
         val entries = JSONArray()
+        val dateRx = Regex("""^\d{4}-\d{1,2}-\d{1,2}""")
+        val timeRx = Regex("""^\d{1,2}:\d{2}""")
         for (i in 0 until rows.length()) {
+            val o = rows.optJSONObject(i)
+            if (o != null) {
+                entries.put(
+                    JSONObject()
+                        .put("type", o.optString("t", o.optString("type")))
+                        .put("amount", o.optDouble("a", o.optDouble("amount", 0.0)))
+                        .put("category", o.optString("c", o.optString("category")))
+                        .put("item", o.optString("i", o.optString("item")))
+                        .put("person", o.optString("p", o.optString("person")))
+                        .put("date", o.optString("d", o.optString("date")))
+                        .put("time", o.optString("h", o.optString("time")))
+                        .put("note", o.optString("n", o.optString("note")))
+                )
+                continue
+            }
+            // A plain list: find each value by what it looks like, not by its position.
             val r = rows.optJSONArray(i) ?: continue
+            val values = (0 until r.length()).map { r.opt(it) }
+            val strings = values.filterIsInstance<String>().map { it.trim() }
+            val date = strings.firstOrNull { dateRx.containsMatchIn(it) }.orEmpty()
+            val time = strings.firstOrNull { timeRx.matches(it) }.orEmpty()
+            val amount = values.firstOrNull { it is Number }?.let { (it as Number).toDouble() }
+                ?: strings.firstNotNullOfOrNull { it.replace(",", "").toDoubleOrNull() } ?: 0.0
+            val words = strings.filter { it.isNotBlank() && it != date && it != time && it.replace(",", "").toDoubleOrNull() == null }
             entries.put(
                 JSONObject()
-                    .put("type", r.optString(0))
-                    .put("amount", r.optDouble(1, 0.0))
-                    .put("category", r.optString(2))
-                    .put("item", r.optString(3))
-                    .put("person", r.optString(4))
-                    .put("date", r.optString(5))
-                    .put("time", r.optString(6))
-                    .put("note", r.optString(7))
+                    .put("type", words.getOrElse(0) { "" })
+                    .put("amount", amount)
+                    .put("category", words.getOrElse(1) { "" })
+                    .put("item", words.getOrElse(2) { "" })
+                    .put("date", date)
+                    .put("time", time)
+                    .put("note", words.drop(3).lastOrNull().orEmpty())
             )
+        }
+        // Never put a whole statement on today's date because its dates went missing.
+        val noDate = (0 until entries.length()).count { !dateRx.containsMatchIn(entries.getJSONObject(it).optString("date")) }
+        if (entries.length() > 2 && noDate * 2 > entries.length()) {
+            throw Failure("I couldn't read the dates in this file. Please send it again.")
         }
         return JSONObject().put("entries", entries).toString()
     }
