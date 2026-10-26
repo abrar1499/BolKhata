@@ -506,7 +506,7 @@ private fun GroupedTxRow(e: Entry, currency: String, first: Boolean, last: Boole
             .fillMaxWidth()
             .clip(shape)
             .background(MaterialTheme.colorScheme.surface)
-            .clickable { onClick() }
+            .entryTap(e, onClick)
     ) {
         if (!first) {
             HorizontalDivider(

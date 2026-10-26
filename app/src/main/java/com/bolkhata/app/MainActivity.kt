@@ -106,6 +106,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var bankHelp by remember { mutableStateOf(false) }
     // A sale or purchase opened from the Stock tab, waiting to be confirmed in the form.
     var trade by remember { mutableStateOf<Entry?>(null) }
+    // The account opened by tapping an entry (People › Shahbaz, Transport › Aldrees…).
+    var account by remember { mutableStateOf<AccountKey?>(null) }
     // The entries before a chat message was handled; what changes after that is reported in the chat.
     var chatWatch by remember { mutableStateOf<List<Entry>?>(null) }
     var voiceForChat by remember { mutableStateOf(false) }
@@ -1024,8 +1026,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         scope.launch { drawer.open() }
     }
 
-    BackHandler(enabled = results != null || people != null || tab != Tab.HOME) {
-        if (results != null) {
+    BackHandler(enabled = account != null || results != null || people != null || tab != Tab.HOME) {
+        if (account != null) {
+            account = null
+        } else if (results != null) {
             results = null
             answerText = null
         } else if (people != null) {
@@ -1054,7 +1058,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
-            val main = results == null && people == null
+            val main = results == null && people == null && account == null
             if (main && tab == Tab.CHAT) {
                 InputBar(
                     onSend = { chatInput(it) }, onMic = { startVoice(forChat = true) }, placeholder = "Speak, type or ask…",
@@ -1069,7 +1073,15 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     ) { pad ->
         Box(Modifier.padding(pad).fillMaxSize()) {
             val who = people
+            val acct = account
+            CompositionLocalProvider(LocalAccountOpener provides { e: Entry -> account = accountOf(e) }) {
             when {
+                acct != null -> CompositionLocalProvider(LocalAccountOpener provides null) {
+                    AccountScreen(
+                        key = acct, entries = entries, currency = currency,
+                        onBack = { account = null }, onEdit = { editing = it }, onNew = { trade = it }
+                    )
+                }
                 results != null -> {
                     val (q, editMode) = results!!
                     ResultsScreen(
@@ -1284,6 +1296,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         }
                     }
                 )
+            }
             }
         }
     }

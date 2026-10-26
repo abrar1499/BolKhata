@@ -436,7 +436,8 @@ fun SectionHeader(title: String, count: Int?, expanded: Boolean, total: String? 
 
 @Composable
 fun TxRow(e: Entry, currency: String, showDate: Boolean = true, onClick: () -> Unit) {
-    Panel(Modifier.fillMaxWidth(), onClick = onClick, padding = 0.dp) {
+    // Tap opens the entry's account, long-press edits it.
+    Panel(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).entryTap(e, onClick), padding = 0.dp) {
         TxRowContent(e, currency, showDate)
     }
 }
