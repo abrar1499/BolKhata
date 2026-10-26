@@ -61,7 +61,7 @@ object Ai {
     class Failure(message: String) : Exception(message)
 
     /** Exact figures (worked out in code), the entries as compact numbered lines, and likely duplicates. */
-    private fun ledgerContext(all: List<Entry>, recent: List<Entry>, currency: String): String {
+    private fun ledgerContext(all: List<Entry>, recent: List<Entry>, currency: String, compact: Boolean = false): String {
         val entryLines = recent.joinToString("\n") { e -> Accounts.line(e) }
         // Likely duplicates, worked out here so the AI doesn't have to spot them: same kind and amount, and either
         // within 3 days of each other or on the same day and month in another year (a misread date).
@@ -86,7 +86,7 @@ object Ai {
                 }
             }
         val dupeText = if (dupes.isEmpty()) "none found" else dupes.joinToString("; ")
-        return Accounts.facts(all, currency) +
+        return Accounts.facts(all, currency, compact = compact) +
             "\n\nSaved entries, newest first (id is the entry's fixed code to use in edits and delete; columns: id | date time | kind | amount | category | item | extras):\n$entryLines" +
             "\n\nPossible duplicates (same kind and amount, close dates or the same date in another year; check item and note): $dupeText"
     }
@@ -111,12 +111,12 @@ object Ai {
         val words = message.lowercase().split(Regex("[^\\p{L}\\p{N}]+")).filter { it.length >= 3 }.toSet()
         // Groq's free plan allows only 8,000 tokens a minute, so its requests carry fewer entries.
         val fastKey = store.fastKey.trim()
-        val limit = if (isGroq(fastKey)) 40 else 100
+        val limit = if (isGroq(fastKey)) 25 else 100
         val named = if (words.isEmpty()) emptyList() else sorted.drop(limit).filter { e ->
             val hay = (e.item + " " + e.person + " " + e.note).lowercase()
             words.any { hay.contains(it) }
         }.take(60)
-        val newest = sorted.take(limit) + named.take(if (isGroq(fastKey)) 25 else 60)
+        val newest = sorted.take(limit) + named.take(if (isGroq(fastKey)) 15 else 60)
         // Entries dated far in the past or in the future are often mistakes; include them so they can be fixed.
         val nowMs = System.currentTimeMillis()
         val odd = all.filter { it !in newest && (it.date > nowMs + 86_400_000L || it.date < nowMs - 300L * 86_400_000L) }.take(30)
@@ -126,9 +126,9 @@ object Ai {
         val recent = newest + odd + mentioned
         val codeOf = recent.associate { e -> e.id to Accounts.code(e) }
         val today = SimpleDateFormat("yyyy-MM-dd (EEEE)", Locale.US).format(Date())
-        val conversation = history.takeLast(if (isGroq(fastKey)) 8 else 12).joinToString("\n") { m ->
+        val conversation = history.takeLast(if (isGroq(fastKey)) 6 else 12).joinToString("\n") { m ->
             val refs = m.entryIds.mapNotNull { codeOf[it] }
-            (if (m.isUser) "User: " else "Assistant: ") + m.text.take(if (isGroq(fastKey)) 400 else 600) +
+            (if (m.isUser) "User: " else "Assistant: ") + m.text.take(if (isGroq(fastKey)) 300 else 600) +
                 (if (refs.isNotEmpty()) " [these entries: id=" + refs.joinToString(", ") + "]" else "")
         }.ifBlank { "(new conversation)" }
         val said = message.replace("\"", "'").take(2000)
@@ -200,7 +200,7 @@ Entry rules:
 ${entryRules()}
 Each entry: {"type":"","amount":0,"category":"","item":"","qty":0,"unit":"","rate":0,"person":"","date":"YYYY-MM-DD","note":""}
 
-${ledgerContext(all, recent, currency)}
+${ledgerContext(all, recent, currency, compact = isGroq(fastKey))}
 
 What you remember about this person from earlier chats (use it; it may be out of date if they say otherwise):
 ${if (memory.isEmpty()) "(nothing yet)" else memory.joinToString("\n") { "- $it" }}
@@ -920,7 +920,8 @@ Make one entry per transaction. Skip anything without an amount. Number words co
             val body = JSONObject()
                 .put("model", model)
                 .put("messages", JSONArray().put(JSONObject().put("role", "user").put("content", prompt)))
-                .put("max_tokens", 4096)
+                // Groq counts the requested maximum toward its 8,000-tokens-a-minute limit, so ask for less there.
+                .put("max_tokens", if (groq) 1500 else 4096)
             if (jsonMode) body.put("response_format", JSONObject().put("type", "json_object"))
             if (groq) {
                 body.put("reasoning_effort", "low")
@@ -969,6 +970,7 @@ Make one entry per transaction. Skip anything without an amount. Number words co
                 code == 400 && jsonMode && (msg.contains("json", true) || msg.contains("response_format", true)) -> jsonMode = false
                 code == 401 -> throw Failure("$provider key not accepted")
                 code == 429 -> throw Failure("$provider limit reached for now")
+                code == 413 -> throw Failure("$provider: message too large for the free plan")
                 else -> throw Failure("$provider error $code " + msg.take(60))
             }
         }

@@ -53,7 +53,8 @@ object Accounts {
         return parts.joinToString(" | ")
     }
 
-    fun facts(all: List<Entry>, currency: String, now: Long = System.currentTimeMillis()): String {
+    /** [compact] gives a shorter version (fewer people and lists) for AI plans with small limits. */
+    fun facts(all: List<Entry>, currency: String, now: Long = System.currentTimeMillis(), compact: Boolean = false): String {
         val c = currency
         val today = startOfDay(now)
         val weekStart = Calendar.getInstance().apply {
@@ -79,7 +80,7 @@ object Accounts {
         sb.appendLine(period("This week (from Sunday)", between(weekStart, today + DAY)))
         sb.appendLine(period("Last week", between(weekStart - 7 * DAY, weekStart)))
         val monthNames = SimpleDateFormat("MMMM yyyy", Locale.US)
-        for (back in 0..5) {
+        for (back in 0..(if (compact) 2 else 5)) {
             val a = monthStart(back, now)
             val b = if (back == 0) today + DAY else monthStart(back - 1, now)
             val list = between(a, b)
@@ -110,7 +111,7 @@ object Accounts {
         sb.appendLine("- Expenses by category, last month: " + byCategory(lastMonth.filter { it.type == Type.KHARCHA }))
         val topItems = spentNow.groupBy { it.item.trim().lowercase() }
             .map { (_, g) -> Triple(g.first().item, g.sumOf { it.amount }, g.size) }
-            .sortedByDescending { it.second }.take(10)
+            .sortedByDescending { it.second }.take(if (compact) 5 else 10)
             .joinToString("; ") { "${it.first} ${f(it.second)} (${it.third}x)" }
         if (topItems.isNotEmpty()) sb.appendLine("- Top items/shops this month: $topItems")
         val biggest = spentNow.sortedByDescending { it.amount }.take(5)
@@ -123,7 +124,7 @@ object Accounts {
         if (people.isNotEmpty()) {
             val bal = balances(all).mapKeys { it.key.trim().lowercase() }
             sb.appendLine("- People (balance > 0 means they owe you):")
-            people.entries.sortedByDescending { abs(bal[it.key] ?: 0.0) }.take(25).forEach { (key, list) ->
+            people.entries.sortedByDescending { abs(bal[it.key] ?: 0.0) }.take(if (compact) 10 else 25).forEach { (key, list) ->
                 fun s(t: Type) = list.filter { it.type == t }.sumOf { it.amount }
                 val parts = listOfNotNull(
                     s(Type.DIYA).takeIf { it > 0 }?.let { "lent ${f(it)}" },
@@ -144,7 +145,7 @@ object Accounts {
                 val got = g.filter { isIn(it) }.sumOf { it.amount }
                 "${g.first().note.removePrefix("To ").removePrefix("From ").trim()}: sent ${f(sent)}, received ${f(got)}"
             }.take(25)
-        if (transferNames.isNotEmpty()) sb.appendLine("- Bank transfers by person, all time: " + transferNames.joinToString("; "))
+        if (!compact && transferNames.isNotEmpty()) sb.appendLine("- Bank transfers by person, all time: " + transferNames.joinToString("; "))
 
         // Regular payments: the same item in at least 2 of the last 3 months.
         val recentMonths = between(monthStart(2, now), today + DAY).filter { it.type == Type.KHARCHA }
@@ -152,7 +153,7 @@ object Accounts {
             .filter { (_, g) -> g.map { Calendar.getInstance().apply { timeInMillis = it.date }.get(Calendar.MONTH) }.toSet().size >= 2 }
             .map { (_, g) -> "${g.first().item} (${g.size}x, about ${f(g.sumOf { it.amount } / g.size)} each)" }
             .take(15)
-        if (regular.isNotEmpty()) sb.appendLine("- Regular payments seen in 2+ of the last 3 months: " + regular.joinToString("; "))
+        if (!compact && regular.isNotEmpty()) sb.appendLine("- Regular payments seen in 2+ of the last 3 months: " + regular.joinToString("; "))
 
         val cash = all.filter { isIn(it) }.sumOf { it.amount } - all.filter { isOut(it) }.sumOf { it.amount }
         sb.appendLine("- Cash in hand by the app's count: ${f(cash)} $c (all money in minus all money out since the first entry; " +
