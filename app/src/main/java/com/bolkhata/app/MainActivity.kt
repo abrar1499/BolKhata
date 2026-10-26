@@ -1184,7 +1184,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                             checking = true
                             newVersion = Updater.check()
                             checking = false
-                            if (newVersion == null) {
+                            if (newVersion == null && Updater.lastCheckFailed) {
+                                toast("Couldn't check for updates. Check the internet and try again.")
+                            } else if (newVersion == null) {
                                 toast("You have the latest version")
                             } else {
                                 tab = Tab.HOME

@@ -19,26 +19,60 @@ data class UpdateInfo(val version: Int, val apkUrl: String)
 object Updater {
     private const val LATEST = "https://api.github.com/repos/abrar1499/BolKhata/releases/latest"
 
+    private const val LATEST_PAGE = "https://github.com/abrar1499/BolKhata/releases/latest"
+    private const val DOWNLOAD = "https://github.com/abrar1499/BolKhata/releases/download/"
+
+    /** True when the last check could not reach GitHub, so "no update" is not known for sure. */
+    @Volatile var lastCheckFailed = false
+        private set
+
     suspend fun check(): UpdateInfo? = withContext(Dispatchers.IO) {
+        lastCheckFailed = false
+        val latest = runCatching { fromApi() }.getOrNull() ?: runCatching { fromPage() }.getOrNull()
+        if (latest == null) {
+            lastCheckFailed = true
+            return@withContext null
+        }
+        if (latest.version <= BuildConfig.VERSION_CODE) null else latest
+    }
+
+    /** GitHub's API: has a limit of 60 checks an hour per network, so it can fail on shared Wi-Fi. */
+    private fun fromApi(): UpdateInfo? {
+        val conn = URL(LATEST).openConnection() as HttpURLConnection
+        conn.connectTimeout = 10_000
+        conn.readTimeout = 10_000
+        conn.useCaches = false
+        conn.setRequestProperty("Accept", "application/vnd.github+json")
+        conn.setRequestProperty("Cache-Control", "no-cache")
         try {
-            val conn = URL(LATEST).openConnection() as HttpURLConnection
-            conn.connectTimeout = 10_000
-            conn.readTimeout = 10_000
-            conn.setRequestProperty("Accept", "application/vnd.github+json")
-            if (conn.responseCode != 200) return@withContext null
+            if (conn.responseCode != 200) return null
             val json = JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
-            val version = json.getString("tag_name").trimStart('v', 'V').toIntOrNull() ?: return@withContext null
-            if (version <= BuildConfig.VERSION_CODE) return@withContext null
+            val version = json.getString("tag_name").trimStart('v', 'V').toIntOrNull() ?: return null
             val assets = json.getJSONArray("assets")
             for (i in 0 until assets.length()) {
                 val a = assets.getJSONObject(i)
-                if (a.getString("name").endsWith(".apk")) {
-                    return@withContext UpdateInfo(version, a.getString("browser_download_url"))
-                }
+                if (a.getString("name").endsWith(".apk")) return UpdateInfo(version, a.getString("browser_download_url"))
             }
-            null
-        } catch (e: Exception) {
-            null
+            return null
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    /** Backup with no limit: the releases page redirects to the newest version's tag, e.g. .../tag/v67. */
+    private fun fromPage(): UpdateInfo? {
+        val conn = URL(LATEST_PAGE).openConnection() as HttpURLConnection
+        conn.instanceFollowRedirects = false
+        conn.connectTimeout = 10_000
+        conn.readTimeout = 10_000
+        conn.useCaches = false
+        try {
+            val location = conn.getHeaderField("Location") ?: return null
+            val tag = location.substringAfterLast("/tag/", "").takeIf { it.isNotBlank() } ?: return null
+            val version = tag.trimStart('v', 'V').toIntOrNull() ?: return null
+            return UpdateInfo(version, DOWNLOAD + tag + "/BolKhata.apk")
+        } finally {
+            conn.disconnect()
         }
     }
 
