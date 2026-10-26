@@ -92,6 +92,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var chatMessages by remember { mutableStateOf(store.loadChatMessages()) }
     var chatLoading by remember { mutableStateOf(false) }
     var loadingLabel by remember { mutableStateOf("Thinking…") }
+    var voiceOn by remember { mutableStateOf(false) }
     var people by remember { mutableStateOf<Boolean?>(null) }   // true = to receive, false = to pay
     var editing by remember { mutableStateOf<Entry?>(null) }
     var adding by remember { mutableStateOf(false) }
@@ -606,7 +607,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         chatLoading = true
         scope.launch {
             try {
-                val res = Ai.assistant(text, history, entries, activeKey, store, currency, store.memory)
+                val res = Ai.assistant(text, history, entries, activeKey, store, currency, store.memory, voice = voiceOn)
                 lastSpeech = res.speech
                 // Lasting facts from the chat are kept on the phone and sent with every later question.
                 if (res.remember.isNotEmpty() || res.forget.isNotEmpty()) {
@@ -749,7 +750,6 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     }
 
     // ---------- Voice conversation: talk to the assistant hands-free ----------
-    var voiceOn by remember { mutableStateOf(false) }
     var voiceStatus by remember { mutableStateOf("") }
     var voicePartial by remember { mutableStateOf("") }
     var voiceAwaiting by remember { mutableStateOf(false) }

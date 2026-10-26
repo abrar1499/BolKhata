@@ -21,13 +21,13 @@ import java.util.Locale
 object Ai {
 
     /** Tried in order; the first one that answers is remembered. */
-    val MODELS = listOf("gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-2.5-flash")
+    val MODELS = listOf("gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-flash-lite-latest", "gemini-2.5-flash-lite")
 
-    /** Stronger model for the chat and for reading files; quick entry reading keeps the light model. */
-    const val CHAT_MODEL = "gemini-3.8-flash"
+    /** Everything uses the fast Flash-Lite models; null = the one that last answered. */
+    val CHAT_MODEL: String? = null
 
-    /** Fastest model, for reading photos and statement pages (many pages are read at the same time). */
-    const val FILE_MODEL = "gemini-3.1-flash-lite"
+    /** Photos and statement pages use the same fast model (many pages are read at the same time). */
+    val FILE_MODEL: String? = null
 
     /** Models that just failed (over the limit, too slow) are skipped for a while, so nobody waits on them again. */
     private val resting = java.util.concurrent.ConcurrentHashMap<String, Long>()
@@ -76,17 +76,18 @@ object Ai {
         key: String,
         store: Store,
         currency: String,
-        memory: List<String> = emptyList()
+        memory: List<String> = emptyList(),
+        voice: Boolean = false
     ): AssistantResult = withContext(Dispatchers.IO) {
         if (key.isBlank()) throw Failure("AI is not configured.")
         // Fewer lines = a much faster answer. The newest 150, plus older ones the message names (shop, person, item).
         val sorted = all.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt })
         val words = message.lowercase().split(Regex("[^\\p{L}\\p{N}]+")).filter { it.length >= 3 }.toSet()
-        val named = if (words.isEmpty()) emptyList() else sorted.drop(150).filter { e ->
+        val named = if (words.isEmpty()) emptyList() else sorted.drop(100).filter { e ->
             val hay = (e.item + " " + e.person + " " + e.note).lowercase()
             words.any { hay.contains(it) }
         }.take(60)
-        val newest = sorted.take(150) + named
+        val newest = sorted.take(100) + named
         // Entries dated far in the past or in the future are often mistakes; include them so they can be fixed.
         val nowMs = System.currentTimeMillis()
         val odd = all.filter { it !in newest && (it.date > nowMs + 86_400_000L || it.date < nowMs - 300L * 86_400_000L) }.take(30)
@@ -96,9 +97,9 @@ object Ai {
         val recent = newest + odd + mentioned
         val codeOf = recent.associate { e -> e.id to Accounts.code(e) }
         val today = SimpleDateFormat("yyyy-MM-dd (EEEE)", Locale.US).format(Date())
-        val conversation = history.takeLast(20).joinToString("\n") { m ->
+        val conversation = history.takeLast(12).joinToString("\n") { m ->
             val refs = m.entryIds.mapNotNull { codeOf[it] }
-            (if (m.isUser) "User: " else "Assistant: ") + m.text.take(1500) +
+            (if (m.isUser) "User: " else "Assistant: ") + m.text.take(600) +
                 (if (refs.isNotEmpty()) " [these entries: id=" + refs.joinToString(", ") + "]" else "")
         }.ifBlank { "(new conversation)" }
         val said = message.replace("\"", "'").take(2000)
@@ -112,7 +113,8 @@ A) It records NEW money that moved (spent, earned, lent, borrowed, returned, sol
 B) It corrects, moves or removes money that is ALREADY in the saved entries: a different day ("aaj nahi kal tha", "that was yesterday"),
    a different amount, category, name or note, or "delete / hata do / galat hai". Do NOT add a new entry for it.
    Put the change in "edits" (the entry's id, only the fields that change; "date" as YYYY-MM-DD for a new day)
-   or its id in "delete". The app shows the person your changes and applies them only when they tap Apply. Look at the previous conversation to know which entry they mean. The reply says what changed.
+   or its id in "delete". Changes are applied straight away. Look at the previous conversation to know which entry they mean.
+   The reply says exactly what changed.
 C) Anything else: a greeting, a question, a report, a search, advice. Answer in "reply" with no entries, edits or deletes.
    A time can be set with "time" ("HH:MM"); "a bit before / after" another saved entry means a few minutes from that entry's time.
    If the same money was saved twice by mistake (same item and amount on two days, and they say it happened once), keep the one on
@@ -126,6 +128,16 @@ For "find duplicates" list the pairs from "Possible duplicates" that really look
 delete the extra ones; when they agree, put those ids in "delete".
 Never say you added, changed or deleted something unless it is in "entries", "edits" or "delete" of THIS answer.
 If you could not do it, say so plainly and what you need.
+
+Worked examples (follow the same pattern):
+1. "chai 5 aur sandwich 12" -> entries: expense 5 food Chai, expense 12 food Sandwich. reply "Saved: chai 5, sandwich 12 $currency".
+2. "kal wala petrol 60 nahi 65 tha" -> edits: [{"id":"<id of yesterday's Petrol 60>","amount":65}]. reply "Petrol on <date> changed from 60 to 65".
+3. "Shehryar ne 4 riyal bheje, wo usi din ke lunch mein uska hissa tha; lunch se minus karo aur Shehryar wali delete karo"
+   -> find the Shehryar income/transfer of 4 and the lunch/food expense on the SAME day (say 24).
+   edits: [{"id":"<lunch id>","amount":20}], delete: ["<Shehryar 4 id>"]. reply "Lunch on <date> is now 20 (24 - 4), Shehryar's 4 removed".
+4. "Ali ko 100 diye" -> entries: gave 100, person "Ali". reply "Saved: gave Ali 100 $currency".
+5. "is mahine khane pe kitna" -> no changes; reply with the food figure from EXACT FIGURES.
+When a message asks for two changes, do both in the same answer.
 
 Long stories about money with a person (who paid what for whom, what was kept, what was sent back):
 - Work it out in "work": list every amount, who it belongs to, and the running balance with that person.
@@ -174,13 +186,11 @@ $conversation
 
 Latest message: "$said"
 
-Return ONLY JSON: {"work":"","reply":"","speech":"","entries":[],"edits":[{"id":"","type":"","amount":0,"category":"","item":"","qty":0,"person":"","date":"YYYY-MM-DD","time":"","note":""}],"delete":[],"remember":[],"forget":[]}
-"speech": the reply as you would SAY it in a phone call: 1 to 3 short natural sentences, no lists, no symbols, numbers as
-digits. If they write or speak Urdu or Roman Urdu, write "speech" in Urdu script (اردو) so an Urdu voice can read it; otherwise English.
-("work" is your private scratch space for working out numbers; the person never sees it. edits and delete are [] unless case B.)
+Return ONLY JSON: {"work":"","reply":""${if (voice) ",\"speech\":\"\"" else ""},"entries":[],"edits":[{"id":"","type":"","amount":0,"category":"","item":"","qty":0,"person":"","date":"YYYY-MM-DD","time":"","note":""}],"delete":[],"remember":[],"forget":[]}
+${if (voice) "\"speech\": the reply as you would SAY it in a phone call: 1 to 3 short natural sentences, no lists, no symbols, numbers as\ndigits. If they write or speak Urdu or Roman Urdu, write \"speech\" in Urdu script (اردو) so an Urdu voice can read it; otherwise English.\n" else ""}("work" is your private scratch space: keep it short, only for working out numbers; the person never sees it. edits and delete are [] unless case B.)
 """.trim()
         val json = try {
-            // The chat needs real reasoning (stories, settlements, corrections), so it uses the stronger Flash model.
+            // Fast Flash-Lite model; the rules and examples in the prompt make up for its smaller size.
             JSONObject(request(prompt, key.trim(), store, prefer = CHAT_MODEL))
         } catch (e: Failure) {
             throw e
