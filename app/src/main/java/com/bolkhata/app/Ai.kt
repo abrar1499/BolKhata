@@ -109,11 +109,14 @@ object Ai {
         // Fewer lines = a much faster answer. The newest 150, plus older ones the message names (shop, person, item).
         val sorted = all.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt })
         val words = message.lowercase().split(Regex("[^\\p{L}\\p{N}]+")).filter { it.length >= 3 }.toSet()
-        val named = if (words.isEmpty()) emptyList() else sorted.drop(100).filter { e ->
+        // Groq's free plan allows only 8,000 tokens a minute, so its requests carry fewer entries.
+        val fastKey = store.fastKey.trim()
+        val limit = if (isGroq(fastKey)) 40 else 100
+        val named = if (words.isEmpty()) emptyList() else sorted.drop(limit).filter { e ->
             val hay = (e.item + " " + e.person + " " + e.note).lowercase()
             words.any { hay.contains(it) }
         }.take(60)
-        val newest = sorted.take(100) + named
+        val newest = sorted.take(limit) + named.take(if (isGroq(fastKey)) 25 else 60)
         // Entries dated far in the past or in the future are often mistakes; include them so they can be fixed.
         val nowMs = System.currentTimeMillis()
         val odd = all.filter { it !in newest && (it.date > nowMs + 86_400_000L || it.date < nowMs - 300L * 86_400_000L) }.take(30)
@@ -123,9 +126,9 @@ object Ai {
         val recent = newest + odd + mentioned
         val codeOf = recent.associate { e -> e.id to Accounts.code(e) }
         val today = SimpleDateFormat("yyyy-MM-dd (EEEE)", Locale.US).format(Date())
-        val conversation = history.takeLast(12).joinToString("\n") { m ->
+        val conversation = history.takeLast(if (isGroq(fastKey)) 8 else 12).joinToString("\n") { m ->
             val refs = m.entryIds.mapNotNull { codeOf[it] }
-            (if (m.isUser) "User: " else "Assistant: ") + m.text.take(600) +
+            (if (m.isUser) "User: " else "Assistant: ") + m.text.take(if (isGroq(fastKey)) 400 else 600) +
                 (if (refs.isNotEmpty()) " [these entries: id=" + refs.joinToString(", ") + "]" else "")
         }.ifBlank { "(new conversation)" }
         val said = message.replace("\"", "'").take(2000)
@@ -240,9 +243,16 @@ ${if (voice) "\"speech\": the reply as you would SAY it in a phone call: 1 to 3 
         }
         // Simple messages go to the fast model. Long ones and corrections go to the stronger model straight away,
         // and a fast answer that doesn't check out is asked again from the stronger model.
+        // A fast key (Groq / OpenRouter) answers everything in a second or two with a strong model; Gemini is the backup.
+        fastError = ""
+        val viaFast = if (fastKey.isNotBlank()) runCatching {
+            trace.setLength(0)
+            JSONObject(fastCall(prompt, fastKey, trace))
+        }.onFailure { e -> fastError = e.message ?: "" }.getOrNull() else null
         val strongFirst = needsStrong(message)
-        var json = try { ask(strongFirst) } catch (e: Failure) { if (strongFirst) throw e else ask(true) }
-        if (!strongFirst && doubtful(json)) {
+        var json = viaFast ?: try { ask(strongFirst) } catch (e: Failure) { if (strongFirst) throw e else ask(true) }
+        if (viaFast == null && fastKey.isNotBlank() && fastError.isNotBlank()) trace.append(" · fast AI failed: " + fastError.take(60))
+        if (viaFast == null && !strongFirst && doubtful(json)) {
             json = runCatching { ask(true) }.getOrNull() ?: json
         }
         val list = toEntries(json.toString(), message)
@@ -574,7 +584,9 @@ Return ONLY valid JSON in this exact shape: {"reply":"your answer here"}
 
     suspend fun parse(text: String, key: String, store: Store, currency: String): List<Entry> = withContext(Dispatchers.IO) {
         val prompt = buildPrompt(text, currency)
-        toEntries(request(prompt, key.trim(), store), text)
+        val fast = store.fastKey.trim()
+        val viaFast = if (fast.isNotBlank()) runCatching { fastCall(prompt, fast, null) }.getOrNull() else null
+        toEntries(viaFast ?: request(prompt, key.trim(), store), text)
     }
 
     /** A change the AI proposes; nothing is applied until the person taps Apply. */
@@ -887,6 +899,82 @@ Make one entry per transaction. Skip anything without an amount. Number words co
         }
     }
 
+    // ---------- Fast chat: Groq or OpenRouter (OpenAI-style API), much quicker than Gemini's free tier ----------
+
+    /** The last reason the fast AI didn't answer, shown small under the answer. */
+    @Volatile var fastError = ""
+
+    fun isGroq(key: String) = key.startsWith("gsk_")
+    fun isOpenRouter(key: String) = key.startsWith("sk-or-")
+    fun isFastKey(key: String) = isGroq(key.trim()) || isOpenRouter(key.trim())
+
+    /** Sends [prompt] to Groq or OpenRouter (picked from the key) and returns the JSON text of the answer. */
+    private fun fastCall(prompt: String, key: String, trace: StringBuilder?): String {
+        val groq = isGroq(key)
+        val base = if (groq) "https://api.groq.com/openai/v1" else "https://openrouter.ai/api/v1"
+        val provider = if (groq) "Groq" else "OpenRouter"
+        var model = "openai/gpt-oss-120b"
+        var jsonMode = true
+        val started = System.currentTimeMillis()
+        repeat(3) {
+            val body = JSONObject()
+                .put("model", model)
+                .put("messages", JSONArray().put(JSONObject().put("role", "user").put("content", prompt)))
+                .put("max_tokens", 4096)
+            if (jsonMode) body.put("response_format", JSONObject().put("type", "json_object"))
+            if (groq) {
+                body.put("reasoning_effort", "low")
+            } else {
+                body.put("reasoning", JSONObject().put("effort", "low"))
+                // Send it to whichever host is fastest right now (Groq, Cerebras, …).
+                body.put("provider", JSONObject().put("sort", "throughput"))
+            }
+            val conn = URL("$base/chat/completions").openConnection() as HttpURLConnection
+            val (code, text) = try {
+                conn.requestMethod = "POST"
+                conn.connectTimeout = 10_000
+                conn.readTimeout = 25_000
+                conn.doOutput = true
+                conn.setRequestProperty("Content-Type", "application/json")
+                conn.setRequestProperty("Authorization", "Bearer $key")
+                if (!groq) conn.setRequestProperty("X-Title", "Smart Expense")
+                conn.outputStream.use { it.write(body.toString().toByteArray()) }
+                val c = conn.responseCode
+                c to ((if (c in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader()?.use { it.readText() } ?: "")
+            } catch (e: java.net.SocketTimeoutException) {
+                conn.disconnect()
+                throw Failure("$provider took too long")
+            } catch (e: Exception) {
+                conn.disconnect()
+                throw Failure("$provider not reachable")
+            }
+            val msg = runCatching { JSONObject(text).optJSONObject("error")?.optString("message").orEmpty() }.getOrDefault("")
+            when {
+                code == 200 -> {
+                    val o = JSONObject(text)
+                    val content = o.getJSONArray("choices").getJSONObject(0).getJSONObject("message").optString("content")
+                        .trim().removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
+                    val clean = content.substring(content.indexOf('{').coerceAtLeast(0), (content.lastIndexOf('}') + 1).coerceAtLeast(0))
+                    if (clean.isBlank()) throw Failure("$provider sent an empty answer")
+                    val u = o.optJSONObject("usage")
+                    trace?.append(
+                        "gpt-oss-120b ($provider) · " + String.format(Locale.US, "%.1fs", (System.currentTimeMillis() - started) / 1000.0) +
+                            (u?.let { " (in " + it.optInt("prompt_tokens") + ", out " + it.optInt("completion_tokens") + ")" } ?: "")
+                    )
+                    return clean
+                }
+                // No credit on OpenRouter: use the free version of the same model.
+                code == 402 && !groq && !model.endsWith(":free") -> model = "openai/gpt-oss-120b:free"
+                // A model that doesn't take JSON mode is asked again without it.
+                code == 400 && jsonMode && (msg.contains("json", true) || msg.contains("response_format", true)) -> jsonMode = false
+                code == 401 -> throw Failure("$provider key not accepted")
+                code == 429 -> throw Failure("$provider limit reached for now")
+                else -> throw Failure("$provider error $code " + msg.take(60))
+            }
+        }
+        throw Failure("$provider did not answer")
+    }
+
     /** Opens the secure connection to Google early (when the chat opens), so the first message doesn't pay for it. */
     fun warmUp(key: String) {
         if (key.isBlank()) return
@@ -901,8 +989,13 @@ Make one entry per transaction. Skip anything without an amount. Number words co
     }
 
     /** Asks every model a tiny question and reports how long each takes. Typed in the chat as "speed test". */
-    fun speedTest(key: String): String {
+    fun speedTest(key: String, fast: String = ""): String {
         val prompt = "Reply with exactly this JSON and nothing else: {\"ok\":1}"
+        val fastLine = if (fast.isBlank()) "" else {
+            val tr = StringBuilder()
+            val r = runCatching { fastCall(prompt, fast.trim(), tr) }
+            "- Fast chat: " + (if (r.isSuccess) tr.toString() + ", OK" else (r.exceptionOrNull()?.message ?: "failed")) + "\n"
+        }
         val lines = (MODELS + STRONG).distinct().map { model ->
             val t0 = System.currentTimeMillis()
             val res = runCatching { call(model, key.trim(), prompt, think = model !in plain) }
@@ -918,7 +1011,7 @@ Make one entry per transaction. Skip anything without an amount. Number words co
             "- ${shortName(model)}: $secs, $status" +
                 (if (r != null) " (connect ${tm.connect}ms, AI ${tm.wait}ms)" else "")
         }
-        return "Speed test (tiny question to each model):\n" + lines.joinToString("\n")
+        return "Speed test (tiny question to each model):\n" + fastLine + lines.joinToString("\n")
     }
 
     private fun errorMessage(body: String): String = try {

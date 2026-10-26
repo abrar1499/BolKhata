@@ -220,6 +220,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     }
 
     var aiKey by remember { mutableStateOf(store.aiKey) }
+    var fastKey by remember { mutableStateOf(store.fastKey) }
     // The person's own key wins; otherwise the key built into the app is used.
     val activeKey = aiKey.ifBlank { BuildConfig.GEMINI_KEY }
     // Open the connection to the AI as soon as the chat is on screen, so the first message is quicker.
@@ -597,7 +598,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             chatLoading = true
             loadingLabel = "Testing each model…"
             scope.launch {
-                val report = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Ai.speedTest(activeKey) }
+                val report = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Ai.speedTest(activeKey, store.fastKey) }
                 postChat(report, isUser = false)
                 chatLoading = false
                 loadingLabel = "Thinking…"
@@ -1255,6 +1256,17 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                                 val err = Ai.test(k, store)
                                 toast(if (err == null) "✓ AI is ready" else err)
                             }
+                        }
+                    },
+                    fastKey = fastKey,
+                    onFastKey = { k ->
+                        val v = k.trim()
+                        if (v.isNotBlank() && !Ai.isFastKey(v)) {
+                            toast("That doesn't look like a Groq (gsk_…) or OpenRouter (sk-or-…) key")
+                        } else {
+                            fastKey = v
+                            store.fastKey = v
+                            toast(if (v.isBlank()) "Fast chat off" else "✓ Fast chat on. Ask something in the chat to try it.")
                         }
                     }
                 )

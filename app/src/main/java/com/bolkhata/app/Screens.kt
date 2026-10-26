@@ -1494,9 +1494,12 @@ fun SettingsScreen(
     onBank: () -> Unit = {},
     aiKey: String = "",
     aiBuiltIn: Boolean = false,
-    onAiKey: (String) -> Unit = {}
+    onAiKey: (String) -> Unit = {},
+    fastKey: String = "",
+    onFastKey: (String) -> Unit = {}
 ) {
     var aiText by remember(aiKey) { mutableStateOf(aiKey) }
+    var fastText by remember(fastKey) { mutableStateOf(fastKey) }
     var nameText by remember(name) { mutableStateOf(name) }
     var currencyMenu by remember { mutableStateOf(false) }
 
@@ -1583,6 +1586,47 @@ fun SettingsScreen(
                 }
                 Text(
                     "Get a free key at aistudio.google.com → Get API key. Keep it private.",
+                    fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 6.dp)
+                )
+            }
+        }
+        item {
+            Panel(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    SmallLabel("⚡ Fast chat (Groq or OpenRouter)")
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        if (fastKey.isNotBlank()) "On" else "Off",
+                        fontWeight = FontWeight.Bold,
+                        color = if (fastKey.isNotBlank()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Text(
+                    "Answers in the chat in a second or two. Gemini still reads photos and PDFs, and takes over if this key hits its limit.",
+                    fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = fastText, onValueChange = { fastText = it.trim() },
+                    singleLine = true, placeholder = { Text("Paste a Groq (gsk_…) or OpenRouter (sk-or-…) key") },
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (fastKey.isNotBlank()) {
+                        OutlinedButton(onClick = { fastText = ""; onFastKey("") }) { Text("Remove") }
+                    }
+                    Button(
+                        onClick = { onFastKey(fastText) },
+                        enabled = fastText.isNotBlank() && fastText != fastKey,
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Save key") }
+                }
+                Text(
+                    "Groq: free key at console.groq.com → API Keys. OpenRouter: openrouter.ai → Keys.",
                     fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 6.dp)
                 )

@@ -289,6 +289,11 @@ class Store(context: Context) {
         get() = prefs.getString("aiKey", "") ?: ""
         set(v) = prefs.edit().putString("aiKey", v).apply()
 
+    /** Optional Groq or OpenRouter key for fast chat answers. */
+    var fastKey: String
+        get() = prefs.getString("fastKey", "") ?: ""
+        set(v) = prefs.edit().putString("fastKey", v).apply()
+
     var aiModel: String
         get() = prefs.getString("aiModel", "") ?: ""
         set(v) = prefs.edit().putString("aiModel", v).apply()
