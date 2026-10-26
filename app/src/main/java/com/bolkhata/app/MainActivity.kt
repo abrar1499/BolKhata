@@ -1261,8 +1261,17 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     fastKey = fastKey,
                     onFastKey = { k ->
                         val v = k.trim()
-                        if (v.isNotBlank() && !Ai.isFastKey(v)) {
-                            toast("That doesn't look like a Groq (gsk_…), OpenRouter (sk-or-…) or Claude (sk-ant-…) key")
+                        if (v.startsWith("AIza")) {
+                            // A Gemini key pasted here becomes the app's own Gemini key (photos, PDFs and the backup chat).
+                            aiKey = v
+                            store.aiKey = v
+                            toast("Checking Gemini key…")
+                            scope.launch {
+                                val err = Ai.test(v, store)
+                                toast(if (err == null) "✓ Gemini key saved" else err)
+                            }
+                        } else if (v.isNotBlank() && !Ai.isFastKey(v)) {
+                            toast("That doesn't look like a Groq (gsk_…), OpenRouter (sk-or-…), Claude (sk-ant-…) or Gemini (AIza…) key")
                         } else {
                             fastKey = v
                             store.fastKey = v

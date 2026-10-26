@@ -1594,7 +1594,7 @@ fun SettingsScreen(
         item {
             Panel(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    SmallLabel("⚡ Fast chat (Groq, OpenRouter or Claude)")
+                    SmallLabel("⚡ AI key (Groq, OpenRouter, Claude or Gemini)")
                     Spacer(Modifier.weight(1f))
                     Text(
                         if (fastKey.isNotBlank()) "On" else "Off",
@@ -1609,7 +1609,7 @@ fun SettingsScreen(
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = fastText, onValueChange = { fastText = it.trim() },
-                    singleLine = true, placeholder = { Text("Paste a Groq, OpenRouter or Claude key") },
+                    singleLine = true, placeholder = { Text("Paste any AI key") },
                     visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier.fillMaxWidth()
@@ -1626,7 +1626,7 @@ fun SettingsScreen(
                     ) { Text("Save key") }
                 }
                 Text(
-                    "Groq (free): console.groq.com → API Keys. OpenRouter: openrouter.ai → Keys. Claude (paid): console.anthropic.com → API Keys.",
+                    "The app knows the key from how it starts. Groq (free): console.groq.com → API Keys. OpenRouter: openrouter.ai → Keys. Claude (paid): console.anthropic.com → API Keys. Gemini (free): aistudio.google.com → Get API key.",
                     fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 6.dp)
                 )
