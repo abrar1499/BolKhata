@@ -725,17 +725,20 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Attachments.pdfPages(context, bytes) }
                 } else emptyList()
                 var failedPages = emptyList<Int>()
+                var pageCheck = ""
                 val found = (if (pages.size > 1) {
                     loadingLabel = "Reading ${pages.size} pages…"
                     val result = Ai.readPages(pages, "", activeKey, store, currency) { done, total ->
                         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { loadingLabel = "Reading pages… $done of $total" }
                     }
                     failedPages = result.failedPages
+                    pageCheck = result.check
                     result.entries
                 } else {
                     loadingLabel = "Reading…"
                     Ai.readDocument(bytes, mime, "", activeKey, store, currency)
                 }).sortedByDescending { it.date }
+                if (pageCheck.isNotBlank()) postChat(pageCheck, isUser = false)
                 if (failedPages.isNotEmpty()) {
                     postChat(
                         "Couldn't read page " + failedPages.joinToString(", ") + ". Send a photo of " +

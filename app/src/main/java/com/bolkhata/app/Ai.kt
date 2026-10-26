@@ -504,10 +504,19 @@ ${if (voice) "\"speech\": the reply as you would SAY it in a phone call: 1 to 3 
         currency: String
     ): List<Entry> = withContext(Dispatchers.IO) {
         if (key.isBlank()) throw Failure("Reading statements needs AI. Turn it on in Settings.")
-        fixDates(readOne(bytes, mime, note, key, store, currency))
+        val first = readOne(bytes, mime, note, key, store, currency)
+        // Fewer rows than lines the AI counted: read again and keep the fuller answer.
+        val best = if (first.count > first.entries.size) {
+            runCatching { readOne(bytes, mime, note, key, store, currency, retry = true) }.getOrNull()
+                ?.takeIf { it.entries.size > first.entries.size } ?: first
+        } else first
+        fixDates(best.entries)
     }
 
-    class PagesResult(val entries: List<Entry>, val failedPages: List<Int>)
+    /** One page or photo read: its entries, how many transaction lines the AI counted, and printed totals if any. */
+    class PageRead(val entries: List<Entry>, val count: Int, val summary: JSONObject?)
+
+    class PagesResult(val entries: List<Entry>, val failedPages: List<Int>, val check: String = "")
 
     /**
      * Reads a statement page by page, several pages at the same time, so a long statement takes about as long
@@ -528,8 +537,15 @@ ${if (voice) "\"speech\": the reply as you would SAY it in a phone call: 1 to 3 
             async(Dispatchers.IO) {
                 gate.acquire()
                 try {
-                    val r = runCatching { readOne(page, "image/jpeg", note, key, store, currency) }
-                        .recoverCatching { readOne(page, "image/jpeg", note, key, store, currency) }
+                    var r = runCatching { readOne(page, "image/jpeg", note, key, store, currency) }
+                        .recoverCatching { readOne(page, "image/jpeg", note, key, store, currency, retry = true) }
+                    // The AI counted more lines than it gave rows: read that page again, keep the fuller one.
+                    r.getOrNull()?.let { first ->
+                        if (first.count > first.entries.size) {
+                            runCatching { readOne(page, "image/jpeg", note, key, store, currency, retry = true) }.getOrNull()
+                                ?.takeIf { it.entries.size > first.entries.size }?.let { r = Result.success(it) }
+                        }
+                    }
                     onPage(done.incrementAndGet(), pages.size)
                     r
                 } finally {
@@ -541,10 +557,43 @@ ${if (voice) "\"speech\": the reply as you would SAY it in a phone call: 1 to 3 
         if (failed.size == pages.size) {
             throw results.first().exceptionOrNull() ?: Failure("Could not read this file.")
         }
-        PagesResult(fixDates(results.mapNotNull { it.getOrNull() }.flatten()), failed)
+        val reads = results.mapNotNull { it.getOrNull() }
+        val all = fixDates(reads.flatMap { it.entries })
+        PagesResult(all, failed, checkTotals(all, reads.mapNotNull { it.summary }.firstOrNull(), currency))
     }
 
-    private fun readOne(bytes: ByteArray, mime: String, note: String, key: String, store: Store, currency: String): List<Entry> {
+    private fun isMoneyIn(e: Entry) = e.type == Type.AAMDANI || e.type == Type.WAPIS_MILA || e.type == Type.LIYA || e.type == Type.SALE
+
+    /** Compares what was read with the totals printed on the statement, so missing lines are noticed. */
+    private fun checkTotals(found: List<Entry>, summary: JSONObject?, currency: String): String {
+        summary ?: return ""
+        val inn = found.filter { isMoneyIn(it) }
+        val out = found.filter { !isMoneyIn(it) }
+        val inCount = summary.optInt("in_count", -1)
+        val outCount = summary.optInt("out_count", -1)
+        val inTotal = summary.optDouble("in_total", Double.NaN)
+        val outTotal = summary.optDouble("out_total", Double.NaN)
+        fun near(a: Double, b: Double) = !b.isNaN() && kotlin.math.abs(a - b) < 0.6
+        val inOk = (inCount < 0 || inCount == inn.size) && (inTotal.isNaN() || near(inn.sumOf { it.amount }, inTotal))
+        val outOk = (outCount < 0 || outCount == out.size) && (outTotal.isNaN() || near(out.sumOf { it.amount }, outTotal))
+        fun line(label: String, n: Int, sum: Double, wantN: Int, wantSum: Double) =
+            "- $label: found $n (" + fmt(sum) + " $currency)" +
+                (if (wantN >= 0 || !wantSum.isNaN()) ", statement says " + (if (wantN >= 0) "$wantN" else "?") +
+                    (if (!wantSum.isNaN()) " (" + fmt(wantSum) + " $currency)" else "") else "")
+        return if (inOk && outOk) {
+            "✓ Checked against the statement's totals: money in ${inn.size} (${fmt(inn.sumOf { it.amount })}), " +
+                "money out ${out.size} (${fmt(out.sumOf { it.amount })}). All lines found."
+        } else {
+            "⚠ Some lines may be missing or misread:\n" +
+                line("Money in", inn.size, inn.sumOf { it.amount }, inCount, inTotal) + "\n" +
+                line("Money out", out.size, out.sumOf { it.amount }, outCount, outTotal) + "\n" +
+                "Check the list before adding, or send the PDF again."
+        }
+    }
+
+    private fun readOne(
+        bytes: ByteArray, mime: String, note: String, key: String, store: Store, currency: String, retry: Boolean = false
+    ): PageRead {
         val data = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
         val today = SimpleDateFormat("yyyy-MM-dd (EEEE)", Locale.US).format(Date())
         val prompt = """
@@ -565,29 +614,56 @@ back unless a 4-digit year says so. Labels a phone shows next to a message ("Tod
 - Shops and card purchases: item is the shop's clean name (e.g. "Sasco", "Express Food"), note the shop and city.
 - time: the time printed for the line as "HH:MM" (24-hour), else "".
 - Skip opening and closing balances, running balances, totals, and declined or reversed lines.
-- note: the merchant or a short clean description, max 6 words.
+- "n" (note): the useful details from the line: merchant or person, plus city or branch, up to 8 words (e.g. "Al Baik, Jeddah",
+  "Card purchase at Panda Riyadh", "From Muhammad Imran"). Never leave it empty when the line has a description.
+- "p" (person): the person's name for transfers to or from a person, loans and repayments; else "".
+- "c" (category): pick from the merchant: restaurants, cafes, bakeries, sweets, supermarkets (Panda, Othaim, Tamimi, Lulu, Danube,
+  BinDawood) = food; petrol (Aldrees, Sasco, Petromin, Naft), taxi, Uber, Careem, car service = transport; pharmacies, clinics = health;
+  STC, Mobily, Zain = mobile; electricity, water, internet = bills; Absher, iqama, visa, traffic fines, bank fees = fees; money sent home = home.
+  Use "other" only when nothing tells.
+- Read carefully: copy amounts exactly with decimals (27.50, not 27.5 rounded or 2750). The amount is never the running balance.
 ${if (note.isNotBlank()) "The person said about this file: \"" + note.replace("\"", "'").take(300) + "\"" else ""}
 
 Entry rules:
 ${entryRules()}
 
 Return ONLY JSON, one short object per transaction with these short keys (statements can have hundreds, so keep it compact):
-{"rows":[{"t":"type","a":0,"c":"category","i":"item","p":"person","d":"YYYY-MM-DD","h":"HH:MM","n":"note"}]}
-Every row MUST have "d", the transaction's own date from the file. Example:
-{"rows":[{"t":"expense","a":19,"c":"food","i":"Express Food","p":"","d":"2026-10-25","h":"13:40","n":"Express Food Jeddah"}]}
+{"count":0,"rows":[{"t":"type","a":0,"c":"category","i":"item","p":"person","d":"YYYY-MM-DD","h":"HH:MM","n":"note"}],"summary":null}
+First count the transaction lines printed on this page (each money in or money out line) and put that number in "count".
+Then give exactly that many rows, one per line, in the order printed. Never merge, skip or invent lines.
+Every row MUST have "d", the transaction's own date from the file.
+If the page prints statement totals (number of deposits and withdrawals, total deposits and withdrawals), put them in
+"summary": {"in_count":0,"in_total":0,"out_count":0,"out_total":0}; otherwise "summary": null. Example:
+{"count":1,"rows":[{"t":"expense","a":19,"c":"food","i":"Express Food","p":"","d":"2026-10-25","h":"13:40","n":"Express Food, Jeddah"}],"summary":null}
 """.trim()
+        // A Claude key reads files with Claude Sonnet (very accurate); otherwise Gemini, with the stronger model on a second try.
+        val fast = store.fastKey.trim()
+        val raw = try {
+            if (isClaude(fast)) {
+                runCatching { claudeCall(prompt, fast, null, model = "claude-sonnet-5-5", file = mime to data) }.getOrNull()
+                    ?: request(prompt, key.trim(), store, mime to data, prefer = FILE_MODEL)
+            } else if (retry) {
+                request(prompt, key.trim(), store, mime to data, prefer = STRONG.first(), models = STRONG + MODELS)
+            } else {
+                request(prompt, key.trim(), store, mime to data, prefer = FILE_MODEL)
+            }
+        } catch (e: Failure) {
+            throw e
+        }
+        val obj = try { JSONObject(raw) } catch (e: Exception) { throw Failure("Could not read this file. Try a clearer photo or another PDF.") }
         val json = try {
-            rowsToEntries(request(prompt, key.trim(), store, mime to data, prefer = FILE_MODEL))
+            rowsToEntries(raw)
         } catch (e: Failure) {
             throw e
         } catch (e: Exception) {
             throw Failure("Could not read this file. Try a clearer photo or another PDF.")
         }
-        return try {
+        val entries = try {
             toEntries(json, note)
         } catch (e: Exception) {
             throw Failure("Could not read this file. Try a clearer photo or another PDF.")
         }
+        return PageRead(entries, obj.optInt("count", 0), obj.optJSONObject("summary"))
     }
 
     /** Turns the compact rows of a statement into the usual {"entries":[...]} JSON. */
@@ -1116,17 +1192,27 @@ Make one entry per transaction. Skip anything without an amount. Number words co
     fun isFastKey(key: String) = isGroq(key.trim()) || isOpenRouter(key.trim()) || isClaude(key.trim())
 
     /** Claude (Anthropic) answers with its fast Haiku model. */
-    private fun claudeCall(prompt: String, key: String, trace: StringBuilder?): String {
+    private fun claudeCall(
+        prompt: String, key: String, trace: StringBuilder?,
+        model: String = "claude-haiku-5-5", file: Pair<String, String>? = null
+    ): String {
         val started = System.currentTimeMillis()
+        val content: Any = if (file == null) prompt else JSONArray()
+            .put(
+                JSONObject()
+                    .put("type", if (file.first == "application/pdf") "document" else "image")
+                    .put("source", JSONObject().put("type", "base64").put("media_type", file.first).put("data", file.second))
+            )
+            .put(JSONObject().put("type", "text").put("text", prompt))
         val body = JSONObject()
-            .put("model", "claude-haiku-5-5")
-            .put("max_tokens", 1500)
-            .put("messages", JSONArray().put(JSONObject().put("role", "user").put("content", prompt)))
+            .put("model", model)
+            .put("max_tokens", if (file != null) 16_000 else 1500)
+            .put("messages", JSONArray().put(JSONObject().put("role", "user").put("content", content)))
         val conn = URL("https://api.anthropic.com/v1/messages").openConnection() as HttpURLConnection
         val (code, text) = try {
             conn.requestMethod = "POST"
             conn.connectTimeout = 10_000
-            conn.readTimeout = 30_000
+            conn.readTimeout = if (file != null) 120_000 else 30_000
             conn.doOutput = true
             conn.setRequestProperty("Content-Type", "application/json")
             conn.setRequestProperty("x-api-key", key)

@@ -67,13 +67,14 @@ object Attachments {
                 PdfRenderer(fd).use { renderer ->
                     (0 until minOf(renderer.pageCount, maxPages)).map { i ->
                         renderer.openPage(i).use { page ->
-                            val width = 1500
-                            val height = (width.toFloat() * page.height / page.width).toInt().coerceIn(1, 4000)
+                            // Sharp enough for small statement print.
+                            val width = 2000
+                            val height = (width.toFloat() * page.height / page.width).toInt().coerceIn(1, 5000)
                             val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
                             bmp.eraseColor(Color.WHITE)
                             page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
                             val out = java.io.ByteArrayOutputStream()
-                            bmp.compress(Bitmap.CompressFormat.JPEG, 82, out)
+                            bmp.compress(Bitmap.CompressFormat.JPEG, 88, out)
                             bmp.recycle()
                             out.toByteArray()
                         }
