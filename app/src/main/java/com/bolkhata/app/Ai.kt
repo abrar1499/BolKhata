@@ -1112,10 +1112,61 @@ Make one entry per transaction. Skip anything without an amount. Number words co
 
     fun isGroq(key: String) = key.startsWith("gsk_")
     fun isOpenRouter(key: String) = key.startsWith("sk-or-")
-    fun isFastKey(key: String) = isGroq(key.trim()) || isOpenRouter(key.trim())
+    fun isClaude(key: String) = key.startsWith("sk-ant-")
+    fun isFastKey(key: String) = isGroq(key.trim()) || isOpenRouter(key.trim()) || isClaude(key.trim())
+
+    /** Claude (Anthropic) answers with its fast Haiku model. */
+    private fun claudeCall(prompt: String, key: String, trace: StringBuilder?): String {
+        val started = System.currentTimeMillis()
+        val body = JSONObject()
+            .put("model", "claude-haiku-5-5")
+            .put("max_tokens", 1500)
+            .put("messages", JSONArray().put(JSONObject().put("role", "user").put("content", prompt)))
+        val conn = URL("https://api.anthropic.com/v1/messages").openConnection() as HttpURLConnection
+        val (code, text) = try {
+            conn.requestMethod = "POST"
+            conn.connectTimeout = 10_000
+            conn.readTimeout = 30_000
+            conn.doOutput = true
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.setRequestProperty("x-api-key", key)
+            conn.setRequestProperty("anthropic-version", "2023-06-01")
+            conn.outputStream.use { it.write(body.toString().toByteArray()) }
+            val c = conn.responseCode
+            c to ((if (c in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader()?.use { it.readText() } ?: "")
+        } catch (e: java.net.SocketTimeoutException) {
+            conn.disconnect(); throw Failure("Claude took too long")
+        } catch (e: Exception) {
+            conn.disconnect(); throw Failure("Claude not reachable")
+        }
+        val msg = runCatching { JSONObject(text).optJSONObject("error")?.optString("message").orEmpty() }.getOrDefault("")
+        when (code) {
+            200 -> {
+                val o = JSONObject(text)
+                val parts = o.getJSONArray("content")
+                val sb = StringBuilder()
+                for (i in 0 until parts.length()) parts.getJSONObject(i).takeIf { it.optString("type") == "text" }?.let { sb.append(it.optString("text")) }
+                val content = sb.toString().trim()
+                val clean = content.substring(content.indexOf('{').coerceAtLeast(0), (content.lastIndexOf('}') + 1).coerceAtLeast(0))
+                if (clean.isBlank()) throw Failure("Claude sent an empty answer")
+                val u = o.optJSONObject("usage")
+                trace?.append(
+                    "Claude Haiku · " + String.format(Locale.US, "%.1fs", (System.currentTimeMillis() - started) / 1000.0) +
+                        (u?.let { " (in " + it.optInt("input_tokens") + ", out " + it.optInt("output_tokens") + ")" } ?: "")
+                )
+                return clean
+            }
+            401 -> throw Failure("Claude key not accepted")
+            402, 403 -> throw Failure("Claude: no credit or not allowed. " + msg.take(60))
+            429 -> throw Failure("Claude limit reached for now")
+            529 -> throw Failure("Claude is busy right now")
+            else -> throw Failure("Claude error $code " + msg.take(60))
+        }
+    }
 
     /** Sends [prompt] to Groq or OpenRouter (picked from the key) and returns the JSON text of the answer. */
     private fun fastCall(prompt: String, key: String, trace: StringBuilder?): String {
+        if (isClaude(key)) return claudeCall(prompt, key, trace)
         val groq = isGroq(key)
         val base = if (groq) "https://api.groq.com/openai/v1" else "https://openrouter.ai/api/v1"
         val provider = if (groq) "Groq" else "OpenRouter"

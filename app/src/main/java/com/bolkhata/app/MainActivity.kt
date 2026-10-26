@@ -1262,7 +1262,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     onFastKey = { k ->
                         val v = k.trim()
                         if (v.isNotBlank() && !Ai.isFastKey(v)) {
-                            toast("That doesn't look like a Groq (gsk_…) or OpenRouter (sk-or-…) key")
+                            toast("That doesn't look like a Groq (gsk_…), OpenRouter (sk-or-…) or Claude (sk-ant-…) key")
                         } else {
                             fastKey = v
                             store.fastKey = v
