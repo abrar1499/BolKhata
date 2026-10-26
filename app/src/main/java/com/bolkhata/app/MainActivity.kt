@@ -509,13 +509,14 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     }
 
     /** Adds a message to the chat and keeps it on the phone. */
-    fun postChat(text: String, isUser: Boolean, entryIds: List<String> = emptyList(), attachment: String = "") {
+    fun postChat(text: String, isUser: Boolean, entryIds: List<String> = emptyList(), attachment: String = "", meta: String = "") {
         val updated = chatMessages + ChatMessage(
             id = "chat-" + System.currentTimeMillis() + "-" + System.nanoTime(),
             isUser = isUser,
             text = text,
             entryIds = entryIds,
-            attachment = attachment
+            attachment = attachment,
+            meta = meta
         )
         chatMessages = updated
         store.saveChatMessages(updated)
@@ -635,9 +636,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 } else reply
                 if (list.isNotEmpty()) {
                     save(list + entries)
-                    postChat(honest.ifBlank { "Saved" }, isUser = false, entryIds = list.map { it.id })
+                    postChat(honest.ifBlank { "Saved" }, isUser = false, entryIds = list.map { it.id }, meta = res.trace)
                 } else {
-                    postChat(honest.ifBlank { "Done." }, isUser = false)
+                    postChat(honest.ifBlank { "Done." }, isUser = false, meta = res.trace)
                 }
                 if (!changeList.isNullOrBlank()) postChat(changeList, isUser = false)
                 if (res.remember.isNotEmpty()) {

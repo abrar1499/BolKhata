@@ -50,6 +50,14 @@ object Ai {
     /** Models that just failed (over the limit, too slow) are skipped for a while, so nobody waits on them again. */
     private val resting = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
+    /** Models that refused the speed settings; they are sent plain requests from then on. */
+    private val plain = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    /** "gemini-3.5-flash-lite" -> "3.5 Flash-Lite", for the small line under each answer. */
+    fun shortName(model: String) = model.removePrefix("gemini-")
+        .replace("-flash-lite", " Flash-Lite").replace("-flash", " Flash")
+        .replace("flash-lite-latest", "Flash-Lite latest").replace("flash-latest", "Flash latest")
+
     class Failure(message: String) : Exception(message)
 
     /** Exact figures (worked out in code), the entries as compact numbered lines, and likely duplicates. */
@@ -208,10 +216,12 @@ Return ONLY JSON: {"work":"","reply":""${if (voice) ",\"speech\":\"\"" else ""},
 ${if (voice) "\"speech\": the reply as you would SAY it in a phone call: 1 to 3 short natural sentences, no lists, no symbols, numbers as\ndigits. If they write or speak Urdu or Roman Urdu, write \"speech\" in Urdu script (اردو) so an Urdu voice can read it; otherwise English.\n" else ""}("work" is your private scratch space: keep it short, only for working out numbers; the person never sees it. edits and delete are [] unless case B.)
 """.trim()
         val knownCodes = recent.map { Accounts.code(it) }.toSet()
+        val trace = StringBuilder()
         fun ask(strong: Boolean): JSONObject {
             val models = if (strong) STRONG + MODELS else MODELS
             return try {
-                JSONObject(request(prompt, key.trim(), store, prefer = if (strong) STRONG.first() else CHAT_MODEL, models = models))
+                trace.setLength(0)
+                JSONObject(request(prompt, key.trim(), store, prefer = if (strong) STRONG.first() else CHAT_MODEL, models = models, trace = trace))
             } catch (e: Failure) {
                 throw e
             } catch (e: Exception) {
@@ -248,7 +258,8 @@ ${if (voice) "\"speech\": the reply as you would SAY it in a phone call: 1 to 3 
         }
         AssistantResult(
             reply, list, plan.takeIf { it.changed.isNotEmpty() || it.deleted.isNotEmpty() }, remember, forget,
-            speech = json.optString("speech").trim()
+            speech = json.optString("speech").trim(),
+            trace = trace.toString()
         )
     }
 
@@ -259,7 +270,9 @@ ${if (voice) "\"speech\": the reply as you would SAY it in a phone call: 1 to 3 
         val remember: List<String> = emptyList(),
         val forget: List<String> = emptyList(),
         /** The reply as it should be spoken aloud in voice mode. */
-        val speech: String = ""
+        val speech: String = "",
+        /** Which model answered and how long it took, shown small under the answer. */
+        val trace: String = ""
     )
 
     /**
@@ -678,8 +691,12 @@ If nothing matches, return {"edits":[],"delete":[],"message":"I couldn't find th
     /** [file] is an attached image or PDF: its media type and base64 data. */
     private fun request(
         prompt: String, key: String, store: Store, file: Pair<String, String>? = null, prefer: String? = null,
-        models: List<String> = MODELS
+        models: List<String> = MODELS,
+        trace: StringBuilder? = null
     ): String {
+        val started = System.currentTimeMillis()
+        val skipped = mutableListOf<String>()
+        fun secs(from: Long) = String.format(Locale.US, "%.1fs", (System.currentTimeMillis() - from) / 1000.0)
         val first = prefer ?: store.aiModel.takeIf { it in models }
         val all = listOfNotNull(first) + models.filter { it != first }
         // Skip models that just failed, unless every model is resting.
@@ -689,19 +706,24 @@ If nothing matches, return {"edits":[],"delete":[],"message":"I couldn't find th
         // If one model is busy, over its free limit, not allowed for this key, or too slow, the next one is tried,
         // so the chat keeps working. Only a key that is really invalid stops right away.
         for (model in order) {
+            val t0 = System.currentTimeMillis()
             fun rest(seconds: Int) { resting[model] = System.currentTimeMillis() + seconds * 1000L }
             var result = try {
-                call(model, key, prompt, file)
+                call(model, key, prompt, file, think = model !in plain)
             } catch (e: Failure) {
                 lastError = e.message ?: lastError
+                skipped += shortName(model) + " no answer " + secs(t0)
                 rest(120)
                 continue
             }
-            // A model that doesn't take the short-thinking setting is asked again without it.
-            if (result.first == 400 && errorMessage(result.second).contains("thinking", ignoreCase = true)) {
-                result = try { call(model, key, prompt, file, think = false) } catch (e: Failure) { lastError = e.message ?: lastError; rest(120); continue }
+            // A model that refuses the speed settings is asked again with a plain request, and remembered.
+            if (result.first == 400 && model !in plain && !errorMessage(result.second).contains("API key", ignoreCase = true)) {
+                val retry = try { call(model, key, prompt, file, think = false) } catch (e: Failure) { null }
+                if (retry != null && retry.first == 200) plain += model
+                if (retry != null) result = retry
             }
             val (code, body) = result
+            if (code != 200) skipped += shortName(model) + " " + (if (code == 429) "busy" else "error $code") + " " + secs(t0)
             when (code) {
                 200 -> {
                     if (prefer == null && model in MODELS) store.aiModel = model
@@ -711,6 +733,8 @@ If nothing matches, return {"edits":[],"delete":[],"message":"I couldn't find th
                         continue
                     } catch (e: Exception) { lastError = "AI sent an empty answer"; continue }
                     if (text.isBlank()) { lastError = "AI sent an empty answer"; continue }
+                    trace?.append(shortName(model) + " · " + secs(started) +
+                        (if (skipped.isNotEmpty()) " (skipped: " + skipped.joinToString(", ") + ")" else ""))
                     return text
                 }
                 400, 401, 403 -> {
@@ -790,13 +814,13 @@ Make one entry per transaction. Skip anything without an amount. Number words co
             .put("maxOutputTokens", if (file) 65_536 else 8_192)
         when {
             model.startsWith("gemini-3") -> {
-                c.put("temperature", 1.0)
+                // Gemini 3 ignores temperature (newer versions refuse it), so it isn't sent.
                 // "minimal" = answer almost straight away; the JSON's "work" field still gives room to work out numbers.
                 // Lite models answer almost straight away; the stronger ones think briefly.
                 if (think) c.put("thinkingConfig", JSONObject().put("thinkingLevel", if (model.contains("lite")) "minimal" else "low"))
             }
             model.startsWith("gemini-2.5") -> {
-                c.put("temperature", 0)
+                if (think) c.put("temperature", 0)
                 if (think) c.put("thinkingConfig", JSONObject().put("thinkingBudget", if (model.contains("lite")) 0 else 512))
             }
             else -> c.put("temperature", 0)

@@ -66,7 +66,9 @@ data class ChatMessage(
     /** Entries this message saved, shown as a card with Undo. */
     val entryIds: List<String> = emptyList(),
     /** Preview picture of an attached photo or PDF (first page), saved in the app's own storage. */
-    val attachment: String = ""
+    val attachment: String = "",
+    /** Small grey line under an answer: which AI model answered and how long it took. */
+    val meta: String = ""
 )
 
 /** Saves entries on the phone itself (no internet needed). */
@@ -121,7 +123,8 @@ class Store(context: Context) {
                     entryIds = o.optJSONArray("entryIds")?.let { ids ->
                         (0 until ids.length()).map { ids.optString(it) }.filter { it.isNotBlank() }
                     } ?: emptyList(),
-                    attachment = o.optString("attachment", "")
+                    attachment = o.optString("attachment", ""),
+                    meta = o.optString("meta", "")
                 )
             }
         }.takeLast(100)
@@ -140,6 +143,7 @@ class Store(context: Context) {
                     .put("timestamp", message.timestamp)
                     .put("entryIds", JSONArray(message.entryIds))
                     .put("attachment", message.attachment)
+                    .put("meta", message.meta)
             )
         }
         prefs.edit().putString("chatMessages", arr.toString()).apply()

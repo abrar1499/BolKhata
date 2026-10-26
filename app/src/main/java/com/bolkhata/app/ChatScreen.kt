@@ -159,7 +159,7 @@ fun ChatScreen(
                 } else if (message.entryIds.isNotEmpty()) {
                     SavedCard(message, byId, currency, onUndo, onEditEntry)
                 } else {
-                    AssistantBubble(message.text)
+                    AssistantBubble(message.text, message.meta)
                 }
             }
             if (loading) {
@@ -337,7 +337,8 @@ private fun UserBubble(text: String, attachment: String = "") {
 }
 
 @Composable
-private fun AssistantBubble(text: String) {
+private fun AssistantBubble(text: String, meta: String = "") {
+    Column(Modifier.fillMaxWidth()) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
         Text(
             text,
@@ -350,6 +351,14 @@ private fun AssistantBubble(text: String) {
                 .background(MaterialTheme.colorScheme.surface)
                 .padding(horizontal = 14.dp, vertical = 10.dp)
         )
+    }
+    if (meta.isNotBlank()) {
+        Text(
+            meta, fontSize = 11.sp, lineHeight = 14.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            modifier = Modifier.padding(start = 10.dp, top = 3.dp).widthIn(max = 320.dp)
+        )
+    }
     }
 }
 
