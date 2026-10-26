@@ -77,7 +77,7 @@ object Accounts {
             else -> "nothing (settled or no loans)"
         }
         return """
-PERSON KHATA for $label (worked out by the app; use these lines and numbers exactly, never add entries that are not here):
+PERSON KHATA for $label (the app searched all saved entries, so this is complete; use these lines and numbers exactly, never add entries that are not here):
 $lines
 - Came to you from them: ${f(got)} $currency (${list.count { isIn(it) }} entries)
 - Went from you to them: ${f(gave)} $currency (${list.count { isOut(it) }} entries)
@@ -87,13 +87,24 @@ When they ask for this person's khata, hisab or details: list each line as "- 22
 then one line with the totals and the balance.""".trim()
     }
 
+    /** Every saved entry of one amount, found by the app in all entries. */
+    fun amountMatches(list: List<Entry>, amount: Double, total: Int, currency: String): String {
+        val lines = list.joinToString("\n") { e ->
+            "  " + dayFmt.format(Date(e.date)) + " | " + e.type.label + " | " + e.item +
+                (if (e.note.isNotBlank() && !e.note.equals(e.item, true)) " (" + e.note.take(40) + ")" else "") +
+                (if (e.person.isNotBlank()) " | " + e.person else "") + " | " + (if (isIn(e)) "+" else if (isOut(e)) "-" else "") + f(e.amount) +
+                " | id=" + code(e)
+        }
+        return "ENTRIES OF ${f(amount)} $currency (the app searched all $total saved entries; this list is complete):\n$lines"
+    }
+
     /** Totals for entries matching an item, shop or category, by month. */
     fun itemSummary(list: List<Entry>, label: String, currency: String): String {
         val out = list.filter { isOut(it) }
         val inn = list.filter { isIn(it) }
         val byMonth = out.groupBy { SimpleDateFormat("MMM yyyy", Locale.US).format(Date(it.date)) }
             .entries.joinToString("; ") { (mo, g) -> "$mo ${f(g.sumOf { it.amount })} (${g.size}x)" }
-        return "SUMMARY for \"$label\" (worked out by the app, use as is): ${list.size} entries; money out ${f(out.sumOf { it.amount })} $currency" +
+        return "SUMMARY for \"$label\" (the app searched all saved entries; use as is): ${list.size} entries; money out ${f(out.sumOf { it.amount })} $currency" +
             (if (inn.isNotEmpty()) ", money in ${f(inn.sumOf { it.amount })} $currency" else "") +
             (if (byMonth.isNotBlank()) "; by month: $byMonth" else "") + "."
     }

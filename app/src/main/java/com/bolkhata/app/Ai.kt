@@ -147,17 +147,25 @@ object Ai {
         val itemLabel: String,
         val range: Pair<Long, Long>?,
         val rangeLabel: String,
-        val periodEntries: List<Entry>
+        val periodEntries: List<Entry>,
+        val amounts: List<Pair<Double, List<Entry>>> = emptyList()
     ) {
-        fun isEmpty() = people.isEmpty() && items.isEmpty() && range == null
+        fun isEmpty() = people.isEmpty() && items.isEmpty() && range == null && amounts.isEmpty()
     }
 
     /** "muhammed" and "muhammad" are the same name. */
     private fun sameWord(a: String, b: String) =
         a == b || (a.length >= 5 && b.length >= 5 && a.take(5) == b.take(5) && kotlin.math.abs(a.length - b.length) <= 2)
 
-    private fun subjectOf(m: String, sorted: List<Entry>): Subject {
+    private fun subjectOf(m: String, sorted: List<Entry>, lookAmounts: Boolean = true): Subject {
         val msgWords = wordsOf(m)
+        // Amounts: "4000 wali entry", "3500 kab aya" → every saved entry of that amount, searched in all entries.
+        val amounts = if (!lookAmounts) emptyList() else Regex("""\d[\d,]*(\.\d+)?""").findAll(m)
+            .mapNotNull { it.value.replace(",", "").toDoubleOrNull() }
+            .filter { it >= 10 || it % 1.0 != 0.0 }
+            .distinct().take(3)
+            .map { a -> a to sorted.filter { kotlin.math.abs(it.amount - a) < 0.01 }.take(30) }
+            .filter { it.second.isNotEmpty() }.toList()
         // People: names on entries (person, and "To X" / "From X" notes on transfers).
         fun namesOf(e: Entry): List<String> = listOfNotNull(
             e.person.trim().takeIf { it.isNotEmpty() },
@@ -222,7 +230,7 @@ object Ai {
             }
         }
         val periodEntries = if (range == null) emptyList() else sorted.filter { it.date >= range.first && it.date < range.second }
-        return Subject(people, items, itemLabel, range, rangeLabel, periodEntries)
+        return Subject(people, items, itemLabel, range, rangeLabel, periodEntries, amounts)
     }
 
     /** Picks what to send for [message]: the matching person, item, shop or period, recent and talked-about entries. */
@@ -238,7 +246,7 @@ object Ai {
 
         // What the message is about: people, items / shops, a period. A short follow-up ("details batao", "dikhao",
         // "ye kahan se aye") with nothing of its own is about what the last messages were about.
-        var subject = subjectOf(m, sorted)
+        var subject = subjectOf(m, sorted, lookAmounts = !(hasDigits && !question && !edit))
         if (subject.isEmpty() && !(hasDigits && !question) && wordsOf(m).size <= 7) {
             for (prev in history.filter { it.isUser }.takeLast(3).reversed()) {
                 val s = subjectOf(prev.text.lowercase(), sorted)
@@ -250,9 +258,10 @@ object Ai {
         val itemEntries = subject.items
         val range = subject.range
         val periodEntries = subject.periodEntries
+        val amountEntries = subject.amounts.flatMap { it.second }
         val newMoney = hasDigits && !question && !edit
         val small = !hasDigits && !edit && !question && !report && !help && !dupes && !story &&
-            people.isEmpty() && itemEntries.isEmpty() && range == null
+            people.isEmpty() && itemEntries.isEmpty() && range == null && amountEntries.isEmpty()
         if (small) return Focus(true, false, false, false, false, false, false, false, emptyList())
 
         // Entries the recent chat talked about, so "that one" / "wo wali" can be found.
@@ -265,13 +274,14 @@ object Ai {
         val day = 86_400_000L
         val odd = if (edit || dupes) sorted.filter { it.date > nowMs + day || it.date < nowMs - 300L * day }.take(15) else emptyList()
         val dupeScope = if (dupes) sorted.take(60) else emptyList()
-        val chosen = (newest + personEntries + itemEntries + periodEntries.take(60) + talkedEntries + odd + dupeScope).distinctBy { it.id }
+        val chosen = (newest + personEntries + itemEntries + amountEntries + periodEntries.take(60) + talkedEntries + odd + dupeScope).distinctBy { it.id }
             .sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt })
         // A question names nothing specific ("kitna kharcha hua?"): the exact figures answer it.
         val worked = buildString {
             people.forEach { (label, list) -> append(Accounts.personLedger(list, label, currencyNow)).append("\n\n") }
             if (itemEntries.isNotEmpty() && subject.itemLabel.isNotBlank()) append(Accounts.itemSummary(itemEntries, subject.itemLabel, currencyNow)).append("\n")
             if (range != null) append(Accounts.periodSummary(periodEntries, subject.rangeLabel, currencyNow)).append("\n")
+            subject.amounts.forEach { (a, list) -> append(Accounts.amountMatches(list, a, sorted.size, currencyNow)).append("\n") }
         }.trim()
         return Focus(
             small = false, newMoney = newMoney, edit = edit, question = question || report || people.isNotEmpty() || range != null,

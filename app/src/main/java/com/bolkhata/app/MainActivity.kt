@@ -651,7 +651,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 res.plan?.let { applyPlan(it) }
                 // If the AI says it did something but sent no change, say so instead of letting it look done.
                 val claims = Regex("""(?i)\b(kar (diya|di|diye|dein)|hata (diya|di|diye)|shift|darj|updated?|deleted?|changed|moved|removed|set kar)\b""")
-                val honest = if (list.isEmpty() && res.plan == null && claims.containsMatchIn(reply)) {
+                // Only when they asked for a change: a reply that mentions an earlier change ("delete ho chuki hai") is fine.
+                val askedChange = Regex("""(?i)\b(delete|del|hata|hatao|change|badal|badlo|galat|ghalat|minus|edit|update|theek|thek|fix|shift|move|remove)\b""").containsMatchIn(text)
+                val honest = if (askedChange && list.isEmpty() && res.plan == null && claims.containsMatchIn(reply)) {
                     "$reply\n\n(Nothing was changed yet. Tell me exactly what to change.)"
                 } else reply
                 if (list.isNotEmpty()) {
