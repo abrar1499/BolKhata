@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -153,7 +154,7 @@ fun ChatScreen(
             }
             items(messages, key = { it.id }) { message ->
                 if (message.isUser) {
-                    UserBubble(message.text)
+                    UserBubble(message.text, message.attachment)
                 } else if (message.entryIds.isNotEmpty()) {
                     SavedCard(message, byId, currency, onUndo, onEditEntry)
                 } else {
@@ -314,7 +315,11 @@ private fun Modifier.copyable(text: String): Modifier {
 }
 
 @Composable
-private fun UserBubble(text: String) {
+private fun UserBubble(text: String, attachment: String = "") {
+    if (attachment.isNotBlank()) {
+        AttachmentBubble(attachment, text)
+        return
+    }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
         Text(
             text,
@@ -475,3 +480,67 @@ private fun PickCard(
     }
 }
 
+
+/** A sent photo or PDF page, shown like a picture in a messaging app. Tap to see it full screen. */
+@Composable
+private fun AttachmentBubble(path: String, name: String) {
+    val bitmap by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, path) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching { android.graphics.BitmapFactory.decodeFile(path)?.asImageBitmap() }.getOrNull()
+        }
+    }
+    var full by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 6.dp)
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+        Column(
+            Modifier
+                .widthIn(max = 250.dp)
+                .clip(shape)
+                .background(MaterialTheme.colorScheme.primary)
+                .padding(4.dp)
+        ) {
+            val img = bitmap
+            if (img != null) {
+                androidx.compose.foundation.Image(
+                    img, contentDescription = name,
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    modifier = Modifier
+                        .width(242.dp)
+                        .aspectRatio((img.width.toFloat() / img.height).coerceIn(0.6f, 1.6f))
+                        .clip(RoundedCornerShape(15.dp))
+                        .clickable { full = true }
+                )
+            } else {
+                Box(
+                    Modifier.width(242.dp).height(160.dp).clip(RoundedCornerShape(15.dp))
+                        .background(MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.12f))
+                )
+            }
+            if (name.lowercase().endsWith(".pdf")) {
+                Text(
+                    name, color = MaterialTheme.colorScheme.onPrimary, fontSize = 13.sp,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+                )
+            }
+        }
+    }
+    val img = bitmap
+    if (full && img != null) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { full = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Box(
+                Modifier.fillMaxSize().background(Color.Black).clickable { full = false },
+                contentAlignment = Alignment.Center
+            ) {
+                androidx.compose.foundation.Image(
+                    img, contentDescription = name,
+                    contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+    }
+}

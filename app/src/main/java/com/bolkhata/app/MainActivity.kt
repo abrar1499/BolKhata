@@ -507,12 +507,13 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     }
 
     /** Adds a message to the chat and keeps it on the phone. */
-    fun postChat(text: String, isUser: Boolean, entryIds: List<String> = emptyList()) {
+    fun postChat(text: String, isUser: Boolean, entryIds: List<String> = emptyList(), attachment: String = "") {
         val updated = chatMessages + ChatMessage(
             id = "chat-" + System.currentTimeMillis() + "-" + System.nanoTime(),
             isUser = isUser,
             text = text,
-            entryIds = entryIds
+            entryIds = entryIds,
+            attachment = attachment
         )
         chatMessages = updated
         store.saveChatMessages(updated)
@@ -683,17 +684,18 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 if (c.moveToFirst()) c.getString(0) else null
             }
         }.getOrNull() ?: if (mime == "application/pdf") "Statement.pdf" else "Photo"
-        postChat("📎 $name", isUser = true)
-        if (activeKey.isBlank()) {
-            postChat("Reading statements and bills needs AI. Turn it on in Settings.", isUser = false)
-            return
-        }
         chatLoading = true
         scope.launch {
             try {
                 val bytes = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                     resolver.openInputStream(uri)?.use { it.readBytes() }
                 } ?: throw Ai.Failure("Could not open this file.")
+                // Show the photo (or the PDF's first page) in the chat, like a messaging app.
+                val preview = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    runCatching { Attachments.savePreview(context, bytes, mime) }.getOrNull().orEmpty()
+                }
+                postChat(name, isUser = true, attachment = preview)
+                if (activeKey.isBlank()) throw Ai.Failure("Reading statements and bills needs AI. Turn it on in Settings.")
                 if (bytes.size > 15 * 1024 * 1024) throw Ai.Failure("This file is too big (over 15 MB). Send a smaller PDF or a photo of one page.")
                 val found = Ai.readDocument(bytes, mime, "", activeKey, store, currency)
                     .sortedByDescending { it.date }
@@ -721,68 +723,6 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
 
     val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) readAttachment(uri)
-    }
-
-    /** Reads bank messages already in the phone's SMS inbox and offers the payments found to tick and add. */
-    fun importSms(days: Int) {
-        if (chatLoading) return
-        postChat("Import bank SMS · last $days days", isUser = true)
-        chatLoading = true
-        scope.launch {
-            try {
-                val since = System.currentTimeMillis() - days * 86_400_000L
-                val found = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    val out = mutableListOf<Entry>()
-                    context.contentResolver.query(
-                        android.net.Uri.parse("content://sms/inbox"),
-                        arrayOf("body", "date"),
-                        "date >= ?", arrayOf(since.toString()), "date DESC"
-                    )?.use { c ->
-                        val bodyCol = c.getColumnIndex("body")
-                        val dateCol = c.getColumnIndex("date")
-                        while (c.moveToNext()) {
-                            val body = c.getString(bodyCol) ?: continue
-                            val date = c.getLong(dateCol)
-                            BankParser.parse(body, date)?.let { e ->
-                                out += e.copy(id = "s" + date + "_" + out.size)
-                            }
-                        }
-                    }
-                    out
-                }
-                if (found.isEmpty()) {
-                    postChat("No bank payments found in your SMS for the last $days days.", isUser = false)
-                } else {
-                    imports = found
-                    importMatch = matchSaved(found)
-                    importDupes = importMatch.keys
-                    val dupes = importDupes.size
-                    postChat(
-                        "Found ${found.size} bank " + (if (found.size == 1) "payment" else "payments") + " in your SMS" +
-                            (if (dupes > 0) ". $dupes look already saved, so I left them unticked." else ".") +
-                            " Check them below and tap Add.",
-                        isUser = false
-                    )
-                }
-            } catch (e: Exception) {
-                postChat("Could not read your SMS: " + (e.message ?: "unknown error"), isUser = false)
-            } finally {
-                chatLoading = false
-            }
-        }
-    }
-
-    var smsDays by remember { mutableIntStateOf(90) }
-    val smsPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
-        if (ok) importSms(smsDays)
-        else postChat("SMS permission was not given, so I can't read bank messages. You can attach a statement PDF instead.", isUser = false)
-    }
-
-    fun askSms(days: Int) {
-        smsDays = days
-        val granted = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_SMS) ==
-            android.content.pm.PackageManager.PERMISSION_GRANTED
-        if (granted) importSms(days) else smsPermission.launch(android.Manifest.permission.READ_SMS)
     }
 
     // ---------- Voice conversation: talk to the assistant hands-free ----------
@@ -1069,12 +1009,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             if (main && tab == Tab.CHAT) {
                 InputBar(
                     onSend = { chatInput(it) }, onMic = { startVoice(forChat = true) }, placeholder = "Speak, type or ask…",
-                    attachOptions = listOf(
-                        "Statement, receipt or bill (photo / PDF)" to { pickFile.launch(arrayOf("image/*", "application/pdf")) },
-                        "Bank SMS · last month" to { askSms(31) },
-                        "Bank SMS · last 3 months" to { askSms(92) },
-                        "Bank SMS · last 6 months" to { askSms(183) }
-                    )
+                    onAttach = { pickFile.launch(arrayOf("image/*", "application/pdf")) }
                 )
             } else {
                 InputBar(onSend = { handleText(it) }, onMic = { startVoice() })
@@ -1161,6 +1096,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         onClear = {
                             chatMessages = emptyList()
                             store.saveChatMessages(emptyList())
+                            Attachments.cleanUp(context, emptySet())
                             toast("Chat history cleared")
                         },
                         onUndo = { ids -> moveToTrash(ids.toSet()) },
@@ -1607,9 +1543,8 @@ private fun InputBar(
     onSend: (String) -> Unit,
     onMic: () -> Unit,
     placeholder: String = "Type here…",
-    attachOptions: List<Pair<String, () -> Unit>>? = null
+    onAttach: (() -> Unit)? = null
 ) {
-    var attachMenu by remember { mutableStateOf(false) }
     var text by rememberSaveable { mutableStateOf("") }
     fun send() {
         val t = text.trim()
@@ -1626,19 +1561,12 @@ private fun InputBar(
                 .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (attachOptions != null) {
-                Box {
-                    IconButton(onClick = { attachMenu = true }) {
-                        Icon(
-                            Icons.Filled.AttachFile, contentDescription = "Import a statement, bill or bank SMS",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    DropdownMenu(expanded = attachMenu, onDismissRequest = { attachMenu = false }) {
-                        attachOptions.forEach { (label, action) ->
-                            DropdownMenuItem(text = { Text(label) }, onClick = { attachMenu = false; action() })
-                        }
-                    }
+            if (onAttach != null) {
+                IconButton(onClick = onAttach) {
+                    Icon(
+                        Icons.Filled.AttachFile, contentDescription = "Attach a photo or PDF",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
                 Spacer(Modifier.width(2.dp))
             }
