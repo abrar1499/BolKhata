@@ -26,6 +26,24 @@ object Ai {
     /** Everything uses the fast Flash-Lite models; null = the one that last answered. */
     val CHAT_MODEL: String? = null
 
+    /**
+     * Stronger models, used only when a message is long or asks for changes (edits, deletes, splitting a bill, settling up),
+     * or when the fast model's answer doesn't check out. They think a little before answering.
+     */
+    val STRONG = listOf("gemini-3.8-flash", "gemini-flash-latest", "gemini-2.5-flash")
+
+    /** Messages that need real reasoning: long ones, several numbers, or corrections and settlements. */
+    private fun needsStrong(message: String): Boolean {
+        val m = message.lowercase()
+        if (m.length > 140) return true
+        if (Regex("""\d+(\.\d+)?""").findAll(m).count() >= 4) return true
+        return Regex(
+            """\b(minus|plus|hissa|hisa|share|split|adha|aadha|delete|delet|hata|hatao|galat|ghalat|wrong|change|badal|badlo|instead|""" +
+                """theek kar|thek kar|correct|fix|settle|hisab|hisaab|baqi|baaki|owe|udhaar|udhar|wapis|return|duplicate|double|""" +
+                """merge|shift|move|edit|update|nahi tha|nahin tha|not \d)""" + """\b"""
+        ).containsMatchIn(m)
+    }
+
     /** Photos and statement pages use the same fast model (many pages are read at the same time). */
     val FILE_MODEL: String? = null
 
@@ -189,13 +207,33 @@ Latest message: "$said"
 Return ONLY JSON: {"work":"","reply":""${if (voice) ",\"speech\":\"\"" else ""},"entries":[],"edits":[{"id":"","type":"","amount":0,"category":"","item":"","qty":0,"person":"","date":"YYYY-MM-DD","time":"","note":""}],"delete":[],"remember":[],"forget":[]}
 ${if (voice) "\"speech\": the reply as you would SAY it in a phone call: 1 to 3 short natural sentences, no lists, no symbols, numbers as\ndigits. If they write or speak Urdu or Roman Urdu, write \"speech\" in Urdu script (اردو) so an Urdu voice can read it; otherwise English.\n" else ""}("work" is your private scratch space: keep it short, only for working out numbers; the person never sees it. edits and delete are [] unless case B.)
 """.trim()
-        val json = try {
-            // Fast Flash-Lite model; the rules and examples in the prompt make up for its smaller size.
-            JSONObject(request(prompt, key.trim(), store, prefer = CHAT_MODEL))
-        } catch (e: Failure) {
-            throw e
-        } catch (e: Exception) {
-            throw Failure("AI returned an unreadable answer.")
+        val knownCodes = recent.map { Accounts.code(it) }.toSet()
+        fun ask(strong: Boolean): JSONObject {
+            val models = if (strong) STRONG + MODELS else MODELS
+            return try {
+                JSONObject(request(prompt, key.trim(), store, prefer = if (strong) STRONG.first() else CHAT_MODEL, models = models))
+            } catch (e: Failure) {
+                throw e
+            } catch (e: Exception) {
+                throw Failure("AI returned an unreadable answer.")
+            }
+        }
+        /** Signs the fast answer is wrong: ids that don't exist, or a reply that claims a change it didn't make. */
+        fun doubtful(j: JSONObject): Boolean {
+            val ids = mutableListOf<String>()
+            j.optJSONArray("edits")?.let { a -> for (i in 0 until a.length()) a.optJSONObject(i)?.optString("id")?.let { ids += it.trim() } }
+            j.optJSONArray("delete")?.let { a -> for (i in 0 until a.length()) ids += a.optString(i).trim() }
+            if (ids.any { it.isNotEmpty() && it !in knownCodes }) return true
+            val nothing = ids.isEmpty() && (j.optJSONArray("entries")?.length() ?: 0) == 0
+            val claims = Regex("""(?i)\b(changed|deleted|removed|updated|moved|kar diya|kar di|hata diya|hata di)\b""")
+            return nothing && claims.containsMatchIn(j.optString("reply"))
+        }
+        // Simple messages go to the fast model. Long ones and corrections go to the stronger model straight away,
+        // and a fast answer that doesn't check out is asked again from the stronger model.
+        val strongFirst = needsStrong(message)
+        var json = try { ask(strongFirst) } catch (e: Failure) { if (strongFirst) throw e else ask(true) }
+        if (!strongFirst && doubtful(json)) {
+            json = runCatching { ask(true) }.getOrNull() ?: json
         }
         val list = toEntries(json.toString(), message)
         val reply = json.optString("reply").trim()
@@ -638,9 +676,12 @@ If nothing matches, return {"edits":[],"delete":[],"message":"I couldn't find th
 
     /** Sends [prompt] to the first model that answers and returns its JSON text. */
     /** [file] is an attached image or PDF: its media type and base64 data. */
-    private fun request(prompt: String, key: String, store: Store, file: Pair<String, String>? = null, prefer: String? = null): String {
-        val first = prefer ?: store.aiModel.takeIf { it in MODELS }
-        val all = listOfNotNull(first) + MODELS.filter { it != first }
+    private fun request(
+        prompt: String, key: String, store: Store, file: Pair<String, String>? = null, prefer: String? = null,
+        models: List<String> = MODELS
+    ): String {
+        val first = prefer ?: store.aiModel.takeIf { it in models }
+        val all = listOfNotNull(first) + models.filter { it != first }
         // Skip models that just failed, unless every model is resting.
         val now = System.currentTimeMillis()
         val order = all.filter { (resting[it] ?: 0L) < now }.ifEmpty { all }
@@ -663,7 +704,7 @@ If nothing matches, return {"edits":[],"delete":[],"message":"I couldn't find th
             val (code, body) = result
             when (code) {
                 200 -> {
-                    if (prefer == null) store.aiModel = model
+                    if (prefer == null && model in MODELS) store.aiModel = model
                     resting.remove(model)
                     val text = try { readText(body) } catch (e: CutOff) {
                         lastError = "The file is too long for one go. Send fewer pages (for example one month) at a time."
@@ -751,7 +792,8 @@ Make one entry per transaction. Skip anything without an amount. Number words co
             model.startsWith("gemini-3") -> {
                 c.put("temperature", 1.0)
                 // "minimal" = answer almost straight away; the JSON's "work" field still gives room to work out numbers.
-                if (think) c.put("thinkingConfig", JSONObject().put("thinkingLevel", "minimal"))
+                // Lite models answer almost straight away; the stronger ones think briefly.
+                if (think) c.put("thinkingConfig", JSONObject().put("thinkingLevel", if (model.contains("lite")) "minimal" else "low"))
             }
             model.startsWith("gemini-2.5") -> {
                 c.put("temperature", 0)
