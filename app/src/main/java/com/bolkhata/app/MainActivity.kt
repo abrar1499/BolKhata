@@ -113,6 +113,14 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     // The main account opened from the home screen, and the entry whose long-press menu / move dialog is open.
     var ledger by remember { mutableStateOf<MainAcct?>(null) }
     var menuFor by remember { mutableStateOf<Entry?>(null) }
+    var ledgerPerson by remember { mutableStateOf<String?>(null) }
+    // Smart understanding: entries the AI read (shown before saving), a name to pick, what was just added (Undo),
+    // the entry being edited from the card (to learn from), and words the person corrected before.
+    var confirmNew by remember { mutableStateOf<Pair<List<Entry>, String>?>(null) }
+    var askWho by remember { mutableStateOf<Understand.Result?>(null) }
+    var lastAdded by remember { mutableStateOf(listOf<String>()) }
+    var editFrom by remember { mutableStateOf<Pair<Entry, String>?>(null) }
+    var wordFixes by remember { mutableStateOf(store.loadWordFixes()) }
     var moving by remember { mutableStateOf<Entry?>(null) }
     // The entries before a chat message was handled; what changes after that is reported in the chat.
     var chatWatch by remember { mutableStateOf<List<Entry>?>(null) }
@@ -293,6 +301,11 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     }
 
     /** When the person fixes a category, remember the words so it is right next time. */
+    /** Names the person has entries with: people in the khata and names on transfers. */
+    fun contactNames(): List<String> = (personAccounts(entries).map { it.name } + entries.mapNotNull { e ->
+        e.note.trim().takeIf { it.startsWith("To ") || it.startsWith("From ") }?.substringAfter(' ')?.trim()
+    }).filter { it.isNotBlank() }.distinctBy { it.lowercase() }
+
     fun learnFrom(before: Entry?, after: Entry) {
         if (after.type != Type.KHARCHA || after.category == Cat.OTHER) return
         if (before != null && before.category == after.category && before.item == after.item) return
@@ -309,7 +322,16 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         }
         if (r.entries.isNotEmpty()) {
             save(r.entries + entries)
-            toast("✓ Added " + r.entries.joinToString(", ") { entryTitle(it) + " " + fmt(it.amount) })
+            lastAdded = r.entries.map { it.id }
+            val ids = lastAdded.toSet()
+            scope.launch {
+                snackbar.currentSnackbarData?.dismiss()
+                val res = snackbar.showSnackbar(
+                    "✓ Added " + r.entries.joinToString(", ") { understoodLine(it, currency) },
+                    actionLabel = "Undo", duration = SnackbarDuration.Short
+                )
+                if (res == SnackbarResult.ActionPerformed) moveToTrash(ids)
+            }
         }
         if (r.unclear.isNotEmpty()) pending = pending + r.unclear
     }
@@ -432,7 +454,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         return t.contains(" entry ") || strong.any { t.contains(it) } || (soft.any { t.contains(it) } && refers.any { t.contains(it) })
     }
 
-    fun handleTextSafely(text: String) {
+    fun handleTextSafely(text: String, clock: Understand.Clock? = null) {
         // A vague "change an entry" is not enough information to edit safely; ask what to change.
         val normalizedWords = text.lowercase().split(Regex("""[^\p{L}\p{N}]+""")).filter { it.isNotEmpty() }
         val genericEditWords = setOf(
@@ -495,7 +517,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             }
             return
         }
-        val r = Parser.parse(text)
+        val r = Parser.parse(text).let { p ->
+            if (clock == null) p else Parser.Result(p.entries.map { Understand.at(it, clock) }, p.unclear.map { Understand.at(it, clock) })
+        }
         // Goods said without a price are asked about here (the rate), not sent to the AI.
         val askRate = r.unclear.isNotEmpty() && r.unclear.all { it.qty > 0 }
         val unsure = !askRate && (r.unclear.isNotEmpty() || r.entries.isEmpty()) ||
@@ -504,25 +528,52 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             addOffline(r)
             return
         }
+        // Not sure: the AI reads it (short prompt, fast model) and the person checks it on a card before it's saved.
         toast("✨ Understanding…")
         scope.launch {
             try {
-                val list = Ai.parse(text, activeKey, store, currency)
-                if (list.isEmpty()) {
-                    addOffline(r)
-                } else {
-                    save(list + entries)
-                    toast("✨ Added " + list.joinToString(", ") { entryTitle(it) + " " + fmt(it.amount) })
+                val list = Ai.understand(text, activeKey, store, contactNames()).map { e ->
+                    if (clock != null) Understand.at(e, clock) else e
                 }
+                if (list.isEmpty()) addOffline(r) else confirmNew = list to text
             } catch (e: Exception) {
                 addOffline(r)
             }
         }
     }
 
+    /** What the person meant, after "smart understanding": a new entry, or a command. */
+    fun act(u: Understand.Result) {
+        when (u.kind) {
+            Understand.Kind.DELETE_LAST -> {
+                val last = entries.maxByOrNull { it.createdAt }
+                if (last == null) toast("There are no entries")
+                else confirm = "Delete the last entry: ${entryTitle(last)} ${fmt(last.amount)} ${currency}?" to setOf(last.id)
+            }
+            Understand.Kind.UNDO -> {
+                val ids = lastAdded.filter { id -> entries.any { it.id == id } }
+                if (ids.isEmpty()) toast("Nothing to undo") else { lastAdded = emptyList(); moveToTrash(ids.toSet()) }
+            }
+            Understand.Kind.OPEN_KHATA -> {
+                val name = u.contact
+                if (name == null) handleTextSafely(u.text, u.clock)
+                else {
+                    val p = personAccounts(entries).firstOrNull { it.name.equals(name, true) }
+                    ledgerPerson = name
+                    ledger = if (p == null || p.toReceive) MainAcct.TO_RECEIVE else MainAcct.TO_PAY
+                }
+            }
+            Understand.Kind.SUMMARY -> { reportStart = ReportKind.CASH_OUT; tab = Tab.REPORTS }
+            Understand.Kind.ENTRY -> handleTextSafely(u.text, u.clock)
+        }
+    }
+
     fun handleText(text: String) {
         try {
-            handleTextSafely(Translit.toRoman(text))
+            // Smart understanding first (offline): spelling, numbers said as words, names, time, commands.
+            val u = Understand.read(Translit.toRoman(text), contactNames(), wordFixes)
+            if (u.choices.size > 1) { askWho = u; return }
+            act(u)
         } catch (e: Exception) {
             // Never close the app because a sentence was not understood.
             toast("Sorry, I couldn't read that. Tap + to add it by hand.")
@@ -1113,6 +1164,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     BackHandler(enabled = ledger != null || account != null || results != null || people != null || tab != Tab.HOME) {
         if (ledger != null) {
             ledger = null
+            ledgerPerson = null
         } else if (account != null) {
             account = null
         } else if (results != null) {
@@ -1409,7 +1461,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     CompositionLocalProvider(LocalEntryMenu provides { e: Entry -> menuFor = e }) {
                         LedgerScreen(
                             start = start, entries = entries, currency = currency,
-                            onClose = { ledger = null }, onEdit = { editing = it }, onNew = { trade = it }
+                            onClose = { ledger = null; ledgerPerson = null }, onEdit = { editing = it }, onNew = { trade = it },
+                            person = ledgerPerson
                         )
                     }
                 }
@@ -1430,6 +1483,38 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         toast("✓ Moved")
                     }
                 }, onDismiss = { moving = null })
+            }
+            confirmNew?.let { (list, said) ->
+                ConfirmCard(
+                    list, currency,
+                    onSave = {
+                        confirmNew = null
+                        save(list + entries)
+                        lastAdded = list.map { it.id }
+                        toast("✓ Saved")
+                    },
+                    onEdit = {
+                        confirmNew = null
+                        // The rest is saved; the first one opens to fix, and the fix is learned.
+                        if (list.size > 1) save(list.drop(1) + entries)
+                        editFrom = list.first() to said
+                        trade = list.first()
+                    },
+                    onCancel = { confirmNew = null }
+                )
+            }
+            askWho?.let { u ->
+                WhoDialog(u.nameWord ?: "", u.choices, onPick = { chosen ->
+                    askWho = null
+                    val word = u.nameWord ?: ""
+                    if (chosen != null && word.isNotBlank()) {
+                        store.addWordFix("@$word", chosen)
+                        wordFixes = store.loadWordFixes()
+                    }
+                    val name = chosen ?: word.replaceFirstChar { it.uppercase() }
+                    val text = u.text.split(" ").joinToString(" ") { if (it == word) name else it }
+                    act(Understand.Result(u.kind, text, chosen, emptyList(), word, u.clock, u.fixes))
+                }, onCancel = { askWho = null })
             }
             // The account opens over the list, so going back returns to the same place in the list.
             if (acct != null) {
@@ -1697,10 +1782,26 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 onSave = { e ->
                     save(listOf(e) + entries)
                     trade = null
+                    lastAdded = listOf(e.id)
                     toast("✓ Saved")
+                    // Fixed on the confirm card: learn it, so the same words are understood right next time.
+                    editFrom?.let { (before, said) ->
+                        editFrom = null
+                        if (before.id == e.id && (before.item != e.item || before.category != e.category)) {
+                            learnFrom(before, e.copy(note = said))
+                            val old = before.item.lowercase()
+                            val new = e.item.trim()
+                            if (new.isNotBlank() && ' ' !in new) {
+                                said.lowercase().split(Regex("[^\\p{L}]+"))
+                                    .filter { w -> w.length >= 3 && (w == old || Normalizer.similarity(w, old) >= 0.8) }
+                                    .forEach { w -> store.addWordFix(w, new.lowercase()) }
+                                wordFixes = store.loadWordFixes()
+                            }
+                        }
+                    }
                 },
                 onDelete = null,
-                onCancel = { trade = null }
+                onCancel = { trade = null; editFrom = null }
             )
         }
     }

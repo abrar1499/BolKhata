@@ -330,6 +330,19 @@ class Store(context: Context) {
         emptyMap()
     }
 
+    /** Words the person corrected (their word -> right word; "@word" -> a contact's name). */
+    fun loadWordFixes(): Map<String, String> = try {
+        val o = JSONObject(prefs.getString("wordFixes", "{}") ?: "{}")
+        o.keys().asSequence().associateWith { o.getString(it) }
+    } catch (e: Exception) { emptyMap() }
+
+    fun addWordFix(word: String, right: String) {
+        if (word.isBlank() || right.isBlank() || word.equals(right, true)) return
+        val o = try { JSONObject(prefs.getString("wordFixes", "{}") ?: "{}") } catch (e: Exception) { JSONObject() }
+        o.put(word.lowercase(), right)
+        prefs.edit().putString("wordFixes", o.toString()).apply()
+    }
+
     fun learn(words: List<String>, cat: Cat, item: String) {
         if (words.isEmpty()) return
         val o = try { JSONObject(prefs.getString("learned", "{}") ?: "{}") } catch (e: Exception) { JSONObject() }

@@ -214,9 +214,12 @@ fun LedgerScreen(
     currency: String,
     onClose: () -> Unit,
     onEdit: (Entry) -> Unit,
-    onNew: (Entry) -> Unit
+    onNew: (Entry) -> Unit,
+    person: String? = null
 ) {
-    val stack = remember(start) { mutableStateListOf<Level>(Level.Main(start)) }
+    val stack = remember(start, person) {
+        mutableStateListOf<Level>(Level.Main(start)).apply { if (person != null) add(Level.Person(person)) }
+    }
     BackHandler(enabled = stack.size > 1) { stack.removeAt(stack.lastIndex) }
     fun back() { if (stack.size > 1) stack.removeAt(stack.lastIndex) else onClose() }
     when (val level = stack.last()) {

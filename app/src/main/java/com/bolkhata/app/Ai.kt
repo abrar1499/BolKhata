@@ -1168,6 +1168,42 @@ Return ONLY valid JSON in this exact shape: {"reply":"your answer here"}
         Cat.TANKHWAH to "income", Cat.UDHAAR to "loans", Cat.SALES to "sales", Cat.STOCK to "purchases", Cat.OTHER to "other"
     )
 
+    /**
+     * The AI step of "smart understanding", used only when the phone could not understand a sentence well enough.
+     * A short prompt with a strict JSON answer, on the fast Flash-Lite model.
+     */
+    suspend fun understand(text: String, key: String, store: Store, contacts: List<String>): List<Entry> = withContext(Dispatchers.IO) {
+        val today = SimpleDateFormat("yyyy-MM-dd (EEEE)", Locale.US).format(Date())
+        val said = text.replace("\"", "'").take(400)
+        val prompt = """
+Money diary. Today is $today. The sentence is Roman Urdu / Hindi / English, often misspelled ("ptrol", "rote", "dia").
+Return ONLY JSON: {"items":[{"intent":"","amount":0,"category":"","sub_item":"","contact":"","date":"YYYY-MM-DD","time":"HH:MM","note":""}]}
+intent: expense | income | lent (I gave a person money they owe back) | borrowed (a person gave me money I owe) | got_back | paid_back.
+"X ne 50 diya" = borrowed from X, unless it is clearly salary or a repayment. One item per amount. Ignore currency words.
+category: food, transport, rent, bills, mobile, home, shopping, health, personal, fees, education, charity, assets, other.
+sub_item: the thing in English, 1-3 words (Petrol, Roti, Taxi). contact: a saved name if it matches (${contacts.take(40).joinToString(", ")}), else the name said, else "".
+time: only if a time is said (subah 7 baje = 07:00, shaam 6 = 18:00), else "". note: 2-5 English words.
+Sentence: "$said"
+""".trim()
+        val raw = request(prompt, key.trim(), store, prefer = "gemini-3.5-flash-lite", models = (listOf("gemini-3.5-flash-lite") + MODELS).distinct())
+        val items = JSONObject(raw).optJSONArray("items") ?: JSONArray()
+        val entries = JSONArray()
+        for (i in 0 until items.length()) {
+            val o = items.optJSONObject(i) ?: continue
+            val type = when (o.optString("intent").lowercase()) {
+                "income" -> "income"; "lent" -> "gave"; "borrowed" -> "took"
+                "got_back" -> "got_back"; "paid_back" -> "paid_back"; else -> "expense"
+            }
+            entries.put(
+                JSONObject().put("type", type).put("amount", o.optDouble("amount", 0.0))
+                    .put("category", o.optString("category")).put("item", o.optString("sub_item"))
+                    .put("person", o.optString("contact")).put("date", o.optString("date"))
+                    .put("time", o.optString("time")).put("note", o.optString("note"))
+            )
+        }
+        toEntries(JSONObject().put("entries", entries).toString(), text)
+    }
+
     /** Asks Gemini which existing entries to change for an instruction like "hamza wali 500 ko 400 kar do". */
     suspend fun edit(instruction: String, all: List<Entry>, key: String, store: Store, currency: String): EditPlan =
         withContext(Dispatchers.IO) {
