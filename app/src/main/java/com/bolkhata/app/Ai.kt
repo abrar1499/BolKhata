@@ -309,6 +309,13 @@ object Ai {
         // "aaj kitna" only today's. Smaller requests answer faster and fit free-plan limits.
         currencyNow = currency
         val focus = focusOf(message, history, sorted)
+        // With Gemini (no Groq / OpenRouter / Claude key), questions and talk get the original Settings chat.
+        // Adding or changing entries still goes through the assistant below.
+        if (fastKey.isBlank() && !focus.newMoney && !focus.edit && !focus.story) {
+            val tr = StringBuilder()
+            val reply = classicChat(message, history, all, key, store, currency, tr)
+            return@withContext AssistantResult(reply, emptyList(), null, trace = tr.toString())
+        }
         val recent = focus.entries
         val codeOf = recent.associate { e -> e.id to Accounts.code(e) }
         val today = SimpleDateFormat("yyyy-MM-dd (EEEE)", Locale.US).format(Date())
@@ -484,6 +491,108 @@ ${if (voice) "\"speech\": the reply as you would SAY it in a phone call: 1 to 3 
             speech = json.optString("speech").trim(),
             trace = trace.toString()
         )
+    }
+
+    /**
+     * The chat as it first was in Settings (answers questions about the saved khata), used for Gemini.
+     * Kept as it was; only the trace line under the answer is added.
+     */
+    private fun classicChat(
+        question: String,
+        history: List<ChatMessage>,
+        all: List<Entry>,
+        key: String,
+        store: Store,
+        currency: String,
+        trace: StringBuilder? = null
+    ): String {
+        if (key.isBlank()) throw Failure("AI is not configured. Add a Gemini API key in Settings.")
+
+        val today = SimpleDateFormat("yyyy-MM-dd (EEEE)", Locale.US).format(Date())
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        val recent = all.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt }).take(80)
+        val recentJson = JSONArray()
+        recent.forEach { entry ->
+            recentJson.put(
+                JSONObject()
+                    .put("date", dateFormat.format(Date(entry.date)))
+                    .put("type", entry.type.label)
+                    .put("amount", entry.amount)
+                    .put("category", entry.category.label)
+                    .put("item", entry.item)
+                    .put("person", entry.person)
+                    .put("note", entry.note)
+                    .put("qty", entry.qty)
+                    .put("unit", entry.unit)
+                    .put("paid", entry.paid)
+            )
+        }
+
+        val currentMonth = Calendar.getInstance()
+        fun isCurrentMonth(entry: Entry): Boolean {
+            val date = Calendar.getInstance().apply { timeInMillis = entry.date }
+            return date.get(Calendar.YEAR) == currentMonth.get(Calendar.YEAR) &&
+                date.get(Calendar.MONTH) == currentMonth.get(Calendar.MONTH)
+        }
+        val allExpenses = all.filter { it.type == Type.KHARCHA }.sumOf { it.amount }
+        val allIncome = all.filter { it.type == Type.AAMDANI }.sumOf { it.amount }
+        val monthExpenses = all.filter { it.type == Type.KHARCHA && isCurrentMonth(it) }.sumOf { it.amount }
+        val monthIncome = all.filter { it.type == Type.AAMDANI && isCurrentMonth(it) }.sumOf { it.amount }
+        val lent = all.filter { it.type == Type.DIYA }.sumOf { it.amount }
+        val receivedBack = all.filter { it.type == Type.WAPIS_MILA }.sumOf { it.amount }
+        val borrowed = all.filter { it.type == Type.LIYA }.sumOf { it.amount }
+        val paidBack = all.filter { it.type == Type.WAPIS_DIYA }.sumOf { it.amount }
+        val personBalances = balances(all).entries
+            .sortedByDescending { kotlin.math.abs(it.value) }
+            .joinToString("; ") { entry ->
+                entry.key + ": " + (if (entry.value >= 0) "owes you " else "you owe ") +
+                    fmt(kotlin.math.abs(entry.value)) + " " + currency
+            }.ifBlank { "No outstanding balances." }
+        val summary = listOf(
+            "Saved entries: " + all.size,
+            "All-time expenses: " + fmt(allExpenses) + " " + currency,
+            "All-time income: " + fmt(allIncome) + " " + currency,
+            "This month's expenses: " + fmt(monthExpenses) + " " + currency,
+            "This month's income: " + fmt(monthIncome) + " " + currency,
+            "Total lent entries: " + fmt(lent) + " " + currency,
+            "Received back entries: " + fmt(receivedBack) + " " + currency,
+            "Total borrowed entries: " + fmt(borrowed) + " " + currency,
+            "Paid back entries: " + fmt(paidBack) + " " + currency,
+            "Current balances (positive means they owe you): " + personBalances
+        ).joinToString("\n")
+        val conversation = history.takeLast(12).joinToString("\n") { message ->
+            (if (message.isUser) "User: " else "Assistant: ") + message.text.take(1000)
+        }.ifBlank { "(new conversation)" }
+        val safeQuestion = question.replace("\"", "'").take(3000)
+        val prompt = """
+You are the friendly assistant inside BolKhata, a personal expense and khata app.
+Today is $today. Currency is $currency.
+The person may write English, Roman Urdu, Urdu, Hindi or Arabic. Reply in the same language as their latest question, in a helpful and concise style.
+Use only the saved data below for personal financial facts. If it does not contain enough information, say so clearly. Never invent transactions or amounts.
+This chat is read-only: do not claim to add, edit or delete entries. If asked to change the ledger, explain that they can use the app's entry input or edit controls.
+You may explain calculations, summarize spending, compare periods when the data supports it, and answer questions about people, categories and saved transactions.
+
+Saved data summary:
+$summary
+
+Recent saved entries, newest first (up to 80):
+$recentJson
+
+Previous conversation:
+$conversation
+
+Latest user question: "$safeQuestion"
+
+Return ONLY valid JSON in this exact shape: {"reply":"your answer here"}
+""".trimIndent()
+        val answer = try {
+            JSONObject(request(prompt, key.trim(), store, trace = trace)).optString("reply").trim()
+        } catch (e: Failure) {
+            throw e
+        } catch (e: Exception) {
+            throw Failure("AI returned an unreadable answer. Please try again.")
+        }
+        return answer.ifBlank { throw Failure("AI returned an empty answer. Please try again.") }
     }
 
     class AssistantResult(
