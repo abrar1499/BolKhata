@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -385,20 +386,29 @@ private fun PeopleView(receive: Boolean, entries: List<Entry>, currency: String,
     val color = if (receive) GreenIn else OrangeOwe
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
         item { Header(if (receive) "To receive" else "To pay", if (list.size == 1) "1 person" else "${list.size} people", onBack) }
-        item { Figures(Triple(if (receive) "They owe you" else "You owe", money(currency, total), color)) }
+        item { TotalsStrip((if (receive) "They owe you" else "You owe") to money(currency, total), color = color) }
         if (list.isEmpty()) item {
             Text(
                 if (receive) "Nobody owes you right now." else "You don't owe anyone right now.",
                 modifier = Modifier.padding(20.dp), color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        items(list, key = { "p-" + it.name.lowercase() }) { p ->
+        itemsIndexed(list, key = { _, p -> "p-" + p.name.lowercase() }) { i, p ->
             val settled = kotlin.math.abs(p.balance) < 0.005
-            NavRow(
-                p.name, count(p.history.size) + (if (settled) " · settled" else ""),
-                if (settled) "0" else fmt(kotlin.math.abs(p.balance)),
-                if (settled) MaterialTheme.colorScheme.onSurfaceVariant else color
-            ) { onOpen(p.name) }
+            CardLine(i == 0, i == list.lastIndex, 0, 46.dp, modifier = Modifier.clickable { onOpen(p.name) }) {
+                Box(
+                    Modifier.size(26.dp).clip(RoundedCornerShape(13.dp)).background(color.copy(alpha = 0.16f)),
+                    contentAlignment = Alignment.Center
+                ) { Text(p.name.trim().take(1).uppercase(), fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = color) }
+                Spacer(Modifier.width(10.dp))
+                Text(p.name, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Text(if (settled) "settled" else "${p.history.size}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    if (settled) "0" else fmt(kotlin.math.abs(p.balance)), fontWeight = FontWeight.ExtraBold, fontSize = 15.sp,
+                    color = if (settled) MaterialTheme.colorScheme.onSurfaceVariant else color,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.widthIn(min = 78.dp)
+                )
+            }
         }
     }
 }
@@ -447,25 +457,25 @@ private fun PersonView(
                 }
             }
             item { SectionTitle("History (balance after each entry)") }
-            items(p.history.reversed(), key = { "h-" + it.first.id }) { (e, after) ->
-                Surface(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 3.dp), shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surface) {
-                    Row(Modifier.fillMaxWidth().entryTap(e) { onEdit(e) }.padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text(e.type.label + (if (e.note.isNotBlank()) " · " + e.note else ""), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(df.format(Date(e.date)), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        Column(horizontalAlignment = Alignment.End) {
-                            val eff = personEffect(e)
-                            Text((if (eff > 0) "−" else "+") + fmt(e.amount), fontWeight = FontWeight.Bold, color = if (eff > 0) RedSpend else GreenIn)
-                            Text(
-                                when {
-                                    after > 0.005 -> "owes you " + fmt(after)
-                                    after < -0.005 -> "you owe " + fmt(-after)
-                                    else -> "settled"
-                                },
-                                fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+            val hist = p.history.reversed()
+            itemsIndexed(hist, key = { _, h -> "h-" + h.first.id }) { i, (e, after) ->
+                val eff = personEffect(e)
+                CardLine(i == 0, i == hist.lastIndex, 0, 46.dp, modifier = Modifier.entryTap(e) { onEdit(e) }) {
+                    Text(SimpleDateFormat("d MMM", Locale.US).format(Date(e.date)), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(48.dp))
+                    Text(
+                        e.type.label + (if (e.note.isNotBlank() && e.note != "Loans") " · " + e.note else ""),
+                        fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f)
+                    )
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text((if (eff > 0) "−" else "+") + fmt(e.amount), fontWeight = FontWeight.Bold, fontSize = 14.sp, color = if (eff > 0) RedSpend else GreenIn)
+                        Text(
+                            when {
+                                after > 0.005 -> "owes you " + fmt(after)
+                                after < -0.005 -> "you owe " + fmt(-after)
+                                else -> "settled"
+                            },
+                            fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
@@ -526,6 +536,62 @@ private fun buildTree(list: List<Entry>): List<Node> =
         }.let { items -> if (items.size == 1) items.first().children else items }
     }
 
+/** The thin "This month · All time" strip at the top of a tree. */
+@Composable
+private fun TotalsStrip(vararg items: Pair<String, String>, color: androidx.compose.ui.graphics.Color) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surface).height(IntrinsicSize.Min)
+    ) {
+        items.forEachIndexed { i, (label, value) ->
+            if (i > 0) Box(Modifier.width(1.dp).fillMaxHeight().background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)))
+            Column(Modifier.weight(1f).padding(horizontal = 12.dp, vertical = 8.dp)) {
+                Text(label, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(value, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+}
+
+/**
+ * One line of a compact list inside a single card: [first] / [last] round the card's corners,
+ * [depth] indents it with guide lines, [highlight] marks an open branch.
+ */
+@Composable
+private fun CardLine(
+    first: Boolean, last: Boolean, depth: Int, height: androidx.compose.ui.unit.Dp,
+    highlight: Boolean = false, shade: androidx.compose.ui.graphics.Color? = null,
+    modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit
+) {
+    val top = if (first) 16.dp else 0.dp
+    val bottom = if (last) 16.dp else 0.dp
+    val primary = MaterialTheme.colorScheme.primary
+    val bg = when {
+        highlight -> primary.copy(alpha = 0.12f)
+        shade != null -> shade
+        depth == 0 -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+        else -> MaterialTheme.colorScheme.surface
+    }
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+            .clip(RoundedCornerShape(topStart = top, topEnd = top, bottomStart = bottom, bottomEnd = bottom))
+            .background(MaterialTheme.colorScheme.surface)
+    ) {
+        if (!first && depth == 0) HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
+        Row(Modifier.fillMaxWidth().height(height).background(bg).then(modifier), verticalAlignment = Alignment.CenterVertically) {
+            if (highlight) Box(Modifier.width(3.dp).fillMaxHeight().background(primary))
+            // Guide lines: one per level, so it's clear what sits under what.
+            for (d in 1..depth) {
+                Spacer(Modifier.width(if (d == 1) 28.dp else 14.dp))
+                Box(Modifier.width(2.dp).fillMaxHeight().background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (d == 1) 0.8f else 0.55f)))
+            }
+            Spacer(Modifier.width(if (highlight) 9.dp else 12.dp))
+            content()
+            Spacer(Modifier.width(12.dp))
+        }
+    }
+}
+
 @Composable
 private fun TreeView(income: Boolean, entries: List<Entry>, currency: String, onBack: () -> Unit, onEdit: (Entry) -> Unit) {
     val type = if (income) Type.AAMDANI else Type.KHARCHA
@@ -549,45 +615,55 @@ private fun TreeView(income: Boolean, entries: List<Entry>, currency: String, on
         walk(tree, 0)
         out
     }
+    val timeFmt = SimpleDateFormat("d MMM", Locale.US)
+    val clockFmt = SimpleDateFormat("h:mm a", Locale.US)
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
-        item { Header(if (income) "Income" else "Expense", count(mine.size) + " · tap a line to open it", onBack) }
+        item { Header(if (income) "Income" else "Expense", count(mine.size), onBack) }
         item {
-            Figures(
-                Triple("This month", fmt(mine.filter { it.date >= m0 }.sumOf { it.amount }), color),
-                Triple("All time", fmt(mine.sumOf { it.amount }), color)
+            TotalsStrip(
+                "This month" to fmt(mine.filter { it.date >= m0 }.sumOf { it.amount }),
+                "All time" to fmt(mine.sumOf { it.amount }), color = color
             )
         }
         if (tree.isEmpty()) item { Text("Nothing here yet.", modifier = Modifier.padding(20.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        items(rows, key = { (_, x) -> if (x is Node) "n-" + x.key else "e-" + (x as Entry).id }) { (depth, x) ->
-            val indent = (16 + depth * 18).dp
+        itemsIndexed(rows, key = { _, (_, x) -> if (x is Node) "n-" + x.key else "e-" + (x as Entry).id }) { i, (depth, x) ->
+            val first = i == 0
+            val last = i == rows.lastIndex
             if (x is Node) {
                 val isOpen = x.key in open
-                val total = x.list.sumOf { it.amount }
-                val month = x.list.filter { it.date >= m0 }.sumOf { it.amount }
-                Surface(
-                    Modifier.fillMaxWidth().padding(start = indent, end = 16.dp, top = if (depth == 0) 6.dp else 2.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    color = if (depth == 0) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-                ) {
-                    Row(
-                        Modifier.fillMaxWidth().clickable { open = if (isOpen) open.filterNot { it == x.key || it.startsWith(x.key + "/") }.toSet() else open + x.key }
-                            .padding(horizontal = 12.dp, vertical = if (depth == 0) 12.dp else 9.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(if (isOpen) "▾" else "▸", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(18.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(x.name, fontWeight = if (depth == 0) FontWeight.ExtraBold else FontWeight.Bold, fontSize = if (depth == 0) 16.sp else 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(
-                                (if (x.list.size == 1) "1 time" else "${x.list.size} times") + (if (month > 0) " · this month " + fmt(month) else ""),
-                                fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1
-                            )
-                        }
-                        Text(fmt(total), fontWeight = FontWeight.Bold, fontSize = if (depth == 0) 16.sp else 14.sp, color = color)
+                val toggle = Modifier.clickable { open = if (isOpen) open.filterNot { it == x.key || it.startsWith(x.key + "/") }.toSet() else open + x.key }
+                if (depth == 0) {
+                    CardLine(first, last, 0, 46.dp, highlight = isOpen, modifier = toggle) {
+                        Text(if (isOpen) "▾" else "▸", fontSize = 12.sp, color = if (isOpen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(14.dp))
+                        CatBubble(x.list.first().category, 26.dp)
+                        Spacer(Modifier.width(10.dp))
+                        Text(x.name, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        Text("${x.list.size}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(fmt(x.list.sumOf { it.amount }), fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, color = color, textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.widthIn(min = 78.dp))
+                    }
+                } else {
+                    CardLine(first, last, depth, 38.dp, modifier = toggle) {
+                        Text(if (isOpen) "▾" else "▸", fontSize = 11.sp, color = if (isOpen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(12.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(x.name, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        Text("${x.list.size}×", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(fmt(x.list.sumOf { it.amount }), fontWeight = FontWeight.Bold, fontSize = 14.sp, color = color, textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.widthIn(min = 64.dp))
                     }
                 }
             } else {
                 val e = x as Entry
-                Box(Modifier.padding(start = indent, end = 16.dp, top = 2.dp)) { TxRow(e, currency) { onEdit(e) } }
+                val place = e.note.substringAfter(", ", "").ifBlank { e.note.takeIf { !it.equals(e.item, true) }.orEmpty() }
+                CardLine(
+                    first, last, depth, 34.dp, shade = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
+                    modifier = Modifier.entryTap(e) { onEdit(e) }
+                ) {
+                    Text(timeFmt.format(Date(e.date)), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(48.dp))
+                    Text(
+                        listOf(place, clockFmt.format(Date(e.date))).filter { it.isNotBlank() }.joinToString(" · "),
+                        fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f)
+                    )
+                    Text((if (income) "+" else "−") + fmt(e.amount), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = color)
+                }
             }
         }
     }
