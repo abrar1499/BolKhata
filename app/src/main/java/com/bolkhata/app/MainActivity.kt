@@ -110,6 +110,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var trade by remember { mutableStateOf<Entry?>(null) }
     // The account opened by tapping an entry (People › Shahbaz, Transport › Aldrees…).
     var account by remember { mutableStateOf<AccountKey?>(null) }
+    // The main account opened from the home screen, and the entry whose long-press menu / move dialog is open.
+    var ledger by remember { mutableStateOf<MainAcct?>(null) }
+    var menuFor by remember { mutableStateOf<Entry?>(null) }
+    var moving by remember { mutableStateOf<Entry?>(null) }
     // The entries before a chat message was handled; what changes after that is reported in the chat.
     var chatWatch by remember { mutableStateOf<List<Entry>?>(null) }
     var voiceForChat by remember { mutableStateOf(false) }
@@ -1106,8 +1110,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         scope.launch { drawer.open() }
     }
 
-    BackHandler(enabled = account != null || results != null || people != null || tab != Tab.HOME) {
-        if (account != null) {
+    BackHandler(enabled = ledger != null || account != null || results != null || people != null || tab != Tab.HOME) {
+        if (ledger != null) {
+            ledger = null
+        } else if (account != null) {
             account = null
         } else if (results != null) {
             results = null
@@ -1138,7 +1144,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
-            val main = results == null && people == null && account == null
+            val main = results == null && people == null && account == null && ledger == null
             if (main && tab == Tab.CHAT) {
                 InputBar(
                     onSend = { chatInput(it) }, onMic = { startVoice(forChat = true) }, placeholder = "Speak, type or ask…",
@@ -1154,7 +1160,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         Box(Modifier.padding(pad).fillMaxSize()) {
             val who = people
             val acct = account
-            CompositionLocalProvider(LocalAccountOpener provides { e: Entry -> account = accountOf(e) }) {
+            CompositionLocalProvider(
+                LocalMainOpener provides { a: MainAcct -> ledger = a },
+                LocalEntryMenu provides { e: Entry -> menuFor = e }
+            ) {
             when {
                 results != null -> {
                     val (q, editMode) = results!!
@@ -1390,6 +1399,37 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     }
                 )
             }
+            }
+            // Main accounts open over the list, so going back returns to the same place in the list.
+            ledger?.let { start ->
+                Box(
+                    Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
+                        .pointerInput(Unit) { detectTapGestures { } }
+                ) {
+                    CompositionLocalProvider(LocalEntryMenu provides { e: Entry -> menuFor = e }) {
+                        LedgerScreen(
+                            start = start, entries = entries, currency = currency,
+                            onClose = { ledger = null }, onEdit = { editing = it }, onNew = { trade = it }
+                        )
+                    }
+                }
+            }
+            menuFor?.let { e ->
+                EntryMenu(
+                    e, currency,
+                    onEdit = { menuFor = null; editing = e },
+                    onMove = { menuFor = null; moving = e },
+                    onDismiss = { menuFor = null }
+                )
+            }
+            moving?.let { e ->
+                MoveDialog(e, entries, onMove = { moved ->
+                    moving = null
+                    if (moved != e) {
+                        save(entries.map { if (it.id == moved.id) moved else it })
+                        toast("✓ Moved")
+                    }
+                }, onDismiss = { moving = null })
             }
             // The account opens over the list, so going back returns to the same place in the list.
             if (acct != null) {

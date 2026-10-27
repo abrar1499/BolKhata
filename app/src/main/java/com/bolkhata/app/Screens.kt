@@ -72,6 +72,8 @@ fun HomeScreen(
     onTab: (Tab) -> Unit = {}
 ) {
     var open by remember { mutableStateOf(setOf("today")) }
+    // The five main accounts open their own screens (Expense / Income / To pay / To receive / Cash in hand).
+    val openMain = LocalMainOpener.current
     fun toggle(k: String) {
         open = if (k in open) open - k else open + k
     }
@@ -157,7 +159,7 @@ fun HomeScreen(
                     Spacer(Modifier.height(12.dp))
                     TabSwitcher(Tab.HOME, trading, chatBadge, onTab)
                     Spacer(Modifier.height(14.dp))
-                    Panel(Modifier.fillMaxWidth(), onClick = { onReports(ReportKind.CASH_OUT) }, padding = 12.dp) {
+                    Panel(Modifier.fillMaxWidth(), padding = 12.dp) {
                         Text("In $monthName", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(8.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -165,28 +167,28 @@ fun HomeScreen(
                             MainSummaryTile(
                                 "Expense", moneyA(currency, monthSpent), Icons.Filled.ArrowUpward, RedSpend,
                                 Modifier.weight(1f)
-                            ) { onReports(ReportKind.CASH_OUT) }
+                            ) { openMain?.invoke(MainAcct.EXPENSE) ?: onReports(ReportKind.CASH_OUT) }
                             MainSummaryTile(
                                 "Income", moneyA(currency, monthIncome), Icons.Filled.ArrowDownward, GreenIn,
                                 Modifier.weight(1f)
-                            ) { onReports(ReportKind.CASH_IN) }
+                            ) { openMain?.invoke(MainAcct.INCOME) ?: onReports(ReportKind.CASH_IN) }
                         }
                         Spacer(Modifier.height(8.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             MiniTile(
                                 "To pay", moneyA(currency, pay), Icons.Filled.Remove, OrangeOwe, Modifier.weight(1f),
                                 valueSize = 12, compact = true
-                            ) { onPeople(false) }
+                            ) { openMain?.invoke(MainAcct.TO_PAY) ?: onPeople(false) }
                             MiniTile(
                                 "To receive", moneyA(currency, receive), Icons.Filled.Add, GreenIn, Modifier.weight(1f),
                                 valueSize = 12, compact = true
-                            ) { onPeople(true) }
+                            ) { openMain?.invoke(MainAcct.TO_RECEIVE) ?: onPeople(true) }
                             MiniTile(
                                 "Cash in hand", moneyA(currency, cashInHand), Icons.Filled.AccountBalanceWallet,
                                 MaterialTheme.colorScheme.onSurfaceVariant, Modifier.weight(1f),
                                 valueSize = 12, valueColor = if (cashInHand >= 0) Color.Unspecified else RedSpend,
                                 compact = true
-                            ) { onSeeAll() }
+                            ) { onReports(ReportKind.CASH_BALANCE) }
                         }
                     }
                 }

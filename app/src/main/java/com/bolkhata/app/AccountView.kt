@@ -55,11 +55,11 @@ fun accountOf(e: Entry): AccountKey {
 /** Set by the main screen: tapping an entry opens its account. Null inside the account screen (tap edits there). */
 val LocalAccountOpener = staticCompositionLocalOf<((Entry) -> Unit)?> { null }
 
-/** Tap opens the entry's account (where that is set up), long-press edits it. */
+/** Tap edits the entry (it never jumps to another screen); long-press shows Edit entry / Move entry. */
 @OptIn(ExperimentalFoundationApi::class)
 fun Modifier.entryTap(e: Entry, onEdit: () -> Unit): Modifier = composed {
-    val open = LocalAccountOpener.current
-    combinedClickable(onClick = { if (open != null) open(e) else onEdit() }, onLongClick = onEdit)
+    val menu = LocalEntryMenu.current
+    combinedClickable(onClick = onEdit, onLongClick = { if (menu != null) menu(e) else onEdit() })
 }
 
 private fun moneyIn(e: Entry) = when (e.type) {
