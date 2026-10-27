@@ -530,7 +530,8 @@ ${if (voice) "\"speech\": the reply as you would SAY it in a phone call: 1 to 3 
             "⚠ The file shows ${best.count} transaction lines but only ${best.entries.size} were extracted. " +
                 "Some transactions may be missing; check the original before adding."
         } else ""
-        PagesResult(fixDates(best.entries), emptyList(), warning)
+        val rows = fixDates(best.entries)
+        PagesResult(rows, emptyList(), listOf(warning, mixedYearNotice(rows)).filter { it.isNotBlank() }.joinToString("\n"))
     }
 
     /** One page or photo read: its entries, how many transaction lines the AI counted, and printed totals if any. */
@@ -590,8 +591,17 @@ ${if (voice) "\"speech\": the reply as you would SAY it in a phone call: 1 to 3 
                 "Review these pages against your PDF before adding."
         } else ""
         val totalsCheck = checkTotals(all, reads.mapNotNull { it.summary }.firstOrNull(), currency)
-        val check = listOf(rowWarning, totalsCheck).filter { it.isNotBlank() }.joinToString("\n")
+        val check = listOf(rowWarning, totalsCheck, mixedYearNotice(all)).filter { it.isNotBlank() }.joinToString("\n")
         PagesResult(all, failed, check)
+    }
+
+    /** A mixed-year statement is normal, but users should see the years clearly before importing. */
+    private fun mixedYearNotice(rows: List<Entry>): String {
+        val years = rows.map {
+            Calendar.getInstance().apply { timeInMillis = it.date }.get(Calendar.YEAR)
+        }.distinct().sorted()
+        return if (years.size < 2) "" else
+            "ℹ Statement includes years ${years.joinToString(" and ")}. Please check dates before adding."
     }
 
     private fun isMoneyIn(e: Entry) = e.type == Type.AAMDANI || e.type == Type.WAPIS_MILA || e.type == Type.LIYA || e.type == Type.SALE
@@ -634,8 +644,12 @@ The attached file is a bank statement (or one page of it), card statement, recei
 A page with no transactions (a cover or summary page) gives {"rows":[]}. The person's currency is $currency.
 Turn every money movement in it into a ledger entry, using the date printed for each line.
 Dates: short dates are ambiguous. "25/10/26" and "26/10/24" can be day/month/year or year/month/day, even inside the same file.
-Choose the reading that gives a date on or before today and closest to today (the newest possible), never a date a year or more
-back unless a 4-digit year says so. Labels a phone shows next to a message ("Today", "Yesterday", a weekday) win over the printed date.
+For bank statements: a printed four-digit year is AUTHORITATIVE. If the row says 2025/10/09, output
+2025-10-09, NEVER 2026-10-09, even when other rows or the statement issue date say 2026.
+A single statement can contain multiple calendar years; preserve the printed year on EACH individual row.
+Only for dates with no four-digit year: choose the reading that gives a date on or before today and closest
+to today. Labels a phone shows next to a message ("Today", "Yesterday", a weekday) win only when the
+source is a screenshot of a message, NOT when it is a dated bank statement.
 - Money taken from the account or paid (purchase, POS, mada, Apple Pay, ATM, transfer out, bill, fee) is "expense",
   unless it is clearly a loan to a named person ("gave") or money returned to someone ("paid_back").
 - Money that came in (salary, deposit, refund, transfer in) is "income", unless it is clearly a named person repaying ("got_back").
@@ -756,14 +770,18 @@ If the page prints statement totals (number of deposits and withdrawals, total d
     }
 
     /**
-     * Second check on dates read from a file, using the other lines as context. A date far from the rest
-     * (more than 45 days from the middle date) or in the future is probably a misread short date, so the
-     * other readings are tried: day and year swapped ("26/10/24" as 2026-10-24 instead of 2024-10-26), or
-     * the same day and month in the year the other lines use. The reading closest to the rest, and not in
-     * the future, is kept. The time of day stays as it was.
+     * Only a single-year document can use nearby dates for guessing an ambiguous short date.
+     * For statements containing multiple years, the original transaction years must NEVER be
+     * silently rewritten to the most common/recent year (e.g. 2025 transactions in a 2026 PDF).
+     * The time of day stays as it was.
      */
     fun fixDates(list: List<Entry>, now: Long = System.currentTimeMillis()): List<Entry> {
         if (list.isEmpty()) return list
+        // Mixed-year bank statements are legitimate. Never rewrite their explicit years.
+        val sourceYears = list.map { e ->
+            Calendar.getInstance().apply { timeInMillis = e.date }.get(Calendar.YEAR)
+        }.distinct()
+        if (sourceYears.size > 1) return list
         val day = 86_400_000L
         // Files are usually recent: the middle of the lines from the last 4 months is the reference;
         // if none are that recent, the middle of all of them.
