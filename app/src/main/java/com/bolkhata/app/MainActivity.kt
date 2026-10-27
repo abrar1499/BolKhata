@@ -215,6 +215,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             Commands.Action.SEARCH -> { results = c.query to false; people = null }
             Commands.Action.EDIT -> { results = c.query to true; people = null }
             Commands.Action.DELETE -> askDelete(c.query, matchEntries(entries, c.query))
+            Commands.Action.DELETE_PERIOD -> {
+                val period = c.period ?: return false
+                askDelete(period.label(), matchEntriesByPeriod(entries, period))
+            }
             Commands.Action.CLEAR_ALL -> {
                 if (entries.isEmpty()) toast("There are no entries to delete")
                 else confirm = "Delete ALL ${entries.size} entries? This removes every entry." to entries.map { it.id }.toSet()
@@ -612,6 +616,22 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         val roman = runCatching { Translit.toRoman(text) }.getOrDefault(text)
         val history = chatMessages.takeLast(20)
         postChat(text, isUser = true)
+        // Always handle date-based bulk deletion locally, even if AI is enabled.
+        // Never let an AI response delete a broad date range without the user's confirmation.
+        val periodCommand = Commands.read(roman)?.takeIf { it.action == Commands.Action.DELETE_PERIOD }
+        if (periodCommand != null) {
+            val period = periodCommand.period!!
+            val matched = matchEntriesByPeriod(entries, period)
+            val reply = if (matched.isEmpty()) {
+                "No saved entries found for ${period.label()}. Nothing deleted."
+            } else {
+                askDelete(period.label(), matched)
+                "Found ${matched.size} entries for ${period.label()}. Confirm the delete dialog to move them to Trash, or Cancel. Nothing deleted yet."
+            }
+            lastSpeech = reply
+            postChat(reply, isUser = false)
+            return
+        }
         // With AI on, corrections go to the AI too: it understands "23 oct, a bit before Shahbaz's 315" and can
         // pick the right entry from the conversation. The offline edit reader is only the fallback without AI.
         // With AI on, everything in the chat (searches, edits, deletes) goes to the AI, which can see the
