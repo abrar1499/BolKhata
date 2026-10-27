@@ -2,6 +2,7 @@ package com.bolkhata.app
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -13,6 +14,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Headset
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -20,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -35,6 +38,7 @@ import androidx.compose.ui.unit.sp
 fun ChatScreen(
     messages: List<ChatMessage>,
     loading: Boolean,
+    loadingLabel: String = "Thinking…",
     entries: List<Entry>,
     currency: String,
     subtitle: String,
@@ -53,15 +57,23 @@ fun ChatScreen(
     imports: List<Entry> = emptyList(),
     importDupes: Set<String> = emptySet(),
     onAddImports: (List<Entry>) -> Unit = {},
-    onDropImports: () -> Unit = {}
+    onDropImports: () -> Unit = {},
+    onUpdateSaved: () -> Unit = {},
+    voiceOn: Boolean = false,
+    voiceStatus: String = "",
+    voicePartial: String = "",
+    onVoiceToggle: () -> Unit = {},
+    pendingChanges: List<String> = emptyList(),
+    onApplyChanges: () -> Unit = {},
+    onCancelChanges: () -> Unit = {}
 ) {
     var confirmClear by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val byId = remember(entries) { entries.associateBy { it.id } }
     val itemCount = messages.size + (if (messages.isEmpty()) 1 else 0) + (if (loading) 1 else 0) +
-        (if (suggestions.isNotEmpty()) 1 else 0) + (if (imports.isNotEmpty()) 1 else 0)
+        (if (suggestions.isNotEmpty()) 1 else 0) + (if (imports.isNotEmpty()) 1 else 0) + (if (pendingChanges.isNotEmpty()) 1 else 0)
 
-    LaunchedEffect(messages.size, loading, suggestions.size, imports.size) {
+    LaunchedEffect(messages.size, loading, suggestions.size, imports.size, pendingChanges.size) {
         if (itemCount > 0) listState.animateScrollToItem(itemCount - 1)
     }
 
@@ -82,6 +94,19 @@ fun ChatScreen(
                         Text("Assistant", color = LocalHeader.current.on, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                         Text(subtitle, color = LocalHeader.current.on.copy(alpha = 0.8f), fontSize = 13.sp, maxLines = 1)
                     }
+                    IconButton(
+                        onClick = onVoiceToggle,
+                        modifier = Modifier.clip(CircleShape).background(
+                            if (voiceOn) MaterialTheme.colorScheme.surface else LocalHeader.current.chip
+                        )
+                    ) {
+                        Icon(
+                            Icons.Filled.Headset,
+                            contentDescription = if (voiceOn) "Stop voice chat" else "Talk to the assistant",
+                            tint = if (voiceOn) MaterialTheme.colorScheme.primary else LocalHeader.current.on
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
                     IconButton(
                         onClick = { confirmClear = true },
                         enabled = messages.isNotEmpty() && !loading,
@@ -130,11 +155,11 @@ fun ChatScreen(
             }
             items(messages, key = { it.id }) { message ->
                 if (message.isUser) {
-                    UserBubble(message.text)
+                    UserBubble(message.text, message.attachment)
                 } else if (message.entryIds.isNotEmpty()) {
                     SavedCard(message, byId, currency, onUndo, onEditEntry)
                 } else {
-                    AssistantBubble(message.text)
+                    AssistantBubble(message.text, message.meta)
                 }
             }
             if (loading) {
@@ -148,7 +173,30 @@ fun ChatScreen(
                     ) {
                         CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                         Spacer(Modifier.width(10.dp))
-                        Text("Thinking…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(loadingLabel, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+            if (pendingChanges.isNotEmpty()) {
+                item(key = "chat-changes") {
+                    Column(
+                        Modifier
+                            .fillMaxWidth(0.92f)
+                            .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 6.dp, bottomEnd = 18.dp))
+                            .background(MaterialTheme.colorScheme.surface)
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text("Apply these changes?", color = OrangeOwe, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        pendingChanges.forEach { line ->
+                            Text(line, fontSize = 13.sp, lineHeight = 18.sp, color = MaterialTheme.colorScheme.onSurface)
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = onApplyChanges, shape = RoundedCornerShape(12.dp), modifier = Modifier.weight(1f)) {
+                                Text("Apply")
+                            }
+                            OutlinedButton(onClick = onCancelChanges, shape = RoundedCornerShape(12.dp)) { Text("Cancel") }
+                        }
                     }
                 }
             }
@@ -163,7 +211,9 @@ fun ChatScreen(
                         currency = currency,
                         onAdd = onAddImports,
                         ignoreLabel = "Cancel",
-                        onIgnore = { onDropImports() }
+                        onIgnore = { onDropImports() },
+                        extraLabel = if (importDupes.isNotEmpty()) "Update details of ${importDupes.size} saved" else null,
+                        onExtra = onUpdateSaved
                     )
                 }
             }
@@ -183,7 +233,33 @@ fun ChatScreen(
             }
         }
 
-        if (quick.isNotEmpty()) {
+        if (voiceOn) {
+            // Voice conversation bar: what it's doing, what it heard, and a stop button.
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(MaterialTheme.colorScheme.primaryContainer)
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Filled.Headset, contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(voiceStatus.ifBlank { "Voice chat on" }, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    if (voicePartial.isNotBlank()) {
+                        Text(voicePartial, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                TextButton(onClick = onVoiceToggle) { Text("Stop", fontWeight = FontWeight.Bold) }
+            }
+        }
+        if (quick.isNotEmpty() && !voiceOn) {
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -222,8 +298,29 @@ fun ChatScreen(
 
 fun quickLabel(e: Entry): String = e.item.ifBlank { e.note }.ifBlank { e.category.label }.take(18)
 
+/** Long-press a chat message to copy its whole text. */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun UserBubble(text: String) {
+private fun Modifier.copyable(text: String): Modifier {
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    return this.combinedClickable(
+        onClick = {},
+        onLongClick = {
+            clipboard.setText(androidx.compose.ui.text.AnnotatedString(text))
+            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+            android.widget.Toast.makeText(context, "Copied", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    )
+}
+
+@Composable
+private fun UserBubble(text: String, attachment: String = "") {
+    if (attachment.isNotBlank()) {
+        AttachmentBubble(attachment, text)
+        return
+    }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
         Text(
             text,
@@ -232,6 +329,7 @@ private fun UserBubble(text: String) {
             modifier = Modifier
                 .widthIn(max = 300.dp)
                 .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 6.dp))
+                .copyable(text)
                 .background(MaterialTheme.colorScheme.primary)
                 .padding(horizontal = 14.dp, vertical = 10.dp)
         )
@@ -239,7 +337,8 @@ private fun UserBubble(text: String) {
 }
 
 @Composable
-private fun AssistantBubble(text: String) {
+private fun AssistantBubble(text: String, meta: String = "") {
+    Column(Modifier.fillMaxWidth()) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
         Text(
             text,
@@ -248,9 +347,18 @@ private fun AssistantBubble(text: String) {
             modifier = Modifier
                 .widthIn(max = 320.dp)
                 .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 6.dp, bottomEnd = 18.dp))
+                .copyable(text)
                 .background(MaterialTheme.colorScheme.surface)
                 .padding(horizontal = 14.dp, vertical = 10.dp)
         )
+    }
+    if (meta.isNotBlank()) {
+        Text(
+            meta, fontSize = 11.sp, lineHeight = 14.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            modifier = Modifier.padding(start = 10.dp, top = 3.dp).widthIn(max = 320.dp)
+        )
+    }
     }
 }
 
@@ -263,10 +371,12 @@ private fun SavedCard(
     onEditEntry: (Entry) -> Unit
 ) {
     val live = message.entryIds.mapNotNull { byId[it] }
+    val copyText = (listOf(message.text) + live.map { entryTitle(it) + " " + fmt(it.amount) + " " + currency }).joinToString("\n")
     Column(
         Modifier
             .fillMaxWidth(0.88f)
             .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 6.dp, bottomEnd = 18.dp))
+            .copyable(copyText)
             .background(MaterialTheme.colorScheme.surface)
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -318,7 +428,9 @@ private fun PickCard(
     currency: String,
     onAdd: (List<Entry>) -> Unit,
     ignoreLabel: String,
-    onIgnore: (Set<String>) -> Unit
+    onIgnore: (Set<String>) -> Unit,
+    extraLabel: String? = null,
+    onExtra: () -> Unit = {}
 ) {
     val suggestions = rows
     var picked by remember(rows.map { it.id }) { mutableStateOf(preselected) }
@@ -346,7 +458,10 @@ private fun PickCard(
                     onCheckedChange = { on -> picked = if (on) picked + e.id else picked - e.id }
                 )
                 Column(Modifier.weight(1f)) {
-                    Text(e.note.ifBlank { entryTitle(e) }, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (e.person.isNotBlank() && !e.note.contains(e.person, ignoreCase = true)) {
+                        Text(e.person, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                    }
+                    Text(e.note.ifBlank { entryTitle(e) }, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
                     Text(
                         e.category.label + " · " + dayLabel(e.date) + " " + timeLabel(e.date),
                         fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1
@@ -369,6 +484,76 @@ private fun PickCard(
                 shape = RoundedCornerShape(12.dp)
             ) { Text(ignoreLabel) }
         }
+        if (extraLabel != null) {
+            // Entries already saved get the clearer names, notes and times from the file, amounts unchanged.
+            FilledTonalButton(onClick = onExtra, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
+                Text(extraLabel)
+            }
+        }
     }
 }
 
+
+/** A sent photo or PDF page, shown like a picture in a messaging app. Tap to see it full screen. */
+@Composable
+private fun AttachmentBubble(path: String, name: String) {
+    val bitmap by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, path) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching { android.graphics.BitmapFactory.decodeFile(path)?.asImageBitmap() }.getOrNull()
+        }
+    }
+    var full by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 6.dp)
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+        Column(
+            Modifier
+                .widthIn(max = 250.dp)
+                .clip(shape)
+                .background(MaterialTheme.colorScheme.primary)
+                .padding(4.dp)
+        ) {
+            val img = bitmap
+            if (img != null) {
+                androidx.compose.foundation.Image(
+                    img, contentDescription = name,
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    modifier = Modifier
+                        .width(242.dp)
+                        .aspectRatio((img.width.toFloat() / img.height).coerceIn(0.6f, 1.6f))
+                        .clip(RoundedCornerShape(15.dp))
+                        .clickable { full = true }
+                )
+            } else {
+                Box(
+                    Modifier.width(242.dp).height(160.dp).clip(RoundedCornerShape(15.dp))
+                        .background(MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.12f))
+                )
+            }
+            if (name.lowercase().endsWith(".pdf")) {
+                Text(
+                    name, color = MaterialTheme.colorScheme.onPrimary, fontSize = 13.sp,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+                )
+            }
+        }
+    }
+    val img = bitmap
+    if (full && img != null) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { full = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Box(
+                Modifier.fillMaxSize().background(Color.Black).clickable { full = false },
+                contentAlignment = Alignment.Center
+            ) {
+                androidx.compose.foundation.Image(
+                    img, contentDescription = name,
+                    contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+    }
+}

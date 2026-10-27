@@ -30,6 +30,8 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -91,6 +93,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var tab by remember { mutableStateOf(Tab.HOME) }
     var chatMessages by remember { mutableStateOf(store.loadChatMessages()) }
     var chatLoading by remember { mutableStateOf(false) }
+    var loadingLabel by remember { mutableStateOf("Thinking…") }
+    var voiceOn by remember { mutableStateOf(false) }
     var people by remember { mutableStateOf<Boolean?>(null) }   // true = to receive, false = to pay
     var editing by remember { mutableStateOf<Entry?>(null) }
     var adding by remember { mutableStateOf(false) }
@@ -104,12 +108,22 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var bankHelp by remember { mutableStateOf(false) }
     // A sale or purchase opened from the Stock tab, waiting to be confirmed in the form.
     var trade by remember { mutableStateOf<Entry?>(null) }
+    // The account opened by tapping an entry (People › Shahbaz, Transport › Aldrees…).
+    var account by remember { mutableStateOf<AccountKey?>(null) }
     // The entries before a chat message was handled; what changes after that is reported in the chat.
     var chatWatch by remember { mutableStateOf<List<Entry>?>(null) }
     var voiceForChat by remember { mutableStateOf(false) }
+    // The assistant's last reply as it should be spoken (voice conversation).
+    var lastSpeech by remember { mutableStateOf("") }
     // Transactions read from an attached statement, receipt or bill, waiting to be ticked and added.
     var imports by remember { mutableStateOf(listOf<Entry>()) }
+    // Which report opens: Expense opens Cash Out, Income opens Cash In.
+    var reportStart by remember { mutableStateOf(ReportKind.CASH_OUT) }
     var importDupes by remember { mutableStateOf(setOf<String>()) }
+    // For each imported row that matches a saved entry: the saved entry's id.
+    var importMatch by remember { mutableStateOf(mapOf<String, String>()) }
+    // Changes the chat AI wants to make to saved entries, shown for the person to Apply or Cancel.
+    var pendingPlan by remember { mutableStateOf<Ai.EditPlan?>(null) }
 
     DisposableEffect(Unit) {
         val stop = store.watchSuggestions { suggestions = store.loadSuggestions() }
@@ -140,7 +154,15 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
 
     LaunchedEffect(Unit) { newVersion = Updater.check() }
 
+    // While a chat message is being handled, short messages go into the chat instead of a pop-up.
+    val chatSink = remember { arrayOfNulls<(String) -> Unit>(1) }
+
     fun toast(msg: String) {
+        val sink = chatSink[0]
+        if (tab == Tab.CHAT && chatWatch != null && sink != null) {
+            sink(msg)
+            return
+        }
         scope.launch {
             snackbar.currentSnackbarData?.dismiss()
             snackbar.showSnackbar(msg)
@@ -193,17 +215,28 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             Commands.Action.SEARCH -> { results = c.query to false; people = null }
             Commands.Action.EDIT -> { results = c.query to true; people = null }
             Commands.Action.DELETE -> askDelete(c.query, matchEntries(entries, c.query))
+            Commands.Action.DELETE_PERIOD -> {
+                val period = c.period ?: return false
+                askDelete(period.label(), matchEntriesByPeriod(entries, period))
+            }
             Commands.Action.CLEAR_ALL -> {
-                if (entries.isEmpty()) toast("Khata is already empty")
-                else confirm = "Delete ALL ${entries.size} entries? This clears the whole khata." to entries.map { it.id }.toSet()
+                if (entries.isEmpty()) toast("There are no entries to delete")
+                else confirm = "Delete ALL ${entries.size} entries? This removes every entry." to entries.map { it.id }.toSet()
             }
         }
         return true
     }
 
     var aiKey by remember { mutableStateOf(store.aiKey) }
+    var fastKey by remember { mutableStateOf(store.fastKey) }
     // The person's own key wins; otherwise the key built into the app is used.
     val activeKey = aiKey.ifBlank { BuildConfig.GEMINI_KEY }
+    // Open the connection to the AI as soon as the chat is on screen, so the first message is quicker.
+    LaunchedEffect(tab == Tab.CHAT, activeKey) {
+        if (tab == Tab.CHAT && activeKey.isNotBlank()) {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Ai.warmUp(activeKey) }
+        }
+    }
 
     /** Sends a question to the read-only AI chat, with recent conversation context. */
     fun sendChat(text: String, addUser: Boolean = true) {
@@ -344,12 +377,12 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         } else null
         val target = matched ?: if (st.keywords.isEmpty() && (latestRef || st.mentionsMoney)) candidates.firstOrNull() else null
         if (target == null) {
-            toast("I couldn't match that payment to an entry. Mention the item or person, e.g. \"Kachi eint ki payment receive nahi hui\".")
+            toast("I couldn't match that payment to an entry. Mention the item or person, e.g. \"payment for kachi eint not received\".")
             return true
         }
         val who = target.person.ifBlank { st.person }
         if (!st.paid && who.isBlank() && target.type == Type.PURCHASE) {
-            toast("Supplier ka naam bhi batao, e.g. \"last purchase ki payment abhi nahi di, supplier Aslam hai\".")
+            toast("Please also say the supplier's name, e.g. \"last purchase not paid yet, supplier Aslam\".")
             return true
         }
         val updated = target.copy(paid = st.paid, person = who)
@@ -405,7 +438,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         val hasEntryRef = normalizedWords.any { it in setOf("entry", "entries", "record", "transaction") }
         val vagueEdit = hasEditVerb && hasEntryRef && text.none { it.isDigit() } && normalizedWords.all { it in genericEditWords }
         if (vagueEdit) {
-            toast("Kaunsi entry aur kya change karna hai? Example: \"last entry 500 nahi 400 thi\" or \"petrol wali entry ki category food kar do\".")
+            toast("Which entry, and what should change? For example: \"last entry was 400 not 500\" or \"change petrol entry category to food\".")
             return
         }
         // Process payment-status statements before stock questions, generic edit commands, or the new-entry parser.
@@ -491,15 +524,22 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     }
 
     /** Adds a message to the chat and keeps it on the phone. */
-    fun postChat(text: String, isUser: Boolean, entryIds: List<String> = emptyList()) {
+    fun postChat(text: String, isUser: Boolean, entryIds: List<String> = emptyList(), attachment: String = "", meta: String = "") {
         val updated = chatMessages + ChatMessage(
             id = "chat-" + System.currentTimeMillis() + "-" + System.nanoTime(),
             isUser = isUser,
             text = text,
-            entryIds = entryIds
+            entryIds = entryIds,
+            attachment = attachment,
+            meta = meta
         )
         chatMessages = updated
         store.saveChatMessages(updated)
+    }
+
+    chatSink[0] = { m ->
+        chatWatch = null
+        postChat(m.removePrefix("✨ ").trim(), isUser = false)
     }
 
     // When a chat message adds or changes entries, say so in the chat (new ones as a saved card with Undo).
@@ -533,7 +573,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     }
 
     /** Without AI (no key, or no internet): save clear entries, answer simple questions, never stay silent. */
-    fun chatOffline(text: String, roman: String, aiDown: Boolean) {
+    fun chatOffline(text: String, roman: String, aiDown: Boolean, why: String? = null) {
         val question = roman.endsWith("?") || runCatching { Questions.isQuestion(roman) }.getOrDefault(false)
         val parsed = runCatching { Parser.parse(roman) }.getOrNull()
         if (!question && parsed != null && (parsed.entries.isNotEmpty() || parsed.unclear.isNotEmpty())) {
@@ -543,7 +583,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         val answer = if (question) runCatching { Questions.answer(roman, entries, currency) }.getOrNull() else null
         postChat(
             answer?.text ?: if (aiDown) {
-                "AI is not reachable right now. I can still save entries like \"petrol 60\", and answer simple questions like \"how much this month?\"."
+                "AI didn't answer" + (if (!why.isNullOrBlank()) " ($why)" else "") +
+                    ". I can still save entries like \"petrol 60\", and answer simple questions like \"how much this month?\"."
             } else {
                 "Hi! Tell me an expense like \"petrol 60\", or ask \"how much did I spend this month?\". Turn on AI in Settings for full answers."
             },
@@ -559,12 +600,46 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     fun chatInput(raw: String) {
         val text = raw.trim()
         if (text.isEmpty() || chatLoading) return
+        // "speed test": measures each AI model with a tiny question, to see where time goes.
+        if (activeKey.isNotBlank() && Regex("""(?i)^\s*(speed ?test|ai ?test|test ?speed)\s*$""").matches(text)) {
+            postChat(text, isUser = true)
+            chatLoading = true
+            loadingLabel = "Testing each model…"
+            scope.launch {
+                val report = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Ai.speedTest(activeKey, store.fastKey) }
+                postChat(report, isUser = false)
+                chatLoading = false
+                loadingLabel = "Thinking…"
+            }
+            return
+        }
         val roman = runCatching { Translit.toRoman(text) }.getOrDefault(text)
-        val history = chatMessages.takeLast(10)
+        val history = chatMessages.takeLast(20)
         postChat(text, isUser = true)
-        val changesExisting = runCatching {
+        // Always handle date-based bulk deletion locally, even if AI is enabled.
+        // Never let an AI response delete a broad date range without the user's confirmation.
+        val periodCommand = Commands.read(roman)?.takeIf { it.action == Commands.Action.DELETE_PERIOD }
+        if (periodCommand != null) {
+            val period = periodCommand.period!!
+            val matched = matchEntriesByPeriod(entries, period)
+            val reply = if (matched.isEmpty()) {
+                "No saved entries found for ${period.label()}. Nothing deleted."
+            } else {
+                askDelete(period.label(), matched)
+                "Found ${matched.size} entries for ${period.label()}. Confirm the delete dialog to move them to Trash, or Cancel. Nothing deleted yet."
+            }
+            lastSpeech = reply
+            postChat(reply, isUser = false)
+            return
+        }
+        // With AI on, corrections go to the AI too: it understands "23 oct, a bit before Shahbaz's 315" and can
+        // pick the right entry from the conversation. The offline edit reader is only the fallback without AI.
+        // With AI on, everything in the chat (searches, edits, deletes) goes to the AI, which can see the
+        // conversation; the app's own command and edit readers are the fallback without AI.
+        val changesExisting = activeKey.isBlank() && runCatching {
             Commands.read(roman) != null || Parser.payStatus(roman) != null ||
-                Edits.plan(roman, entries) != null || (looksLikeEdit(roman) && entries.isNotEmpty())
+                Edits.plan(roman, entries) != null ||
+                (looksLikeEdit(roman) && entries.isNotEmpty() && roman.any { it.isDigit() })
         }.getOrDefault(false)
         if (changesExisting) {
             chatViaReader(text)
@@ -577,15 +652,46 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         chatLoading = true
         scope.launch {
             try {
-                val (reply, list) = Ai.assistant(text, history, entries, activeKey, store, currency)
+                val res = Ai.assistant(text, history, entries, activeKey, store, currency, store.memory, voice = voiceOn)
+                lastSpeech = res.speech
+                // Lasting facts from the chat are kept on the phone and sent with every later question.
+                if (res.remember.isNotEmpty() || res.forget.isNotEmpty()) {
+                    val gone = res.forget.map { it.lowercase() }.toSet()
+                    val kept = store.memory.filter { it.lowercase() !in gone }
+                    store.memory = (kept + res.remember.filter { r -> kept.none { it.equals(r, ignoreCase = true) } }).takeLast(80)
+                }
+                val reply = res.reply
+                val list = res.entries
+                // Changes are applied straight away (the bar at the bottom has Undo), and listed in the chat
+                // so it's always clear exactly what changed.
+                val changeList = res.plan?.let { plan ->
+                    val df = java.text.SimpleDateFormat("d MMM", java.util.Locale.US)
+                    fun d(e: Entry) = df.format(java.util.Date(e.date)) + " · " + entryTitle(e) + " · " + fmt(e.amount)
+                    (plan.deleted.map { "- Deleted: " + d(it) } +
+                        plan.changed.map { (a, b) -> "- Changed: " + d(a) + "  →  " + d(b) +
+                            (if (a.category != b.category || a.type != b.type) " (" + b.type.label + ", " + b.category.label + ")" else "") })
+                        .joinToString("\n")
+                }
+                res.plan?.let { applyPlan(it) }
+                // If the AI says it did something but sent no change, say so instead of letting it look done.
+                val claims = Regex("""(?i)\b(kar (diya|di|diye|dein)|hata (diya|di|diye)|shift|darj|updated?|deleted?|changed|moved|removed|set kar)\b""")
+                // Only when they asked for a change: a reply that mentions an earlier change ("delete ho chuki hai") is fine.
+                val askedChange = Regex("""(?i)\b(delete|del|hata|hatao|change|badal|badlo|galat|ghalat|minus|edit|update|theek|thek|fix|shift|move|remove)\b""").containsMatchIn(text)
+                val honest = if (askedChange && list.isEmpty() && res.plan == null && claims.containsMatchIn(reply)) {
+                    "$reply\n\n(Nothing was changed yet. Tell me exactly what to change.)"
+                } else reply
                 if (list.isNotEmpty()) {
                     save(list + entries)
-                    postChat(reply.ifBlank { "Saved" }, isUser = false, entryIds = list.map { it.id })
+                    postChat(honest.ifBlank { "Saved" }, isUser = false, entryIds = list.map { it.id }, meta = res.trace)
                 } else {
-                    postChat(reply, isUser = false)
+                    postChat(honest.ifBlank { "Done." }, isUser = false, meta = res.trace)
+                }
+                if (!changeList.isNullOrBlank()) postChat(changeList, isUser = false)
+                if (res.remember.isNotEmpty()) {
+                    postChat("Remembered: " + res.remember.joinToString("; "), isUser = false)
                 }
             } catch (e: Exception) {
-                chatOffline(text, roman, aiDown = true)
+                chatOffline(text, roman, aiDown = true, why = e.message?.take(160))
             } finally {
                 chatLoading = false
             }
@@ -595,6 +701,36 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     /** An entry already in the khata on the same day with the same amount and kind is probably the same one. */
     fun isDuplicate(e: Entry): Boolean = entries.any {
         it.type == e.type && kotlin.math.abs(it.amount - e.amount) < 0.01 && sameDay(it.date, e.date)
+    }
+
+    /** Auto-match only when minute, amount, direction and identity agree. */
+    fun matchSaved(found: List<Entry>): Map<String, String> {
+        val used = mutableSetOf<String>()
+        val out = linkedMapOf<String, String>()
+        fun normal(s: String) = s.trim().lowercase().replace(Regex("""\\s+"""), " ")
+        found.forEach { imported ->
+            val hit = entries.firstOrNull { saved ->
+                if (saved.id in used || saved.type != imported.type ||
+                    kotlin.math.abs(saved.amount - imported.amount) >= 0.01 ||
+                    saved.date / 60_000L != imported.date / 60_000L
+                ) {
+                    false
+                } else {
+                    val note = normal(saved.note)
+                    val sameNote = note.isNotBlank() && note.length >= 6 && note == normal(imported.note)
+                    val person = normal(saved.person)
+                    val samePerson = person.isNotBlank() && person == normal(imported.person)
+                    val item = normal(saved.item)
+                    val sameItem = item.isNotBlank() && item == normal(imported.item)
+                    sameNote || (samePerson && sameItem)
+                }
+            }
+            if (hit != null) {
+                used += hit.id
+                out[imported.id] = hit.id
+            }
+        }
+        return out
     }
 
     /** Reads an attached photo or PDF with AI and shows what it found in the chat to tick and add. */
@@ -611,25 +747,29 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 if (c.moveToFirst()) c.getString(0) else null
             }
         }.getOrNull() ?: if (mime == "application/pdf") "Statement.pdf" else "Photo"
-        postChat("📎 $name", isUser = true)
-        if (activeKey.isBlank()) {
-            postChat("Reading statements and bills needs AI. Turn it on in Settings.", isUser = false)
-            return
-        }
         chatLoading = true
         scope.launch {
             try {
                 val bytes = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                     resolver.openInputStream(uri)?.use { it.readBytes() }
                 } ?: throw Ai.Failure("Could not open this file.")
+                // Show the photo (or the PDF's first page) in the chat, like a messaging app.
+                val preview = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    runCatching { Attachments.savePreview(context, bytes, mime) }.getOrNull().orEmpty()
+                }
+                postChat(name, isUser = true, attachment = preview)
+                if (activeKey.isBlank()) throw Ai.Failure("Reading statements and bills needs AI. Turn it on in Settings.")
                 if (bytes.size > 15 * 1024 * 1024) throw Ai.Failure("This file is too big (over 15 MB). Send a smaller PDF or a photo of one page.")
-                val found = Ai.readDocument(bytes, mime, "", activeKey, store, currency)
+                // Statement reading as in version 59: the whole file in one request.
+                loadingLabel = "Reading…"
+                val found = Ai.readWholeFile(bytes, mime, "", activeKey, store, currency)
                     .sortedByDescending { it.date }
                 if (found.isEmpty()) {
                     postChat("I couldn't find any transactions in this file.", isUser = false)
                 } else {
                     imports = found
-                    importDupes = found.filter { isDuplicate(it) }.map { it.id }.toSet()
+                    importMatch = matchSaved(found)
+                    importDupes = importMatch.keys
                     val dupes = importDupes.size
                     postChat(
                         "Found ${found.size} " + (if (found.size == 1) "transaction" else "transactions") +
@@ -642,6 +782,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 postChat(e.message ?: "Could not read this file.", isUser = false)
             } finally {
                 chatLoading = false
+                loadingLabel = "Thinking…"
             }
         }
     }
@@ -696,6 +837,150 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         if (uri != null) readAttachment(uri)
     }
 
+    // ---------- Voice conversation: talk to the assistant hands-free ----------
+    var voiceStatus by remember { mutableStateOf("") }
+    var voicePartial by remember { mutableStateOf("") }
+    var voiceAwaiting by remember { mutableStateOf(false) }
+    var voiceMisses by remember { mutableIntStateOf(0) }
+    val ttsReady = remember { mutableStateOf(false) }
+    val tts = remember {
+        android.speech.tts.TextToSpeech(context) { status -> ttsReady.value = status == android.speech.tts.TextToSpeech.SUCCESS }
+    }
+    val recognizer = remember {
+        if (android.speech.SpeechRecognizer.isRecognitionAvailable(context)) android.speech.SpeechRecognizer.createSpeechRecognizer(context) else null
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            runCatching { recognizer?.destroy() }
+            runCatching { tts.shutdown() }
+        }
+    }
+
+    fun listenNow() {
+        val r = recognizer ?: return
+        if (!voiceOn) return
+        voicePartial = ""
+        voiceStatus = "Listening…"
+        val i = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, lang)
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
+            // Give the person time to finish a long story before it stops listening.
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2500L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2000L)
+        }
+        runCatching { r.cancel(); r.startListening(i) }
+    }
+
+    fun stopVoice(message: String? = null) {
+        voiceOn = false
+        voiceAwaiting = false
+        voiceStatus = ""
+        voicePartial = ""
+        runCatching { recognizer?.cancel() }
+        runCatching { tts.stop() }
+        if (message != null) toast(message)
+    }
+
+    /** Reads [text] aloud: Urdu script with an Urdu voice, otherwise English. Listens again when done. */
+    fun speak(text: String) {
+        val clean = text.replace(Regex("""[✓•*#_]"""), " ").replace(Regex("""(?m)^\s*-\s*"""), "").trim()
+        if (clean.isEmpty() || !ttsReady.value) {
+            listenNow()
+            return
+        }
+        val urduScript = clean.any { it in '\u0600'..'\u06FF' }
+        val wanted = if (urduScript) java.util.Locale("ur", "PK") else java.util.Locale("en", "IN")
+        val ok = tts.setLanguage(wanted)
+        if (ok == android.speech.tts.TextToSpeech.LANG_MISSING_DATA || ok == android.speech.tts.TextToSpeech.LANG_NOT_SUPPORTED) {
+            tts.setLanguage(java.util.Locale.ENGLISH)
+        }
+        voiceStatus = "Speaking…"
+        tts.speak(clean.take(3500), android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "reply-" + System.nanoTime())
+    }
+
+    DisposableEffect(tts) {
+        tts.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
+            override fun onStart(utteranceId: String?) {}
+            override fun onDone(utteranceId: String?) {
+                android.os.Handler(android.os.Looper.getMainLooper()).post { if (voiceOn) listenNow() }
+            }
+            @Deprecated("Deprecated in Java")
+            override fun onError(utteranceId: String?) {
+                android.os.Handler(android.os.Looper.getMainLooper()).post { if (voiceOn) listenNow() }
+            }
+        })
+        onDispose { }
+    }
+
+    DisposableEffect(recognizer) {
+        recognizer?.setRecognitionListener(object : android.speech.RecognitionListener {
+            override fun onReadyForSpeech(params: Bundle?) { voiceStatus = "Listening…" }
+            override fun onBeginningOfSpeech() {}
+            override fun onRmsChanged(rmsdB: Float) {}
+            override fun onBufferReceived(buffer: ByteArray?) {}
+            override fun onEndOfSpeech() { voiceStatus = "Thinking…" }
+            override fun onEvent(eventType: Int, params: Bundle?) {}
+            override fun onPartialResults(partialResults: Bundle?) {
+                partialResults?.getStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
+                    ?.let { voicePartial = it }
+            }
+            override fun onResults(results: Bundle?) {
+                val said = results?.getStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION)
+                    ?.firstOrNull()?.let { runCatching { Translit.toRoman(it) }.getOrDefault(it) }?.trim().orEmpty()
+                if (!voiceOn) return
+                if (said.isBlank()) { listenNow(); return }
+                voiceMisses = 0
+                voicePartial = said
+                voiceStatus = "Thinking…"
+                voiceAwaiting = true
+                chatInput(said)
+            }
+            override fun onError(error: Int) {
+                if (!voiceOn) return
+                when (error) {
+                    android.speech.SpeechRecognizer.ERROR_NO_MATCH, android.speech.SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> {
+                        voiceMisses++
+                        // Quiet for a while: stop instead of listening forever.
+                        if (voiceMisses >= 3) stopVoice("Voice chat paused. Tap the headset to talk again.") else listenNow()
+                    }
+                    android.speech.SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> stopVoice("Allow the microphone for Smart Expense to talk.")
+                    android.speech.SpeechRecognizer.ERROR_NETWORK, android.speech.SpeechRecognizer.ERROR_NETWORK_TIMEOUT ->
+                        stopVoice("No internet for voice. Try again when online.")
+                    else -> listenNow()
+                }
+            }
+        })
+        onDispose { }
+    }
+
+    // When the assistant has answered a spoken message, read the answer aloud, then listen again.
+    LaunchedEffect(chatLoading, chatMessages.size) {
+        if (!voiceOn || !voiceAwaiting || chatLoading) return@LaunchedEffect
+        val lastUser = chatMessages.indexOfLast { it.isUser }
+        val answers = chatMessages.drop(lastUser + 1).filter { !it.isUser }
+        if (answers.isEmpty()) return@LaunchedEffect
+        kotlinx.coroutines.delay(400) // let any follow-up line (changes, "Remembered") arrive
+        voiceAwaiting = false
+        val spoken = lastSpeech.takeIf { it.isNotBlank() } ?: answers.joinToString(". ") { it.text }
+        lastSpeech = ""
+        speak(spoken)
+    }
+
+    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        if (ok) { voiceOn = true; voiceMisses = 0; listenNow() }
+        else toast("Microphone permission is needed to talk to the assistant.")
+    }
+
+    fun toggleVoice() {
+        if (voiceOn) { stopVoice(); return }
+        if (recognizer == null) { toast("Speech recognition is not available on this phone."); return }
+        val granted = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (granted) { voiceOn = true; voiceMisses = 0; listenNow() } else micPermission.launch(android.Manifest.permission.RECORD_AUDIO)
+    }
+
     /** One tap from the chat chips: the same entry again, dated now. */
     fun quickAdd(e: Entry) {
         val now = System.currentTimeMillis()
@@ -742,7 +1027,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             val said = guesses.maxByOrNull { it.second }?.first.orEmpty()
             if (said.isNotBlank()) {
                 if (voiceForChat) chatInput(said) else handleText(said)
-            } else toast("Awaaz samajh nahi aayi. Mic dobara dabao aur thora aahista bolo.")
+            } else toast("Couldn't catch that. Tap the mic again and speak a little slower.")
         }
     }
 
@@ -801,8 +1086,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         scope.launch { drawer.open() }
     }
 
-    BackHandler(enabled = results != null || people != null || tab != Tab.HOME) {
-        if (results != null) {
+    BackHandler(enabled = account != null || results != null || people != null || tab != Tab.HOME) {
+        if (account != null) {
+            account = null
+        } else if (results != null) {
             results = null
             answerText = null
         } else if (people != null) {
@@ -820,6 +1107,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 store.currency = c
                 toast("✓ Currency set to $c")
             }) { t ->
+                if (t == Tab.REPORTS) reportStart = ReportKind.CASH_OUT
                 tab = t
                 people = null
                 results = null
@@ -830,7 +1118,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
-            val main = results == null && people == null
+            val main = results == null && people == null && account == null
             if (main && tab == Tab.CHAT) {
                 InputBar(
                     onSend = { chatInput(it) }, onMic = { startVoice(forChat = true) }, placeholder = "Speak, type or ask…",
@@ -845,6 +1133,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     ) { pad ->
         Box(Modifier.padding(pad).fillMaxSize()) {
             val who = people
+            val acct = account
+            CompositionLocalProvider(LocalAccountOpener provides { e: Entry -> account = accountOf(e) }) {
             when {
                 results != null -> {
                     val (q, editMode) = results!!
@@ -861,16 +1151,16 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     name = name, entries = entries, currency = currency,
                     newVersion = null, progress = progress, onUpdate = { startUpdate() },
                     onAdd = { adding = true }, onMenu = { openMenu() }, onSearch = { searching = true }, onEdit = { editing = it },
-                    onPeople = { people = it }, onReports = { tab = Tab.REPORTS }, onSeeAll = { tab = Tab.ENTRIES },
+                    onPeople = { people = it }, onReports = { reportStart = it; tab = Tab.REPORTS }, onSeeAll = { tab = Tab.ENTRIES },
                     chatBadge = suggestions.size, onTab = { tab = it }
                 )
                 tab == Tab.STOCK -> StockScreen(
                     entries = entries, currency = currency, chatBadge = suggestions.size,
                     onTab = { tab = it }, onMenu = { openMenu() },
-                    onTrade = { trade = it }, onReports = { tab = Tab.REPORTS }
+                    onTrade = { trade = it }, onReports = { reportStart = it; tab = Tab.REPORTS }
                 )
                 tab == Tab.ENTRIES -> TransactionsScreen(entries, currency, onEdit = { editing = it }, onAdd = { adding = true }, onMenu = { openMenu() })
-                tab == Tab.REPORTS -> ReportsScreen(entries, currency, onMenu = { openMenu() })
+                tab == Tab.REPORTS -> ReportsScreen(entries, currency, onMenu = { openMenu() }, startKind = reportStart)
                 tab == Tab.TRASH -> TrashScreen(
                     trash = trash, currency = currency, onMenu = { openMenu() },
                     onRestore = { e ->
@@ -889,6 +1179,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     }
                 )
                 tab == Tab.CHAT -> {
+                    DisposableEffect(Unit) { onDispose { if (voiceOn) stopVoice() } }
                     val monthStart = java.util.Calendar.getInstance().apply {
                         set(java.util.Calendar.DAY_OF_MONTH, 1)
                         set(java.util.Calendar.HOUR_OF_DAY, 0)
@@ -908,6 +1199,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     ChatScreen(
                         messages = chatMessages,
                         loading = chatLoading,
+                        loadingLabel = loadingLabel,
                         entries = entries,
                         currency = currency,
                         subtitle = "$monthName · ${fmt(monthSpent)} $currency spent",
@@ -920,6 +1212,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         onClear = {
                             chatMessages = emptyList()
                             store.saveChatMessages(emptyList())
+                            Attachments.cleanUp(context, emptySet())
                             toast("Chat history cleared")
                         },
                         onUndo = { ids -> moveToTrash(ids.toSet()) },
@@ -936,6 +1229,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         },
                         onIgnoreSuggestions = { ids -> dropSuggestions(ids) },
                         onQuick = { quickAdd(it) },
+                        voiceOn = voiceOn,
+                        voiceStatus = voiceStatus,
+                        voicePartial = voicePartial,
+                        onVoiceToggle = { toggleVoice() },
                         imports = imports,
                         importDupes = importDupes,
                         onAddImports = { list ->
@@ -948,6 +1245,47 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         onDropImports = {
                             imports = emptyList()
                             importDupes = emptySet()
+                            importMatch = emptyMap()
+                        },
+                        pendingChanges = pendingPlan?.let { plan ->
+                            val df = java.text.SimpleDateFormat("d MMM", java.util.Locale.US)
+                            fun d(e: Entry) = df.format(java.util.Date(e.date)) + " · " + entryTitle(e) + " · " + fmt(e.amount)
+                            plan.deleted.map { "Delete: " + d(it) } +
+                                plan.changed.map { (a, b) ->
+                                    "Change: " + d(a) + "  →  " + d(b) + (if (a.category != b.category || a.type != b.type) " (" + b.type.label + ", " + b.category.label + ")" else "")
+                                }
+                        } ?: emptyList(),
+                        onApplyChanges = {
+                            pendingPlan?.let { applyPlan(it) }
+                            pendingPlan = null
+                            postChat("✓ Changes applied. Use Undo at the bottom if something is wrong.", isUser = false)
+                        },
+                        onCancelChanges = {
+                            pendingPlan = null
+                            postChat("Okay, nothing was changed.", isUser = false)
+                        },
+                        onUpdateSaved = {
+                            val byImport = imports.associateBy { it.id }
+                            val updates = importMatch.mapNotNull { (importId, savedId) ->
+                                byImport[importId]?.let { savedId to it }
+                            }.toMap()
+                            var changed = 0
+                            save(entries.map { old ->
+                                val src = updates[old.id] ?: return@map old
+                                changed++
+                                old.copy(
+                                    item = src.item.ifBlank { old.item },
+                                    person = src.person.ifBlank { old.person },
+                                    note = src.note.ifBlank { old.note },
+                                    category = src.category,
+                                    date = src.date,
+                                    createdAt = src.createdAt
+                                )
+                            })
+                            imports = imports.filter { it.id !in importDupes }
+                            importDupes = emptySet()
+                            importMatch = emptyMap()
+                            postChat("✓ Updated names, notes and times of $changed saved entries. Amounts unchanged.", isUser = false)
                         }
                     )
                 }
@@ -963,7 +1301,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                             checking = true
                             newVersion = Updater.check()
                             checking = false
-                            if (newVersion == null) {
+                            if (newVersion == null && Updater.lastCheckFailed) {
+                                toast("Couldn't check for updates. Check the internet and try again.")
+                            } else if (newVersion == null) {
                                 toast("You have the latest version")
                             } else {
                                 tab = Tab.HOME
@@ -994,8 +1334,43 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                                 toast(if (err == null) "✓ AI is ready" else err)
                             }
                         }
+                    },
+                    fastKey = fastKey,
+                    onFastKey = { k ->
+                        val v = k.trim()
+                        if (v.startsWith("AIza")) {
+                            // A Gemini key pasted here becomes the app's own Gemini key (photos, PDFs and the backup chat).
+                            aiKey = v
+                            store.aiKey = v
+                            toast("Checking Gemini key…")
+                            scope.launch {
+                                val err = Ai.test(v, store)
+                                toast(if (err == null) "✓ Gemini key saved" else err)
+                            }
+                        } else if (v.isNotBlank() && !Ai.isFastKey(v)) {
+                            toast("That doesn't look like a Groq (gsk_…), OpenRouter (sk-or-…), Claude (sk-ant-…) or Gemini (AIza…) key")
+                        } else {
+                            fastKey = v
+                            store.fastKey = v
+                            toast(if (v.isBlank()) "Fast chat off" else "✓ Fast chat on. Ask something in the chat to try it.")
+                        }
                     }
                 )
+            }
+            }
+            // The account opens over the list, so going back returns to the same place in the list.
+            if (acct != null) {
+                Box(
+                    Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
+                        .pointerInput(Unit) { detectTapGestures { } }
+                ) {
+                    CompositionLocalProvider(LocalAccountOpener provides null) {
+                        AccountScreen(
+                            key = acct, entries = entries, currency = currency,
+                            onBack = { account = null }, onEdit = { editing = it }, onNew = { trade = it }
+                        )
+                    }
+                }
             }
         }
     }
@@ -1348,7 +1723,7 @@ private fun InputBar(
             if (onAttach != null) {
                 IconButton(onClick = onAttach) {
                     Icon(
-                        Icons.Filled.AttachFile, contentDescription = "Attach a statement, receipt or bill",
+                        Icons.Filled.AttachFile, contentDescription = "Attach a photo or PDF",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
