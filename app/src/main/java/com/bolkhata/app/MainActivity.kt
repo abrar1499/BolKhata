@@ -646,6 +646,52 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         }
     }
 
+    // ---------- Backup: export and import all data ----------
+    var importText by remember { mutableStateOf<String?>(null) }
+    val exportFile = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) scope.launch {
+            val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching {
+                    context.contentResolver.openOutputStream(uri)?.use { it.write(store.exportJson().toByteArray()) } != null
+                }.getOrDefault(false)
+            }
+            toast(if (ok) "✓ Data exported (${entries.size} entries)" else "Could not save the file")
+        }
+    }
+    val importFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) scope.launch {
+            val text = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching { context.contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) } }.getOrNull()
+            }
+            if (text == null || store.backupEntries(text) < 0) toast("This is not a Smart Expense backup file")
+            else importText = text
+        }
+    }
+    importText?.let { text ->
+        AlertDialog(
+            onDismissRequest = { importText = null },
+            title = { Text("Import data?") },
+            text = {
+                Text(
+                    "This backup has ${store.backupEntries(text)} entries. It will replace everything in the app now " +
+                        "(${entries.size} entries). Export first if you want to keep the current data."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    importText = null
+                    runCatching { store.importJson(text) }
+                        .onSuccess {
+                            toast("✓ Data imported")
+                            (context as? android.app.Activity)?.recreate()
+                        }
+                        .onFailure { toast("Could not import this file") }
+                }) { Text("Replace") }
+            },
+            dismissButton = { TextButton(onClick = { importText = null }) { Text("Cancel") } }
+        )
+    }
+
     val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) readAttachment(uri)
     }
@@ -931,6 +977,11 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     onBank = { bankHelp = true },
                     aiKey = aiKey,
                     aiBuiltIn = BuildConfig.GEMINI_KEY.isNotBlank(),
+                    onExport = {
+                        val day = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+                        exportFile.launch("SmartExpense-backup-$day.json")
+                    },
+                    onImport = { importFile.launch(arrayOf("application/json", "text/plain", "application/octet-stream", "*/*")) },
                     onAiKey = { k ->
                         aiKey = k
                         store.aiKey = k

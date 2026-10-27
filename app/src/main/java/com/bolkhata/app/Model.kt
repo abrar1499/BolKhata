@@ -73,6 +73,68 @@ class Store(context: Context) {
 
     fun load(): List<Entry> = read("entries")
 
+    // ---------- Backup: everything the app keeps, in one file ----------
+
+    /** Keys left out of a backup: AI keys are private and stay on this phone. */
+    private val notBackedUp = setOf("aiKey", "fastKey", "aiModel")
+
+    /** All saved data (entries, trash, chat, memory, settings) as one JSON text. */
+    fun exportJson(): String {
+        val data = JSONObject()
+        for ((k, v) in prefs.all) {
+            if (k in notBackedUp || v == null) continue
+            val item = when (v) {
+                is String -> JSONObject().put("t", "s").put("v", v)
+                is Boolean -> JSONObject().put("t", "b").put("v", v)
+                is Int -> JSONObject().put("t", "i").put("v", v)
+                is Long -> JSONObject().put("t", "l").put("v", v)
+                is Float -> JSONObject().put("t", "f").put("v", v.toDouble())
+                is Set<*> -> JSONObject().put("t", "set").put("v", JSONArray(v.map { it.toString() }))
+                else -> null
+            } ?: continue
+            data.put(k, item)
+        }
+        return JSONObject()
+            .put("app", "Smart Expense")
+            .put("backup", 1)
+            .put("at", System.currentTimeMillis())
+            .put("entries", backupEntryCount(data))
+            .put("data", data)
+            .toString()
+    }
+
+    private fun backupEntryCount(data: JSONObject): Int =
+        runCatching { JSONArray(data.getJSONObject("entries").getString("v")).length() }.getOrDefault(0)
+
+    /** How many entries a backup file holds, or -1 if it is not a Smart Expense backup. */
+    fun backupEntries(text: String): Int = runCatching {
+        val o = JSONObject(text)
+        if (o.optString("app") != "Smart Expense" || !o.has("data")) -1 else backupEntryCount(o.getJSONObject("data"))
+    }.getOrDefault(-1)
+
+    /** Replaces all saved data with a backup (AI keys on this phone are kept). */
+    fun importJson(text: String) {
+        val data = JSONObject(text).getJSONObject("data")
+        val keep = notBackedUp.associateWith { prefs.all[it] }
+        val ed = prefs.edit().clear()
+        for (k in data.keys()) {
+            val item = data.getJSONObject(k)
+            when (item.optString("t")) {
+                "s" -> ed.putString(k, item.getString("v"))
+                "b" -> ed.putBoolean(k, item.getBoolean("v"))
+                "i" -> ed.putInt(k, item.getInt("v"))
+                "l" -> ed.putLong(k, item.getLong("v"))
+                "f" -> ed.putFloat(k, item.getDouble("v").toFloat())
+                "set" -> {
+                    val a = item.getJSONArray("v")
+                    ed.putStringSet(k, (0 until a.length()).map { a.getString(it) }.toSet())
+                }
+            }
+        }
+        keep.forEach { (k, v) -> if (v is String) ed.putString(k, v) }
+        ed.commit()
+    }
+
     /** Deleted entries; createdAt is reused as the time it was deleted. Kept for 30 days. */
     fun loadTrash(): List<Entry> {
         val cutoff = System.currentTimeMillis() - 30L * 86_400_000L

@@ -1409,7 +1409,9 @@ fun SettingsScreen(
     onBank: () -> Unit = {},
     aiKey: String = "",
     aiBuiltIn: Boolean = false,
-    onAiKey: (String) -> Unit = {}
+    onAiKey: (String) -> Unit = {},
+    onExport: () -> Unit = {},
+    onImport: () -> Unit = {}
 ) {
     var aiText by remember(aiKey) { mutableStateOf(aiKey) }
     var nameText by remember(name) { mutableStateOf(name) }
@@ -1501,6 +1503,21 @@ fun SettingsScreen(
                     fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 6.dp)
                 )
+            }
+        }
+        item {
+            Panel(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp)) {
+                SmallLabel("Backup")
+                Text(
+                    "Save all your entries, trash, chat and settings to one file (Drive, WhatsApp, phone storage), " +
+                        "or bring them back from a file. AI keys are not included.",
+                    fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = onExport, modifier = Modifier.weight(1f)) { Text("Export data") }
+                    OutlinedButton(onClick = onImport, modifier = Modifier.weight(1f)) { Text("Import data") }
+                }
             }
         }
         item {
