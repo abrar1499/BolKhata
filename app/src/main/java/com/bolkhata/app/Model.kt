@@ -80,7 +80,7 @@ class Store(context: Context) {
     // ---------- Backup: everything the app keeps, in one file ----------
 
     /** Keys left out of a backup: AI keys are private and stay on this phone. */
-    private val notBackedUp = setOf("aiKey", "fastKey", "aiModel")
+    private val notBackedUp = setOf("aiKey", "fastKey", "aiModel", "fileKey")
 
     /** All saved data (entries, trash, chat, memory, settings) as one JSON text. */
     fun exportJson(): String {
@@ -355,6 +355,15 @@ class Store(context: Context) {
     var fastKey: String
         get() = prefs.getString("fastKey", "") ?: ""
         set(v) = prefs.edit().putString("fastKey", v).apply()
+
+    /** OpenRouter key and model used to read photos and PDFs (statements, receipts, bills). */
+    var fileKey: String
+        get() = prefs.getString("fileKey", "") ?: ""
+        set(v) = prefs.edit().putString("fileKey", v).apply()
+
+    var fileModel: String
+        get() = prefs.getString("fileModel", "")?.ifBlank { null } ?: Ai.DEFAULT_FILE_MODEL
+        set(v) = prefs.edit().putString("fileModel", v).apply()
 
     var aiModel: String
         get() = prefs.getString("aiModel", "") ?: ""

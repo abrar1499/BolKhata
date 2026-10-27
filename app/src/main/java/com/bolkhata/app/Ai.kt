@@ -607,6 +607,65 @@ Return ONLY valid JSON in this exact shape: {"reply":"your answer here"}
         val trace: String = ""
     )
 
+    /** Model that reads photos and PDFs through OpenRouter unless another is set in Settings. */
+    const val DEFAULT_FILE_MODEL = "anthropic/claude-sonnet-5.5"
+
+    /** Why the OpenRouter file read last failed (Gemini then read it). */
+    @Volatile var lastFileError = ""
+
+    /** Sends a photo or PDF with [prompt] to OpenRouter and returns the JSON text of the answer. */
+    private fun openRouterFile(prompt: String, key: String, model: String, mime: String, data: String): String {
+        val filePart = if (mime == "application/pdf") {
+            JSONObject().put("type", "file").put(
+                "file", JSONObject().put("filename", "statement.pdf").put("file_data", "data:application/pdf;base64,$data")
+            )
+        } else {
+            JSONObject().put("type", "image_url").put("image_url", JSONObject().put("url", "data:$mime;base64,$data"))
+        }
+        val body = JSONObject()
+            .put("model", model.ifBlank { DEFAULT_FILE_MODEL })
+            .put("max_tokens", 16_000)
+            .put(
+                "messages", JSONArray().put(
+                    JSONObject().put("role", "user").put(
+                        "content", JSONArray().put(JSONObject().put("type", "text").put("text", prompt)).put(filePart)
+                    )
+                )
+            )
+        val conn = URL("https://openrouter.ai/api/v1/chat/completions").openConnection() as HttpURLConnection
+        val (code, text) = try {
+            conn.requestMethod = "POST"
+            conn.connectTimeout = 15_000
+            conn.readTimeout = 150_000
+            conn.doOutput = true
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.setRequestProperty("Authorization", "Bearer $key")
+            conn.setRequestProperty("X-Title", "Smart Expense")
+            conn.outputStream.use { it.write(body.toString().toByteArray()) }
+            val c = conn.responseCode
+            c to ((if (c in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader()?.use { it.readText() } ?: "")
+        } catch (e: java.net.SocketTimeoutException) {
+            conn.disconnect(); throw Failure("OpenRouter took too long")
+        } catch (e: Exception) {
+            conn.disconnect(); throw Failure("OpenRouter not reachable")
+        }
+        if (code != 200) {
+            val msg = runCatching { JSONObject(text).optJSONObject("error")?.optString("message").orEmpty() }.getOrDefault("")
+            throw Failure(
+                when (code) {
+                    401 -> "OpenRouter key not accepted"
+                    402 -> "OpenRouter: no credit for this model"
+                    429 -> "OpenRouter limit reached for now"
+                    else -> "OpenRouter error $code " + msg.take(60)
+                }
+            )
+        }
+        val content = JSONObject(text).getJSONArray("choices").getJSONObject(0).getJSONObject("message").optString("content").trim()
+        val clean = content.substring(content.indexOf('{').coerceAtLeast(0), (content.lastIndexOf('}') + 1).coerceAtLeast(0))
+        if (clean.isBlank()) throw Failure("OpenRouter sent an empty answer")
+        return clean
+    }
+
     /** Reads a statement, receipt or bill the way version 59 did: the whole file in one request. */
     suspend fun readWholeFile(
         bytes: ByteArray,
@@ -642,7 +701,11 @@ ${entryRules()}
 Return ONLY JSON: {"entries":[{"type":"","amount":0,"category":"","item":"","qty":0,"unit":"","rate":0,"person":"","date":"YYYY-MM-DD","time":"","note":""}]}
 """.trim()
         val json = try {
-            request(prompt, key.trim(), store, mime to data)
+            // With an OpenRouter file key the file is read by the model chosen in Settings; Gemini is the backup.
+            val orKey = store.fileKey.trim()
+            val viaOr = if (orKey.isNotBlank()) runCatching { openRouterFile(prompt, orKey, store.fileModel, mime, data) }
+                .onFailure { lastFileError = it.message ?: "" }.getOrNull() else null
+            viaOr ?: request(prompt, key.trim(), store, mime to data)
         } catch (e: Failure) {
             throw e
         } catch (e: Exception) {

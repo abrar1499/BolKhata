@@ -1498,8 +1498,13 @@ fun SettingsScreen(
     fastKey: String = "",
     onFastKey: (String) -> Unit = {},
     onExport: () -> Unit = {},
-    onImport: () -> Unit = {}
+    onImport: () -> Unit = {},
+    fileKey: String = "",
+    fileModel: String = "",
+    onFileSettings: (String, String) -> Unit = { _, _ -> }
 ) {
+    var fileKeyText by remember(fileKey) { mutableStateOf(fileKey) }
+    var fileModelText by remember(fileModel) { mutableStateOf(fileModel) }
     var aiText by remember(aiKey) { mutableStateOf(aiKey) }
     var fastText by remember(fastKey) { mutableStateOf(fastKey) }
     var nameText by remember(name) { mutableStateOf(name) }
@@ -1632,6 +1637,43 @@ fun SettingsScreen(
                     fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 6.dp)
                 )
+            }
+        }
+        item {
+            Panel(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp)) {
+                SmallLabel("📎 Reading photos and PDFs (OpenRouter)")
+                Text(
+                    "Statements, receipts and bills are read by this model. Without a key, or if it fails, Gemini reads them.",
+                    fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = fileKeyText, onValueChange = { fileKeyText = it.trim() },
+                    singleLine = true, label = { Text("OpenRouter key (sk-or-…)") },
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = fileModelText, onValueChange = { fileModelText = it.trim() },
+                    singleLine = true, label = { Text("Model") },
+                    shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()
+                )
+                Text(
+                    "Best: anthropic/claude-sonnet-5.5. Cheaper: google/gemini-3.5-flash-lite. Any model name from openrouter.ai/models that reads images and PDFs.",
+                    fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp)
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (fileKey.isNotBlank()) {
+                        OutlinedButton(onClick = { fileKeyText = ""; onFileSettings("", fileModelText) }) { Text("Remove") }
+                    }
+                    Button(
+                        onClick = { onFileSettings(fileKeyText, fileModelText) },
+                        enabled = fileKeyText != fileKey || fileModelText != fileModel,
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Save") }
+                }
             }
         }
         item {

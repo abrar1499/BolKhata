@@ -229,6 +229,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
 
     var aiKey by remember { mutableStateOf(store.aiKey) }
     var fastKey by remember { mutableStateOf(store.fastKey) }
+    var fileKey by remember { mutableStateOf(store.fileKey) }
+    var fileModel by remember { mutableStateOf(store.fileModel) }
     // The person's own key wins; otherwise the key built into the app is used.
     val activeKey = aiKey.ifBlank { BuildConfig.GEMINI_KEY }
     // Open the connection to the AI as soon as the chat is on screen, so the first message is quicker.
@@ -762,8 +764,12 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 if (bytes.size > 15 * 1024 * 1024) throw Ai.Failure("This file is too big (over 15 MB). Send a smaller PDF or a photo of one page.")
                 // Statement reading as in version 59: the whole file in one request.
                 loadingLabel = "Reading…"
+                Ai.lastFileError = ""
                 val found = Ai.readWholeFile(bytes, mime, "", activeKey, store, currency)
                     .sortedByDescending { it.date }
+                if (store.fileKey.isNotBlank() && Ai.lastFileError.isNotBlank()) {
+                    postChat("OpenRouter couldn't read it (" + Ai.lastFileError.take(80) + "), so Gemini read it.", isUser = false)
+                }
                 if (found.isEmpty()) {
                     postChat("I couldn't find any transactions in this file.", isUser = false)
                 } else {
@@ -1333,6 +1339,19 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                                 val err = Ai.test(k, store)
                                 toast(if (err == null) "✓ AI is ready" else err)
                             }
+                        }
+                    },
+                    fileKey = fileKey, fileModel = fileModel,
+                    onFileSettings = { k, model ->
+                        val v = k.trim()
+                        if (v.isNotBlank() && !v.startsWith("sk-or-")) {
+                            toast("That doesn't look like an OpenRouter key (sk-or-…)")
+                        } else {
+                            fileKey = v
+                            store.fileKey = v
+                            fileModel = model.trim().ifBlank { Ai.DEFAULT_FILE_MODEL }
+                            store.fileModel = fileModel
+                            toast(if (v.isBlank()) "Photos and PDFs: Gemini" else "✓ Photos and PDFs: $fileModel")
                         }
                     },
                     fastKey = fastKey,
