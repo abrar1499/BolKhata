@@ -71,7 +71,8 @@ fun HomeScreen(
     chatBadge: Int = 0,
     onTab: (Tab) -> Unit = {}
 ) {
-    var open by remember { mutableStateOf(setOf("today")) }
+    // Today and this year's months start open; older years start closed.
+    var open by remember { mutableStateOf(setOf("today", "y" + Calendar.getInstance().get(Calendar.YEAR))) }
     // The five main accounts open their own screens (Expense / Income / To pay / To receive / Cash in hand).
     val openMain = LocalMainOpener.current
     fun toggle(k: String) {
@@ -101,7 +102,13 @@ fun HomeScreen(
             todayList = sortedAll.filter { sameDay(it.date, nowMs) },
             dayGroups = sortedAll.filter { !sameDay(it.date, nowMs) && inMonth(it.date) }.groupBy { dayKey(it.date) },
             monthGroups = sortedAll.filter { !inMonth(it.date) }.groupBy { monthKey(it.date) }
-        ).also { h -> h.monthDays = h.monthGroups.mapValues { m -> m.value.groupBy { dayKey(it.date) } } }
+        ).also { h ->
+            h.monthDays = h.monthGroups.mapValues { m -> m.value.groupBy { dayKey(it.date) } }
+            // Real expense and income per year (loans are not counted), for the year headings.
+            h.yearTotals = entries.groupBy { cal(it.date).get(Calendar.YEAR) }.mapValues { (_, l) ->
+                l.filter { it.type == Type.AAMDANI }.sumOf { it.amount } to l.filter { it.type == Type.KHARCHA }.sumOf { it.amount }
+            }
+        }
     }
     val monthSpent = d.monthSpent
     val monthIncome = d.monthIncome
@@ -275,12 +282,29 @@ fun HomeScreen(
             }
         }
 
+        // Past months sit inside their year: "2026" (year in / out) -> "September" (month in / out) -> days.
+        var lastYear = -1
         monthGroups.forEach { (key, list) ->
+            val year = cal(list.first().date).get(Calendar.YEAR)
+            val yKey = "y$year"
+            if (year != lastYear) {
+                lastYear = year
+                val (yIn, yOut) = d.yearTotals[year] ?: (0.0 to 0.0)
+                item(key = "yh-$year") {
+                    Box(Modifier.padding(horizontal = 16.dp)) {
+                        YearHeader(year.toString(), yIn, yOut, yKey in open) { toggle(yKey) }
+                    }
+                }
+            }
+            if (yKey !in open) return@forEach
             item(key = "mh-$key") {
                 Box(Modifier.padding(horizontal = 16.dp)) {
-                    SectionHeader(
-                        SimpleDateFormat("MMMM yyyy", Locale.US).format(Date(list.first().date)),
-                        list.size, key in open, spentLabel(currency, list)
+                    MonthHeader(
+                        SimpleDateFormat("MMMM", Locale.US).format(Date(list.first().date)),
+                        list.size,
+                        list.filter { it.type == Type.AAMDANI }.sumOf { it.amount },
+                        list.filter { it.type == Type.KHARCHA }.sumOf { it.amount },
+                        key in open
                     ) { toggle(key) }
                 }
             }
@@ -405,6 +429,68 @@ private class HomeData(
     val monthGroups: Map<String, List<Entry>>
 ) {
     var monthDays: Map<String, Map<String, List<Entry>>> = emptyMap()
+    var yearTotals: Map<Int, Pair<Double, Double>> = emptyMap()
+}
+
+/** A year on the home list: the year, its total income and expense, open / close. */
+@Composable
+private fun YearHeader(title: String, income: Double, expense: Double, expanded: Boolean, onToggle: () -> Unit) {
+    Row(
+        Modifier
+            .padding(top = 14.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.primaryContainer)
+            .clickable { onToggle() }
+            .padding(start = 14.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(title, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, color = MaterialTheme.colorScheme.onPrimaryContainer)
+        Spacer(Modifier.weight(1f))
+        InOutFigures(income, expense)
+        Icon(
+            if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+            contentDescription = if (expanded) "Close" else "Open",
+            tint = MaterialTheme.colorScheme.onPrimaryContainer
+        )
+    }
+}
+
+/** A month inside a year: name, entry count, the month's income and expense. */
+@Composable
+private fun MonthHeader(title: String, count: Int, income: Double, expense: Double, expanded: Boolean, onToggle: () -> Unit) {
+    Row(
+        Modifier
+            .padding(top = 8.dp, start = 10.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onToggle() }
+            .padding(start = 6.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(title, fontWeight = FontWeight.Bold, fontSize = 16.sp, maxLines = 1)
+        Spacer(Modifier.width(6.dp))
+        Text(
+            if (count == 1) "1 entry" else "$count entries",
+            fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1
+        )
+        Spacer(Modifier.weight(1f))
+        InOutFigures(income, expense)
+        Icon(
+            if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+            contentDescription = if (expanded) "Close" else "Open",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+/** Income (green, in) and expense (red, out) chips; a zero side is left out. */
+@Composable
+private fun InOutFigures(income: Double, expense: Double) {
+    if (income > 0) FlowChip(fmt(income), GreenIn, Icons.Filled.ArrowDownward)
+    if (income > 0 && expense > 0) Spacer(Modifier.width(6.dp))
+    if (expense > 0) FlowChip(fmt(expense), RedSpend, Icons.Filled.ArrowUpward)
+    Spacer(Modifier.width(4.dp))
 }
 
 private fun dayKey(ms: Long): String = cal(ms).let { "d" + it.get(Calendar.YEAR) + "-" + it.get(Calendar.DAY_OF_YEAR) }
