@@ -64,11 +64,7 @@ data class ChatMessage(
     val text: String,
     val timestamp: Long = System.currentTimeMillis(),
     /** Entries this message saved, shown as a card with Undo. */
-    val entryIds: List<String> = emptyList(),
-    /** Preview picture of an attached photo or PDF (first page), saved in the app's own storage. */
-    val attachment: String = "",
-    /** Small grey line under an answer: which AI model answered and how long it took. */
-    val meta: String = ""
+    val entryIds: List<String> = emptyList()
 )
 
 /** Saves entries on the phone itself (no internet needed). */
@@ -122,9 +118,7 @@ class Store(context: Context) {
                     timestamp = o.optLong("timestamp", now()),
                     entryIds = o.optJSONArray("entryIds")?.let { ids ->
                         (0 until ids.length()).map { ids.optString(it) }.filter { it.isNotBlank() }
-                    } ?: emptyList(),
-                    attachment = o.optString("attachment", ""),
-                    meta = o.optString("meta", "")
+                    } ?: emptyList()
                 )
             }
         }.takeLast(100)
@@ -142,8 +136,6 @@ class Store(context: Context) {
                     .put("text", message.text.take(8000))
                     .put("timestamp", message.timestamp)
                     .put("entryIds", JSONArray(message.entryIds))
-                    .put("attachment", message.attachment)
-                    .put("meta", message.meta)
             )
         }
         prefs.edit().putString("chatMessages", arr.toString()).apply()
@@ -202,20 +194,7 @@ class Store(context: Context) {
 
     fun save(list: List<Entry>) = write("entries", list)
 
-    /** Saving happens on one background thread, in order, so the screen never waits for it. */
-    private val saver = java.util.concurrent.Executors.newSingleThreadExecutor()
-
     private fun write(key: String, list: List<Entry>) {
-        // Bank suggestions are also written by the notification reader, so they stay immediate.
-        if (key == "suggestions") {
-            writeNow(key, list)
-            return
-        }
-        val snapshot = list.toList()
-        saver.execute { writeNow(key, snapshot) }
-    }
-
-    private fun writeNow(key: String, list: List<Entry>) {
         val arr = JSONArray()
         list.forEach { e ->
             arr.put(
@@ -275,24 +254,9 @@ class Store(context: Context) {
         prefs.edit().putString("learned", o.toString()).apply()
     }
 
-    /** Lasting facts the chat assistant was told to keep ("Shahbaz is my brother", "mess is paid monthly"). */
-    var memory: List<String>
-        get() = try {
-            val arr = JSONArray(prefs.getString("memory", "[]") ?: "[]")
-            (0 until arr.length()).map { arr.optString(it) }.filter { it.isNotBlank() }
-        } catch (e: Exception) {
-            emptyList()
-        }
-        set(v) = prefs.edit().putString("memory", JSONArray(v.takeLast(80)).toString()).apply()
-
     var aiKey: String
         get() = prefs.getString("aiKey", "") ?: ""
         set(v) = prefs.edit().putString("aiKey", v).apply()
-
-    /** Optional Groq or OpenRouter key for fast chat answers. */
-    var fastKey: String
-        get() = prefs.getString("fastKey", "") ?: ""
-        set(v) = prefs.edit().putString("fastKey", v).apply()
 
     var aiModel: String
         get() = prefs.getString("aiModel", "") ?: ""

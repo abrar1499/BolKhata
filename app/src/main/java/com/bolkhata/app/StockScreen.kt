@@ -84,7 +84,7 @@ fun StockScreen(
     onTab: (Tab) -> Unit,
     onMenu: () -> Unit,
     onTrade: (Entry) -> Unit,
-    onReports: (ReportKind) -> Unit
+    onReports: () -> Unit
 ) {
     val nowMs = System.currentTimeMillis()
     val today = entries.filter { sameDay(it.date, nowMs) }
@@ -115,7 +115,7 @@ fun StockScreen(
                     Spacer(Modifier.height(12.dp))
                     TabSwitcher(Tab.STOCK, true, chatBadge, onTab)
                     Spacer(Modifier.height(14.dp))
-                    Panel(Modifier.fillMaxWidth(), onClick = { onReports(ReportKind.PROFIT) }, padding = 14.dp) {
+                    Panel(Modifier.fillMaxWidth(), onClick = onReports, padding = 14.dp) {
                         Text("Today in business", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(8.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
