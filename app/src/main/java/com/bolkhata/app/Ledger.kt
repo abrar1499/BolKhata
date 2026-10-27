@@ -224,7 +224,7 @@ fun LedgerScreen(
     fun back() { if (stack.size > 1) stack.removeAt(stack.lastIndex) else onClose() }
     when (val level = stack.last()) {
         is Level.Main -> when (level.acct) {
-            MainAcct.EXPENSE, MainAcct.INCOME -> CategoriesView(level.acct == MainAcct.INCOME, entries, currency, ::back) { stack.add(Level.Sub(level.acct == MainAcct.INCOME, it)) }
+            MainAcct.EXPENSE, MainAcct.INCOME -> TreeView(level.acct == MainAcct.INCOME, entries, currency, ::back, onEdit)
             else -> PeopleView(level.acct == MainAcct.TO_RECEIVE, entries, currency, ::back) { stack.add(Level.Person(it)) }
         }
         is Level.Sub -> SubView(level.income, level.cat, entries, currency, ::back, onEdit) { stack.add(Level.Vendor(level.income, level.cat, it)) }
@@ -479,4 +479,116 @@ private fun template(type: Type, person: String): Entry {
         id = "e" + System.nanoTime(), type = type, amount = 0.0, category = Cat.UDHAAR, item = "Loans",
         person = person, note = "", date = now, createdAt = now
     )
+}
+
+
+// ---------------------------------------------------------------- tree view
+
+/** One branch of the Expense / Income tree: a name, its total, how many entries, and what's under it. */
+private class Node(val key: String, val name: String, val list: List<Entry>, val children: List<Node>)
+
+private fun transfer(e: Entry) = e.item.equals("Transfer", true) || e.item.equals("Transfer fee", true)
+
+private fun personOnNote(e: Entry): String {
+    val n = e.note.trim()
+    return when {
+        n.startsWith("To ") || n.startsWith("From ") -> n.substringAfter(' ').trim()
+        n.startsWith("Fee: transfer to ") -> n.removePrefix("Fee: transfer to ").trim()
+        else -> ""
+    }
+}
+
+/** The shop or place on a statement note ("Sasco, Riyadh" -> "Sasco"). */
+private fun placeOnNote(e: Entry): String = if (',' in e.note) e.note.substringBefore(',').trim() else ""
+
+private fun sortedNewest(l: List<Entry>) = l.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt })
+
+private fun groupNodes(prefix: String, list: List<Entry>, keyOf: (Entry) -> String, nameOf: (List<Entry>) -> String, children: (String, List<Entry>) -> List<Node>): List<Node> =
+    list.groupBy { keyOf(it).lowercase().ifBlank { "-" } }
+        .map { (k, l) -> Node("$prefix/$k", nameOf(l), sortedNewest(l), children("$prefix/$k", l)) }
+        .sortedByDescending { n -> n.list.sumOf { it.amount } }
+
+/**
+ * Category -> item (Petrol, Taxi, Roti; transfers grouped as "Transfers to people") -> shop or person -> entries.
+ * A level with only one branch is skipped, so the tree never shows a pointless step.
+ */
+private fun buildTree(list: List<Entry>): List<Node> =
+    groupNodes("c", list, { it.category.name }, { it.first().category.label }) { cp, cl ->
+        groupNodes(cp, cl,
+            { if (transfer(it)) "~transfers" else it.item.trim().ifBlank { it.category.label } },
+            { l -> if (transfer(l.first())) "Transfers to people" else l.first().item.trim().ifBlank { l.first().category.label } }
+        ) { ip, il ->
+            val third = groupNodes(ip, il,
+                { if (transfer(it)) personOnNote(it).ifBlank { "Others" } else placeOnNote(it).ifBlank { it.item } },
+                { l -> if (transfer(l.first())) personOnNote(l.first()).ifBlank { "Others" } else placeOnNote(l.first()).ifBlank { l.first().item } }
+            ) { _, _ -> emptyList() }
+            if (third.size > 1) third else emptyList()
+        }.let { items -> if (items.size == 1) items.first().children else items }
+    }
+
+@Composable
+private fun TreeView(income: Boolean, entries: List<Entry>, currency: String, onBack: () -> Unit, onEdit: (Entry) -> Unit) {
+    val type = if (income) Type.AAMDANI else Type.KHARCHA
+    val mine = remember(entries, income) { entries.filter { it.type == type } }
+    val tree = remember(mine) { buildTree(mine) }
+    var open by remember(income) { mutableStateOf(setOf<String>()) }
+    val m0 = monthStart()
+    val color = if (income) GreenIn else RedSpend
+    // The visible rows: each open branch shows its children, a branch without children shows its entries.
+    val rows = remember(tree, open) {
+        val out = mutableListOf<Pair<Int, Any>>()
+        fun walk(nodes: List<Node>, depth: Int) {
+            for (n in nodes) {
+                out += depth to n
+                if (n.key in open) {
+                    if (n.children.isNotEmpty()) walk(n.children, depth + 1)
+                    else n.list.forEach { out += (depth + 1) to it }
+                }
+            }
+        }
+        walk(tree, 0)
+        out
+    }
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
+        item { Header(if (income) "Income" else "Expense", count(mine.size) + " · tap a line to open it", onBack) }
+        item {
+            Figures(
+                Triple("This month", fmt(mine.filter { it.date >= m0 }.sumOf { it.amount }), color),
+                Triple("All time", fmt(mine.sumOf { it.amount }), color)
+            )
+        }
+        if (tree.isEmpty()) item { Text("Nothing here yet.", modifier = Modifier.padding(20.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        items(rows, key = { (_, x) -> if (x is Node) "n-" + x.key else "e-" + (x as Entry).id }) { (depth, x) ->
+            val indent = (16 + depth * 18).dp
+            if (x is Node) {
+                val isOpen = x.key in open
+                val total = x.list.sumOf { it.amount }
+                val month = x.list.filter { it.date >= m0 }.sumOf { it.amount }
+                Surface(
+                    Modifier.fillMaxWidth().padding(start = indent, end = 16.dp, top = if (depth == 0) 6.dp else 2.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    color = if (depth == 0) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth().clickable { open = if (isOpen) open.filterNot { it == x.key || it.startsWith(x.key + "/") }.toSet() else open + x.key }
+                            .padding(horizontal = 12.dp, vertical = if (depth == 0) 12.dp else 9.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(if (isOpen) "▾" else "▸", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(18.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(x.name, fontWeight = if (depth == 0) FontWeight.ExtraBold else FontWeight.Bold, fontSize = if (depth == 0) 16.sp else 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(
+                                (if (x.list.size == 1) "1 time" else "${x.list.size} times") + (if (month > 0) " · this month " + fmt(month) else ""),
+                                fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1
+                            )
+                        }
+                        Text(fmt(total), fontWeight = FontWeight.Bold, fontSize = if (depth == 0) 16.sp else 14.sp, color = color)
+                    }
+                }
+            } else {
+                val e = x as Entry
+                Box(Modifier.padding(start = indent, end = 16.dp, top = 2.dp)) { TxRow(e, currency) { onEdit(e) } }
+            }
+        }
+    }
 }
