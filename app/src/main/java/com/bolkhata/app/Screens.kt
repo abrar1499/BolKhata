@@ -88,8 +88,9 @@ fun HomeScreen(
         val bal = balances(entries)
         val sortedAll = entries.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt })
         HomeData(
-            monthSpent = entries.filter { it.isCashOutFlow() && inMonth(it.date) }.sumOf { it.amount },
-            monthIncome = entries.filter { it.isCashInFlow() && inMonth(it.date) }.sumOf { it.amount },
+            // Only real spending and real income: money lent, borrowed or paid back is in To pay / To receive.
+            monthSpent = entries.filter { it.type == Type.KHARCHA && inMonth(it.date) }.sumOf { it.amount },
+            monthIncome = entries.filter { it.type == Type.AAMDANI && inMonth(it.date) }.sumOf { it.amount },
             trading = entries.any { isTrade(it.type) },
             todaySales = todayEntries.filter { it.type == Type.SALE }.sumOf { it.amount },
             todayBought = todayEntries.filter { it.type == Type.PURCHASE }.sumOf { it.amount },

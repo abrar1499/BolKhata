@@ -125,4 +125,21 @@ class UnderstandTest {
         assertTrue(!read("last antry delt kr do").text.contains(" 2"))
         assertNotNull(read("chai do").text)
     }
+
+    // Misspelled common names are fixed even with no saved contact, and a misspelled contact gives way.
+    @Test fun misspelledNameIsFixedWithoutContact() {
+        val e = Parser.parse(Understand.read("ashrf ko 50 diye", emptyList()).text).entries.single()
+        assertEquals(Type.DIYA, e.type); assertEquals("Ashraf", e.person)
+    }
+    @Test fun misspelledNameReturned() {
+        val e = Parser.parse(Understand.read("ashrf ne 50 wapis kiye", emptyList()).text).entries.single()
+        assertEquals(Type.WAPIS_MILA, e.type); assertEquals("Ashraf", e.person)
+    }
+    @Test fun misspelledContactBecomesRightSpelling() {
+        assertEquals("Ashraf", Understand.read("ashrf ko 50 diye", listOf("Ashrf")).contact)
+    }
+    @Test fun rightNameIsKept() {
+        assertEquals("Ashfaq", Understand.read("ashfaq ko 20 diye", emptyList()).contact ?: "Ashfaq")
+        assertEquals(null, Understand.fixName("petrol"))
+    }
 }

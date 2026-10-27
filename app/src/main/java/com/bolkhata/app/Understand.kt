@@ -42,6 +42,33 @@ object Understand {
         "rupay", "rupees", "wala", "wali", "wale", "liye", "mein", "main", "aur", "kuch", "sab", "nahi", "please"
     )
 
+    /** Common names, so a misspelled name is fixed even before it is saved ("ashrf" -> "Ashraf"). */
+    private val commonNames = listOf(
+        "Ashraf", "Abrar", "Imran", "Nisar", "Bilal", "Ahmed", "Ahmad", "Muhammad", "Ali", "Hassan", "Hussain", "Usman", "Umar",
+        "Shahbaz", "Zubair", "Waleed", "Rahim", "Akram", "Afzal", "Nadir", "Tariq", "Khalid", "Arshad", "Asif", "Aslam", "Naeem",
+        "Saleem", "Shahid", "Sajid", "Rashid", "Majid", "Kashif", "Faisal", "Farhan", "Imtiaz", "Ijaz", "Javed", "Junaid", "Kamran",
+        "Rizwan", "Rehman", "Shafiq", "Shoaib", "Sohail", "Tahir", "Waqas", "Yasir", "Zahid", "Zeeshan", "Abbas", "Adnan", "Amir",
+        "Anwar", "Asad", "Babar", "Danish", "Ehsan", "Fahad", "Ghulam", "Haider", "Hamza", "Iqbal", "Irfan", "Jamil", "Latif",
+        "Mansoor", "Mushtaq", "Nadeem", "Noman", "Qasim", "Raza", "Sabir", "Saeed", "Shakeel", "Sharif", "Tanveer", "Wasim",
+        "Younis", "Zafar", "Ashfaq", "Abdullah", "Aziz", "Sultan", "Shehryar", "Arslan", "Touseef", "Akbar", "Anees", "Aqeel",
+        "Arif", "Asim", "Atif", "Azhar", "Fawad", "Hafeez", "Hanif", "Ishaq", "Jabbar", "Kaleem", "Khurram", "Liaqat", "Mehmood",
+        "Mohsin", "Munir", "Nasir", "Nawaz", "Obaid", "Pervez", "Rafiq", "Rauf", "Sadiq", "Salman", "Sami", "Shafqat", "Shakir",
+        "Sharjeel", "Shaukat", "Talha", "Taimoor", "Waheed", "Yaqoob", "Yousaf", "Zain", "Zaheer", "Fatima", "Ayesha", "Maryam",
+        "Sana", "Saima", "Nadia", "Rabia", "Hina", "Amina", "Khadija", "Zainab", "Uzma", "Sadia", "Shazia", "Bushra", "Farah"
+    )
+    /** Everyday words that sound like a name ("saman" ~ Salman) but are things. */
+    private val notNameItems = setOf("saman", "samaan", "zafran", "zafraan", "sona", "chandi", "kamra", "kamre", "dukan", "makan",
+        "nasha", "rasta", "raasta", "sabun", "kapra", "kapre", "imli", "amrood", "anaar", "badam", "kishmish", "masala", "haldi")
+    private val nameMarkers = setOf("ne", "ko", "se", "ka", "ki", "ke", "nay", "say", "sy", "ny")
+
+    /** A word said like a name ("ashrf ne", "nisaar ko") that is a misspelled common name -> the right spelling. */
+    fun fixName(word: String): String? {
+        if (word.length < 4 || word in notNames || word in notNameItems) return null
+        commonNames.firstOrNull { it.equals(word, true) }?.let { return null }  // already right
+        return commonNames.filter { closeName(word, it.lowercase()) }
+            .maxByOrNull { Normalizer.similarity(word, it.lowercase()) }
+    }
+
     /** Saved contacts whose name matches a word of the sentence (by spelling or by sound). */
     fun matchContact(words: List<String>, contacts: Collection<String>): Triple<String?, List<String>, String?> {
         val names = contacts.filter { it.isNotBlank() }.distinctBy { it.lowercase() }
@@ -107,7 +134,18 @@ object Understand {
         val words = noClock.split(" ").filter { it.isNotBlank() }
         // A name the person picked before ("imraan" -> "Muhammad Imran") is used straight away.
         val picked = words.firstNotNullOfOrNull { w -> learned["@$w"]?.let { n -> contacts.firstOrNull { it.equals(n, true) }?.let { w to it } } }
-        val (contact, choices, nameWord) = if (picked != null) Triple(picked.second, emptyList(), picked.first) else matchContact(words, contacts)
+        // Misspelled common names are fixed first ("ashrf ne" -> "Ashraf ne"); a saved contact with the
+        // misspelling ("Ashrf") then gives way to the right spelling.
+        val fixedNames = mutableMapOf<String, String>()
+        words.forEachIndexed { i, w ->
+            if (i + 1 < words.size && words[i + 1] in nameMarkers && w.none { it.isDigit() }) fixName(w)?.let { fixedNames[w] = it }
+        }
+        val contactsPlus = contacts.filter { c -> fixName(c) == null || contacts.none { it.equals(fixName(c), true) } } +
+            fixedNames.values.filter { n -> contacts.none { it.equals(n, true) } }
+        val matched = if (picked != null) Triple(picked.second, emptyList(), picked.first) else matchContact(words, contactsPlus)
+        // A saved contact that is itself a misspelling of a common name ("Ashrf") is written the right way.
+        val contact0 = matched.first?.let { c -> if (c.contains(' ')) c else (fixName(c) ?: c) }
+        val (contact, choices, nameWord) = Triple(contact0, matched.second, matched.third)
         val text = if (contact != null && nameWord != null && !nameWord.equals(contact, true)) {
             words.joinToString(" ") { if (it == nameWord) contact else it }
         } else noClock
