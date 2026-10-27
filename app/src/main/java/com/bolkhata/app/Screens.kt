@@ -1660,7 +1660,7 @@ fun SettingsScreen(
                     shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()
                 )
                 Text(
-                    "Best: anthropic/claude-sonnet-5.5. Cheaper: google/gemini-3.5-flash-lite. Any model name from openrouter.ai/models that reads images and PDFs.",
+                    "Default: nvidia/nemotron-3-ultra-550b-a55b:free (NVIDIA Ultra, free; reads PDFs as text, photos go to Gemini). Any model name from openrouter.ai/models works.",
                     fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp)
                 )
                 Spacer(Modifier.height(8.dp))

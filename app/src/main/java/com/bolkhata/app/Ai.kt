@@ -608,7 +608,7 @@ Return ONLY valid JSON in this exact shape: {"reply":"your answer here"}
     )
 
     /** Model that reads photos and PDFs through OpenRouter unless another is set in Settings. */
-    const val DEFAULT_FILE_MODEL = "anthropic/claude-sonnet-5.5"
+    const val DEFAULT_FILE_MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free"
 
     /** Why the OpenRouter file read last failed (Gemini then read it). */
     @Volatile var lastFileError = ""
@@ -622,9 +622,17 @@ Return ONLY valid JSON in this exact shape: {"reply":"your answer here"}
         } else {
             JSONObject().put("type", "image_url").put("image_url", JSONObject().put("url", "data:$mime;base64,$data"))
         }
+        val m = model.ifBlank { DEFAULT_FILE_MODEL }
         val body = JSONObject()
-            .put("model", model.ifBlank { DEFAULT_FILE_MODEL })
+            .put("model", m)
             .put("max_tokens", 16_000)
+        // Models that can't open a PDF themselves (Nemotron and other text models) get its text, pulled out by
+        // OpenRouter's free "pdf-text" reader. Photos need a model that can see images; otherwise Gemini reads them.
+        val native = m.startsWith("anthropic/") || m.startsWith("google/") || m.startsWith("openai/")
+        if (mime == "application/pdf" && !native) {
+            body.put("plugins", JSONArray().put(JSONObject().put("id", "file-parser").put("pdf", JSONObject().put("engine", "pdf-text"))))
+        }
+        body
             .put(
                 "messages", JSONArray().put(
                     JSONObject().put("role", "user").put(
