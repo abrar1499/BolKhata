@@ -760,15 +760,29 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     runCatching { Attachments.savePreview(context, bytes, mime) }.getOrNull().orEmpty()
                 }
                 postChat(name, isUser = true, attachment = preview)
-                if (activeKey.isBlank()) throw Ai.Failure("Reading statements and bills needs AI. Turn it on in Settings.")
                 if (bytes.size > 15 * 1024 * 1024) throw Ai.Failure("This file is too big (over 15 MB). Send a smaller PDF or a photo of one page.")
                 // Statement reading as in version 59: the whole file in one request.
                 loadingLabel = "Reading…"
-                Ai.lastFileError = ""
-                val found = Ai.readWholeFile(bytes, mime, "", activeKey, store, currency)
-                    .sortedByDescending { it.date }
-                if (store.fileKey.isNotBlank() && Ai.lastFileError.isNotBlank()) {
-                    postChat("OpenRouter couldn't read it (" + Ai.lastFileError.take(80) + "), so Gemini read it.", isUser = false)
+                // First the phone reads the PDF itself (no AI): exact, instant and free, and it checks itself against the
+                // running balance and the statement's totals. Only when that doesn't check out does the AI read it.
+                val offline = if (mime == "application/pdf") kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    PdfText.extract(context, bytes)?.let { runCatching { StatementParser.parse(it) }.getOrNull() }
+                } else null
+                val found = if (offline != null && offline.ok) {
+                    postChat(offline.check, isUser = false)
+                    PdfText.toEntries(offline).sortedByDescending { it.date }
+                } else {
+                    if (offline != null && offline.rows.isNotEmpty()) {
+                        postChat("Couldn't check this statement on the phone (" + offline.why + "), so the AI is reading it.", isUser = false)
+                    }
+                    if (activeKey.isBlank()) throw Ai.Failure("Reading this file needs AI. Turn it on in Settings.")
+                    Ai.lastFileError = ""
+                    val viaAi = Ai.readWholeFile(bytes, mime, "", activeKey, store, currency)
+                        .sortedByDescending { it.date }
+                    if (store.fileKey.isNotBlank() && Ai.lastFileError.isNotBlank()) {
+                        postChat("OpenRouter couldn't read it (" + Ai.lastFileError.take(80) + "), so Gemini read it.", isUser = false)
+                    }
+                    viaAi
                 }
                 if (found.isEmpty()) {
                     postChat("I couldn't find any transactions in this file.", isUser = false)
