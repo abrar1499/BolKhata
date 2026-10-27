@@ -509,15 +509,28 @@ ${if (voice) "\"speech\": the reply as you would SAY it in a phone call: 1 to 3 
         key: String,
         store: Store,
         currency: String
-    ): List<Entry> = withContext(Dispatchers.IO) {
+    ): List<Entry> = readDocumentReport(bytes, mime, note, key, store, currency).entries
+
+    /** Includes extraction completeness warnings for one-page PDFs and photos too. */
+    suspend fun readDocumentReport(
+        bytes: ByteArray,
+        mime: String,
+        note: String,
+        key: String,
+        store: Store,
+        currency: String
+    ): PagesResult = withContext(Dispatchers.IO) {
         if (key.isBlank()) throw Failure("Reading statements needs AI. Turn it on in Settings.")
         val first = readOne(bytes, mime, note, key, store, currency)
-        // Fewer rows than lines the AI counted: read again and keep the fuller answer.
         val best = if (first.count > first.entries.size) {
             runCatching { readOne(bytes, mime, note, key, store, currency, retry = true) }.getOrNull()
                 ?.takeIf { it.entries.size > first.entries.size } ?: first
         } else first
-        fixDates(best.entries)
+        val warning = if (best.count > best.entries.size) {
+            "⚠ The file shows ${best.count} transaction lines but only ${best.entries.size} were extracted. " +
+                "Some transactions may be missing; check the original before adding."
+        } else ""
+        PagesResult(fixDates(best.entries), emptyList(), warning)
     }
 
     /** One page or photo read: its entries, how many transaction lines the AI counted, and printed totals if any. */
@@ -566,7 +579,19 @@ ${if (voice) "\"speech\": the reply as you would SAY it in a phone call: 1 to 3 
         }
         val reads = results.mapNotNull { it.getOrNull() }
         val all = fixDates(reads.flatMap { it.entries })
-        PagesResult(all, failed, checkTotals(all, reads.mapNotNull { it.summary }.firstOrNull(), currency))
+        val incomplete = results.mapIndexedNotNull { index, result ->
+            result.getOrNull()?.let { page ->
+                if (page.count > page.entries.size) "page ${index + 1}: ${page.entries.size} of ${page.count} rows"
+                else null
+            }
+        }
+        val rowWarning = if (incomplete.isNotEmpty()) {
+            "⚠ Some transaction lines may be missing (" + incomplete.joinToString("; ") + "). " +
+                "Review these pages against your PDF before adding."
+        } else ""
+        val totalsCheck = checkTotals(all, reads.mapNotNull { it.summary }.firstOrNull(), currency)
+        val check = listOf(rowWarning, totalsCheck).filter { it.isNotBlank() }.joinToString("\n")
+        PagesResult(all, failed, check)
     }
 
     private fun isMoneyIn(e: Entry) = e.type == Type.AAMDANI || e.type == Type.WAPIS_MILA || e.type == Type.LIYA || e.type == Type.SALE
@@ -580,6 +605,7 @@ ${if (voice) "\"speech\": the reply as you would SAY it in a phone call: 1 to 3 
         val outCount = summary.optInt("out_count", -1)
         val inTotal = summary.optDouble("in_total", Double.NaN)
         val outTotal = summary.optDouble("out_total", Double.NaN)
+        if (inCount < 0 && outCount < 0 && inTotal.isNaN() && outTotal.isNaN()) return ""
         fun near(a: Double, b: Double) = !b.isNaN() && kotlin.math.abs(a - b) < 0.6
         val inOk = (inCount < 0 || inCount == inn.size) && (inTotal.isNaN() || near(inn.sumOf { it.amount }, inTotal))
         val outOk = (outCount < 0 || outCount == out.size) && (outTotal.isNaN() || near(out.sumOf { it.amount }, outTotal))
@@ -615,14 +641,16 @@ back unless a 4-digit year says so. Labels a phone shows next to a message ("Tod
 - Money that came in (salary, deposit, refund, transfer in) is "income", unless it is clearly a named person repaying ("got_back").
 - A receipt or bill with several items is ONE expense for its total, with the shop name as item.
 - Transfers to or from a person (IPS, SARIE, internal transfer, "TO<NAME>", "/NAME" in the notes): item "Transfer",
-  note "To <Name>" or "From <Name>" with the person's name in normal capitals (e.g. "To Waleed Ali Ahmed", "From Zubair").
-  Never write only "Credit Transfer" when a name is shown.
+  note "To <Name>" or "From <Name>" with the FULL name exactly as printed.
+  Copy every part of the name (including initials and middle/family names) into "p" without dropping, rearranging,
+  guessing, or correcting its spelling. Never write only "Credit Transfer" when a name is shown.
 - Bank charges for a transfer: expense, category fees, item "Transfer fee", note "Fee: transfer to <Name>".
 - Shops and card purchases: item is the shop's clean name (e.g. "Sasco", "Express Food"), note the shop and city.
 - time: the time printed for the line as "HH:MM" (24-hour), else "".
 - Skip opening and closing balances, running balances, totals, and declined or reversed lines.
-- "n" (note): the useful details from the line: merchant or person, plus city or branch, up to 8 words (e.g. "Al Baik, Jeddah",
-  "Card purchase at Panda Riyadh", "From Muhammad Imran"). Never leave it empty when the line has a description.
+- "n" (note): preserve the FULL original transaction description, exact names, merchant, city, branch and transaction
+  reference when visible. Do not shorten, paraphrase, omit words or silently fix the spelling.
+  Never leave it empty when the line has a description.
 - "p" (person): the person's name for transfers to or from a person, loans and repayments; else "".
 - "c" (category): pick from the merchant: restaurants, cafes, bakeries, sweets, supermarkets (Panda, Othaim, Tamimi, Lulu, Danube,
   BinDawood) = food; petrol (Aldrees, Sasco, Petromin, Naft), taxi, Uber, Careem, car service = transport; pharmacies, clinics = health;
@@ -638,6 +666,8 @@ Return ONLY JSON, one short object per transaction with these short keys (statem
 {"count":0,"rows":[{"t":"type","a":0,"c":"category","i":"item","p":"person","d":"YYYY-MM-DD","h":"HH:MM","n":"note"}],"summary":null}
 First count the transaction lines printed on this page (each money in or money out line) and put that number in "count".
 Then give exactly that many rows, one per line, in the order printed. Never merge, skip or invent lines.
+Two same-day transactions with the same amount are STILL two distinct rows if printed separately.
+If a name is blurry, keep all clearly visible characters and do not invent missing letters.
 Every row MUST have "d", the transaction's own date from the file.
 If the page prints statement totals (number of deposits and withdrawals, total deposits and withdrawals), put them in
 "summary": {"in_count":0,"in_total":0,"out_count":0,"out_total":0}; otherwise "summary": null. Example:
@@ -1458,8 +1488,8 @@ Make one entry per transaction. Skip anything without an amount. Number words co
                 amount = amount,
                 category = cat,
                 item = item,
-                person = if (isLoan(type) || isTrade(type)) person else "",
-                note = o.optString("note").trim().ifBlank { said }.take(60),
+                person = person,
+                note = o.optString("note").trim().ifBlank { said }.take(500),
                 date = entryDate,
                 createdAt = if (exact != null || hour != null) entryDate else now,
                 qty = qty,

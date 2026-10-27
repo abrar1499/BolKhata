@@ -65,22 +65,27 @@ object Attachments {
         return try {
             ParcelFileDescriptor.open(tmp, ParcelFileDescriptor.MODE_READ_ONLY).use { fd ->
                 PdfRenderer(fd).use { renderer ->
-                    (0 until minOf(renderer.pageCount, maxPages)).map { i ->
+                    require(renderer.pageCount <= maxPages) {
+                        "This PDF has ${renderer.pageCount} pages. Send at most $maxPages pages at a time so no transactions are skipped."
+                    }
+                    (0 until renderer.pageCount).map { i ->
                         renderer.openPage(i).use { page ->
                             // Sharp enough for small statement print.
-                            val width = 2000
+                            val width = 2200
                             val height = (width.toFloat() * page.height / page.width).toInt().coerceIn(1, 5000)
                             val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
                             bmp.eraseColor(Color.WHITE)
                             page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
                             val out = java.io.ByteArrayOutputStream()
-                            bmp.compress(Bitmap.CompressFormat.JPEG, 88, out)
+                            bmp.compress(Bitmap.CompressFormat.JPEG, 92, out)
                             bmp.recycle()
                             out.toByteArray()
                         }
                     }
                 }
             }
+        } catch (e: IllegalArgumentException) {
+            throw e
         } catch (e: Exception) {
             emptyList()
         } finally {

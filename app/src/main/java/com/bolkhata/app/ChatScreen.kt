@@ -458,7 +458,10 @@ private fun PickCard(
                     onCheckedChange = { on -> picked = if (on) picked + e.id else picked - e.id }
                 )
                 Column(Modifier.weight(1f)) {
-                    Text(e.note.ifBlank { entryTitle(e) }, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (e.person.isNotBlank() && !e.note.contains(e.person, ignoreCase = true)) {
+                        Text(e.person, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                    }
+                    Text(e.note.ifBlank { entryTitle(e) }, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
                     Text(
                         e.category.label + " · " + dayLabel(e.date) + " " + timeLabel(e.date),
                         fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1

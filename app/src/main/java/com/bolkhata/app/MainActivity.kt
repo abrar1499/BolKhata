@@ -683,17 +683,31 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         it.type == e.type && kotlin.math.abs(it.amount - e.amount) < 0.01 && sameDay(it.date, e.date)
     }
 
-    /** Pairs each imported row with one saved entry it repeats (each saved entry used once). */
+    /** Auto-match only when minute, amount, direction and identity agree. */
     fun matchSaved(found: List<Entry>): Map<String, String> {
         val used = mutableSetOf<String>()
         val out = linkedMapOf<String, String>()
-        found.forEach { e ->
-            val hit = entries.firstOrNull {
-                it.id !in used && it.type == e.type && kotlin.math.abs(it.amount - e.amount) < 0.01 && sameDay(it.date, e.date)
+        fun normal(s: String) = s.trim().lowercase().replace(Regex("""\\s+"""), " ")
+        found.forEach { imported ->
+            val hit = entries.firstOrNull { saved ->
+                if (saved.id in used || saved.type != imported.type ||
+                    kotlin.math.abs(saved.amount - imported.amount) >= 0.01 ||
+                    saved.date / 60_000L != imported.date / 60_000L
+                ) {
+                    false
+                } else {
+                    val note = normal(saved.note)
+                    val sameNote = note.isNotBlank() && note.length >= 6 && note == normal(imported.note)
+                    val person = normal(saved.person)
+                    val samePerson = person.isNotBlank() && person == normal(imported.person)
+                    val item = normal(saved.item)
+                    val sameItem = item.isNotBlank() && item == normal(imported.item)
+                    sameNote || (samePerson && sameItem)
+                }
             }
             if (hit != null) {
                 used += hit.id
-                out[e.id] = hit.id
+                out[imported.id] = hit.id
             }
         }
         return out
@@ -742,7 +756,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     result.entries
                 } else {
                     loadingLabel = "Reading…"
-                    Ai.readDocument(bytes, mime, "", activeKey, store, currency)
+                    val result = Ai.readDocumentReport(bytes, mime, "", activeKey, store, currency)
+                    pageCheck = result.check
+                    result.entries
                 }).sortedByDescending { it.date }
                 if (pageCheck.isNotBlank()) postChat(pageCheck, isUser = false)
                 if (failedPages.isNotEmpty()) {
@@ -1217,6 +1233,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                                 changed++
                                 old.copy(
                                     item = src.item.ifBlank { old.item },
+                                    person = src.person.ifBlank { old.person },
                                     note = src.note.ifBlank { old.note },
                                     category = src.category,
                                     date = src.date,
