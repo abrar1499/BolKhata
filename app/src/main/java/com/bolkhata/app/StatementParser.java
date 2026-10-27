@@ -123,7 +123,11 @@ public final class StatementParser {
         String l = s.toLowerCase(Locale.US);
         return l.isEmpty() || l.matches("\\d{1,3}") || l.matches("page \\d+( of \\d+)?") || l.startsWith("ref. no")
                 || (l.contains("date") && (l.contains("debit") || l.contains("credit") || l.contains("balance") || l.contains("description") || l.contains("details")))
-                || l.startsWith("click to validate");
+                || l.startsWith("click to validate")
+                // Summary lines (their numbers are read separately and must not join a transaction).
+                || l.matches("^(opening|closing|ending|beginning|available|previous|current) balance.*")
+                || l.matches("^balance (brought|carried) forward.*")
+                || l.matches("^(total|number of|no\\. of) (deposits|withdrawals|credits|debits|money).*");
     }
 
     /** A line that names a transaction's type and sits just above its date line ("POS purchase mada pay"). */
@@ -185,7 +189,12 @@ public final class StatementParser {
             if (nextIsDate && !MONEY.matcher(l).find() && TYPE_WORDS.matcher(l).find()) {
                 pending.add(l);
             } else if (!recs.isEmpty()) {
-                recs.get(recs.size() - 1).add(l);
+                // A line with amounts joins the transaction only if it doesn't have its amounts yet.
+                List<String> last = recs.get(recs.size() - 1);
+                int have = 0;
+                Matcher hm = MONEY.matcher(String.join(" ", last));
+                while (hm.find()) have++;
+                if (have < 2 || !MONEY.matcher(l).find()) last.add(l);
             }
         }
         if (recs.isEmpty()) { res.why = "no dated lines"; return res; }
