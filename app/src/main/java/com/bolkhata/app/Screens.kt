@@ -954,13 +954,13 @@ enum class ReportKind(val label: String) {
 }
 
 private fun Entry.isCashInFlow(): Boolean = when (type) {
-    Type.AAMDANI, Type.WAPIS_MILA, Type.LIYA -> true
+    Type.AAMDANI, Type.WAPIS_MILA, Type.LIYA, Type.TRANSFER_IN -> true
     Type.SALE -> person.isBlank() || paid
     else -> false
 }
 
 private fun Entry.isCashOutFlow(): Boolean = when (type) {
-    Type.KHARCHA, Type.WAPIS_DIYA, Type.DIYA -> true
+    Type.KHARCHA, Type.WAPIS_DIYA, Type.DIYA, Type.TRANSFER_OUT -> true
     Type.PURCHASE -> person.isBlank() || paid
     else -> false
 }
@@ -973,6 +973,7 @@ private fun cashFlowCategory(entry: Entry): Cat = when (entry.type) {
     Type.SALE -> Cat.SALES
     Type.PURCHASE -> Cat.STOCK
     Type.DIYA, Type.LIYA, Type.WAPIS_MILA, Type.WAPIS_DIYA -> Cat.UDHAAR
+    Type.TRANSFER_IN, Type.TRANSFER_OUT -> Cat.OTHER
     else -> entry.category
 }
 
@@ -985,12 +986,14 @@ private fun cashFlowGroupTitle(category: Cat, kind: ReportKind): String = when (
 }
 
 private fun flowGroups(entries: List<Entry>, kind: ReportKind): List<ReportGroup> =
-    entries.groupBy { cashFlowCategory(it) }
-        .map { (category, list) ->
+    entries.groupBy { if (isTransfer(it.type)) "TRANSFERS" else cashFlowCategory(it).name }
+        .map { (key, list) ->
+            val transfer = key == "TRANSFERS"
+            val category = if (transfer) Cat.OTHER else Cat.valueOf(key)
             ReportGroup(
-                key = category.name,
-                title = cashFlowGroupTitle(category, kind),
-                icon = category.icon,
+                key = key,
+                title = if (transfer) "Transfers" else cashFlowGroupTitle(category, kind),
+                icon = if (transfer) "🔁" else category.icon,
                 amount = list.sumOf { it.amount },
                 entries = list.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt }),
                 color = catColor(category)
