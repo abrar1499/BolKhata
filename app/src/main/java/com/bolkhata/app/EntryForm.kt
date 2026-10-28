@@ -46,11 +46,14 @@ private fun shortType(t: Type) = when (t) {
     Type.WAPIS_DIYA -> "Paid back"
     Type.SALE -> "Sale"
     Type.PURCHASE -> "Purchase"
+    Type.TRANSFER_IN -> "Transfer in"
+    Type.TRANSFER_OUT -> "Transfer out"
 }
 
 private fun typeColor(t: Type) = when (t) {
     Type.KHARCHA, Type.PURCHASE -> RedSpend
     Type.AAMDANI, Type.WAPIS_MILA, Type.SALE -> GreenIn
+    Type.TRANSFER_IN, Type.TRANSFER_OUT -> OrangeOwe
     else -> OrangeOwe
 }
 
@@ -166,10 +169,10 @@ fun EntryForm(
             }
         }
 
-        if (chosen != null && (isLoan(chosen) || isTrade(chosen))) {
+        if (chosen != null && (isLoan(chosen) || isTrade(chosen) || isTransfer(chosen))) {
             OutlinedTextField(
                 value = person, onValueChange = { person = it },
-                label = { Text(if (isTrade(chosen)) "Customer / supplier (optional)" else "Person", fontSize = 12.sp) }, singleLine = true, textStyle = small,
+                label = { Text(if (isTrade(chosen)) "Customer / supplier (optional)" else if (isTransfer(chosen)) "Person (optional)" else "Person", fontSize = 12.sp) }, singleLine = true, textStyle = small,
                 shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()
             )
             if (isTrade(chosen) && person.isNotBlank()) {
@@ -248,12 +251,14 @@ fun EntryForm(
                             t == Type.SALE -> Cat.SALES
                             t == Type.PURCHASE -> Cat.STOCK
                             isLoan(t) -> Cat.UDHAAR
+                            isTransfer(t) -> Cat.OTHER
                             t == Type.AAMDANI && cat == Cat.ASSETS -> Cat.ASSETS
                             t == Type.AAMDANI -> Cat.TANKHWAH
                             else -> cat
                         }
                         val finalItem = when {
                             isLoan(t) -> item.trim().ifBlank { "Loans" }
+                            isTransfer(t) -> "Transfer"
                             isTrade(t) -> item.trim().ifBlank { if (t == Type.SALE) "Sale" else "Purchase" }
                             item.isNotBlank() -> item.trim()
                             t == Type.AAMDANI -> "Income"
@@ -266,7 +271,7 @@ fun EntryForm(
                                 category = finalCat,
                                 item = finalItem,
                                 qty = qty.toDoubleOrNull() ?: 0.0,
-                                person = if (isLoan(t) || isTrade(t)) person.trim() else "",
+                                person = if (isLoan(t) || isTrade(t) || isTransfer(t)) person.trim() else "",
                                 paid = isTrade(t) && person.isNotBlank() && paid,
                                 date = date,
                                 note = note.trim().ifBlank { finalItem }
