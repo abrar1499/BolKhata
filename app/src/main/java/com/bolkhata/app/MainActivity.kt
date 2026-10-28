@@ -664,6 +664,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             }.getOrNull()
             when {
                 f == null || f.text.isBlank() -> { flash = null; handleText(text, original = text) }
+                f.kind == "unsupported" -> flash = Flash(f.reply.ifBlank { "The app can't do that yet." }, Flash.Kind.ANSWER)
                 f.kind == "chat" || (f.kind !in setOf("entry", "question", "command") && f.text.none { it.isDigit() }) ->
                     flash = Flash(f.reply.ifBlank { f.text }, Flash.Kind.ANSWER)
                 // A question: the app answers from its own numbers (a khata opens over the list).

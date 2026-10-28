@@ -1219,15 +1219,21 @@ Sentence: "$said"
             val near = words.flatMap { w -> Understand.matchContact(listOf(w), contacts).let { (c, ch, _) -> listOfNotNull(c) + ch } }
                 .distinct().take(5)
             val prompt = """
-Rewrite the user's text for a money app in its simple Roman Urdu forms. Fix spelling; amounts as digits; keep every amount, name and time; add nothing.
-Entry forms: "<thing> <amount>" (khana 30, petrol 70, taxi 15, roti 10, kiraya 2000, bijli bill 120, recharge 50), "<name> ko <amount> diye" (I lent),
-"<name> se <amount> liye" (I borrowed), "<name> ne <amount> wapis diye" (got back), "<name> ko <amount> wapis diye" (I paid back), "salary <amount>",
-"<thing> <amount> <name> <name> ke sath" (bill shared), "<name> ne pay kiya <thing> <amount> sath", time: aaj, kal, subah 7 baje, shaam 6 baje.
-Question forms: "<name> ka khata", "aaj/is mahine/pichle mahine/is saal kitna kharcha", "<thing> kharcha is mahine", "income is mahine",
-"mujhe kitne lene hain", "mujhe kitne dene hain", "profit aaj", "<item> stock kitna hai".
-Command forms: "last entry delete karo", "aaj ki sari entries delete karo", "kal ki sari entries delete karo", "is mahine ki sari entries delete karo",
-"october 2025 ki entries delete karo", "<thing> wali entry delete karo", "last entry <amount> karo", "undo", "<name> ka khata kholo", "other wali entries theek karo" (sort expenses lying in Other).${if (near.isEmpty()) "" else "\nSaved names: " + near.joinToString(", ")}
-k: entry | question | command | chat (greeting or anything else). r: for chat a short friendly reply in the user's language (max 12 words); for an entry with no amount a short question asking how much; else "".
+You translate what the user typed (any language, any spelling) into ONE command the money app understands. The app can ONLY do the forms below.
+Pick the form that does what the user wants, fill the <slots>, amounts as digits. Never invent a form. Several entries: join with ", ".
+ENTRY: "<thing> <amount>" (khana 30, petrol 70, taxi 15, roti 10, kiraya 2000, bijli bill 120, recharge 50) | "salary <amount>" (income)
+ | "<name> ko <amount> diye" (I lent) | "<name> se <amount> liye" (I borrowed) | "<name> ne <amount> wapis diye" (got back)
+ | "<name> ko <amount> wapis diye" (I paid back) | "<thing> <amount> <name> <name> ke sath" (bill shared, my share is mine)
+ | "<name> ne pay kiya <thing> <amount> sath" | "hum <n> ne <thing> <amount>" | add time: aaj, kal, subah 7 baje, shaam 6 baje
+QUESTION: "<name> ka khata" | "aaj/kal/is mahine/pichle mahine/is saal kitna kharcha" | "<thing> kharcha is mahine" | "income is mahine"
+ | "mujhe kitne lene hain" | "mujhe kitne dene hain" | "profit aaj" | "<item> stock kitna hai"
+DELETE: "last entry delete karo" | "aaj ki sari entries delete karo" | "kal ki sari entries delete karo" | "is mahine ki sari entries delete karo"
+ | "<month> <year> ki sari entries delete karo" | "<year> ki sari entries delete karo" | "<thing or name> wali entries delete karo" | "undo"
+CHANGE: "<thing> <old> nahi <new> tha" (amount) | "<thing> wali entry kal ki thi" (date) | "<thing> <category> mein dal do"
+ | "<name> nahi <name2> ko diye the" | "last entry <amount> karo" | "other wali entries theek karo" (sort expenses lying in Other)
+OPEN: "<name> ka khata kholo" | "<thing> dhoondo" (search)${if (near.isEmpty()) "" else "\nSaved names: " + near.joinToString(", ")}
+k: entry | question | command | chat (greeting, small talk) | unsupported (none of the forms can do it).
+r: for chat a short friendly reply in the user's language (max 12 words); for unsupported say briefly what the app can't do; for an entry with no amount ask how much; else "".
 JSON only: {"t":"","k":"","r":""}
 Text: "$said"
 """.trim()
