@@ -455,29 +455,30 @@ private fun MonthHeader(title: String, count: Int, income: Double, expense: Doub
     val tertiary = MaterialTheme.colorScheme.tertiary
     Row(
         Modifier
-            .padding(top = 12.dp)
+            .padding(top = 10.dp)
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(14.dp))
             .background(MaterialTheme.colorScheme.surface)
             .background(Brush.horizontalGradient(listOf(primary.copy(alpha = 0.10f), tertiary.copy(alpha = 0.04f))))
-            .border(1.dp, primary.copy(alpha = if (expanded) 0.35f else 0.15f), RoundedCornerShape(18.dp))
+            .border(1.dp, primary.copy(alpha = if (expanded) 0.35f else 0.15f), RoundedCornerShape(14.dp))
             .clickable { onToggle() }
             .height(IntrinsicSize.Min),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(Modifier.width(5.dp).fillMaxHeight().background(Brush.verticalGradient(listOf(primary, tertiary))))
-        Column(Modifier.weight(1f).padding(start = 12.dp, top = 12.dp, bottom = 12.dp)) {
-            Text(title, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, maxLines = 1)
-            Text(
-                if (count == 1) "1 entry" else "$count entries",
-                fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1
-            )
-        }
-        InOutFigures(income, expense)
+        // One line: name, count, in / out — slim but still stands out from the days.
+        Text(title, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, maxLines = 1,
+            modifier = Modifier.padding(start = 12.dp, top = 9.dp, bottom = 9.dp))
+        Spacer(Modifier.width(6.dp))
+        Text("$count", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+        Spacer(Modifier.weight(1f))
+        if (expense > 0) Text("↑ " + fmt(expense), fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = RedSpend, maxLines = 1)
+        if (expense > 0 && income > 0) Spacer(Modifier.width(10.dp))
+        if (income > 0) Text("↓ " + fmt(income), fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = GreenIn, maxLines = 1)
         Icon(
             if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
             contentDescription = if (expanded) "Close" else "Open",
-            tint = primary, modifier = Modifier.padding(end = 8.dp)
+            tint = primary, modifier = Modifier.padding(start = 4.dp, end = 8.dp).size(20.dp)
         )
     }
 }
