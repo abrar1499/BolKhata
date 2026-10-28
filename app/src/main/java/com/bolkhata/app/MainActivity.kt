@@ -647,6 +647,62 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     readAgain = { fixed, said -> handleText(fixed, said) }
 
     /**
+     * Carries out what the AI understood. The AI only translated; every record is picked, counted, added up,
+     * deleted or changed here by the app. Returns a line to show, or null when the action shows itself.
+     */
+    fun runFixed(f: Ai.Fixed, said: String, inChat: Boolean): String? {
+        val q = f.filter
+        return when (f.kind) {
+            "entry" -> {
+                if (f.text.none { it.isDigit() }) return f.reply.ifBlank { "How much? e.g. \"${f.text.ifBlank { "petrol" }} 50\"" }
+                if (inChat) chatViaReader(f.text) else handleText(f.text, original = said)
+                null
+            }
+            "ask" -> {
+                if (f.what == "balance" && q.persons.size == 1) {
+                    Questions.answer(q.persons.first() + " kitna", entries, currency)?.text ?: "No entries with ${q.persons.first()}."
+                } else Query.answer(Query.select(entries, q), f.what.ifBlank { "sum" }, q, currency)
+            }
+            "delete" -> {
+                if (q.isEmpty) return "Which entries? e.g. \"aaj ki sari entries delete karo\""
+                askDelete(Query.label(q), Query.select(entries, q))
+                null
+            }
+            "change" -> {
+                if (q.isEmpty || f.set.isEmpty()) return "What should change? e.g. \"petrol 50 nahi 40 tha\""
+                val hits = Query.select(entries, q)
+                if (hits.isEmpty()) return "Nothing found (${Query.label(q)})."
+                val changed = hits.map { it to Query.change(it, f.set) }.filter { (a, b) -> a != b }
+                if (changed.isEmpty()) return "Already like that."
+                applyPlan(Ai.EditPlan(changed, emptyList(), "Changed ${changed.size} " + (if (changed.size == 1) "entry" else "entries")))
+                null
+            }
+            "open" -> {
+                val name = q.persons.firstOrNull()
+                if (name != null) {
+                    val p = personAccounts(entries).firstOrNull { it.name.equals(name, true) }
+                    ledgerPerson = p?.name ?: name
+                    ledger = if (p == null || p.toReceive) MainAcct.TO_RECEIVE else MainAcct.TO_PAY
+                    if (inChat) tab = Tab.HOME
+                    null
+                } else {
+                    val term = (q.items + q.cats.map { it.label }).firstOrNull() ?: return "What should I show?"
+                    results = term to false; people = null
+                    if (inChat) tab = Tab.HOME
+                    null
+                }
+            }
+            "sort_other" -> { recat = Recat.plan(entries); null }
+            "undo" -> {
+                val ids = lastAdded.filter { id -> entries.any { it.id == id } }
+                if (ids.isEmpty()) "Nothing to undo" else { lastAdded = emptyList(); moveToTrash(ids.toSet()); null }
+            }
+            "chat" -> f.reply.ifBlank { "🙂" }
+            else -> f.reply.ifBlank { "The app can't do that yet." }
+        }
+    }
+
+    /**
      * Home input: the AI first fixes the sentence into the app's words (shown in the strip above the input),
      * then the app reads it and does everything itself. Hello / small talk gets the AI's short reply in the strip.
      * No key or no internet: the app reads it on its own.
@@ -662,32 +718,16 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             val f = runCatching {
                 kotlinx.coroutines.withTimeout(6_000) { Ai.fix(Translit.toRoman(text), fast, activeKey, store, contactNames()) }
             }.getOrNull()
-            when {
-                f == null || (f.text.isBlank() && f.kind != "chat" && f.kind != "unsupported") -> { flash = null; handleText(text, original = text) }
-                f.kind == "unsupported" -> flash = Flash(f.reply.ifBlank { "The app can't do that yet." }, Flash.Kind.ANSWER)
-                f.kind == "chat" || (f.kind !in setOf("entry", "question", "command") && f.text.none { it.isDigit() }) ->
-                    flash = Flash(f.reply.ifBlank { f.text }, Flash.Kind.ANSWER)
-                // A question: the app answers from its own numbers (a khata opens over the list).
-                f.kind == "question" -> {
-                    val u = runCatching { Understand.read(f.text, contactNames(), wordFixes) }.getOrNull()
-                    if (u?.kind == Understand.Kind.OPEN_KHATA) { flash = Flash(f.text, Flash.Kind.FIXED); handleText(f.text, original = text) }
-                    else {
-                        val a = runCatching { Questions.answer(u?.text ?: f.text, entries, currency) }.getOrNull()
-                        flash = Flash(a?.text ?: f.reply.ifBlank { "Couldn't find that in your khata." }, Flash.Kind.ANSWER)
-                    }
-                }
-                // An entry without an amount: ask for it in the strip, nothing is saved.
-                f.kind == "entry" && f.text.none { it.isDigit() } ->
-                    flash = Flash(f.reply.ifBlank { "How much? e.g. \"${f.text} 50\"" }, Flash.Kind.ANSWER)
-                else -> {
-                    if (!f.text.equals(text, true)) learnWordFixes(Translit.toRoman(text), f.text)
-                    flash = Flash(f.text, Flash.Kind.FIXED)
-                    handleText(f.text, original = text)
-                }
+            if (f == null) { flash = null; handleText(text, original = text); return@launch }
+            if (f.kind == "entry" && f.text.isNotBlank() && !f.text.equals(text, true)) learnWordFixes(Translit.toRoman(text), f.text)
+            val msg = runFixed(f, text, inChat = false)
+            flash = when {
+                msg != null -> Flash(msg, Flash.Kind.ANSWER)
+                f.kind == "entry" -> Flash(f.text, Flash.Kind.FIXED)
+                else -> null
             }
         }
     }
-
 
     /** Adds a message to the chat and keeps it on the phone. */
     fun postChat(text: String, isUser: Boolean, entryIds: List<String> = emptyList(), attachment: String = "", meta: String = "") {
@@ -851,10 +891,12 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             try {
                 // The AI only fixes the sentence; if the app can then read it, that's the answer (a few tokens).
                 val asked = roman.trim().endsWith("?") || runCatching { Questions.isQuestion(roman) }.getOrDefault(false)
-                val fixed = runCatching { Ai.fix(roman, store.fastKey, activeKey, store, contactNames()) }.getOrNull()?.text.orEmpty()
-                if (fixed.isNotBlank() && !fixed.equals(roman.trim(), true)) {
-                    learnWordFixes(roman, fixed)
-                    if (runCatching { localChat(fixed, fixed) }.getOrDefault(false)) return@launch
+                val f = runCatching { Ai.fix(roman, store.fastKey, activeKey, store, contactNames()) }.getOrNull()
+                if (f != null && f.kind != "unsupported" && !(f.kind == "chat" && activeKey.isNotBlank())) {
+                    if (f.kind == "entry" && f.text.isNotBlank()) learnWordFixes(roman, f.text)
+                    val msg = runCatching { runFixed(f, roman, inChat = true) }.getOrNull()
+                    if (msg != null) { lastSpeech = msg; postChat(msg, isUser = false) }
+                    return@launch
                 }
                 // Only things outside the app's own work (advice, general talk) go to the full AI.
                 if (activeKey.isBlank()) { chatOffline(text, roman, aiDown = false); return@launch }

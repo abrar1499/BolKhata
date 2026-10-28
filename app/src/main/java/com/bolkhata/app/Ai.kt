@@ -1204,13 +1204,22 @@ Sentence: "$said"
         toEntries(JSONObject().put("entries", entries).toString(), text)
     }
 
-    /** The AI's fix of what was typed or said: the sentence in the app's words, what kind it is, and a reply for small talk. */
-    class Fixed(val text: String, val kind: String, val reply: String)
+    /**
+     * What the AI understood, in the app's own terms: a new entry (as a sentence in the app's words), or what to
+     * ask / delete / change / open (as a filter the app runs itself), or a short reply for small talk.
+     */
+    class Fixed(
+        val text: String,
+        val kind: String,
+        val reply: String,
+        val what: String = "",
+        val filter: Query.Filter = Query.Filter(),
+        val set: Map<String, String> = emptyMap()
+    )
 
     /**
-     * The AI only fixes the sentence into the simple words the app reads ("nadim ke sang lunch kia 30 ka" ->
-     * "khana 30 nadeem ke sath"); the app itself then understands it and does all the maths.
-     * Tiny prompt, one short line back. GPT-OSS (fast key) first, Gemini if there is no fast key or it fails.
+     * The AI only translates ("3 din pehle kitna kharcha hua tha" -> ask sum, from/to = that day); the app does the
+     * work. Tiny prompt, short JSON back. GPT-OSS (fast key) first, Gemini if there is no fast key or it fails.
      */
     suspend fun fix(text: String, fastKey: String, geminiKey: String, store: Store, contacts: List<String>): Fixed =
         withContext(Dispatchers.IO) {
@@ -1218,39 +1227,55 @@ Sentence: "$said"
             val words = said.lowercase().split(Regex("[^\\p{L}]+")).filter { it.length >= 3 }
             val near = words.flatMap { w -> Understand.matchContact(listOf(w), contacts).let { (c, ch, _) -> listOfNotNull(c) + ch } }
                 .distinct().take(5)
+            val today = SimpleDateFormat("yyyy-MM-dd (EEEE)", Locale.US).format(Date())
             val prompt = """
-You translate what the user typed (any language, any spelling) into ONE command the money app understands. The app can ONLY do the forms below.
-Pick the form that does what the user wants, fill the <slots>, amounts as digits. Never invent a form. Several entries: join with ", ".
-ENTRY: "<thing> <amount>" (khana 30, petrol 70, taxi 15, roti 10, kiraya 2000, bijli bill 120, recharge 50) | "salary <amount>" (income)
- | "<name> ko <amount> diye" (I lent) | "<name> se <amount> liye" (I borrowed) | "<name> ne <amount> wapis diye" (got back)
- | "<name> ko <amount> wapis diye" (I paid back) | "<thing> <amount> <name> <name> ke sath" (bill shared, my share is mine)
- | "<name> ne pay kiya <thing> <amount> sath" | "hum <n> ne <thing> <amount>" | add time: aaj, kal, subah 7 baje, shaam 6 baje
-QUESTION: "<name> ka khata" | "aaj/kal/is mahine/pichle mahine/is saal kitna kharcha" | "<thing> kharcha is mahine" | "income is mahine"
- | "mujhe kitne lene hain" | "mujhe kitne dene hain" | "profit aaj" | "<item> stock kitna hai"
-DELETE: "last entry delete karo" | "aaj ki sari entries delete karo" | "kal ki sari entries delete karo" | "is mahine ki sari entries delete karo"
- | "<month> <year> ki sari entries delete karo" | "<year> ki sari entries delete karo" | "<thing or name> wali entries delete karo" | "undo"
-CHANGE: "<thing> <old> nahi <new> tha" (amount) | "<thing> wali entry kal ki thi" (date) | "<thing> <category> mein dal do"
- | "<name> nahi <name2> ko diye the" | "last entry <amount> karo" | "other wali entries theek karo" (sort expenses lying in Other)
-OPEN: "<name> ka khata kholo" | "<thing> dhoondo" (search)${if (near.isEmpty()) "" else "\nSaved names: " + near.joinToString(", ")}
-kind: entry | question | command | chat (greeting, small talk) | unsupported (none of the forms can do it).
-reply: for chat a short friendly reply in the user's language (max 12 words); for unsupported say briefly what the app can't do; for an entry with no amount ask how much; else "".
-JSON only, "text" is the filled-in form itself: {"text":"aaj ki sari entries delete karo","kind":"command","reply":""}
+Today is $today. Translate the user's text (any language, any spelling) for a money app. The app does all the work; you only fill this JSON:
+{"kind":"","text":"","what":"","f":{},"set":{},"reply":""}
+kind=entry: new money record(s); text = in the app's forms, amounts as digits, several joined with ", ":
+ "<thing> <amount>" (khana 30, petrol 70, taxi 15, kiraya 2000, bijli bill 120) | "salary <amount>" | "<name> ko <amount> diye" (I lent)
+ | "<name> se <amount> liye" (I borrowed) | "<name> ne <amount> wapis diye" (got back) | "<name> ko <amount> wapis diye" (I paid back)
+ | "<thing> <amount> <name> <name> ke sath" (bill shared) | "<name> ne pay kiya <thing> <amount> sath" | time: aaj, kal, subah 7 baje
+kind=ask: a question about records; what = sum | count | list | balance (what a person owes or is owed); f = which records.
+kind=delete: remove records; f = which. kind=change: edit records; f = which, set = only the new values {"amount","category","date","person","type","item"}.
+kind=open: show records (f.person opens a khata). kind=sort_other: sort expenses lying in Other. kind=undo.
+kind=chat: greeting / small talk, reply = short friendly answer (max 12 words). kind=unsupported: reply says briefly why.
+f (all optional): "from","to" (YYYY-MM-DD, inclusive), "type" [expense,income,lent,borrowed,got_back,paid_back,sale,purchase],
+"person" [names], "category" [food,transport,rent,bills,mobile,home,shopping,health,personal,fees,education,charity,assets,other],
+"item" [words], "min", "max", "last" (newest N; "last entry" = 1). Days: aaj = today, kal (past) = yesterday, "3 din pehle" = that day.${if (near.isEmpty()) "" else "\nSaved names: " + near.joinToString(", ")}
 Text: "$said"
 """.trim()
             val raw = if (fastKey.isNotBlank()) {
-                runCatching { fastCall(prompt, fastKey.trim(), null, maxTokens = 300) }.getOrElse { e ->
+                runCatching { fastCall(prompt, fastKey.trim(), null, maxTokens = 500) }.getOrElse { e ->
                     if (geminiKey.isBlank()) throw e
                     request(prompt, geminiKey.trim(), store, prefer = "gemini-3.5-flash-lite", models = (listOf("gemini-3.5-flash-lite") + MODELS).distinct())
                 }
             } else request(prompt, geminiKey.trim(), store, prefer = "gemini-3.5-flash-lite", models = (listOf("gemini-3.5-flash-lite") + MODELS).distinct())
             val o = JSONObject(raw)
-            val kinds = setOf("entry", "question", "command", "chat", "unsupported")
-            var t = o.optString("text", o.optString("t")).trim()
-            var k = o.optString("kind", o.optString("k")).trim()
-            // A model that swaps the fields ("text":"command") is put right.
-            if (t.lowercase() in kinds && k.lowercase() !in kinds) { val s = t; t = k; k = s }
+            val kinds = setOf("entry", "ask", "delete", "change", "open", "sort_other", "undo", "chat", "unsupported")
+            var t = o.optString("text").trim()
+            var k = o.optString("kind").trim().lowercase()
+            if (t.lowercase() in kinds && k !in kinds) { val s = t; t = k; k = s.lowercase() }
             if (t.lowercase() in kinds) t = ""
-            Fixed(t.take(300), k.lowercase(), o.optString("reply", o.optString("r")).trim().take(200))
+            fun list(f: JSONObject, key: String): List<String> {
+                val a = f.optJSONArray(key)
+                return if (a != null) (0 until a.length()).map { a.optString(it).trim() }.filter { it.isNotEmpty() }
+                else f.optString(key).split(",").map { it.trim() }.filter { it.isNotEmpty() }
+            }
+            val f = o.optJSONObject("f") ?: JSONObject()
+            val filter = Query.Filter(
+                from = Query.day(f.optString("from")),
+                to = Query.day(f.optString("to"), end = true),
+                types = list(f, "type").mapNotNull { Query.typeWords[it.lowercase()] }.toSet(),
+                persons = list(f, "person").map { n -> contacts.firstOrNull { it.equals(n, true) } ?: n },
+                cats = list(f, "category").mapNotNull { Query.catWords[it.lowercase()] }.toSet(),
+                items = list(f, "item"),
+                min = f.optDouble("min").takeIf { !it.isNaN() && it > 0 },
+                max = f.optDouble("max").takeIf { !it.isNaN() && it > 0 },
+                last = f.optInt("last", 0).coerceAtLeast(0)
+            )
+            val s = o.optJSONObject("set")
+            val set = s?.keys()?.asSequence()?.associateWith { s.optString(it).trim() }?.filterValues { it.isNotEmpty() && it != "0" }.orEmpty()
+            Fixed(t.take(300), k, o.optString("reply").trim().take(200), o.optString("what").trim().lowercase(), filter, set)
         }
 
     /** Asks Gemini which existing entries to change for an instruction like "hamza wali 500 ko 400 kar do". */
