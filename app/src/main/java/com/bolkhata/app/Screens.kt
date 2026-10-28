@@ -282,7 +282,9 @@ fun HomeScreen(
         monthGroups.forEach { (key, list) ->
             val year = cal(list.first().date).get(Calendar.YEAR)
             val yKey = "y$year"
-            if (year != lastYear) {
+            // This year's months show straight away; a year gets its own heading only once it is over.
+            val thisYear = year == Calendar.getInstance().get(Calendar.YEAR)
+            if (year != lastYear && !thisYear) {
                 lastYear = year
                 val (yIn, yOut) = d.yearTotals[year] ?: (0.0 to 0.0)
                 item(key = "yh-$year") {
@@ -291,7 +293,7 @@ fun HomeScreen(
                     }
                 }
             }
-            if (yKey !in open) return@forEach
+            if (!thisYear && yKey !in open) return@forEach
             item(key = "mh-$key") {
                 Box(Modifier.padding(horizontal = 16.dp)) {
                     MonthHeader(
