@@ -661,7 +661,15 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             "ask" -> {
                 if (f.what == "balance" && q.persons.size == 1) {
                     Questions.answer(q.persons.first() + " kitna", entries, currency)?.text ?: "No entries with ${q.persons.first()}."
-                } else Query.answer(Query.select(entries, q), f.what.ifBlank { "sum" }, q, currency)
+                } else {
+                    val main = Query.answer(Query.select(entries, q), f.what.ifBlank { "sum" }, q, currency)
+                    // "kitna kharcha": money that went out as loans or paybacks that day is shown too, so nothing looks missing.
+                    if (q.types == setOf(Type.KHARCHA) && f.what.ifBlank { "sum" } == "sum") {
+                        val outs = Query.Filter(q.from, q.to, setOf(Type.DIYA, Type.WAPIS_DIYA), q.persons, emptySet(), q.items, q.min, q.max, q.last)
+                        val other = Query.select(entries, outs)
+                        if (other.isEmpty()) main else main + "\nAlso out: " + Query.answer(other, "sum", outs, currency)
+                    } else main
+                }
             }
             "delete" -> {
                 if (q.isEmpty) return "Which entries? e.g. \"aaj ki sari entries delete karo\""
