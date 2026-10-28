@@ -80,3 +80,33 @@ fun WhoDialog(said: String, choices: List<String>, onPick: (String?) -> Unit, on
         dismissButton = { TextButton(onClick = onCancel) { Text("Cancel") } }
     )
 }
+
+/** "Who were the other 2?" after a shared bill said without names: type or speak the names ("ali aur bilal"). */
+@Composable
+fun SplitAskDialog(bill: String, missing: Int, onAnswer: (String) -> Unit, onMic: () -> Unit, onCancel: () -> Unit) {
+    var text by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text(if (missing > 0) "Who were the other $missing?" else "Who was with you?") },
+        text = {
+            Column {
+                Text("$bill, split equally", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = text, onValueChange = { text = it }, singleLine = true,
+                    placeholder = { Text("e.g. Ali and Bilal") },
+                    trailingIcon = {
+                        IconButton(onClick = onMic) {
+                            Icon(androidx.compose.material.icons.Icons.Filled.Mic, contentDescription = "Speak the names")
+                        }
+                    },
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
+                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { if (text.isNotBlank()) onAnswer(text) }),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = { if (text.isNotBlank()) onAnswer(text) }) { Text("Add", fontWeight = FontWeight.Bold) } },
+        dismissButton = { TextButton(onClick = onCancel) { Text("Cancel") } }
+    )
+}

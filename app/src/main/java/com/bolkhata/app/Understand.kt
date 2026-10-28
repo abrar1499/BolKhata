@@ -61,6 +61,8 @@ object Understand {
         "nasha", "rasta", "raasta", "sabun", "kapra", "kapre", "imli", "amrood", "anaar", "badam", "kishmish", "masala", "haldi")
     private val nameMarkers = setOf("ne", "ko", "se", "ka", "ki", "ke", "nay", "say", "sy", "ny")
 
+    fun isCommonName(word: String) = commonNames.any { it.equals(word, true) }
+
     /** A word said like a name ("ashrf ne", "nisaar ko") that is a misspelled common name -> the right spelling. */
     fun fixName(word: String): String? {
         if (word.length < 4 || word in notNames || word in notNameItems) return null

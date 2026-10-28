@@ -118,6 +118,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     // the entry being edited from the card (to learn from), and words the person corrected before.
     var confirmNew by remember { mutableStateOf<Pair<List<Entry>, String>?>(null) }
     var askWho by remember { mutableStateOf<Understand.Result?>(null) }
+    // A shared bill said without (all) the names: waiting for "ali aur bilal".
+    var splitAsk by remember { mutableStateOf<Split.Plan?>(null) }
     var lastAdded by remember { mutableStateOf(listOf<String>()) }
     var editFrom by remember { mutableStateOf<Pair<Entry, String>?>(null) }
     var wordFixes by remember { mutableStateOf(store.loadWordFixes()) }
@@ -542,6 +544,37 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         }
     }
 
+    /** A shared bill: your share is the expense, the others' shares go in their khata. Saved with Undo. */
+    fun addSplit(p: Split.Plan) {
+        val list = Split.entries(p)
+        if (list.isEmpty()) { toast("No amount found. Please say or type an amount."); return }
+        save(list + entries)
+        lastAdded = list.map { it.id }
+        val ids = lastAdded.toSet()
+        val mine = list.filter { it.type == Type.KHARCHA }.sumOf { it.amount }
+        val others = list.filter { it.type == Type.DIYA }
+        val owe = list.firstOrNull { it.type == Type.LIYA }
+        val msg = "✓ " + p.bill.category.label + " " + fmt(mine) + " (your share)" +
+            (if (others.isNotEmpty()) " · " + others.joinToString(" · ") { it.person + " " + fmt(it.amount) } + " to receive" else "") +
+            (if (owe != null) " · " + fmt(owe.amount) + " to pay " + owe.person else "")
+        scope.launch {
+            snackbar.currentSnackbarData?.dismiss()
+            val res = snackbar.showSnackbar(msg, actionLabel = "Undo", duration = SnackbarDuration.Long)
+            if (res == SnackbarResult.ActionPerformed) moveToTrash(ids)
+        }
+    }
+
+    /** The names typed or said after "Who were the other 2?". */
+    fun answerSplit(text: String) {
+        val p = splitAsk ?: return
+        val names = Split.namesIn(Translit.toRoman(text), contactNames())
+        if (names.isEmpty()) { toast("Please say the names, e.g. \"Ali and Bilal\"."); return }
+        val full = p.with(names)
+        if (full.missing > 0) { splitAsk = full; return }
+        splitAsk = null
+        addSplit(full)
+    }
+
     /** What the person meant, after "smart understanding": a new entry, or a command. */
     fun act(u: Understand.Result) {
         when (u.kind) {
@@ -564,11 +597,20 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 }
             }
             Understand.Kind.SUMMARY -> { reportStart = ReportKind.CASH_OUT; tab = Tab.REPORTS }
-            Understand.Kind.ENTRY -> handleTextSafely(u.text, u.clock)
+            Understand.Kind.ENTRY -> {
+                // "khana 30 ali bilal ke sath": a shared bill.
+                val sp = Split.detect(u.text, contactNames())
+                if (sp == null) handleTextSafely(u.text, u.clock)
+                else {
+                    val p = if (u.clock == null) sp else Split.Plan(Understand.at(sp.bill, u.clock), sp.payer, sp.names, sp.shares, sp.people)
+                    if (p.missing != 0) splitAsk = p else addSplit(p)
+                }
+            }
         }
     }
 
     fun handleText(text: String) {
+        if (splitAsk != null) { answerSplit(text); return }
         try {
             // Smart understanding first (offline): spelling, numbers said as words, names, time, commands.
             val u = Understand.read(Translit.toRoman(text), contactNames(), wordFixes)
@@ -1501,6 +1543,14 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         trade = list.first()
                     },
                     onCancel = { confirmNew = null }
+                )
+            }
+            splitAsk?.let { p ->
+                SplitAskDialog(
+                    understoodLine(p.bill, currency), p.missing,
+                    onAnswer = { answerSplit(it) },
+                    onMic = { startVoice() },
+                    onCancel = { splitAsk = null }
                 )
             }
             askWho?.let { u ->
