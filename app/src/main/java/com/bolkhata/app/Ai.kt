@@ -1204,28 +1204,30 @@ Sentence: "$said"
         toEntries(JSONObject().put("entries", entries).toString(), text)
     }
 
+    /** The AI's fix of what was typed or said: the sentence in the app's words, what kind it is, and a reply for small talk. */
+    class Fixed(val text: String, val kind: String, val reply: String)
+
     /**
      * The AI only fixes the sentence into the simple words the app reads ("nadim ke sang lunch kia 30 ka" ->
      * "khana 30 nadeem ke sath"); the app itself then understands it and does all the maths.
      * Tiny prompt, one short line back. GPT-OSS (fast key) first, Gemini if there is no fast key or it fails.
      */
-    suspend fun rewrite(text: String, question: Boolean, fastKey: String, geminiKey: String, store: Store, contacts: List<String>): String =
+    suspend fun fix(text: String, fastKey: String, geminiKey: String, store: Store, contacts: List<String>): Fixed =
         withContext(Dispatchers.IO) {
             val said = text.replace("\"", "'").take(300)
             val words = said.lowercase().split(Regex("[^\\p{L}]+")).filter { it.length >= 3 }
             val near = words.flatMap { w -> Understand.matchContact(listOf(w), contacts).let { (c, ch, _) -> listOfNotNull(c) + ch } }
                 .distinct().take(5)
-            val forms = if (question) """
-Question forms: "<name> ka khata", "aaj kitna kharcha", "is mahine kitna kharcha", "pichle mahine kitna kharcha",
-"is saal kitna kharcha", "<thing> kharcha is mahine" (food, petrol, rent...), "income is mahine", "mujhe kitne lene hain",
-"mujhe kitne dene hain", "profit aaj", "<item> stock kitna hai". Keep the asked period and names.""" else """
-Entry forms: "<thing> <amount>" (khana 30, petrol 70, taxi 15, roti 10, chai 5, kiraya 2000, bijli bill 120, recharge 50),
-"<name> ko <amount> diye" (I lent), "<name> se <amount> liye" (I borrowed), "<name> ne <amount> wapis diye" (got back),
-"<name> ko <amount> wapis diye" (I paid back), "salary <amount>" (income), "<thing> <amount> <name> <name> ke sath" (bill shared),
-"<name> ne pay kiya <thing> <amount> sath", "hum 3 ne <thing> <amount>", time words: aaj, kal, subah 7 baje, shaam 6 baje."""
             val prompt = """
-Rewrite this money-app ${if (question) "question" else "note"} in the app's simple Roman Urdu forms. Fix spelling; amounts as digits; keep every amount, name and time; add nothing.$forms${if (near.isEmpty()) "" else "\nSaved names: " + near.joinToString(", ")}
-JSON only: {"t":"rewritten"}
+Rewrite the user's text for a money app in its simple Roman Urdu forms. Fix spelling; amounts as digits; keep every amount, name and time; add nothing.
+Entry forms: "<thing> <amount>" (khana 30, petrol 70, taxi 15, roti 10, kiraya 2000, bijli bill 120, recharge 50), "<name> ko <amount> diye" (I lent),
+"<name> se <amount> liye" (I borrowed), "<name> ne <amount> wapis diye" (got back), "<name> ko <amount> wapis diye" (I paid back), "salary <amount>",
+"<thing> <amount> <name> <name> ke sath" (bill shared), "<name> ne pay kiya <thing> <amount> sath", time: aaj, kal, subah 7 baje, shaam 6 baje.
+Question forms: "<name> ka khata", "aaj/is mahine/pichle mahine/is saal kitna kharcha", "<thing> kharcha is mahine", "income is mahine",
+"mujhe kitne lene hain", "mujhe kitne dene hain", "profit aaj", "<item> stock kitna hai".
+Command forms: "last entry delete karo", "undo", "<name> ka khata kholo".${if (near.isEmpty()) "" else "\nSaved names: " + near.joinToString(", ")}
+k: entry | question | command | chat (greeting or anything else). r: only for chat, a short friendly reply in the user's language (max 15 words), else "".
+JSON only: {"t":"","k":"","r":""}
 Text: "$said"
 """.trim()
             val raw = if (fastKey.isNotBlank()) {
@@ -1234,7 +1236,8 @@ Text: "$said"
                     request(prompt, geminiKey.trim(), store, prefer = "gemini-3.5-flash-lite", models = (listOf("gemini-3.5-flash-lite") + MODELS).distinct())
                 }
             } else request(prompt, geminiKey.trim(), store, prefer = "gemini-3.5-flash-lite", models = (listOf("gemini-3.5-flash-lite") + MODELS).distinct())
-            JSONObject(raw).optString("t").trim().take(300)
+            val o = JSONObject(raw)
+            Fixed(o.optString("t").trim().take(300), o.optString("k").trim().lowercase(), o.optString("r").trim().take(200))
         }
 
     /** Asks Gemini which existing entries to change for an instruction like "hamza wali 500 ko 400 kar do". */

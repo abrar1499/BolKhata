@@ -120,6 +120,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var askWho by remember { mutableStateOf<Understand.Result?>(null) }
     // A shared bill said without (all) the names: waiting for "ali aur bilal".
     var splitAsk by remember { mutableStateOf<Split.Plan?>(null) }
+    // The small strip above the home input: the corrected sentence, or the answer to a question / hello.
+    var flash by remember { mutableStateOf<Flash?>(null) }
     var lastAdded by remember { mutableStateOf(listOf<String>()) }
     var editFrom by remember { mutableStateOf<Pair<Entry, String>?>(null) }
     var wordFixes by remember { mutableStateOf(store.loadWordFixes()) }
@@ -306,7 +308,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     /** Names the person has entries with: people in the khata and names on transfers. */
     fun contactNames(): List<String> = (personAccounts(entries).map { it.name } + entries.mapNotNull { e ->
         e.note.trim().takeIf { it.startsWith("To ") || it.startsWith("From ") }?.substringAfter(' ')?.trim()
-    }).filter { it.isNotBlank() }.distinctBy { it.lowercase() }
+    }).mapNotNull { cleanPersonName(it) }.distinctBy { it.lowercase() }
 
     fun learnFrom(before: Entry?, after: Entry) {
         if (after.type != Type.KHARCHA || after.category == Cat.OTHER) return
@@ -480,7 +482,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         if (fast.isBlank() && activeKey.isBlank()) { orElse(); return }
         toast("✨ Understanding…")
         scope.launch {
-            val fixed = runCatching { Ai.rewrite(text, question, fast, activeKey, store, contactNames()) }.getOrNull().orEmpty()
+            val fixed = runCatching { Ai.fix(text, fast, activeKey, store, contactNames()) }.getOrNull()?.text.orEmpty()
             if (fixed.isBlank() || fixed.equals(text.trim(), true)) { orElse(); return@launch }
             learnWordFixes(text, fixed)
             readAgain(fixed, text)
@@ -520,18 +522,17 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     answerText = a.text
                     results = a.search to false
                 } else {
-                    scope.launch {
-                        snackbar.currentSnackbarData?.dismiss()
-                        snackbar.showSnackbar(a.text, duration = SnackbarDuration.Long, withDismissAction = true)
-                    }
+                    flash = Flash(a.text, Flash.Kind.ANSWER)
                 }
                 return
             }
             // A question the app couldn't read: the AI only rewrites it, the app still works out the answer.
             if (original == null) {
-                askAiToFix(text, question = true) { toast("Sorry, I couldn't understand the question. Try: \"ali ka khata\" or \"is mahine kitna kharcha\".") }
+                askAiToFix(text, question = true) { flash = Flash("Couldn't understand. Try \"ali ka khata\" or \"is mahine kitna kharcha\".", Flash.Kind.ANSWER) }
                 return
             }
+            flash = Flash("Couldn't find that. Try \"ali ka khata\" or \"is mahine kitna kharcha\".", Flash.Kind.ANSWER)
+            return
         }
         // Simple changes (date, amount) are done offline straight away, with Undo.
         Edits.plan(text, entries)?.let { applyPlan(it); return }
@@ -636,6 +637,34 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 else {
                     val p = if (u.clock == null) sp else Split.Plan(Understand.at(sp.bill, u.clock), sp.payer, sp.names, sp.shares, sp.people)
                     if (p.missing != 0) splitAsk = p else addSplit(p)
+                }
+            }
+        }
+    }
+
+    /**
+     * Home input: the AI first fixes the sentence into the app's words (shown in the strip above the input),
+     * then the app reads it and does everything itself. Hello / small talk gets the AI's short reply in the strip.
+     * No key or no internet: the app reads it on its own.
+     */
+    fun homeInput(raw: String) {
+        val text = raw.trim()
+        if (text.isEmpty()) return
+        if (splitAsk != null) { answerSplit(text); return }
+        val fast = store.fastKey.trim()
+        if (fast.isBlank() && activeKey.isBlank()) { handleText(text); return }
+        flash = Flash("…", Flash.Kind.WORKING)
+        scope.launch {
+            val f = runCatching {
+                kotlinx.coroutines.withTimeout(6_000) { Ai.fix(Translit.toRoman(text), fast, activeKey, store, contactNames()) }
+            }.getOrNull()
+            when {
+                f == null || f.text.isBlank() -> { flash = null; handleText(text, original = text) }
+                f.kind == "chat" -> flash = Flash(f.reply.ifBlank { f.text }, Flash.Kind.ANSWER)
+                else -> {
+                    if (!f.text.equals(text, true)) learnWordFixes(Translit.toRoman(text), f.text)
+                    flash = Flash(f.text, Flash.Kind.FIXED)
+                    handleText(f.text, original = text)
                 }
             }
         }
@@ -812,7 +841,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             try {
                 // The AI only fixes the sentence; if the app can then read it, that's the answer (a few tokens).
                 val asked = roman.trim().endsWith("?") || runCatching { Questions.isQuestion(roman) }.getOrDefault(false)
-                val fixed = runCatching { Ai.rewrite(roman, asked, store.fastKey, activeKey, store, contactNames()) }.getOrNull().orEmpty()
+                val fixed = runCatching { Ai.fix(roman, store.fastKey, activeKey, store, contactNames()) }.getOrNull()?.text.orEmpty()
                 if (fixed.isNotBlank() && !fixed.equals(roman.trim(), true)) {
                     learnWordFixes(roman, fixed)
                     if (runCatching { localChat(fixed, fixed) }.getOrDefault(false)) return@launch
@@ -1211,7 +1240,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             // Score every alternative: the first transcript can be fluent but still be the wrong words.
             val said = guesses.maxByOrNull { it.second }?.first.orEmpty()
             if (said.isNotBlank()) {
-                if (voiceForChat) chatInput(said) else handleText(said)
+                if (voiceForChat) chatInput(said) else homeInput(said)
             } else toast("Couldn't catch that. Tap the mic again and speak a little slower.")
         }
     }
@@ -1313,7 +1342,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     onAttach = { pickFile.launch(arrayOf("image/*", "application/pdf")) }
                 )
             } else {
-                InputBar(onSend = { handleText(it) }, onMic = { startVoice() })
+                Column {
+                    FlashStrip(flash) { flash = null }
+                    InputBar(onSend = { homeInput(it) }, onMic = { startVoice() })
+                }
             }
         },
         containerColor = MaterialTheme.colorScheme.background,
