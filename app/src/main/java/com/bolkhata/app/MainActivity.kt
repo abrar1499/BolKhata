@@ -716,6 +716,28 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 changed.take(3).joinToString("; ") { (a, b) -> entryTitle(a) + " " + fmt(a.amount) + " → " + entryTitle(b) + " " + fmt(b.amount) } +
                     if (changed.size > 3) " +${changed.size - 3} more" else ""
             }
+            "to_khata" -> {
+                // "Ye sari Abrar D360 ka khata bana do": these records become that khata's lene-dene, in date order,
+                // each one a loan or a repayment by the running balance (money out = they owe me, money in = back / I owe).
+                val name = f.set["person"]?.trim()?.takeIf { it.isNotEmpty() } ?: f.payer.ifBlank { return "Which khata? e.g. \"Abrar D360 ka khata\"" }
+                if (q.isEmpty) return "Which entries? e.g. \"d360 wali entries\""
+                val hits = Query.select(entries, Query.Filter(q.from, q.to, q.types, q.persons, q.cats, q.items, q.min, q.max, q.last, q.noPeople, q.notItems))
+                    .filter { !it.person.equals(name, true) }.sortedWith(compareBy<Entry> { it.date }.thenBy { it.createdAt })
+                if (hits.isEmpty()) return "Nothing found (${Query.label(q)})."
+                var work = entries
+                val changed = hits.map { e ->
+                    val moved = movedTo(e, work, null, false, name).copy(item = e.item.ifBlank { "Loans" })
+                    work = work.map { if (it.id == e.id) moved else it }
+                    e to moved
+                }
+                applyPlan(Ai.EditPlan(changed, emptyList(), "Moved ${changed.size} to $name"))
+                val bal = personAccounts(work).firstOrNull { it.name.equals(name, true) }?.balance ?: 0.0
+                "${changed.size} entries → $name khata · " + when {
+                    bal > 0.005 -> "$name will give you ${fmt(bal)}"
+                    bal < -0.005 -> "you will give $name ${fmt(-bal)}"
+                    else -> "settled"
+                }
+            }
             "paid_by" -> {
                 // "Aaj jo khana khaya us ke paise Nadeem ne diye": find that meal and make it "Nadeem paid".
                 val payer = f.payer.ifBlank { return "Who paid? e.g. \"nadeem ne pay kiya\"" }

@@ -1240,8 +1240,9 @@ kind=entry: new money record(s); text = in the app's forms, amounts as digits, s
 kind=ask: a question about records; what = sum | count | list | balance (what a person owes or is owed); f = which records.
 kind=delete: remove records; f = which. kind=change: edit records when the user SAYS the new value; f = which, set = only the new values {"amount","category","date","person","type","item"}.
 kind=paid_by: someone else paid for a record ALREADY saved ("aaj jo khana khaya us ke paise nadeem ne diye"); f = which record (date, item, category; no amount needed), payer = the name.
+kind=to_khata: put records into a person's / account's khata (lene dene ka khata), "ye sari Abrar D360 ka khata bana do"; f = which records, set = {"person":"<khata name>"}.
 kind=reread: a record is wrong but no new value is said ("laptop wali entry galat hai theek karo"); f = which; the app reads its note again.
-kind=open: show records (f.person opens a khata). kind=sort_other: put expenses lying in "Other" into their proper categories (any wording like "other wali expense me dalo / theek karo / move karo"). kind=undo.
+kind=open: show records ("show me", "dikhao"; f.person opens a khata, f.item searches). kind=sort_other: put expenses lying in "Other" into their proper categories (any wording like "other wali expense me dalo / theek karo / move karo"). kind=undo.
 kind=chat: greeting / small talk, reply = short friendly answer (max 12 words). kind=unsupported: reply says briefly why.
 f (all optional): "from","to" (YYYY-MM-DD, inclusive), "type" [expense,income,lent,borrowed,got_back,paid_back,sale,purchase],
 "person" [names], "category" [food,transport,rent,bills,mobile,home,shopping,health,personal,fees,education,charity,assets,other],
@@ -1256,7 +1257,7 @@ ${if (previous.isBlank()) "" else "Previous message (resolve wo / unko / sab / s
                 }
             } else request(prompt, geminiKey.trim(), store, prefer = "gemini-3.5-flash-lite", models = (listOf("gemini-3.5-flash-lite") + MODELS).distinct())
             val o = JSONObject(raw)
-            val kinds = setOf("entry", "ask", "delete", "change", "reread", "paid_by", "open", "sort_other", "undo", "chat", "unsupported")
+            val kinds = setOf("entry", "ask", "delete", "change", "reread", "paid_by", "to_khata", "open", "sort_other", "undo", "chat", "unsupported")
             var t = o.optString("text").trim()
             var k = o.optString("kind").trim().lowercase()
             if (t.lowercase() in kinds && k !in kinds) { val s = t; t = k; k = s.lowercase() }
