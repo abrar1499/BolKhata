@@ -1221,7 +1221,7 @@ Sentence: "$said"
      * The AI only translates ("3 din pehle kitna kharcha hua tha" -> ask sum, from/to = that day); the app does the
      * work. Tiny prompt, short JSON back. GPT-OSS (fast key) first, Gemini if there is no fast key or it fails.
      */
-    suspend fun fix(text: String, fastKey: String, geminiKey: String, store: Store, contacts: List<String>): Fixed =
+    suspend fun fix(text: String, fastKey: String, geminiKey: String, store: Store, contacts: List<String>, previous: String = ""): Fixed =
         withContext(Dispatchers.IO) {
             val said = text.replace("\"", "'").take(300)
             val words = said.lowercase().split(Regex("[^\\p{L}]+")).filter { it.length >= 3 }
@@ -1237,12 +1237,12 @@ kind=entry: new money record(s); text = in the app's forms, amounts as digits, s
  | "<thing> <amount> <name> <name> ke sath" (bill shared) | "<name> ne pay kiya <thing> <amount> sath" | time: aaj, kal, subah 7 baje
 kind=ask: a question about records; what = sum | count | list | balance (what a person owes or is owed); f = which records.
 kind=delete: remove records; f = which. kind=change: edit records; f = which, set = only the new values {"amount","category","date","person","type","item"}.
-kind=open: show records (f.person opens a khata). kind=sort_other: sort expenses lying in Other. kind=undo.
+kind=open: show records (f.person opens a khata). kind=sort_other: put expenses lying in "Other" into their proper categories (any wording like "other wali expense me dalo / theek karo / move karo"). kind=undo.
 kind=chat: greeting / small talk, reply = short friendly answer (max 12 words). kind=unsupported: reply says briefly why.
 f (all optional): "from","to" (YYYY-MM-DD, inclusive), "type" [expense,income,lent,borrowed,got_back,paid_back,sale,purchase],
 "person" [names], "category" [food,transport,rent,bills,mobile,home,shopping,health,personal,fees,education,charity,assets,other],
 "item" [words], "min", "max", "last" (newest N; "last entry" = 1). Days: aaj = today, kal (past) = yesterday, "3 din pehle" = that day.${if (near.isEmpty()) "" else "\nSaved names: " + near.joinToString(", ")}
-Text: "$said"
+${if (previous.isBlank()) "" else "Previous message (resolve wo / unko / sab / same from it): \"" + previous.replace("\"", "'").take(200) + "\"\n"}Text: "$said"
 """.trim()
             val raw = if (fastKey.isNotBlank()) {
                 runCatching { fastCall(prompt, fastKey.trim(), null, maxTokens = 500) }.getOrElse { e ->

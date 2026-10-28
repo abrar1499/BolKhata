@@ -124,6 +124,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var flash by remember { mutableStateOf<Flash?>(null) }
     // "Other wali entries theek karo": the list of shops to sort, before anything changes.
     var recat by remember { mutableStateOf<List<Recat.Group>?>(null) }
+    // The last thing said and the app's answer, so "wo sab expense me dal do" knows what "wo" is.
+    var lastTalk by remember { mutableStateOf("") }
     var lastAdded by remember { mutableStateOf(listOf<String>()) }
     var editFrom by remember { mutableStateOf<Pair<Entry, String>?>(null) }
     var wordFixes by remember { mutableStateOf(store.loadWordFixes()) }
@@ -679,6 +681,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 null
             }
             "change" -> {
+                // "Other wali expense me dal do": that's sorting Other into real categories.
+                if (q.cats == setOf(Cat.OTHER) && (f.set["category"].isNullOrBlank() || f.set["category"].equals("expense", true))) {
+                    recat = Recat.plan(entries); return null
+                }
                 if (q.isEmpty || f.set.isEmpty()) return "What should change? e.g. \"petrol 50 nahi 40 tha\""
                 val hits = Query.select(entries, q)
                 if (hits.isEmpty()) return "Nothing found (${Query.label(q)})."
@@ -726,11 +732,12 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         flash = Flash("…", Flash.Kind.WORKING)
         scope.launch {
             val f = runCatching {
-                kotlinx.coroutines.withTimeout(6_000) { Ai.fix(Translit.toRoman(text), fast, activeKey, store, contactNames()) }
+                kotlinx.coroutines.withTimeout(6_000) { Ai.fix(Translit.toRoman(text), fast, activeKey, store, contactNames(), lastTalk) }
             }.getOrNull()
             if (f == null) { flash = null; handleText(text, original = text); return@launch }
             if (f.kind == "entry" && f.text.isNotBlank() && !f.text.equals(text, true)) learnWordFixes(Translit.toRoman(text), f.text)
             val msg = runFixed(f, text, inChat = false)
+            lastTalk = text + (if (msg != null) " → app: " + msg.take(80) else "")
             flash = when {
                 msg != null -> Flash(msg, Flash.Kind.ANSWER)
                 f.kind == "entry" -> Flash(f.text, Flash.Kind.FIXED)
@@ -903,10 +910,11 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             try {
                 // The AI only fixes the sentence; if the app can then read it, that's the answer (a few tokens).
                 val asked = roman.trim().endsWith("?") || runCatching { Questions.isQuestion(roman) }.getOrDefault(false)
-                val f = runCatching { Ai.fix(roman, store.fastKey, activeKey, store, contactNames()) }.getOrNull()
+                val f = runCatching { Ai.fix(roman, store.fastKey, activeKey, store, contactNames(), lastTalk) }.getOrNull()
                 if (f != null && f.kind != "unsupported" && !(f.kind == "chat" && activeKey.isNotBlank())) {
                     if (f.kind == "entry" && f.text.isNotBlank()) learnWordFixes(roman, f.text)
                     val msg = runCatching { runFixed(f, roman, inChat = true) }.getOrNull()
+                    lastTalk = roman + (if (msg != null) " → app: " + msg.take(80) else "")
                     if (msg != null) { lastSpeech = msg; postChat(msg, isUser = false) }
                     return@launch
                 }
