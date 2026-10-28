@@ -456,7 +456,38 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         return t.contains(" entry ") || strong.any { t.contains(it) } || (soft.any { t.contains(it) } && refers.any { t.contains(it) })
     }
 
-    fun handleTextSafely(text: String, clock: Understand.Clock? = null) {
+    /**
+     * The AI rewrites a sentence the app could not read into the app's own simple words; the app then reads it
+     * again (no second AI call). Word fixes are remembered, so next time no AI is needed at all.
+     */
+    /** Words the AI fixed ("ptrl" -> "petrol") are remembered, so the app reads them itself next time. */
+    fun learnWordFixes(said: String, fixed: String) {
+        val a = said.lowercase().split(Regex("[^\\p{L}]+")).filter { it.length >= 3 }
+        val b = fixed.lowercase().split(Regex("[^\\p{L}]+")).filter { it.length >= 3 }
+        var any = false
+        a.filter { it !in b }.forEach { w ->
+            val best = b.filter { it !in a }.maxByOrNull { Normalizer.similarity(w, it) } ?: return@forEach
+            if (Normalizer.similarity(w, best) >= 0.75) { store.addWordFix(w, best); any = true }
+        }
+        if (any) wordFixes = store.loadWordFixes()
+    }
+
+    // handleText is written further down; this lets the AI-fix step hand the fixed sentence back to it.
+    var readAgain: (String, String) -> Unit = { _, _ -> }
+
+    fun askAiToFix(text: String, question: Boolean, orElse: () -> Unit) {
+        val fast = store.fastKey.trim()
+        if (fast.isBlank() && activeKey.isBlank()) { orElse(); return }
+        toast("✨ Understanding…")
+        scope.launch {
+            val fixed = runCatching { Ai.rewrite(text, question, fast, activeKey, store, contactNames()) }.getOrNull().orEmpty()
+            if (fixed.isBlank() || fixed.equals(text.trim(), true)) { orElse(); return@launch }
+            learnWordFixes(text, fixed)
+            readAgain(fixed, text)
+        }
+    }
+
+    fun handleTextSafely(text: String, clock: Understand.Clock? = null, original: String? = null) {
         // A vague "change an entry" is not enough information to edit safely; ask what to change.
         val normalizedWords = text.lowercase().split(Regex("""[^\p{L}\p{N}]+""")).filter { it.isNotEmpty() }
         val genericEditWords = setOf(
@@ -496,6 +527,11 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 }
                 return
             }
+            // A question the app couldn't read: the AI only rewrites it, the app still works out the answer.
+            if (original == null) {
+                askAiToFix(text, question = true) { toast("Sorry, I couldn't understand the question. Try: \"ali ka khata\" or \"is mahine kitna kharcha\".") }
+                return
+            }
         }
         // Simple changes (date, amount) are done offline straight away, with Undo.
         Edits.plan(text, entries)?.let { applyPlan(it); return }
@@ -531,37 +567,13 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             addOffline(r)
             return
         }
-        if (fast.isNotBlank()) {
-            // GPT-OSS first: a tiny prompt, the app does the maths. Gemini only if it fails.
-            toast("✨ Understanding…")
-            scope.launch {
-                val got = runCatching { Ai.understandFast(text, fast, contactNames()) }.getOrNull()
-                val sp = got?.split?.let { p -> if (clock == null) p else Split.Plan(Understand.at(p.bill, clock), p.payer, p.names, p.shares, p.people) }
-                val list = got?.entries.orEmpty().map { e -> if (clock != null) Understand.at(e, clock) else e }
-                when {
-                    sp != null && sp.missing != 0 -> splitAsk = sp
-                    sp != null -> confirmNew = (Split.entries(sp) + list) to text
-                    list.isNotEmpty() -> confirmNew = list to text
-                    activeKey.isNotBlank() -> runCatching { Ai.understand(text, activeKey, store, contactNames()) }.getOrNull()
-                        ?.map { e -> if (clock != null) Understand.at(e, clock) else e }
-                        .let { g -> if (g.isNullOrEmpty()) addOffline(r) else confirmNew = g to text }
-                    else -> addOffline(r)
-                }
-            }
+        if (original != null) {
+            // Already fixed by the AI once and still not sure: show it on a card to check, never ask the AI again.
+            if (r.entries.isNotEmpty()) confirmNew = (r.entries + r.unclear) to original else addOffline(r)
             return
         }
-        // Not sure: the AI reads it (short prompt, fast model) and the person checks it on a card before it's saved.
-        toast("✨ Understanding…")
-        scope.launch {
-            try {
-                val list = Ai.understand(text, activeKey, store, contactNames()).map { e ->
-                    if (clock != null) Understand.at(e, clock) else e
-                }
-                if (list.isEmpty()) addOffline(r) else confirmNew = list to text
-            } catch (e: Exception) {
-                addOffline(r)
-            }
-        }
+        // Not sure: the AI only fixes the sentence; the app reads the fixed sentence itself.
+        askAiToFix(text, question = false) { addOffline(r) }
     }
 
     /** A shared bill: your share is the expense, the others' shares go in their khata. Saved with Undo. */
@@ -596,7 +608,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     }
 
     /** What the person meant, after "smart understanding": a new entry, or a command. */
-    fun act(u: Understand.Result) {
+    fun act(u: Understand.Result, original: String? = null) {
         when (u.kind) {
             Understand.Kind.DELETE_LAST -> {
                 val last = entries.maxByOrNull { it.createdAt }
@@ -609,7 +621,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             }
             Understand.Kind.OPEN_KHATA -> {
                 val name = u.contact
-                if (name == null) handleTextSafely(u.text, u.clock)
+                if (name == null) handleTextSafely(u.text, u.clock, original)
                 else {
                     val p = personAccounts(entries).firstOrNull { it.name.equals(name, true) }
                     ledgerPerson = name
@@ -620,7 +632,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             Understand.Kind.ENTRY -> {
                 // "khana 30 ali bilal ke sath": a shared bill.
                 val sp = Split.detect(u.text, contactNames())
-                if (sp == null) handleTextSafely(u.text, u.clock)
+                if (sp == null) handleTextSafely(u.text, u.clock, original)
                 else {
                     val p = if (u.clock == null) sp else Split.Plan(Understand.at(sp.bill, u.clock), sp.payer, sp.names, sp.shares, sp.people)
                     if (p.missing != 0) splitAsk = p else addSplit(p)
@@ -629,18 +641,20 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         }
     }
 
-    fun handleText(text: String) {
+    fun handleText(text: String, original: String? = null) {
         if (splitAsk != null) { answerSplit(text); return }
         try {
             // Smart understanding first (offline): spelling, numbers said as words, names, time, commands.
             val u = Understand.read(Translit.toRoman(text), contactNames(), wordFixes)
             if (u.choices.size > 1) { askWho = u; return }
-            act(u)
+            act(u, original)
         } catch (e: Exception) {
             // Never close the app because a sentence was not understood.
             toast("Sorry, I couldn't read that. Tap + to add it by hand.")
         }
     }
+
+    readAgain = { fixed, said -> handleText(fixed, said) }
 
     /** Adds a message to the chat and keeps it on the phone. */
     fun postChat(text: String, isUser: Boolean, entryIds: List<String> = emptyList(), attachment: String = "", meta: String = "") {
@@ -712,6 +726,29 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     }
 
     /**
+     * The app's own reading of a chat message: entries it can read, questions it can answer from its own numbers,
+     * commands and edits it understands. True when handled, so no AI is needed.
+     */
+    fun localChat(text: String, roman: String): Boolean {
+        val u = Understand.read(roman, contactNames(), wordFixes)
+        if (u.kind != Understand.Kind.ENTRY || u.choices.size > 1) { chatViaReader(text); return true }
+        if (Commands.read(roman) != null || Parser.payStatus(roman) != null || Edits.plan(roman, entries) != null) {
+            chatViaReader(text); return true
+        }
+        if (Questions.isQuestion(u.text)) {
+            val a = Questions.answer(u.text, entries, currency) ?: return false
+            lastSpeech = a.text
+            postChat(a.text, isUser = false)
+            return true
+        }
+        if (Split.detect(u.text, contactNames()) != null) { chatViaReader(text); return true }
+        val r = Parser.parse(u.text)
+        val sure = r.entries.isNotEmpty() && r.unclear.isEmpty() && r.entries.none { it.type == Type.KHARCHA && it.category == Cat.OTHER }
+        if (sure) { chatViaReader(text); return true }
+        return false
+    }
+
+    /**
      * Chat input. AI comes first: one call either saves the money the person mentioned or answers them
      * (questions, reports, searches, advice). Changes to existing entries use the app's own reader.
      * Without AI, the offline reader and offline answers take over.
@@ -755,7 +792,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         // pick the right entry from the conversation. The offline edit reader is only the fallback without AI.
         // With AI on, everything in the chat (searches, edits, deletes) goes to the AI, which can see the
         // conversation; the app's own command and edit readers are the fallback without AI.
-        val changesExisting = activeKey.isBlank() && runCatching {
+        // The app first: whatever it can read or answer itself costs no AI at all.
+        if (runCatching { localChat(text, roman) }.getOrDefault(false)) return
+        val changesExisting = activeKey.isBlank() && store.fastKey.isBlank() && runCatching {
             Commands.read(roman) != null || Parser.payStatus(roman) != null ||
                 Edits.plan(roman, entries) != null ||
                 (looksLikeEdit(roman) && entries.isNotEmpty() && roman.any { it.isDigit() })
@@ -764,13 +803,22 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             chatViaReader(text)
             return
         }
-        if (activeKey.isBlank()) {
+        if (activeKey.isBlank() && store.fastKey.isBlank()) {
             chatOffline(text, roman, aiDown = false)
             return
         }
         chatLoading = true
         scope.launch {
             try {
+                // The AI only fixes the sentence; if the app can then read it, that's the answer (a few tokens).
+                val asked = roman.trim().endsWith("?") || runCatching { Questions.isQuestion(roman) }.getOrDefault(false)
+                val fixed = runCatching { Ai.rewrite(roman, asked, store.fastKey, activeKey, store, contactNames()) }.getOrNull().orEmpty()
+                if (fixed.isNotBlank() && !fixed.equals(roman.trim(), true)) {
+                    learnWordFixes(roman, fixed)
+                    if (runCatching { localChat(fixed, fixed) }.getOrDefault(false)) return@launch
+                }
+                // Only things outside the app's own work (advice, general talk) go to the full AI.
+                if (activeKey.isBlank()) { chatOffline(text, roman, aiDown = false); return@launch }
                 val res = Ai.assistant(text, history, entries, activeKey, store, currency, store.memory, voice = voiceOn)
                 lastSpeech = res.speech
                 // Lasting facts from the chat are kept on the phone and sent with every later question.

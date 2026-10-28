@@ -1204,50 +1204,38 @@ Sentence: "$said"
         toEntries(JSONObject().put("entries", entries).toString(), text)
     }
 
-    /** What GPT-OSS understood: plain entries, or a shared bill (the app works out the shares). */
-    class Fast(val entries: List<Entry>, val split: Split.Plan?)
-
     /**
-     * GPT-OSS (Groq / OpenRouter) reads a sentence the app wasn't sure about, with as few tokens as possible:
-     * a tiny prompt, only the saved names that look like words of the sentence, and a short coded answer.
-     * The app does the maths (shares, khata) itself.
+     * The AI only fixes the sentence into the simple words the app reads ("nadim ke sang lunch kia 30 ka" ->
+     * "khana 30 nadeem ke sath"); the app itself then understands it and does all the maths.
+     * Tiny prompt, one short line back. GPT-OSS (fast key) first, Gemini if there is no fast key or it fails.
      */
-    suspend fun understandFast(text: String, key: String, contacts: List<String>): Fast = withContext(Dispatchers.IO) {
-        val said = text.replace("\"", "'").take(300)
-        val words = said.lowercase().split(Regex("[^\\p{L}]+")).filter { it.length >= 3 }
-        val near = words.flatMap { w -> Understand.matchContact(listOf(w), contacts).let { (c, ch, _) -> listOfNotNull(c) + ch } }
-            .distinct().take(5)
-        val prompt = """
-Money note, Roman Urdu/English, misspelled. JSON only: {"e":[{"k":"","a":0,"c":"","i":"","w":[],"p":"","h":0}]}
-k: x=my expense, n=income, l=I lent to w, b=I borrowed from w, g=w paid me back, r=I paid w back, s=bill shared with w (p=payer if not me, h=people incl me if said).
-c: food,transport,rent,bills,mobile,home,shopping,health,personal,fees,education,charity,assets,other. i: thing, 1-2 English words.${if (near.isEmpty()) "" else "\nNames: " + near.joinToString(", ")}
-Note: "$said"
+    suspend fun rewrite(text: String, question: Boolean, fastKey: String, geminiKey: String, store: Store, contacts: List<String>): String =
+        withContext(Dispatchers.IO) {
+            val said = text.replace("\"", "'").take(300)
+            val words = said.lowercase().split(Regex("[^\\p{L}]+")).filter { it.length >= 3 }
+            val near = words.flatMap { w -> Understand.matchContact(listOf(w), contacts).let { (c, ch, _) -> listOfNotNull(c) + ch } }
+                .distinct().take(5)
+            val forms = if (question) """
+Question forms: "<name> ka khata", "aaj kitna kharcha", "is mahine kitna kharcha", "pichle mahine kitna kharcha",
+"is saal kitna kharcha", "<thing> kharcha is mahine" (food, petrol, rent...), "income is mahine", "mujhe kitne lene hain",
+"mujhe kitne dene hain", "profit aaj", "<item> stock kitna hai". Keep the asked period and names.""" else """
+Entry forms: "<thing> <amount>" (khana 30, petrol 70, taxi 15, roti 10, chai 5, kiraya 2000, bijli bill 120, recharge 50),
+"<name> ko <amount> diye" (I lent), "<name> se <amount> liye" (I borrowed), "<name> ne <amount> wapis diye" (got back),
+"<name> ko <amount> wapis diye" (I paid back), "salary <amount>" (income), "<thing> <amount> <name> <name> ke sath" (bill shared),
+"<name> ne pay kiya <thing> <amount> sath", "hum 3 ne <thing> <amount>", time words: aaj, kal, subah 7 baje, shaam 6 baje."""
+            val prompt = """
+Rewrite this money-app ${if (question) "question" else "note"} in the app's simple Roman Urdu forms. Fix spelling; amounts as digits; keep every amount, name and time; add nothing.$forms${if (near.isEmpty()) "" else "\nSaved names: " + near.joinToString(", ")}
+JSON only: {"t":"rewritten"}
+Text: "$said"
 """.trim()
-        val raw = fastCall(prompt, key.trim(), null, maxTokens = 400)
-        val arr = JSONObject(raw).optJSONArray("e") ?: JSONArray()
-        val plain = JSONArray()
-        var split: Split.Plan? = null
-        fun names(o: JSONObject): List<String> {
-            val w = o.optJSONArray("w")
-            val l = if (w != null) (0 until w.length()).map { w.optString(it) } else o.optString("w").split(",")
-            return l.map { it.trim() }.filter { it.isNotEmpty() }.map { n -> contacts.firstOrNull { it.equals(n, true) } ?: n.replaceFirstChar { it.uppercase() } }
+            val raw = if (fastKey.isNotBlank()) {
+                runCatching { fastCall(prompt, fastKey.trim(), null, maxTokens = 300) }.getOrElse { e ->
+                    if (geminiKey.isBlank()) throw e
+                    request(prompt, geminiKey.trim(), store, prefer = "gemini-3.5-flash-lite", models = (listOf("gemini-3.5-flash-lite") + MODELS).distinct())
+                }
+            } else request(prompt, geminiKey.trim(), store, prefer = "gemini-3.5-flash-lite", models = (listOf("gemini-3.5-flash-lite") + MODELS).distinct())
+            JSONObject(raw).optString("t").trim().take(300)
         }
-        for (i in 0 until arr.length()) {
-            val o = arr.optJSONObject(i) ?: continue
-            val k = o.optString("k").lowercase()
-            val type = when (k) { "n" -> "income"; "l" -> "gave"; "b" -> "took"; "g" -> "got_back"; "r" -> "paid_back"; else -> "expense" }
-            val who = names(o)
-            val one = JSONObject().put("type", type).put("amount", o.optDouble("a", 0.0)).put("category", o.optString("c"))
-                .put("item", o.optString("i")).put("person", who.firstOrNull() ?: "").put("note", "")
-            if (k == "s" && split == null) {
-                val bill = toEntries(JSONObject().put("entries", JSONArray().put(one.put("type", "expense").put("person", ""))).toString(), text).firstOrNull() ?: continue
-                val payer = o.optString("p").trim().takeIf { it.isNotEmpty() && it.lowercase() !in setOf("me", "i", "mene", "maine") }
-                    ?.let { p -> contacts.firstOrNull { it.equals(p, true) } ?: p.replaceFirstChar { it.uppercase() } }
-                split = Split.Plan(bill, payer, (who + listOfNotNull(payer)).distinctBy { it.lowercase() }, emptyMap(), o.optInt("h", 0))
-            } else plain.put(one)
-        }
-        Fast(toEntries(JSONObject().put("entries", plain).toString(), text), split)
-    }
 
     /** Asks Gemini which existing entries to change for an instruction like "hamza wali 500 ko 400 kar do". */
     suspend fun edit(instruction: String, all: List<Entry>, key: String, store: Store, currency: String): EditPlan =
