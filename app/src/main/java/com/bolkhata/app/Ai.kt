@@ -1222,7 +1222,7 @@ Sentence: "$said"
      * The AI only translates ("3 din pehle kitna kharcha hua tha" -> ask sum, from/to = that day); the app does the
      * work. Tiny prompt, short JSON back. GPT-OSS (fast key) first, Gemini if there is no fast key or it fails.
      */
-    suspend fun fix(text: String, fastKey: String, geminiKey: String, store: Store, contacts: List<String>, previous: String = ""): Fixed =
+    suspend fun fix(text: String, fastKey: String, geminiKey: String, store: Store, contacts: List<String>, previous: String = "", screen: String = ""): Fixed =
         withContext(Dispatchers.IO) {
             val said = text.replace("\"", "'").take(300)
             val words = said.lowercase().split(Regex("[^\\p{L}]+")).filter { it.length >= 3 }
@@ -1248,7 +1248,7 @@ f (all optional): "from","to" (YYYY-MM-DD, inclusive), "type" [expense,income,le
 "person" [names], "category" [food,transport,rent,bills,mobile,home,shopping,health,personal,fees,education,charity,assets,other],
 "item" [words], "not_item" [words to leave out], "no_people" (true = leave out transfers and money to/from people, "people ke ilawa"),
 "min", "max", "last" (newest N; "last entry" = 1). A follow-up like "people ke ilawa" / "sirf petrol" repeats the previous request with the extra condition. Days: aaj = today, kal (past) = yesterday, "3 din pehle" = that day.${if (near.isEmpty()) "" else "\nSaved names: " + near.joinToString(", ")}
-${if (previous.isBlank()) "" else "Previous message (resolve wo / unko / sab / same from it): \"" + previous.replace("\"", "'").take(200) + "\"\n"}Text: "$said"
+${if (screen.isBlank()) "" else "On screen now: $screen. \"ye / inko / these / sab / in sab\" = the records on screen: leave f empty.\n"}${if (previous.isBlank()) "" else "Previous message (resolve wo / unko / sab / same from it): \"" + previous.replace("\"", "'").take(200) + "\"\n"}Text: "$said"
 """.trim()
             val raw = if (fastKey.isNotBlank()) {
                 runCatching { fastCall(prompt, fastKey.trim(), null, maxTokens = 500) }.getOrElse { e ->

@@ -671,12 +671,29 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
 
     readAgain = { fixed, said -> handleText(fixed, said) }
 
+    /** The records on the screen the person is looking at (a search or a khata), so "inko" / "ye sari" means them. */
+    fun screenList(): Pair<String, List<Entry>>? {
+        results?.let { (q, _) ->
+            val person = entries.map { it.person.trim() }.firstOrNull { it.isNotEmpty() && it.equals(q.trim(), true) }
+            val list = if (person != null) entries.filter { it.person.trim().equals(person, true) && withPerson(it) } else matchEntries(entries, q)
+            return "search '$q' (${list.size} records)" to list
+        }
+        ledgerPerson?.let { p ->
+            val list = entries.filter { it.person.equals(p, true) }
+            return "$p's khata (${list.size} records)" to list
+        }
+        return null
+    }
+
     /**
      * Carries out what the AI understood. The AI only translated; every record is picked, counted, added up,
      * deleted or changed here by the app. Returns a line to show, or null when the action shows itself.
      */
     fun runFixed(f: Ai.Fixed, said: String, inChat: Boolean): String? {
-        val q = f.filter
+        // "Inko / ye sari": nothing narrowed down, so it means the records on screen.
+        val onScreen = screenList()
+        val q = if (f.filter.isEmpty && onScreen != null && f.kind in setOf("delete", "change", "to_khata", "reread", "ask", "paid_by"))
+            Query.Filter(ids = onScreen.second.map { it.id }.toSet()) else f.filter
         return when (f.kind) {
             "entry" -> {
                 if (f.text.none { it.isDigit() }) return f.reply.ifBlank { "How much? e.g. \"${f.text.ifBlank { "petrol" }} 50\"" }
@@ -690,7 +707,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     val main = Query.answer(Query.select(entries, q), f.what.ifBlank { "sum" }, q, currency)
                     // "kitna kharcha": money that went out as loans or paybacks that day is shown too, so nothing looks missing.
                     if (q.types == setOf(Type.KHARCHA) && f.what.ifBlank { "sum" } == "sum") {
-                        val outs = Query.Filter(q.from, q.to, setOf(Type.DIYA, Type.WAPIS_DIYA), q.persons, emptySet(), q.items, q.min, q.max, q.last, false, q.notItems)
+                        val outs = Query.Filter(q.from, q.to, setOf(Type.DIYA, Type.WAPIS_DIYA), q.persons, emptySet(), q.items, q.min, q.max, q.last, false, q.notItems, q.ids)
                         val other = Query.select(entries, outs)
                         if (other.isEmpty()) main else main + "\nAlso out: " + Query.answer(other, "sum", outs, currency)
                     } else main
@@ -721,7 +738,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 // each one a loan or a repayment by the running balance (money out = they owe me, money in = back / I owe).
                 val name = f.set["person"]?.trim()?.takeIf { it.isNotEmpty() } ?: f.payer.ifBlank { return "Which khata? e.g. \"Abrar D360 ka khata\"" }
                 if (q.isEmpty) return "Which entries? e.g. \"d360 wali entries\""
-                val hits = Query.select(entries, Query.Filter(q.from, q.to, q.types, q.persons, q.cats, q.items, q.min, q.max, q.last, q.noPeople, q.notItems))
+                val hits = Query.select(entries, q)
                     .filter { !it.person.equals(name, true) }.sortedWith(compareBy<Entry> { it.date }.thenBy { it.createdAt })
                 if (hits.isEmpty()) return "Nothing found (${Query.label(q)})."
                 var work = entries
@@ -741,8 +758,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             "paid_by" -> {
                 // "Aaj jo khana khaya us ke paise Nadeem ne diye": find that meal and make it "Nadeem paid".
                 val payer = f.payer.ifBlank { return "Who paid? e.g. \"nadeem ne pay kiya\"" }
-                val q2 = Query.Filter(q.from, q.to, setOf(Type.KHARCHA), emptyList(), q.cats, q.items, q.min, q.max, q.last, q.noPeople, q.notItems)
-                if (q2.from == null && q2.cats.isEmpty() && q2.items.isEmpty()) return "Which one? e.g. \"aaj ka khana\""
+                val q2 = Query.Filter(q.from, q.to, setOf(Type.KHARCHA), emptyList(), q.cats, q.items, q.min, q.max, q.last, q.noPeople, q.notItems, q.ids)
+                if (q2.from == null && q2.cats.isEmpty() && q2.items.isEmpty() && q2.ids.isEmpty()) return "Which one? e.g. \"aaj ka khana\""
                 val hits = Query.select(entries, q2)
                 // The one that mentions the payer comes first ("Khana with nadeem").
                 val h = hits.firstOrNull { it.note.contains(payer, true) } ?: hits.firstOrNull() ?: return "Nothing found (${Query.label(q2)})."
@@ -834,7 +851,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         flash = Flash("…", Flash.Kind.WORKING)
         scope.launch {
             val f = runCatching {
-                kotlinx.coroutines.withTimeout(6_000) { Ai.fix(Translit.toRoman(text), fast, activeKey, store, contactNames(), lastTalk) }
+                kotlinx.coroutines.withTimeout(6_000) { Ai.fix(Translit.toRoman(text), fast, activeKey, store, contactNames(), lastTalk, screenList()?.first.orEmpty()) }
             }.getOrNull()
             if (f == null) { flash = null; handleText(text, original = text); return@launch }
             if (f.kind == "entry" && f.text.isNotBlank() && !f.text.equals(text, true)) learnWordFixes(Translit.toRoman(text), f.text)
