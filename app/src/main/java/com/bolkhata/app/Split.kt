@@ -89,12 +89,6 @@ object Split {
                 }
             }
         }
-        val said = people > 0 || ws.any { it in splitWords }
-        // Without a split word: "khana 30 ali 12 bilal 8" (names with shares), or food with a name and no
-        // ko / se / ne ("khana ali 40") is a shared bill.
-        val foodWithName = !said && ws.none { it in loanMarkers } && ws.count { isNum(it) } == 1
-        if (!said && !foodWithName && ws.count { isNum(it) } < 3) return null
-
         // Who paid: "ali ne pay kiya" / "mene pay kiya".
         var payer: String? = null
         ws.forEachIndexed { i, w ->
@@ -104,6 +98,12 @@ object Split {
                 drop += i
             }
         }
+        val said = people > 0 || ws.any { it in splitWords }
+        // Without a split word: "khana 30 ali 12 bilal 8" (names with shares), or food with a name and no
+        // ko / se / ne ("khana ali 40") is a shared bill.
+        val foodWithName = !said && ws.none { it in loanMarkers } && ws.count { isNum(it) } == 1
+        if (!said && !foodWithName && payer == null && ws.count { isNum(it) } < 3) return null
+
 
         // Names: contacts / common names; an unknown word joined to a name by "aur"/","; a name with a number is its share.
         val names = mutableListOf<String>()
@@ -136,7 +136,9 @@ object Split {
         val bill = e.copy(type = Type.KHARCHA, person = "", category = if (e.category == Cat.UDHAAR) Cat.OTHER else e.category,
             item = if (isLoan(e.type)) e.item.takeIf { it != "Loans" } ?: "Shared bill" else e.item)
         if (bill.amount <= 0) return null
-        if (!said && shares.size < 2 && !(foodWithName && names.isNotEmpty() && bill.category == Cat.KHANA)) return null
+        if (!said && payer == null && shares.size < 2 && !(foodWithName && names.isNotEmpty() && bill.category == Cat.KHANA)) return null
+        // "nadeem ne pay kiya khana 40" (no sath / with): only I ate, he paid it all.
+        if (payer != null && !said && names.all { it.equals(payer, true) }) return Plan(bill, payer, names, shares, 1)
         return Plan(bill, payer, names, shares, people)
     }
 
@@ -151,6 +153,15 @@ object Split {
     fun entries(plan: Plan): List<Entry> {
         val b = plan.bill
         val total = b.amount
+        // Someone paid for what only I had: it's my expense, and I owe them all of it.
+        if (plan.people == 1 && plan.payer != null) {
+            val what = b.item.ifBlank { b.category.label }
+            return listOf(
+                b.copy(id = "e" + System.nanoTime() + "s0", note = "Paid by ${plan.payer}"),
+                b.copy(id = "e" + System.nanoTime() + "s1", type = Type.LIYA, category = Cat.UDHAAR, item = what, person = plan.payer,
+                    note = "${plan.payer} paid my $what")
+            )
+        }
         val others = plan.names
         val count = maxOf(plan.people, others.size + 1)
         val fixed = plan.shares.values.sum()

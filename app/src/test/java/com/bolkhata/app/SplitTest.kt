@@ -85,4 +85,11 @@ class SplitTest {
         assertNull(plan("ali se 40 liye"))
         assertNull(plan("petrol ali 40"))
     }
+
+    @Test fun someonePaidOnlyMine() {
+        val list = Split.entries(plan("nadeem ne pay kiya khana 40")!!)
+        assertEquals(40.0, list.single { it.type == Type.KHARCHA }.amount, 0.01)
+        val owe = list.single { it.type == Type.LIYA }
+        assertEquals("Nadeem", owe.person); assertEquals(40.0, owe.amount, 0.01)
+    }
 }

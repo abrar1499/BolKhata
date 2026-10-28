@@ -1214,7 +1214,8 @@ Sentence: "$said"
         val reply: String,
         val what: String = "",
         val filter: Query.Filter = Query.Filter(),
-        val set: Map<String, String> = emptyMap()
+        val set: Map<String, String> = emptyMap(),
+        val payer: String = ""
     )
 
     /**
@@ -1230,13 +1231,15 @@ Sentence: "$said"
             val today = SimpleDateFormat("yyyy-MM-dd (EEEE)", Locale.US).format(Date())
             val prompt = """
 Today is $today. Translate the user's text (any language, any spelling) for a money app. The app does all the work; you only fill this JSON:
-{"kind":"","text":"","what":"","f":{},"set":{},"reply":""}
+{"kind":"","text":"","what":"","f":{},"set":{},"payer":"","reply":""}
 kind=entry: new money record(s); text = in the app's forms, amounts as digits, several joined with ", ":
  "<thing> <amount>" (khana 30, petrol 70, taxi 15, kiraya 2000, bijli bill 120) | "salary <amount>" | "<name> ko <amount> diye" (I lent)
  | "<name> se <amount> liye" (I borrowed) | "<name> ne <amount> wapis diye" (got back) | "<name> ko <amount> wapis diye" (I paid back)
- | "<thing> <amount> <name> <name> ke sath" (bill shared) | "<name> ne pay kiya <thing> <amount> sath" | time: aaj, kal, subah 7 baje
+ | "<thing> <amount> <name> <name> ke sath" (bill shared, I paid) | "<name> ne pay kiya <thing> <amount> sath" (shared, he paid)
+ | "<name> ne pay kiya <thing> <amount>" (only mine, he paid) | time: aaj, kal, subah 7 baje
 kind=ask: a question about records; what = sum | count | list | balance (what a person owes or is owed); f = which records.
 kind=delete: remove records; f = which. kind=change: edit records when the user SAYS the new value; f = which, set = only the new values {"amount","category","date","person","type","item"}.
+kind=paid_by: someone else paid for a record ALREADY saved ("aaj jo khana khaya us ke paise nadeem ne diye"); f = which record (date, item, category; no amount needed), payer = the name.
 kind=reread: a record is wrong but no new value is said ("laptop wali entry galat hai theek karo"); f = which; the app reads its note again.
 kind=open: show records (f.person opens a khata). kind=sort_other: put expenses lying in "Other" into their proper categories (any wording like "other wali expense me dalo / theek karo / move karo"). kind=undo.
 kind=chat: greeting / small talk, reply = short friendly answer (max 12 words). kind=unsupported: reply says briefly why.
@@ -1252,7 +1255,7 @@ ${if (previous.isBlank()) "" else "Previous message (resolve wo / unko / sab / s
                 }
             } else request(prompt, geminiKey.trim(), store, prefer = "gemini-3.5-flash-lite", models = (listOf("gemini-3.5-flash-lite") + MODELS).distinct())
             val o = JSONObject(raw)
-            val kinds = setOf("entry", "ask", "delete", "change", "reread", "open", "sort_other", "undo", "chat", "unsupported")
+            val kinds = setOf("entry", "ask", "delete", "change", "reread", "paid_by", "open", "sort_other", "undo", "chat", "unsupported")
             var t = o.optString("text").trim()
             var k = o.optString("kind").trim().lowercase()
             if (t.lowercase() in kinds && k !in kinds) { val s = t; t = k; k = s.lowercase() }
@@ -1276,7 +1279,8 @@ ${if (previous.isBlank()) "" else "Previous message (resolve wo / unko / sab / s
             )
             val s = o.optJSONObject("set")
             val set = s?.keys()?.asSequence()?.associateWith { s.optString(it).trim() }?.filterValues { it.isNotEmpty() && it != "0" }.orEmpty()
-            Fixed(t.take(300), k, o.optString("reply").trim().take(200), o.optString("what").trim().lowercase(), filter, set)
+            val payer = o.optString("payer").trim().let { p -> contacts.firstOrNull { it.equals(p, true) } ?: p.replaceFirstChar { it.uppercase() } }
+            Fixed(t.take(300), k, o.optString("reply").trim().take(200), o.optString("what").trim().lowercase(), filter, set, payer)
         }
 
     /** Asks Gemini which existing entries to change for an instruction like "hamza wali 500 ko 400 kar do". */

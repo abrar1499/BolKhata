@@ -695,6 +695,33 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 changed.take(3).joinToString("; ") { (a, b) -> entryTitle(a) + " " + fmt(a.amount) + " → " + entryTitle(b) + " " + fmt(b.amount) } +
                     if (changed.size > 3) " +${changed.size - 3} more" else ""
             }
+            "paid_by" -> {
+                // "Aaj jo khana khaya us ke paise Nadeem ne diye": find that meal and make it "Nadeem paid".
+                val payer = f.payer.ifBlank { return "Who paid? e.g. \"nadeem ne pay kiya\"" }
+                val q2 = Query.Filter(q.from, q.to, setOf(Type.KHARCHA), emptyList(), q.cats, q.items, q.min, q.max, q.last)
+                if (q2.from == null && q2.cats.isEmpty() && q2.items.isEmpty()) return "Which one? e.g. \"aaj ka khana\""
+                val hits = Query.select(entries, q2)
+                // The one that mentions the payer comes first ("Khana with nadeem").
+                val h = hits.firstOrNull { it.note.contains(payer, true) } ?: hits.firstOrNull() ?: return "Nothing found (${Query.label(q2)})."
+                // A bill I split earlier: the others' shares were "to receive" for me; now the payer is owed instead.
+                val siblings = entries.filter { it.id != h.id && it.createdAt == h.createdAt && it.type == Type.DIYA && it.note.contains("share of", true) }
+                val shared = siblings.isNotEmpty() || h.note.contains(payer, true)
+                val total = h.amount + siblings.sumOf { it.amount }
+                val mine = if (siblings.isNotEmpty()) h.amount else if (shared) Math.round(h.amount * 50.0) / 100.0 else h.amount
+                val what = h.item.ifBlank { h.category.label }
+                val myEntry = h.copy(amount = mine, note = if (shared) "My share · shared ${fmt(total)} · paid by $payer" else "Paid by $payer")
+                val owe = h.copy(id = h.id + "p", type = Type.LIYA, amount = mine, category = Cat.UDHAAR, item = what, person = payer,
+                    note = "$payer paid $what (${fmt(total)}), my share")
+                val before = entries
+                val gone = siblings.map { it.id }.toSet() + h.id
+                save(listOf(myEntry, owe) + entries.filter { it.id !in gone })
+                scope.launch {
+                    snackbar.currentSnackbarData?.dismiss()
+                    val res = snackbar.showSnackbar("✓ $payer paid", actionLabel = "Undo", duration = SnackbarDuration.Long)
+                    if (res == SnackbarResult.ActionPerformed) save(before)
+                }
+                "${entryTitle(h)} ${fmt(total)} paid by $payer → your share ${fmt(mine)} · you owe $payer ${fmt(mine)}"
+            }
             "reread" -> {
                 // "Galat hai, theek karo": the app reads each entry's own note again with what it knows now.
                 if (q.isEmpty) return "Which entry? e.g. \"laptop wali entry\""
