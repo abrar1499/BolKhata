@@ -1180,7 +1180,7 @@ Return ONLY valid JSON in this exact shape: {"reply":"your answer here"}
         val prompt = """
 Money diary. Today is $today. The sentence is Roman Urdu / Hindi / English, often misspelled ("ptrol", "rote", "dia").
 Return ONLY JSON: {"items":[{"intent":"","amount":0,"category":"","sub_item":"","contact":"","date":"YYYY-MM-DD","time":"HH:MM","note":""}]}
-intent: expense | income | lent (I gave a person money they owe back) | borrowed (a person gave me money I owe) | got_back | paid_back.
+intent: expense | income | transfer_out | transfer_in | lent (I gave a person money they owe back) | borrowed (a person gave me money I owe) | got_back | paid_back. Transfers do not create debt.
 "X ne 50 diya" = borrowed from X, unless it is clearly salary or a repayment. One item per amount. Ignore currency words.
 category: food, transport, rent, bills, mobile, home, shopping, health, personal, fees, education, charity, assets, other.
 sub_item: the thing in English, 1-3 words (Petrol, Roti, Taxi). contact: a saved name if it matches (${contacts.take(40).joinToString(", ")}), else the name said, else "".
@@ -1193,7 +1193,7 @@ Sentence: "$said"
         for (i in 0 until items.length()) {
             val o = items.optJSONObject(i) ?: continue
             val type = when (o.optString("intent").lowercase()) {
-                "income" -> "income"; "lent" -> "gave"; "borrowed" -> "took"
+                "income" -> "income"; "transfer_in" -> "transfer_in"; "transfer_out" -> "transfer_out"; "lent" -> "gave"; "borrowed" -> "took"
                 "got_back" -> "got_back"; "paid_back" -> "paid_back"; else -> "expense"
             }
             entries.put(
