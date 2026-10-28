@@ -35,7 +35,8 @@ class StatementParserTest {
         assertEquals(4, r.rows.size)
         assertEquals("To John Test Person", r.rows[1].note)
         assertEquals("Transfer fee", r.rows[2].item)
-        assertEquals("From Muhammad Test", r.rows[3].note)
+        assertEquals("Transfer in", r.rows[3].note)
+        assertEquals("transfer_in", r.rows[3].kind)
         assertTrue(r.rows[3].`in`)
         assertEquals(0.58, r.rows[2].amount, 0.001)
     }
@@ -55,6 +56,42 @@ class StatementParserTest {
         assertEquals("2026-10-01", r.rows[0].date)
         assertEquals("TRANSPORT", r.rows[0].category)
         assertTrue(r.rows[1].`in`)
+    }
+
+    @Test
+    fun classifiesTransfersAtmAndCompanyCreditsSeparately() {
+        val text = """
+            Opening Balance 1,000.00 SAR
+            Closing Balance 1,150.00 SAR
+            Number Of Deposits 2
+            Number Of Withdrawals 2
+            Total Deposits 400.00 SAR
+            Total Withdrawals 250.00 SAR
+            Date Transaction Details Debit Credit Balance
+            Outward IPS Credit Transfer
+            2026/08/18 Time:10:00:00, Notes:9118082600301463/JOHN TEST PERSON
+            200.00 SAR 0.00 SAR 800.00 SAR
+            Internal Transfer
+            2026/08/19 Time:10:00:00, Notes:W-/FRACCT/07703608010906118FRMUHAMMADTEST
+            0.00 SAR 100.00 SAR 900.00 SAR
+            ATM cash withdrawal
+            2026/08/20 Time:10:00:00
+            50.00 SAR 0.00 SAR 850.00 SAR
+            Inward IPS Credit Transfer ACME TRADING LLC
+            2026/08/21 Time:10:00:00, Notes:ACME TRADING LLC
+            0.00 SAR 300.00 SAR 1,150.00 SAR
+        """.trimIndent()
+        val r = StatementParser.parse(text)
+        assertTrue(r.why, r.ok)
+        assertEquals(4, r.rows.size)
+        assertEquals("transfer_out", r.rows[0].kind)
+        assertEquals("John Test Person", r.rows[0].person)
+        assertEquals("transfer_in", r.rows[1].kind)
+        assertEquals("", r.rows[1].person)
+        assertEquals("transfer_out", r.rows[2].kind)
+        assertEquals("ATM withdrawal", r.rows[2].item)
+        assertEquals("income", r.rows[3].kind)
+        assertEquals("Company credit", r.rows[3].item)
     }
 
     @Test
