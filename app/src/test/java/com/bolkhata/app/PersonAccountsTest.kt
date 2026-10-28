@@ -55,6 +55,38 @@ class PersonAccountsTest {
     }
 
     @Test
+    fun currentKhataContextAddsPersonOnlyToPersonTransactions() {
+        val gave = Entry("c1", Type.DIYA, 50.0, Cat.UDHAAR, "Loans", "", "", 1L, 1L)
+        val petrol = Entry("c2", Type.KHARCHA, 20.0, Cat.TRANSPORT, "Petrol", "", "", 2L, 2L)
+        val explicit = Entry("c3", Type.TRANSFER_OUT, 10.0, Cat.OTHER, "Transfer", "Bilal", "", 3L, 3L)
+        val contextual = applyKhataContext(listOf(gave, petrol, explicit), "Aamir")
+        assertEquals("Aamir", contextual[0].person)
+        assertEquals("", contextual[1].person)
+        assertEquals("Bilal", contextual[2].person)
+    }
+
+    @Test
+    fun convertsPersonTransfersUsingCurrentKhataBalance() {
+        val sent = Entry("sent", Type.TRANSFER_OUT, 100.0, Cat.OTHER, "Transfer", "Aamir", "To Aamir", 1L, 1L)
+        val received = Entry("received", Type.TRANSFER_IN, 50.0, Cat.OTHER, "Transfer", "Aamir", "From Aamir", 2L, 2L)
+        val changed = convertPersonTransfersToLedgerEntries(listOf(sent, received), "Aamir")
+        assertEquals(2, changed.size)
+        assertEquals(Type.DIYA, changed[0].second.type)
+        assertEquals(Type.WAPIS_MILA, changed[1].second.type)
+        assertEquals(Cat.UDHAAR, changed[0].second.category)
+        assertEquals(50.0, personAccounts(changed.map { it.second }).single().balance, 0.001)
+    }
+
+    @Test
+    fun transferOutWhileIAlreadyOwePersonBecomesPaidBack() {
+        val borrowed = e("borrowed", Type.LIYA, 200.0, 0)
+        val sent = Entry("sent", Type.TRANSFER_OUT, 50.0, Cat.OTHER, "Transfer", "Nisar", "To Nisar", 1_700_000_000_000L + day, 1_700_000_000_000L + day)
+        val changed = convertPersonTransfersToLedgerEntries(listOf(borrowed, sent), "Nisar")
+        assertEquals(Type.WAPIS_DIYA, changed.single().second.type)
+        assertEquals(-150.0, personAccounts(listOf(borrowed, changed.single().second)).single().balance, 0.001)
+    }
+
+    @Test
     fun movingAnEntryKeepsItsDetails() {
         val fuel = Entry("9", Type.KHARCHA, 100.0, Cat.OTHER, "Sasco", "", "Sasco, Riyadh", 5L, 5L)
         val moved = movedTo(fuel, listOf(fuel), Cat.TRANSPORT, false, null)
