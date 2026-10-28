@@ -1204,6 +1204,51 @@ Sentence: "$said"
         toEntries(JSONObject().put("entries", entries).toString(), text)
     }
 
+    /** What GPT-OSS understood: plain entries, or a shared bill (the app works out the shares). */
+    class Fast(val entries: List<Entry>, val split: Split.Plan?)
+
+    /**
+     * GPT-OSS (Groq / OpenRouter) reads a sentence the app wasn't sure about, with as few tokens as possible:
+     * a tiny prompt, only the saved names that look like words of the sentence, and a short coded answer.
+     * The app does the maths (shares, khata) itself.
+     */
+    suspend fun understandFast(text: String, key: String, contacts: List<String>): Fast = withContext(Dispatchers.IO) {
+        val said = text.replace("\"", "'").take(300)
+        val words = said.lowercase().split(Regex("[^\\p{L}]+")).filter { it.length >= 3 }
+        val near = words.flatMap { w -> Understand.matchContact(listOf(w), contacts).let { (c, ch, _) -> listOfNotNull(c) + ch } }
+            .distinct().take(5)
+        val prompt = """
+Money note, Roman Urdu/English, misspelled. JSON only: {"e":[{"k":"","a":0,"c":"","i":"","w":[],"p":"","h":0}]}
+k: x=my expense, n=income, l=I lent to w, b=I borrowed from w, g=w paid me back, r=I paid w back, s=bill shared with w (p=payer if not me, h=people incl me if said).
+c: food,transport,rent,bills,mobile,home,shopping,health,personal,fees,education,charity,assets,other. i: thing, 1-2 English words.${if (near.isEmpty()) "" else "\nNames: " + near.joinToString(", ")}
+Note: "$said"
+""".trim()
+        val raw = fastCall(prompt, key.trim(), null, maxTokens = 400)
+        val arr = JSONObject(raw).optJSONArray("e") ?: JSONArray()
+        val plain = JSONArray()
+        var split: Split.Plan? = null
+        fun names(o: JSONObject): List<String> {
+            val w = o.optJSONArray("w")
+            val l = if (w != null) (0 until w.length()).map { w.optString(it) } else o.optString("w").split(",")
+            return l.map { it.trim() }.filter { it.isNotEmpty() }.map { n -> contacts.firstOrNull { it.equals(n, true) } ?: n.replaceFirstChar { it.uppercase() } }
+        }
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            val k = o.optString("k").lowercase()
+            val type = when (k) { "n" -> "income"; "l" -> "gave"; "b" -> "took"; "g" -> "got_back"; "r" -> "paid_back"; else -> "expense" }
+            val who = names(o)
+            val one = JSONObject().put("type", type).put("amount", o.optDouble("a", 0.0)).put("category", o.optString("c"))
+                .put("item", o.optString("i")).put("person", who.firstOrNull() ?: "").put("note", "")
+            if (k == "s" && split == null) {
+                val bill = toEntries(JSONObject().put("entries", JSONArray().put(one.put("type", "expense").put("person", ""))).toString(), text).firstOrNull() ?: continue
+                val payer = o.optString("p").trim().takeIf { it.isNotEmpty() && it.lowercase() !in setOf("me", "i", "mene", "maine") }
+                    ?.let { p -> contacts.firstOrNull { it.equals(p, true) } ?: p.replaceFirstChar { it.uppercase() } }
+                split = Split.Plan(bill, payer, (who + listOfNotNull(payer)).distinctBy { it.lowercase() }, emptyMap(), o.optInt("h", 0))
+            } else plain.put(one)
+        }
+        Fast(toEntries(JSONObject().put("entries", plain).toString(), text), split)
+    }
+
     /** Asks Gemini which existing entries to change for an instruction like "hamza wali 500 ko 400 kar do". */
     suspend fun edit(instruction: String, all: List<Entry>, key: String, store: Store, currency: String): EditPlan =
         withContext(Dispatchers.IO) {
@@ -1570,7 +1615,7 @@ Make one entry per transaction. Skip anything without an amount. Number words co
     }
 
     /** Sends [prompt] to Groq or OpenRouter (picked from the key) and returns the JSON text of the answer. */
-    private fun fastCall(prompt: String, key: String, trace: StringBuilder?): String {
+    private fun fastCall(prompt: String, key: String, trace: StringBuilder?, maxTokens: Int = 0): String {
         if (isClaude(key)) return claudeCall(prompt, key, trace)
         val groq = isGroq(key)
         val base = if (groq) "https://api.groq.com/openai/v1" else "https://openrouter.ai/api/v1"
@@ -1583,7 +1628,7 @@ Make one entry per transaction. Skip anything without an amount. Number words co
                 .put("model", model)
                 .put("messages", JSONArray().put(JSONObject().put("role", "user").put("content", prompt)))
                 // Groq counts the requested maximum toward its 8,000-tokens-a-minute limit, so ask for less there.
-                .put("max_tokens", if (groq) 1500 else 4096)
+                .put("max_tokens", if (maxTokens > 0) maxTokens else if (groq) 1500 else 4096)
             if (jsonMode) body.put("response_format", JSONObject().put("type", "json_object"))
             if (groq) {
                 body.put("reasoning_effort", "low")

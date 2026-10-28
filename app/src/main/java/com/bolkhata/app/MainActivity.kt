@@ -526,8 +526,28 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         val askRate = r.unclear.isNotEmpty() && r.unclear.all { it.qty > 0 }
         val unsure = !askRate && (r.unclear.isNotEmpty() || r.entries.isEmpty()) ||
             r.entries.any { it.type == Type.KHARCHA && it.category == Cat.OTHER }
-        if (!unsure || activeKey.isBlank()) {
+        val fast = store.fastKey.trim()
+        if (!unsure || (activeKey.isBlank() && fast.isBlank())) {
             addOffline(r)
+            return
+        }
+        if (fast.isNotBlank()) {
+            // GPT-OSS first: a tiny prompt, the app does the maths. Gemini only if it fails.
+            toast("✨ Understanding…")
+            scope.launch {
+                val got = runCatching { Ai.understandFast(text, fast, contactNames()) }.getOrNull()
+                val sp = got?.split?.let { p -> if (clock == null) p else Split.Plan(Understand.at(p.bill, clock), p.payer, p.names, p.shares, p.people) }
+                val list = got?.entries.orEmpty().map { e -> if (clock != null) Understand.at(e, clock) else e }
+                when {
+                    sp != null && sp.missing != 0 -> splitAsk = sp
+                    sp != null -> confirmNew = (Split.entries(sp) + list) to text
+                    list.isNotEmpty() -> confirmNew = list to text
+                    activeKey.isNotBlank() -> runCatching { Ai.understand(text, activeKey, store, contactNames()) }.getOrNull()
+                        ?.map { e -> if (clock != null) Understand.at(e, clock) else e }
+                        .let { g -> if (g.isNullOrEmpty()) addOffline(r) else confirmNew = g to text }
+                    else -> addOffline(r)
+                }
+            }
             return
         }
         // Not sure: the AI reads it (short prompt, fast model) and the person checks it on a card before it's saved.
@@ -1533,6 +1553,11 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         confirmNew = null
                         save(list + entries)
                         lastAdded = list.map { it.id }
+                        // What the AI understood is learned, so next time the app knows it without AI (no tokens).
+                        list.singleOrNull { it.type == Type.KHARCHA && it.category != Cat.OTHER }?.let { e ->
+                            val words = Parser.learnWords(said).filter { w -> Parser.parse("$w 1").entries.firstOrNull()?.category == Cat.OTHER }.take(3)
+                            if (words.isNotEmpty()) { store.learn(words, e.category, e.item); Parser.learned = store.loadLearned() }
+                        }
                         toast("✓ Saved")
                     },
                     onEdit = {

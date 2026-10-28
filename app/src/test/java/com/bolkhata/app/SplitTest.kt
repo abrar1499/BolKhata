@@ -77,4 +77,12 @@ class SplitTest {
         val list = Split.entries(plan("khana 100 ali bilal sath")!!)
         assertEquals(100.0, list.sumOf { it.amount }, 0.001)
     }
+
+    @Test fun withWord() { check(Split.entries(plan("khana with nadeem 30")!!), 15.0, "Nadeem" to 15.0) }
+    @Test fun foodWithAName() { check(Split.entries(plan("khana ali 40")!!), 20.0, "Ali" to 20.0) }
+    @Test fun loanIsNotSplit() {
+        assertNull(plan("ali ko khana 40 diya"))
+        assertNull(plan("ali se 40 liye"))
+        assertNull(plan("petrol ali 40"))
+    }
 }

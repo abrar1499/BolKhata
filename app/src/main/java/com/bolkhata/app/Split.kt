@@ -31,7 +31,7 @@ object Split {
     }
 
     private val splitWords = setOf(
-        "split", "sath", "saath", "satth", "milke", "milkar", "milkr", "hissa", "hisa", "share", "shared",
+        "split", "sath", "saath", "satth", "with", "milke", "milkar", "milkr", "hissa", "hisa", "share", "shared",
         "teeno", "teenon", "tino", "tinon", "dono", "donon", "charo", "charon", "chaaron", "paancho", "panchon"
     )
     private val groupWords = mapOf(
@@ -41,6 +41,9 @@ object Split {
     private val peopleWords = setOf("bande", "bando", "bandon", "banday", "log", "logon", "loug", "dost", "doston", "afrad", "people", "persons", "admi", "aadmi")
     private val paidWords = setOf("pay", "paid", "payment", "bhara", "bhare", "bill")
     private val meWords = setOf("mene", "maine", "mainay", "men", "main", "mein", "me", "i")
+    /** Words that make it a loan, not a shared bill: "ali ko", "ali se", "ali ne", "ali ka". */
+    private val loanMarkers = setOf("ko", "se", "sy", "ne", "nay", "ny", "ka", "ki", "ke", "kay", "udhar", "udhaar", "qarz", "wapis",
+        "wapas", "liye", "liya", "lia", "diye", "diya", "dia", "lent", "borrowed", "gave", "took", "salary", "tankhwah")
     private val joinWords = setOf("aur", "or", "and", "&", ",")
     private val stop = setOf(
         "hum", "ham", "humne", "hamne", "ne", "ko", "ke", "ka", "ki", "kay", "se", "sy", "mera", "mere", "meri", "my", "with",
@@ -87,8 +90,10 @@ object Split {
             }
         }
         val said = people > 0 || ws.any { it in splitWords }
-        // Without a split word, only "khana 30 ali 12 bilal 8" (two names with their shares) is a shared bill.
-        if (!said && ws.count { isNum(it) } < 3) return null
+        // Without a split word: "khana 30 ali 12 bilal 8" (names with shares), or food with a name and no
+        // ko / se / ne ("khana ali 40") is a shared bill.
+        val foodWithName = !said && ws.none { it in loanMarkers } && ws.count { isNum(it) } == 1
+        if (!said && !foodWithName && ws.count { isNum(it) } < 3) return null
 
         // Who paid: "ali ne pay kiya" / "mene pay kiya".
         var payer: String? = null
@@ -112,16 +117,17 @@ object Split {
                 (ws.getOrNull(i + 1) in setOf("ke", "ki", "kay") && ws.getOrNull(i + 2) in setOf("sath", "saath"))
             if (joined && !isThing(w)) isName[i] = true
         }
+        var numbersLeft = ws.withIndex().count { (i, w) -> isNum(w) && i !in drop }
         ws.forEachIndexed { i, w ->
             if (!isName[i]) return@forEachIndexed
             val name = person(w, contacts) ?: cap(raw[i])
             if (names.none { it.equals(name, true) }) names += name
             drop += i
             val next = ws.getOrNull(i + 1)
-            if (next != null && isNum(next)) { num(next)?.let { shares[name] = it }; drop += i + 1 }
+            // "ali 12" is Ali's share only when another number is left for the bill ("khana ali 40" = bill 40).
+            if (next != null && isNum(next) && numbersLeft > 1) { num(next)?.let { shares[name] = it }; drop += i + 1; numbersLeft-- }
         }
         payer?.let { p -> if (names.none { it.equals(p, true) }) names += p }
-        if (!said && shares.size < 2) return null
 
         // What's left is the bill itself: "khana 30".
         val rest = raw.filterIndexed { i, w -> i !in drop && w.lowercase() !in splitWords && w.lowercase() !in peopleWords && w.lowercase() !in setOf("hum", "ham") }
@@ -130,6 +136,7 @@ object Split {
         val bill = e.copy(type = Type.KHARCHA, person = "", category = if (e.category == Cat.UDHAAR) Cat.OTHER else e.category,
             item = if (isLoan(e.type)) e.item.takeIf { it != "Loans" } ?: "Shared bill" else e.item)
         if (bill.amount <= 0) return null
+        if (!said && shares.size < 2 && !(foodWithName && names.isNotEmpty() && bill.category == Cat.KHANA)) return null
         return Plan(bill, payer, names, shares, people)
     }
 

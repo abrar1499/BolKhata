@@ -576,11 +576,12 @@ object Parser {
     /** Words from a note worth remembering for a category ("10 ki shawarma khai" -> ["shawarma"]). */
     fun learnWords(note: String): List<String> =
         note.lowercase().split(Regex("""[^\p{L}]+"""))
-            .filter { it.length >= 3 && it !in learnStop && it !in notNames && it !in knownPeople }
+            .filter { it.length >= 3 && it !in learnStop && it !in notNames && it !in knownPeople && !Understand.isCommonName(it) }
             .distinct()
 
     private fun matchSpending(t: String, words: List<String>): Pair<Cat, String>? {
-        words.firstNotNullOfOrNull { learned[it] }?.let { return it }
+        // A name ("ali") learned by mistake earlier never decides what was bought.
+        words.firstNotNullOfOrNull { w -> if (Understand.isCommonName(w)) null else learned[w] }?.let { return it }
         if (repairWords.any { matches(it, t, words) }) {
             return when {
                 carWords.any { matches(it, t, words) } -> Cat.TRANSPORT to "Car repair"
