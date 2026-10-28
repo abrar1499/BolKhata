@@ -323,25 +323,30 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         Parser.learned = store.loadLearned()
     }
 
+    fun contextualizeCurrentKhata(list: List<Entry>): List<Entry> =
+        applyKhataContext(list, ledgerPerson?.takeIf { ledger != null })
+
     fun addOffline(r: Parser.Result) {
-        if (r.entries.isEmpty() && r.unclear.isEmpty()) {
+        val contextualEntries = contextualizeCurrentKhata(r.entries)
+        val contextualUnclear = contextualizeCurrentKhata(r.unclear)
+        if (contextualEntries.isEmpty() && contextualUnclear.isEmpty()) {
             flash = Flash("How much? e.g. \"petrol 70\"", Flash.Kind.ANSWER)
             return
         }
-        if (r.entries.isNotEmpty()) {
-            save(r.entries + entries)
-            lastAdded = r.entries.map { it.id }
+        if (contextualEntries.isNotEmpty()) {
+            save(contextualEntries + entries)
+            lastAdded = contextualEntries.map { it.id }
             val ids = lastAdded.toSet()
             scope.launch {
                 snackbar.currentSnackbarData?.dismiss()
                 val res = snackbar.showSnackbar(
-                    "✓ Added " + r.entries.joinToString(", ") { understoodLine(it, currency) },
+                    "✓ Added " + contextualEntries.joinToString(", ") { understoodLine(it, currency) },
                     actionLabel = "Undo", duration = SnackbarDuration.Short
                 )
                 if (res == SnackbarResult.ActionPerformed) moveToTrash(ids)
             }
         }
-        if (r.unclear.isNotEmpty()) pending = pending + r.unclear
+        if (contextualUnclear.isNotEmpty()) pending = pending + contextualUnclear
     }
 
     /**
@@ -686,6 +691,27 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     }
 
     /**
+     * Handles the explicit "all entries gave and received" request only inside an open person's khata.
+     * Transfers are converted using the running balance; ordinary expenses and income are left untouched.
+     * Returns null when this is not that command.
+     */
+    fun handleCurrentKhataBulkCommand(text: String): String? {
+        val person = ledgerPerson?.takeIf { ledger != null } ?: return null
+        val m = runCatching { Translit.toRoman(text) }.getOrDefault(text).lowercase()
+        val all = Regex("""\b(all|sab|sari|saari|tamam|here|yahan|yaha|these|ye|in sab)\b""").containsMatchIn(m)
+        val records = Regex("""\b(entr(?:y|ies)|records?|transactions?)\b""").containsMatchIn(m)
+        val directions = Regex("""\b(gave|give|given|received|receive|got|diye|diya|mila|mili)\b""").containsMatchIn(m)
+        val action = Regex("""\b(kar do|kr do|kardo|krdo|bana do|bna do|convert|change|make|set|darj|dalo|dal do|karo|kro)\b""").containsMatchIn(m)
+        if (!all || !records || !directions || !action) return null
+
+        val changed = convertPersonTransfersToLedgerEntries(entries, person)
+        if (changed.isEmpty()) return "No transfer entries found to convert in " + person + "'s khata."
+        val message = "Converted " + changed.size + " transfer entries in " + person + "'s khata to gave/received entries"
+        applyPlan(Ai.EditPlan(changed, emptyList(), message))
+        return "Done. Converted " + changed.size + " transfer entries in " + person + "'s khata. The khata stays open."
+    }
+
+    /**
      * Carries out what the AI understood. The AI only translated; every record is picked, counted, added up,
      * deleted or changed here by the app. Returns a line to show, or null when the action shows itself.
      */
@@ -846,6 +872,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         val text = raw.trim()
         if (text.isEmpty()) return
         if (splitAsk != null) { answerSplit(text); return }
+        handleCurrentKhataBulkCommand(text)?.let { flash = Flash(it, Flash.Kind.ANSWER); return }
         val fast = store.fastKey.trim()
         if (fast.isBlank() && activeKey.isBlank()) { handleText(text); return }
         flash = Flash("…", Flash.Kind.WORKING)
@@ -989,6 +1016,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         val roman = runCatching { Translit.toRoman(text) }.getOrDefault(text)
         val history = chatMessages.takeLast(20)
         postChat(text, isUser = true)
+        handleCurrentKhataBulkCommand(text)?.let { lastSpeech = it; postChat(it, isUser = false); return }
         // Always handle date-based bulk deletion locally, even if AI is enabled.
         // Never let an AI response delete a broad date range without the user's confirmation.
         val periodCommand = Commands.read(roman)?.takeIf { it.action == Commands.Action.DELETE_PERIOD }
@@ -1029,7 +1057,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             try {
                 // The AI only fixes the sentence; if the app can then read it, that's the answer (a few tokens).
                 val asked = roman.trim().endsWith("?") || runCatching { Questions.isQuestion(roman) }.getOrDefault(false)
-                val f = runCatching { Ai.fix(roman, store.fastKey, activeKey, store, contactNames(), lastTalk) }.getOrNull()
+                val f = runCatching { Ai.fix(roman, store.fastKey, activeKey, store, contactNames(), lastTalk, screenList()?.first.orEmpty()) }.getOrNull()
                 if (f != null && f.kind != "unsupported" && !(f.kind == "chat" && activeKey.isNotBlank())) {
                     if (f.kind == "entry" && f.text.isNotBlank()) learnWordFixes(roman, f.text)
                     val msg = runCatching { runFixed(f, roman, inChat = true) }.getOrNull()
@@ -1048,7 +1076,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     store.memory = (kept + res.remember.filter { r -> kept.none { it.equals(r, ignoreCase = true) } }).takeLast(80)
                 }
                 val reply = res.reply
-                val list = res.entries
+                val list = contextualizeCurrentKhata(res.entries)
                 // Changes are applied straight away (the bar at the bottom has Undo), and listed in the chat
                 // so it's always clear exactly what changed.
                 val changeList = res.plan?.let { plan ->
