@@ -69,6 +69,49 @@ fun personHistoryIsOutflow(e: Entry): Boolean = when (e.type) {
     else -> personEffect(e) > 0
 }
 
+/** Apply the open person's khata as the default for new loan/trade/transfer entries without a named person. */
+fun applyKhataContext(entries: List<Entry>, person: String?): List<Entry> {
+    val name = person?.trim()?.takeIf { it.isNotEmpty() } ?: return entries
+    return entries.map { e ->
+        if (e.person.isBlank() && (isLoan(e.type) || isTrade(e.type) || isTransfer(e.type))) e.copy(person = name)
+        else e
+    }
+}
+
+/**
+ * Converts named-person bank transfers into khata entries when the user explicitly asks.
+ * Positive balance means they owe me; negative means I owe them.
+ */
+fun convertPersonTransfersToLedgerEntries(entries: List<Entry>, person: String): List<Pair<Entry, Entry>> {
+    val history = entries
+        .filter { it.person.equals(person, true) && withPerson(it) && !it.paid }
+        .sortedWith(compareBy<Entry> { it.date }.thenBy { it.createdAt })
+    var balance = 0.0
+    val changed = mutableListOf<Pair<Entry, Entry>>()
+    for (e in history) {
+        val converted = when (e.type) {
+            Type.TRANSFER_OUT -> e.copy(
+                type = if (balance < -0.005) Type.WAPIS_DIYA else Type.DIYA,
+                category = Cat.UDHAAR,
+                item = if (e.item.isBlank() || e.item.equals("Transfer", true)) "Loans" else e.item
+            )
+            Type.TRANSFER_IN -> e.copy(
+                type = if (balance > 0.005) Type.WAPIS_MILA else Type.LIYA,
+                category = Cat.UDHAAR,
+                item = if (e.item.isBlank() || e.item.equals("Transfer", true)) "Loans" else e.item
+            )
+            else -> null
+        }
+        if (converted != null) {
+            changed += e to converted
+            balance += personEffect(converted)
+        } else {
+            balance += personEffect(e)
+        }
+    }
+    return changed
+}
+
 fun personAccounts(entries: List<Entry>): List<PersonAcct> =
     entries.filter { withPerson(it) && !it.paid }
         .groupBy { it.person.trim().lowercase() }
