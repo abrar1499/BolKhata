@@ -478,6 +478,27 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         if (any) wordFixes = store.loadWordFixes()
     }
 
+    /**
+     * The "Sort Other" list. Shops the app knows get their category straight away; for names it doesn't know
+     * ("Atheer Meed Taiba", "Kholoud Rajeh") only the names go to the AI once, and the person checks the list.
+     */
+    fun openRecat() {
+        val groups = Recat.plan(entries)
+        recat = groups
+        val unknown = groups.filter { it.guess == Cat.OTHER }
+        val fast = store.fastKey.trim()
+        if (unknown.isEmpty() || (fast.isBlank() && activeKey.isBlank())) return
+        flash = Flash("Finding ${unknown.size} shops…", Flash.Kind.WORKING)
+        scope.launch {
+            val got = runCatching {
+                Ai.categorize(unknown.take(80).map { it.name to it.total / it.ids.size }, fast, activeKey, store)
+            }.getOrNull().orEmpty()
+            flash = if (got.isEmpty()) Flash("Couldn't sort the rest; pick them in the list.", Flash.Kind.ANSWER)
+                else Flash("Sorted ${got.size} more. Check and tap Apply.", Flash.Kind.ANSWER)
+            if (recat != null && got.isNotEmpty()) recat = recat!!.map { g -> got[g.name]?.let { Recat.Group(g.name, g.ids, g.total, it) } ?: g }
+        }
+    }
+
     // handleText is written further down; this lets the AI-fix step hand the fixed sentence back to it.
     var readAgain: (String, String) -> Unit = { _, _ -> }
     // chatViaReader is written further down too.
@@ -497,7 +518,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
 
     fun handleTextSafely(text: String, clock: Understand.Clock? = null, original: String? = null) {
         // "Other wali entries theek karo": the app sorts them itself (the AI only fixed the wording).
-        if (Recat.isCommand(text)) { recat = Recat.plan(entries); return }
+        if (Recat.isCommand(text)) { openRecat(); return }
         // A vague "change an entry" is not enough information to edit safely; ask what to change.
         val normalizedWords = text.lowercase().split(Regex("""[^\p{L}\p{N}]+""")).filter { it.isNotEmpty() }
         val genericEditWords = setOf(
@@ -683,7 +704,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             "change" -> {
                 // "Other wali expense me dal do": that's sorting Other into real categories.
                 if (q.cats == setOf(Cat.OTHER) && (f.set["category"].isNullOrBlank() || f.set["category"].equals("expense", true))) {
-                    recat = Recat.plan(entries); return null
+                    openRecat(); return null
                 }
                 if (q.isEmpty) return "Which entry? e.g. \"laptop wali entry\""
                 if (f.set.isEmpty()) return runFixed(Ai.Fixed("", "reread", "", "", q), said, inChat)
@@ -767,7 +788,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     null
                 }
             }
-            "sort_other" -> { recat = Recat.plan(entries); null }
+            "sort_other" -> { openRecat(); null }
             "undo" -> {
                 val ids = lastAdded.filter { id -> entries.any { it.id == id } }
                 if (ids.isEmpty()) "Nothing to undo" else { lastAdded = emptyList(); moveToTrash(ids.toSet()); null }
@@ -883,7 +904,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     fun localChat(text: String, roman: String): Boolean {
         if (Recat.isCommand(roman)) {
             val g = Recat.plan(entries)
-            recat = g
+            openRecat()
             postChat(if (g.isEmpty()) "No expenses in Other." else "Found ${g.sumOf { it.ids.size }} expenses in Other (${g.size} shops). Check the list and tap Apply.", isUser = false)
             return true
         }
@@ -1789,7 +1810,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     // Each shop's category is remembered, so the next statement sorts itself.
                     groups.forEach { g ->
                         val c = change[g.ids.first()] ?: return@forEach
-                        val words = Parser.learnWords(g.name).take(3)
+                        val generic = setOf("atheer", "est", "company", "trading", "tradin", "store", "stor", "retail", "shop", "market", "abdul", "abdullah", "mohammed", "muhammad", "ahmed", "alsahel")
+                        val words = Parser.learnWords(g.name).filter { it !in generic }.take(3)
                         if (words.isNotEmpty()) store.learn(words, c, g.name)
                     }
                     Parser.learned = store.loadLearned()

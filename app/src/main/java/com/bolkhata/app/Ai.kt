@@ -1286,6 +1286,33 @@ ${if (previous.isBlank()) "" else "Previous message (resolve wo / unko / sab / s
             Fixed(t.take(300), k, o.optString("reply").trim().take(200), o.optString("what").trim().lowercase(), filter, set, payer)
         }
 
+    /**
+     * Names from a bank statement the app doesn't know -> spending category. Only the names (and the usual amount)
+     * are sent, numbered, and the answer is numbers only: {"1":"food","2":"shopping",...}.
+     */
+    suspend fun categorize(names: List<Pair<String, Double>>, fastKey: String, geminiKey: String, store: Store): Map<String, Cat> =
+        withContext(Dispatchers.IO) {
+            if (names.isEmpty()) return@withContext emptyMap()
+            val lines = names.mapIndexed { i, (n, avg) -> "${i + 1}. ${n.take(40)} (~${avg.toInt()})" }.joinToString("\n")
+            val prompt = """
+Saudi bank card payments: shop names with the usual amount in SAR. Give each the most likely spending category:
+food (restaurants, cafes, bakeries, baqala, groceries, tea, juice), transport (fuel, taxi, parking, car), mobile, health, shopping (clothes,
+electronics, online, stores), bills, personal (salon, laundry, gym), fees (government), education, charity, home, other (can't tell).
+A person's name as a shop with small amounts is usually a small cafeteria / baqala -> food. Answer JSON only: {"1":"food",...}
+$lines
+""".trim()
+            val raw = if (fastKey.isNotBlank()) {
+                runCatching { fastCall(prompt, fastKey.trim(), null, maxTokens = 1200) }.getOrElse { e ->
+                    if (geminiKey.isBlank()) throw e
+                    request(prompt, geminiKey.trim(), store, prefer = "gemini-3.5-flash-lite", models = (listOf("gemini-3.5-flash-lite") + MODELS).distinct())
+                }
+            } else request(prompt, geminiKey.trim(), store, prefer = "gemini-3.5-flash-lite", models = (listOf("gemini-3.5-flash-lite") + MODELS).distinct())
+            val o = JSONObject(raw)
+            names.mapIndexedNotNull { i, (n, _) ->
+                Query.catWords[o.optString((i + 1).toString()).trim().lowercase()]?.takeIf { it != Cat.OTHER && it != Cat.UDHAAR }?.let { n to it }
+            }.toMap()
+        }
+
     /** Asks Gemini which existing entries to change for an instruction like "hamza wali 500 ko 400 kar do". */
     suspend fun edit(instruction: String, all: List<Entry>, key: String, store: Store, currency: String): EditPlan =
         withContext(Dispatchers.IO) {

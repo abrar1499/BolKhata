@@ -120,7 +120,10 @@ fun SplitAskDialog(bill: String, missing: Int, onAnswer: (String) -> Unit, onMic
 /** The list for "Other wali entries theek karo": each shop with the app's category; tap a category to change it. */
 @Composable
 fun RecatDialog(groups: List<Recat.Group>, currency: String, onApply: (Map<String, Cat>) -> Unit, onCancel: () -> Unit) {
-    val picked = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateMapOf<String, Cat>().apply { groups.forEach { put(it.name, it.guess) } } }
+    val picked = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateMapOf<String, Cat>() }
+    // New guesses (from the AI) fill in names not picked yet; a choice the person made is kept.
+    val touched = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateListOf<String>() }
+    groups.forEach { g -> if (g.name !in touched) picked[g.name] = g.guess }
     AlertDialog(
         onDismissRequest = onCancel,
         title = { Text("Sort \"Other\" expenses", fontWeight = FontWeight.Bold) },
@@ -140,7 +143,7 @@ fun RecatDialog(groups: List<Recat.Group>, currency: String, onApply: (Map<Strin
                             AssistChip(onClick = { open = true }, label = { Text(c.icon + " " + c.label, fontSize = 12.sp, maxLines = 1) })
                             DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
                                 Recat.expenseCats.forEach { cat ->
-                                    DropdownMenuItem(text = { Text(cat.icon + " " + cat.label) }, onClick = { picked[g.name] = cat; open = false })
+                                    DropdownMenuItem(text = { Text(cat.icon + " " + cat.label) }, onClick = { picked[g.name] = cat; if (g.name !in touched) touched += g.name; open = false })
                                 }
                             }
                         }
