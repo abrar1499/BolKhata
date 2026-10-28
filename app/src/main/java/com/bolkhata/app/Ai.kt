@@ -1232,9 +1232,9 @@ DELETE: "last entry delete karo" | "aaj ki sari entries delete karo" | "kal ki s
 CHANGE: "<thing> <old> nahi <new> tha" (amount) | "<thing> wali entry kal ki thi" (date) | "<thing> <category> mein dal do"
  | "<name> nahi <name2> ko diye the" | "last entry <amount> karo" | "other wali entries theek karo" (sort expenses lying in Other)
 OPEN: "<name> ka khata kholo" | "<thing> dhoondo" (search)${if (near.isEmpty()) "" else "\nSaved names: " + near.joinToString(", ")}
-k: entry | question | command | chat (greeting, small talk) | unsupported (none of the forms can do it).
-r: for chat a short friendly reply in the user's language (max 12 words); for unsupported say briefly what the app can't do; for an entry with no amount ask how much; else "".
-JSON only: {"t":"","k":"","r":""}
+kind: entry | question | command | chat (greeting, small talk) | unsupported (none of the forms can do it).
+reply: for chat a short friendly reply in the user's language (max 12 words); for unsupported say briefly what the app can't do; for an entry with no amount ask how much; else "".
+JSON only, "text" is the filled-in form itself: {"text":"aaj ki sari entries delete karo","kind":"command","reply":""}
 Text: "$said"
 """.trim()
             val raw = if (fastKey.isNotBlank()) {
@@ -1244,7 +1244,13 @@ Text: "$said"
                 }
             } else request(prompt, geminiKey.trim(), store, prefer = "gemini-3.5-flash-lite", models = (listOf("gemini-3.5-flash-lite") + MODELS).distinct())
             val o = JSONObject(raw)
-            Fixed(o.optString("t").trim().take(300), o.optString("k").trim().lowercase(), o.optString("r").trim().take(200))
+            val kinds = setOf("entry", "question", "command", "chat", "unsupported")
+            var t = o.optString("text", o.optString("t")).trim()
+            var k = o.optString("kind", o.optString("k")).trim()
+            // A model that swaps the fields ("text":"command") is put right.
+            if (t.lowercase() in kinds && k.lowercase() !in kinds) { val s = t; t = k; k = s }
+            if (t.lowercase() in kinds) t = ""
+            Fixed(t.take(300), k.lowercase(), o.optString("reply", o.optString("r")).trim().take(200))
         }
 
     /** Asks Gemini which existing entries to change for an instruction like "hamza wali 500 ko 400 kar do". */
