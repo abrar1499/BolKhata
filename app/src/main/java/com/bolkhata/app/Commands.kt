@@ -11,14 +11,17 @@ object Commands {
     class Command(val action: Action, val query: String, val period: DatePeriod? = null)
 
     /** Calendar year, and optionally one calendar month (1 to 12). */
-    data class DatePeriod(val year: Int, val month: Int? = null) {
-        fun label(): String = if (month == null) "$year"
-            else java.text.DateFormatSymbols(java.util.Locale.ENGLISH).months[month - 1] + " " + year
+    data class DatePeriod(val year: Int, val month: Int? = null, val day: Int? = null) {
+        fun label(): String = when {
+            month == null -> "$year"
+            day != null -> "$day " + java.text.DateFormatSymbols(java.util.Locale.ENGLISH).shortMonths[month - 1] + " " + year
+            else -> java.text.DateFormatSymbols(java.util.Locale.ENGLISH).months[month - 1] + " " + year
+        }
     }
 
     private val search = setOf("search", "find", "show", "dhoondo", "dhundo", "dhoondho", "dhundho", "talash", "talaash", "dikhao", "تلاش", "دکھاؤ")
     private val edit = setOf("edit", "change", "badlo", "open", "kholo")
-    private val delete = setOf("delete", "delet", "dlt", "remove", "mitao", "mita", "hatao", "khatam", "مٹاؤ", "ختم")
+    private val delete = setOf("delete", "delet", "dlt", "del", "dilit", "dilete", "remove", "mitao", "mita", "hatao", "khatam", "مٹاؤ", "ختم")
     private val clear = setOf("clear")
     private val allWords = setOf("all", "sab", "sara", "saara", "sari", "saari", "everything", "poora", "pura", "puri", "poori", "سب")
     private val filler = setOf(
@@ -84,7 +87,34 @@ object Commands {
         return Command(Action.DELETE_PERIOD, period.label(), period)
     }
 
+    /** "aaj ki sari entries delete karo", "kal ki sab entry del kr do", "is mahine ki sari entries delete karo". */
+    private fun readDayDelete(text: String): Command? {
+        val words = text.lowercase(java.util.Locale.ROOT).split(Regex("""[^\p{L}\p{N}]+""")).filter { it.isNotEmpty() }
+        if (words.none { it in delete }) return null
+        if (words.any { it in setOf("nahi", "nahin", "nhi", "ni", "mat", "not", "dont") }) return null
+        if (words.none { it in allWords }) return null
+        val now = java.util.Calendar.getInstance()
+        val back = when {
+            words.any { it in setOf("aaj", "aj", "today", "aaja") } -> 0
+            words.any { it in setOf("kal", "yesterday", "kl") } -> 1
+            words.any { it in setOf("parson", "parso") } -> 2
+            (words.any { it in setOf("is", "iss", "es", "this") } && words.any { it in setOf("mahine", "mahina", "month") }) -> -1
+            else -> return null
+        }
+        val known = filler + allWords + delete + setOf("aaj", "aj", "today", "aaja", "kal", "yesterday", "kl", "parson", "parso", "is", "iss",
+            "es", "this", "mahine", "mahina", "month", "ki", "ka", "ke", "ko", "ki", "entri", "sabhi", "jitni", "bhi", "hain", "hai", "wo", "jo", "din")
+        if (words.any { it !in known }) return null
+        if (back < 0) {
+            val p = DatePeriod(now.get(java.util.Calendar.YEAR), now.get(java.util.Calendar.MONTH) + 1)
+            return Command(Action.DELETE_PERIOD, p.label(), p)
+        }
+        now.add(java.util.Calendar.DAY_OF_YEAR, -back)
+        val p = DatePeriod(now.get(java.util.Calendar.YEAR), now.get(java.util.Calendar.MONTH) + 1, now.get(java.util.Calendar.DAY_OF_MONTH))
+        return Command(Action.DELETE_PERIOD, p.label(), p)
+    }
+
     fun read(text: String): Command? {
+        readDayDelete(text)?.let { return it }
         readPeriodDelete(text)?.let { return it }
         if (text.any { it.isDigit() }) return null
         val words = text.lowercase().trim().split(Regex("""[\s,.!?]+""")).filter { it.isNotEmpty() }
@@ -156,5 +186,6 @@ fun matchEntriesByPeriod(entries: List<Entry>, period: Commands.DatePeriod): Lis
     entries.filter { entry ->
         val date = java.util.Calendar.getInstance().apply { timeInMillis = entry.date }
         date.get(java.util.Calendar.YEAR) == period.year &&
-            (period.month == null || date.get(java.util.Calendar.MONTH) + 1 == period.month)
+            (period.month == null || date.get(java.util.Calendar.MONTH) + 1 == period.month) &&
+            (period.day == null || date.get(java.util.Calendar.DAY_OF_MONTH) == period.day)
     }.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt })

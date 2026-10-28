@@ -1225,7 +1225,8 @@ Entry forms: "<thing> <amount>" (khana 30, petrol 70, taxi 15, roti 10, kiraya 2
 "<thing> <amount> <name> <name> ke sath" (bill shared), "<name> ne pay kiya <thing> <amount> sath", time: aaj, kal, subah 7 baje, shaam 6 baje.
 Question forms: "<name> ka khata", "aaj/is mahine/pichle mahine/is saal kitna kharcha", "<thing> kharcha is mahine", "income is mahine",
 "mujhe kitne lene hain", "mujhe kitne dene hain", "profit aaj", "<item> stock kitna hai".
-Command forms: "last entry delete karo", "undo", "<name> ka khata kholo", "other wali entries theek karo" (sort expenses lying in Other).${if (near.isEmpty()) "" else "\nSaved names: " + near.joinToString(", ")}
+Command forms: "last entry delete karo", "aaj ki sari entries delete karo", "kal ki sari entries delete karo", "is mahine ki sari entries delete karo",
+"october 2025 ki entries delete karo", "<thing> wali entry delete karo", "last entry <amount> karo", "undo", "<name> ka khata kholo", "other wali entries theek karo" (sort expenses lying in Other).${if (near.isEmpty()) "" else "\nSaved names: " + near.joinToString(", ")}
 k: entry | question | command | chat (greeting or anything else). r: for chat a short friendly reply in the user's language (max 12 words); for an entry with no amount a short question asking how much; else "".
 JSON only: {"t":"","k":"","r":""}
 Text: "$said"

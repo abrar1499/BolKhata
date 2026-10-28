@@ -541,23 +541,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         // Simple changes (date, amount) are done offline straight away, with Undo.
         Edits.plan(text, entries)?.let { applyPlan(it); return }
         if (looksLikeEdit(text) && entries.isNotEmpty()) {
-            if (activeKey.isBlank()) {
-                toast("Changing entries by voice needs AI. Turn it on in Settings, or tap the entry to edit.")
-                return
-            }
-            toast("✨ Finding the entry…")
-            scope.launch {
-                try {
-                    val plan = Ai.edit(text, entries, activeKey, store, currency)
-                    if (plan.changed.isEmpty() && plan.deleted.isEmpty()) {
-                        toast(plan.message)
-                    } else {
-                        applyPlan(plan)
-                    }
-                } catch (e: Exception) {
-                    toast(e.message ?: "AI did not answer. Tap the entry to edit it.")
-                }
-            }
+            // The AI never changes entries itself: if the app's own reader couldn't place it, say so.
+            flash = Flash("Which entry? e.g. \"last entry 400 karo\" or \"aaj ki sari entries delete karo\"", Flash.Kind.ANSWER)
             return
         }
         val r = Parser.parse(text).let { p ->
