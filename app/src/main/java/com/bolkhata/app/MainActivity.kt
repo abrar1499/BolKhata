@@ -478,6 +478,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
 
     // handleText is written further down; this lets the AI-fix step hand the fixed sentence back to it.
     var readAgain: (String, String) -> Unit = { _, _ -> }
+    // chatViaReader is written further down too.
+    var chatRead: (String) -> Unit = { }
 
     fun askAiToFix(text: String, question: Boolean, orElse: () -> Unit) {
         val fast = store.fastKey.trim()
@@ -655,7 +657,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         return when (f.kind) {
             "entry" -> {
                 if (f.text.none { it.isDigit() }) return f.reply.ifBlank { "How much? e.g. \"${f.text.ifBlank { "petrol" }} 50\"" }
-                if (inChat) chatViaReader(f.text) else handleText(f.text, original = said)
+                if (inChat) chatRead(f.text) else handleText(f.text, original = said)
                 null
             }
             "ask" -> {
@@ -785,6 +787,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             if (chatWatch === snapshot) chatWatch = null
         }
     }
+
+    chatRead = { chatViaReader(it) }
 
     /** Without AI (no key, or no internet): save clear entries, answer simple questions, never stay silent. */
     fun chatOffline(text: String, roman: String, aiDown: Boolean, why: String? = null) {
