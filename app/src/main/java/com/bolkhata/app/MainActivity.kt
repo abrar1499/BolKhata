@@ -642,6 +642,21 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         }
     }
 
+    fun handleText(text: String, original: String? = null) {
+        if (splitAsk != null) { answerSplit(text); return }
+        try {
+            // Smart understanding first (offline): spelling, numbers said as words, names, time, commands.
+            val u = Understand.read(Translit.toRoman(text), contactNames(), wordFixes)
+            if (u.choices.size > 1) { askWho = u; return }
+            act(u, original)
+        } catch (e: Exception) {
+            // Never close the app because a sentence was not understood.
+            toast("Sorry, I couldn't read that. Tap + to add it by hand.")
+        }
+    }
+
+    readAgain = { fixed, said -> handleText(fixed, said) }
+
     /**
      * Home input: the AI first fixes the sentence into the app's words (shown in the strip above the input),
      * then the app reads it and does everything itself. Hello / small talk gets the AI's short reply in the strip.
@@ -670,20 +685,6 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         }
     }
 
-    fun handleText(text: String, original: String? = null) {
-        if (splitAsk != null) { answerSplit(text); return }
-        try {
-            // Smart understanding first (offline): spelling, numbers said as words, names, time, commands.
-            val u = Understand.read(Translit.toRoman(text), contactNames(), wordFixes)
-            if (u.choices.size > 1) { askWho = u; return }
-            act(u, original)
-        } catch (e: Exception) {
-            // Never close the app because a sentence was not understood.
-            toast("Sorry, I couldn't read that. Tap + to add it by hand.")
-        }
-    }
-
-    readAgain = { fixed, said -> handleText(fixed, said) }
 
     /** Adds a message to the chat and keeps it on the phone. */
     fun postChat(text: String, isUser: Boolean, entryIds: List<String> = emptyList(), attachment: String = "", meta: String = "") {
