@@ -28,11 +28,11 @@ object PdfText {
             val at = runCatching { fmt.parse(r.date + " " + r.time.ifBlank { "12:00" })!!.time }.getOrDefault(now)
             Entry(
                 id = "s" + now + "-" + i,
-                type = if (r.kind == "income") Type.AAMDANI else Type.KHARCHA,
+                type = when (r.kind) { "income" -> Type.AAMDANI; "transfer_in" -> Type.TRANSFER_IN; "transfer_out" -> Type.TRANSFER_OUT; else -> Type.KHARCHA },
                 amount = r.amount,
                 category = runCatching { Cat.valueOf(r.category) }.getOrDefault(Cat.OTHER),
                 item = r.item.take(40),
-                person = "",
+                person = r.person.take(60),
                 note = r.note.take(60),
                 date = at,
                 createdAt = at
