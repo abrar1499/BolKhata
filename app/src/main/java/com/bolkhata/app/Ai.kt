@@ -1226,7 +1226,7 @@ Entry forms: "<thing> <amount>" (khana 30, petrol 70, taxi 15, roti 10, kiraya 2
 Question forms: "<name> ka khata", "aaj/is mahine/pichle mahine/is saal kitna kharcha", "<thing> kharcha is mahine", "income is mahine",
 "mujhe kitne lene hain", "mujhe kitne dene hain", "profit aaj", "<item> stock kitna hai".
 Command forms: "last entry delete karo", "undo", "<name> ka khata kholo".${if (near.isEmpty()) "" else "\nSaved names: " + near.joinToString(", ")}
-k: entry | question | command | chat (greeting or anything else). r: only for chat, a short friendly reply in the user's language (max 15 words), else "".
+k: entry | question | command | chat (greeting or anything else). r: for chat a short friendly reply in the user's language (max 12 words); for an entry with no amount a short question asking how much; else "".
 JSON only: {"t":"","k":"","r":""}
 Text: "$said"
 """.trim()

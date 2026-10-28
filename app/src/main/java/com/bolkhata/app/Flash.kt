@@ -18,7 +18,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -56,43 +55,35 @@ fun FlashStrip(flash: Flash?, onClose: () -> Unit) {
         val primary = MaterialTheme.colorScheme.primary
         val tertiary = MaterialTheme.colorScheme.tertiary
         val surface = MaterialTheme.colorScheme.surface
+        // A slim pill: icon, one or two short lines, no heading.
         Row(
             Modifier
-                .padding(horizontal = 16.dp, vertical = 6.dp)
-                .fillMaxWidth()
-                .shadow(8.dp, RoundedCornerShape(18.dp), ambientColor = primary.copy(alpha = 0.25f), spotColor = primary.copy(alpha = 0.25f))
-                .clip(RoundedCornerShape(18.dp))
-                .background(Brush.horizontalGradient(listOf(primary.copy(alpha = 0.10f), tertiary.copy(alpha = 0.10f))))
-                .background(surface.copy(alpha = 0.85f))
-                .border(1.dp, Brush.horizontalGradient(listOf(primary.copy(alpha = 0.45f), tertiary.copy(alpha = 0.45f))), RoundedCornerShape(18.dp))
+                .padding(horizontal = 20.dp, vertical = 4.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(surface)
+                .background(Brush.horizontalGradient(listOf(primary.copy(alpha = 0.08f), tertiary.copy(alpha = 0.08f))))
+                .border(1.dp, Brush.horizontalGradient(listOf(primary.copy(alpha = 0.40f), tertiary.copy(alpha = 0.40f))), RoundedCornerShape(14.dp))
                 .clickable { onClose() }
-                .padding(horizontal = 12.dp, vertical = 9.dp),
+                .padding(start = 6.dp, end = 12.dp, top = 5.dp, bottom = 5.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
-                Modifier.size(26.dp).clip(CircleShape)
-                    .background(Brush.linearGradient(listOf(primary, tertiary))),
+                Modifier.size(18.dp).clip(CircleShape).background(Brush.linearGradient(listOf(primary, tertiary))),
                 contentAlignment = Alignment.Center
             ) {
                 if (f.kind == Flash.Kind.WORKING) {
-                    CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp, color = surface)
+                    CircularProgressIndicator(Modifier.size(10.dp), strokeWidth = 1.5.dp, color = surface)
                 } else {
-                    Text(if (f.kind == Flash.Kind.FIXED) "✎" else "✨", fontSize = 13.sp, color = surface)
+                    Text(if (f.kind == Flash.Kind.FIXED) "✎" else "✨", fontSize = 9.sp, color = surface)
                 }
             }
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    when (f.kind) { Flash.Kind.WORKING -> "Understanding"; Flash.Kind.FIXED -> "Understood as"; Flash.Kind.ANSWER -> "Answer" },
-                    fontSize = 10.sp, fontWeight = FontWeight.Bold, color = primary, letterSpacing = 0.6.sp
-                )
-                if (f.kind != Flash.Kind.WORKING) {
-                    Text(
-                        f.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface, maxLines = 4, overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
+            Spacer(Modifier.width(7.dp))
+            Text(
+                if (f.kind == Flash.Kind.WORKING) "Understanding…" else f.text,
+                fontSize = 12.sp, fontWeight = FontWeight.Medium,
+                color = if (f.kind == Flash.Kind.WORKING) primary else MaterialTheme.colorScheme.onSurface,
+                maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 15.sp
+            )
         }
     }
 }

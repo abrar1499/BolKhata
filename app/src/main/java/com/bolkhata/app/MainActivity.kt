@@ -321,7 +321,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
 
     fun addOffline(r: Parser.Result) {
         if (r.entries.isEmpty() && r.unclear.isEmpty()) {
-            toast("No amount found. Please say or type an amount.")
+            flash = Flash("How much? e.g. \"petrol 70\"", Flash.Kind.ANSWER)
             return
         }
         if (r.entries.isNotEmpty()) {
@@ -580,7 +580,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     /** A shared bill: your share is the expense, the others' shares go in their khata. Saved with Undo. */
     fun addSplit(p: Split.Plan) {
         val list = Split.entries(p)
-        if (list.isEmpty()) { toast("No amount found. Please say or type an amount."); return }
+        if (list.isEmpty()) { flash = Flash("How much? e.g. \"petrol 70\"", Flash.Kind.ANSWER); return }
         save(list + entries)
         lastAdded = list.map { it.id }
         val ids = lastAdded.toSet()
@@ -675,7 +675,20 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             }.getOrNull()
             when {
                 f == null || f.text.isBlank() -> { flash = null; handleText(text, original = text) }
-                f.kind == "chat" -> flash = Flash(f.reply.ifBlank { f.text }, Flash.Kind.ANSWER)
+                f.kind == "chat" || (f.kind !in setOf("entry", "question", "command") && f.text.none { it.isDigit() }) ->
+                    flash = Flash(f.reply.ifBlank { f.text }, Flash.Kind.ANSWER)
+                // A question: the app answers from its own numbers (a khata opens over the list).
+                f.kind == "question" -> {
+                    val u = runCatching { Understand.read(f.text, contactNames(), wordFixes) }.getOrNull()
+                    if (u?.kind == Understand.Kind.OPEN_KHATA) { flash = Flash(f.text, Flash.Kind.FIXED); handleText(f.text, original = text) }
+                    else {
+                        val a = runCatching { Questions.answer(u?.text ?: f.text, entries, currency) }.getOrNull()
+                        flash = Flash(a?.text ?: f.reply.ifBlank { "Couldn't find that in your khata." }, Flash.Kind.ANSWER)
+                    }
+                }
+                // An entry without an amount: ask for it in the strip, nothing is saved.
+                f.kind == "entry" && f.text.none { it.isDigit() } ->
+                    flash = Flash(f.reply.ifBlank { "How much? e.g. \"${f.text} 50\"" }, Flash.Kind.ANSWER)
                 else -> {
                     if (!f.text.equals(text, true)) learnWordFixes(Translit.toRoman(text), f.text)
                     flash = Flash(f.text, Flash.Kind.FIXED)
