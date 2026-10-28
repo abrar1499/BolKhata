@@ -441,8 +441,8 @@ public final class StatementParser {
     /** Incoming credits from a business are income, not personal transfers. */
     private static boolean isCompanyCredit(String text, String name) {
         String s = (text + " " + name).toLowerCase(Locale.US);
-        if (Pattern.compile("(?i)\\b(internal transfer|own account|self transfer|between own accounts)\\b").matcher(s).find()) return false;
-        return Pattern.compile("(?i)\\b(company|establishment|trading|contracting|services|enterprise|ltd|llc|corp|corporation|inc|wll|llp)\\b").matcher(s).find();
+        if (Pattern.compile("(?i)\\b(internal transfer|own account|self transfer|between own accounts|refund|reversal|returned)\\b").matcher(s).find()) return false;
+        return Pattern.compile("(?i)\\b(company|establishment|trading|contracting|services|enterprise|ltd|llc|corp|corporation|inc|wll|llp|co\\.?)\\b").matcher(s).find();
     }
 
     /** A person's name in a transfer line: ".../WALEED ALI AHMED", "TOZUBAIR-", "to Ahmed Khan". */
