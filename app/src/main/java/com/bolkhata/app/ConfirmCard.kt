@@ -116,3 +116,44 @@ fun SplitAskDialog(bill: String, missing: Int, onAnswer: (String) -> Unit, onMic
         dismissButton = { TextButton(onClick = onCancel) { Text("Cancel") } }
     )
 }
+
+/** The list for "Other wali entries theek karo": each shop with the app's category; tap a category to change it. */
+@Composable
+fun RecatDialog(groups: List<Recat.Group>, currency: String, onApply: (Map<String, Cat>) -> Unit, onCancel: () -> Unit) {
+    val picked = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateMapOf<String, Cat>().apply { groups.forEach { put(it.name, it.guess) } } }
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text("Sort \"Other\" expenses", fontWeight = FontWeight.Bold) },
+        text = {
+            if (groups.isEmpty()) Text("No expenses in Other (transfers are left as they are).")
+            else androidx.compose.foundation.lazy.LazyColumn(Modifier.heightIn(max = 420.dp)) {
+                items(groups.size) { i ->
+                    val g = groups[i]
+                    var open by androidx.compose.runtime.remember { mutableStateOf(false) }
+                    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(g.name, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                            Text("${g.ids.size}× · ${money(currency, g.total)}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Box {
+                            val c = picked[g.name] ?: Cat.OTHER
+                            AssistChip(onClick = { open = true }, label = { Text(c.icon + " " + c.label, fontSize = 12.sp, maxLines = 1) })
+                            DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                                Recat.expenseCats.forEach { cat ->
+                                    DropdownMenuItem(text = { Text(cat.icon + " " + cat.label) }, onClick = { picked[g.name] = cat; open = false })
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            val changes = groups.filter { (picked[it.name] ?: Cat.OTHER) != Cat.OTHER }
+            TextButton(enabled = changes.isNotEmpty(), onClick = {
+                onApply(changes.flatMap { g -> g.ids.map { it to (picked[g.name] ?: Cat.OTHER) } }.toMap())
+            }) { Text("Apply (${changes.sumOf { it.ids.size }})", fontWeight = FontWeight.Bold) }
+        },
+        dismissButton = { TextButton(onClick = onCancel) { Text("Cancel") } }
+    )
+}

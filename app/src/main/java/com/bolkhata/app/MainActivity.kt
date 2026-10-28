@@ -122,6 +122,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var splitAsk by remember { mutableStateOf<Split.Plan?>(null) }
     // The small strip above the home input: the corrected sentence, or the answer to a question / hello.
     var flash by remember { mutableStateOf<Flash?>(null) }
+    // "Other wali entries theek karo": the list of shops to sort, before anything changes.
+    var recat by remember { mutableStateOf<List<Recat.Group>?>(null) }
     var lastAdded by remember { mutableStateOf(listOf<String>()) }
     var editFrom by remember { mutableStateOf<Pair<Entry, String>?>(null) }
     var wordFixes by remember { mutableStateOf(store.loadWordFixes()) }
@@ -490,6 +492,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     }
 
     fun handleTextSafely(text: String, clock: Understand.Clock? = null, original: String? = null) {
+        // "Other wali entries theek karo": the app sorts them itself (the AI only fixed the wording).
+        if (Recat.isCommand(text)) { recat = Recat.plan(entries); return }
         // A vague "change an entry" is not enough information to edit safely; ask what to change.
         val normalizedWords = text.lowercase().split(Regex("""[^\p{L}\p{N}]+""")).filter { it.isNotEmpty() }
         val genericEditWords = setOf(
@@ -773,6 +777,12 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
      * commands and edits it understands. True when handled, so no AI is needed.
      */
     fun localChat(text: String, roman: String): Boolean {
+        if (Recat.isCommand(roman)) {
+            val g = Recat.plan(entries)
+            recat = g
+            postChat(if (g.isEmpty()) "No expenses in Other." else "Found ${g.sumOf { it.ids.size }} expenses in Other (${g.size} shops). Check the list and tap Apply.", isUser = false)
+            return true
+        }
         val u = Understand.read(roman, contactNames(), wordFixes)
         if (u.kind != Understand.Kind.ENTRY || u.choices.size > 1) { chatViaReader(text); return true }
         if (Commands.read(roman) != null || Parser.payStatus(roman) != null || Edits.plan(roman, entries) != null) {
@@ -1663,6 +1673,25 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     },
                     onCancel = { confirmNew = null }
                 )
+            }
+            recat?.let { groups ->
+                RecatDialog(groups, currency, onApply = { change ->
+                    recat = null
+                    val before = entries
+                    save(entries.map { e -> change[e.id]?.let { e.copy(category = it) } ?: e })
+                    // Each shop's category is remembered, so the next statement sorts itself.
+                    groups.forEach { g ->
+                        val c = change[g.ids.first()] ?: return@forEach
+                        val words = Parser.learnWords(g.name).take(3)
+                        if (words.isNotEmpty()) store.learn(words, c, g.name)
+                    }
+                    Parser.learned = store.loadLearned()
+                    scope.launch {
+                        snackbar.currentSnackbarData?.dismiss()
+                        val res = snackbar.showSnackbar("✓ Sorted ${change.size} expenses", actionLabel = "Undo", duration = SnackbarDuration.Long)
+                        if (res == SnackbarResult.ActionPerformed) save(before)
+                    }
+                }, onCancel = { recat = null })
             }
             splitAsk?.let { p ->
                 SplitAskDialog(
