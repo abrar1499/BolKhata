@@ -258,7 +258,7 @@ fun EntryForm(
                         }
                         val finalItem = when {
                             isLoan(t) -> item.trim().ifBlank { "Loans" }
-                            isTransfer(t) -> "Transfer"
+                            isTransfer(t) -> item.trim().ifBlank { "Transfer" }
                             isTrade(t) -> item.trim().ifBlank { if (t == Type.SALE) "Sale" else "Purchase" }
                             item.isNotBlank() -> item.trim()
                             t == Type.AAMDANI -> "Income"
