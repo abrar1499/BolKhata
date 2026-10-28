@@ -27,13 +27,13 @@ object Accounts {
     }.timeInMillis
 
     private fun isOut(e: Entry) = when (e.type) {
-        Type.KHARCHA, Type.DIYA, Type.WAPIS_DIYA -> true
+        Type.KHARCHA, Type.DIYA, Type.WAPIS_DIYA, Type.TRANSFER_OUT -> true
         Type.PURCHASE -> e.person.isBlank() || e.paid
         else -> false
     }
 
     private fun isIn(e: Entry) = when (e.type) {
-        Type.AAMDANI, Type.WAPIS_MILA, Type.LIYA -> true
+        Type.AAMDANI, Type.WAPIS_MILA, Type.LIYA, Type.TRANSFER_IN -> true
         Type.SALE -> e.person.isBlank() || e.paid
         else -> false
     }
@@ -204,12 +204,12 @@ then one line with the totals and the balance.""".trim()
             }
         }
         // Transfers by name (bank transfers are often to or from people without being loans).
-        val transferNames = all.filter { it.item.equals("Transfer", ignoreCase = true) && it.note.isNotBlank() }
-            .groupBy { it.note.removePrefix("To ").removePrefix("From ").trim().lowercase() }
+        val transferNames = all.filter { isTransfer(it.type) && it.person.isNotBlank() }
+            .groupBy { it.person.trim().lowercase() }
             .map { (_, g) ->
-                val sent = g.filter { isOut(it) }.sumOf { it.amount }
-                val got = g.filter { isIn(it) }.sumOf { it.amount }
-                "${g.first().note.removePrefix("To ").removePrefix("From ").trim()}: sent ${f(sent)}, received ${f(got)}"
+                val sent = g.filter { it.type == Type.TRANSFER_OUT }.sumOf { it.amount }
+                val got = g.filter { it.type == Type.TRANSFER_IN }.sumOf { it.amount }
+                "${g.first().person.trim()}: sent ${f(sent)}, received ${f(got)}"
             }.take(25)
         if (!compact && transferNames.isNotEmpty()) sb.appendLine("- Bank transfers by person, all time: " + transferNames.joinToString("; "))
 
