@@ -375,9 +375,19 @@ public final class StatementParser {
             return;
         }
         if (SALARY.matcher(t).find() && r.in) {
+            r.kind = "income";
             r.item = "Salary";
             String from = merchant(t.replaceAll("(?i)salary|payroll|wages|credit|transfer|inward|ips|sarie", " "));
             r.note = from.isEmpty() ? "Salary" : "Salary from " + from;
+            r.category = "TANKHWAH";
+            return;
+        }
+        // An incoming credit from a business is income even when the bank calls it a transfer.
+        if (r.in && isCompanyCredit(t, personIn(t)) && !ATM.matcher(t).find()) {
+            String name = personIn(t);
+            r.kind = "income";
+            r.item = "Company credit";
+            r.note = name.isEmpty() ? "Company credit" : "Company credit from " + name;
             r.category = "TANKHWAH";
             return;
         }
