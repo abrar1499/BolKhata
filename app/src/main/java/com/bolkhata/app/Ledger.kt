@@ -62,6 +62,13 @@ fun personEffect(e: Entry): Double = when (e.type) {
     else -> 0.0
 }
 
+/** Direction shown for a transaction in a person's history; transfer direction is independent of debt balance. */
+fun personHistoryIsOutflow(e: Entry): Boolean = when (e.type) {
+    Type.TRANSFER_OUT -> true
+    Type.TRANSFER_IN -> false
+    else -> personEffect(e) > 0
+}
+
 fun personAccounts(entries: List<Entry>): List<PersonAcct> =
     entries.filter { withPerson(it) && !it.paid }
         .groupBy { it.person.trim().lowercase() }
@@ -460,7 +467,7 @@ private fun PersonView(
             item { SectionTitle("History (balance after each entry)") }
             val hist = p.history.reversed()
             itemsIndexed(hist, key = { _, h -> "h-" + h.first.id }) { i, (e, after) ->
-                val eff = personEffect(e)
+                val outflow = personHistoryIsOutflow(e)
                 CardLine(i == 0, i == hist.lastIndex, 0, 46.dp, modifier = Modifier.entryTap(e) { onEdit(e) }) {
                     Text(SimpleDateFormat("d MMM", Locale.US).format(Date(e.date)), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(48.dp))
                     Text(
@@ -468,7 +475,7 @@ private fun PersonView(
                         fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f)
                     )
                     Column(horizontalAlignment = Alignment.End) {
-                        Text((if (eff > 0) "−" else "+") + fmt(e.amount), fontWeight = FontWeight.Bold, fontSize = 14.sp, color = if (eff > 0) RedSpend else GreenIn)
+                        Text((if (outflow) "−" else "+") + fmt(e.amount), fontWeight = FontWeight.Bold, fontSize = 14.sp, color = if (outflow) RedSpend else GreenIn)
                         Text(
                             when {
                                 after > 0.005 -> "owes you " + fmt(after)

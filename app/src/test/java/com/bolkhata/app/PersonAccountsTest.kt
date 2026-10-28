@@ -45,6 +45,16 @@ class PersonAccountsTest {
     }
 
     @Test
+    fun transferHistoryShowsDirectionWithoutChangingDebtBalance() {
+        val out = e("out", Type.TRANSFER_OUT, 50.0, 0)
+        val inn = e("in", Type.TRANSFER_IN, 100.0, 1)
+        assertTrue(personHistoryIsOutflow(out))
+        assertFalse(personHistoryIsOutflow(inn))
+        val account = personAccounts(listOf(out, inn)).single()
+        assertEquals(0.0, account.balance, 0.001)
+    }
+
+    @Test
     fun movingAnEntryKeepsItsDetails() {
         val fuel = Entry("9", Type.KHARCHA, 100.0, Cat.OTHER, "Sasco", "", "Sasco, Riyadh", 5L, 5L)
         val moved = movedTo(fuel, listOf(fuel), Cat.TRANSPORT, false, null)
