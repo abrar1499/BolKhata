@@ -689,13 +689,14 @@ Return ONLY valid JSON in this exact shape: {"reply":"your answer here"}
         val prompt = """
 The attached file is a bank statement, card statement, receipt or bill. Today is $today. The person's currency is $currency.
 Turn every money movement in it into a ledger entry, using the date printed for each line.
-- Money taken from the account or paid (purchase, POS, mada, Apple Pay, ATM, transfer out, bill, fee) is "expense",
-  unless it is clearly a loan to a named person ("gave") or money returned to someone ("paid_back").
-- Money that came in (salary, deposit, refund, transfer in) is "income", unless it is clearly a named person repaying ("got_back").
+- Purchases, bills and bank fees are "expense"; salary, refunds and credits from a company are "income".
+- A transfer to/from a person or between your own accounts is "transfer_out" / "transfer_in", NOT expense/income or a loan.
+  Keep the named recipient/sender in "person"; own-account transfers have an empty person. ATM withdrawals/deposits are transfers too.
+- Only use "gave", "took", "got_back" or "paid_back" when the statement clearly records a loan or its repayment.
 - A receipt or bill with several items is ONE expense for its total, with the shop name as item.
-- Transfers to or from a person (IPS, SARIE, internal transfer, "TO<NAME>", "/NAME" in the notes): item "Transfer",
-  note "To <Name>" or "From <Name>" with the person's name in normal capitals (e.g. "To Waleed Ali Ahmed", "From Zubair").
-  Never write only "Credit Transfer" when a name is shown.
+- Transfers to or from a person (IPS, SARIE, internal transfer, "TO<NAME>", "/NAME" in the notes): type "transfer_out" or "transfer_in", item "Transfer",
+  person is the person's full name, note "To <Name>" or "From <Name>". These transfers do not create a debt.
+  Transfers between own accounts and ATM cash withdrawals/deposits use the transfer types with person "". Never write only "Credit Transfer" when a name is shown.
 - Bank charges for a transfer: expense, category fees, item "Transfer fee", note "Fee: transfer to <Name>".
 - Shops and card purchases: item is the shop's clean name (e.g. "Sasco", "Express Food"), note the shop and city.
 - time: the time printed for the line as "HH:MM" (24-hour), else "".
@@ -878,14 +879,14 @@ A single statement can contain multiple calendar years; preserve the printed yea
 Only for dates with no four-digit year: choose the reading that gives a date on or before today and closest
 to today. Labels a phone shows next to a message ("Today", "Yesterday", a weekday) win only when the
 source is a screenshot of a message, NOT when it is a dated bank statement.
-- Money taken from the account or paid (purchase, POS, mada, Apple Pay, ATM, transfer out, bill, fee) is "expense",
-  unless it is clearly a loan to a named person ("gave") or money returned to someone ("paid_back").
-- Money that came in (salary, deposit, refund, transfer in) is "income", unless it is clearly a named person repaying ("got_back").
+- Purchases, bills and bank fees are "expense"; salary, refunds and credits from a company are "income".
+- A transfer to/from a person or between your own accounts is "transfer_out" / "transfer_in", NOT expense/income or a loan.
+  Keep the named recipient/sender in "person"; own-account transfers have an empty person. ATM withdrawals/deposits are transfers too.
+- Only use "gave", "took", "got_back" or "paid_back" when the statement clearly records a loan or its repayment.
 - A receipt or bill with several items is ONE expense for its total, with the shop name as item.
-- Transfers to or from a person (IPS, SARIE, internal transfer, "TO<NAME>", "/NAME" in the notes): item "Transfer",
-  note "To <Name>" or "From <Name>" with the FULL name exactly as printed.
-  Copy every part of the name (including initials and middle/family names) into "p" without dropping, rearranging,
-  guessing, or correcting its spelling. Never write only "Credit Transfer" when a name is shown.
+- Transfers to or from a person (IPS, SARIE, internal transfer, "TO<NAME>", "/NAME" in the notes): type "transfer_out" or "transfer_in", item "Transfer",
+  note "To <Name>" or "From <Name>" with the FULL name exactly as printed. Copy every part of the name into "p".
+  These transfers do not create a debt. Transfers between own accounts and ATM withdrawals/deposits are transfer types with person "".
 - Bank charges for a transfer: expense, category fees, item "Transfer fee", note "Fee: transfer to <Name>".
 - Shops and card purchases: item is the shop's clean name (e.g. "Sasco", "Express Food"), note the shop and city.
 - time: the time printed for the line as "HH:MM" (24-hour), else "".
@@ -1159,7 +1160,8 @@ Return ONLY valid JSON in this exact shape: {"reply":"your answer here"}
 
     private val typeNames = mapOf(
         Type.KHARCHA to "expense", Type.AAMDANI to "income", Type.DIYA to "gave", Type.LIYA to "took",
-        Type.WAPIS_MILA to "got_back", Type.WAPIS_DIYA to "paid_back", Type.SALE to "sale", Type.PURCHASE to "purchase"
+        Type.WAPIS_MILA to "got_back", Type.WAPIS_DIYA to "paid_back", Type.SALE to "sale", Type.PURCHASE to "purchase",
+        Type.TRANSFER_IN to "transfer_in", Type.TRANSFER_OUT to "transfer_out"
     )
     private val catNames = mapOf(
         Cat.KHANA to "food", Cat.TRANSPORT to "transport", Cat.RENT to "rent", Cat.BIJLI to "bills",
@@ -1521,6 +1523,8 @@ type, one of:
 - "paid_back": they returned money they owed to a person
 - "sale": they sold goods (to a customer if named; on credit the customer then owes them)
 - "purchase": they bought goods or stock for a shop or business (from a supplier if named; on credit they then owe the supplier)
+- "transfer_in" / "transfer_out": money moved from or to a named person or between own accounts; it is NOT income, expense or a loan.
+  Keep the other person's name in person if known, but do not change their debt balance. ATM cash withdrawals/deposits are transfers too.
   Everyday personal shopping (food, petrol, clothes) is "expense", not "purchase".
   A part payment in the same sentence is a separate "got_back" (customer paid) or "paid_back" (they paid the supplier) entry.
 category (expense and income), one of: food, transport, rent, bills, mobile, home, shopping, health, personal, assets, fees, education, charity, other
