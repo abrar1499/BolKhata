@@ -310,13 +310,8 @@ fun HomeScreen(
                     val dKey = "day-$day"
                     item(key = "md-$key-$day") {
                         Box(Modifier.padding(horizontal = 16.dp)) {
-                            DailyCashHeader(
-                                dayLabel(dayList.first().date),
-                                dayList.size,
-                                dKey in open,
-                                dailyCashSummary(entries, dayList),
-                                currency
-                            ) { toggle(dKey) }
+                            val s = dailyCashSummary(entries, dayList)
+                            DayLine(dayLabel(dayList.first().date), dayList.size, dKey in open, s.cashIn, s.cashOut) { toggle(dKey) }
                         }
                     }
                     if (dKey in open) dayEntries(dayList, currency, onEdit)
@@ -453,30 +448,65 @@ private fun YearHeader(title: String, income: Double, expense: Double, expanded:
     }
 }
 
-/** A month inside a year: name, entry count, the month's income and expense. */
+/** A month: a premium card with a colour edge, the month's name, entry count, income and expense. */
 @Composable
 private fun MonthHeader(title: String, count: Int, income: Double, expense: Double, expanded: Boolean, onToggle: () -> Unit) {
+    val primary = MaterialTheme.colorScheme.primary
+    val tertiary = MaterialTheme.colorScheme.tertiary
     Row(
         Modifier
-            .padding(top = 8.dp, start = 10.dp)
+            .padding(top = 12.dp)
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(18.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .background(Brush.horizontalGradient(listOf(primary.copy(alpha = 0.10f), tertiary.copy(alpha = 0.04f))))
+            .border(1.dp, primary.copy(alpha = if (expanded) 0.35f else 0.15f), RoundedCornerShape(18.dp))
             .clickable { onToggle() }
-            .padding(start = 6.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+            .height(IntrinsicSize.Min),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(title, fontWeight = FontWeight.Bold, fontSize = 16.sp, maxLines = 1)
-        Spacer(Modifier.width(6.dp))
-        Text(
-            if (count == 1) "1 entry" else "$count entries",
-            fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1
-        )
-        Spacer(Modifier.weight(1f))
+        Box(Modifier.width(5.dp).fillMaxHeight().background(Brush.verticalGradient(listOf(primary, tertiary))))
+        Column(Modifier.weight(1f).padding(start = 12.dp, top = 12.dp, bottom = 12.dp)) {
+            Text(title, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, maxLines = 1)
+            Text(
+                if (count == 1) "1 entry" else "$count entries",
+                fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1
+            )
+        }
         InOutFigures(income, expense)
         Icon(
             if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
             contentDescription = if (expanded) "Close" else "Open",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
+            tint = primary, modifier = Modifier.padding(end = 8.dp)
+        )
+    }
+}
+
+/** A day inside a month: one slim line (date, count, small in / out), opens on tap. */
+@Composable
+private fun DayLine(title: String, count: Int, expanded: Boolean, cashIn: Double, cashOut: Double, onToggle: () -> Unit) {
+    val (bar, ink, sub) = slateColors()
+    val shape = if (expanded) RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp) else RoundedCornerShape(12.dp)
+    Row(
+        Modifier
+            .padding(top = 6.dp)
+            .fillMaxWidth()
+            .clip(shape)
+            .background(bar.copy(alpha = 0.7f))
+            .clickable { onToggle() }
+            .padding(start = 12.dp, end = 6.dp, top = 7.dp, bottom = 7.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(title, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = ink, maxLines = 1)
+        Spacer(Modifier.width(6.dp))
+        Text("$count", fontSize = 11.sp, color = sub, maxLines = 1)
+        Spacer(Modifier.weight(1f))
+        if (cashOut > 0) Text("↑ " + fmt(cashOut), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = RedSpend, maxLines = 1)
+        if (cashOut > 0 && cashIn > 0) Spacer(Modifier.width(8.dp))
+        if (cashIn > 0) Text("↓ " + fmt(cashIn), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = GreenIn, maxLines = 1)
+        Icon(
+            if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+            contentDescription = if (expanded) "Close" else "Open", tint = sub, modifier = Modifier.size(18.dp).padding(start = 2.dp)
         )
     }
 }
