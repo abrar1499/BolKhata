@@ -1392,6 +1392,7 @@ If nothing matches, return {"edits":[],"delete":[],"message":"I couldn't find th
                 isLoan(e.type) -> e.copy(category = Cat.UDHAAR, item = e.item.ifBlank { "Loans" })
                 e.type == Type.AAMDANI && e.category == Cat.ASSETS -> e.copy(person = "")
                 e.type == Type.AAMDANI -> e.copy(category = Cat.TANKHWAH, person = "")
+                isTransfer(e.type) -> e.copy(category = Cat.OTHER, item = e.item.ifBlank { "Transfer" })
                 e.category == Cat.UDHAAR || e.category == Cat.TANKHWAH || e.category == Cat.SALES || e.category == Cat.STOCK ->
                     e.copy(category = Cat.OTHER, item = "Other", person = "")
                 else -> e.copy(person = "")
@@ -1824,6 +1825,8 @@ Make one entry per transaction. Skip anything without an amount. Number words co
                 "took" -> Type.LIYA
                 "got_back" -> Type.WAPIS_MILA
                 "paid_back" -> Type.WAPIS_DIYA
+                "transfer_in", "transfer_received", "transfer in" -> Type.TRANSFER_IN
+                "transfer_out", "transfer_sent", "transfer out" -> Type.TRANSFER_OUT
                 else -> Type.KHARCHA
             }
             val person = o.optString("person").trim().replaceFirstChar { it.uppercase() }
@@ -1832,6 +1835,7 @@ Make one entry per transaction. Skip anything without an amount. Number words co
                 type == Type.SALE -> Cat.SALES
                 type == Type.PURCHASE -> Cat.STOCK
                 isLoan(type) -> Cat.UDHAAR
+                isTransfer(type) -> Cat.OTHER
                 type == Type.AAMDANI && o.optString("category").lowercase() == "assets" -> Cat.ASSETS
                 type == Type.AAMDANI -> Cat.TANKHWAH
                 else -> when (o.optString("category").lowercase()) {
@@ -1853,6 +1857,7 @@ Make one entry per transaction. Skip anything without an amount. Number words co
             }
             val item = when {
                 isLoan(type) -> o.optString("item").trim().ifBlank { "Loans" }
+                isTransfer(type) -> o.optString("item").trim().ifBlank { "Transfer" }
                 isTrade(type) -> o.optString("item").trim().ifBlank { if (type == Type.SALE) "Sale" else "Purchase" }
                 else -> o.optString("item").trim().ifBlank { if (type == Type.AAMDANI) "Income" else cat.label }
             }
