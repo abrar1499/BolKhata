@@ -359,7 +359,7 @@ fun qtyText(e: Entry): String {
 }
 
 fun entryTitle(e: Entry): String = when {
-    isTransfer(e.type) -> typeLabel(e.type, e.person)
+    isTransfer(e.type) -> typeLabel(e.type, e.person) + (if (e.item.isNotBlank() && !e.item.equals("Transfer", true)) ": " + e.item else "")
     isLoan(e.type) -> typeLabel(e.type, e.person)
     isTrade(e.type) && e.person.isNotBlank() -> typeLabel(e.type, e.person)
     isTrade(e.type) -> typeLabel(e.type, "") + (if (e.item.isNotBlank() && e.item != "Loans") ": " + e.item else "")
