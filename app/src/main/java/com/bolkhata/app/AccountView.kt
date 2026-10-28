@@ -63,7 +63,7 @@ fun Modifier.entryTap(e: Entry, onEdit: () -> Unit): Modifier = composed {
 }
 
 private fun moneyIn(e: Entry) = when (e.type) {
-    Type.AAMDANI, Type.WAPIS_MILA, Type.LIYA -> true
+    Type.AAMDANI, Type.WAPIS_MILA, Type.LIYA, Type.TRANSFER_IN -> true
     Type.SALE -> e.person.isBlank() || e.paid
     else -> false
 }

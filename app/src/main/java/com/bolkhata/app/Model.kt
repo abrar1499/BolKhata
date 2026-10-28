@@ -12,7 +12,9 @@ enum class Type(val label: String) {
     WAPIS_MILA("Received back"),
     WAPIS_DIYA("Paid back"),
     SALE("Sale"),
-    PURCHASE("Purchase")
+    PURCHASE("Purchase"),
+    TRANSFER_IN("Transfer received"),
+    TRANSFER_OUT("Transfer sent")
 }
 
 enum class Cat(val label: String, val icon: String) {

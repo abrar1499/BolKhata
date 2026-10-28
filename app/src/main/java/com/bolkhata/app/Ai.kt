@@ -689,13 +689,14 @@ Return ONLY valid JSON in this exact shape: {"reply":"your answer here"}
         val prompt = """
 The attached file is a bank statement, card statement, receipt or bill. Today is $today. The person's currency is $currency.
 Turn every money movement in it into a ledger entry, using the date printed for each line.
-- Money taken from the account or paid (purchase, POS, mada, Apple Pay, ATM, transfer out, bill, fee) is "expense",
-  unless it is clearly a loan to a named person ("gave") or money returned to someone ("paid_back").
-- Money that came in (salary, deposit, refund, transfer in) is "income", unless it is clearly a named person repaying ("got_back").
+- Purchases, bills and bank fees are "expense"; salary, refunds and credits from a company are "income".
+- A transfer to/from a person or between your own accounts is "transfer_out" / "transfer_in", NOT expense/income or a loan.
+  Keep the named recipient/sender in "person"; own-account transfers have an empty person. ATM withdrawals/deposits are transfers too.
+- Only use "gave", "took", "got_back" or "paid_back" when the statement clearly records a loan or its repayment.
 - A receipt or bill with several items is ONE expense for its total, with the shop name as item.
-- Transfers to or from a person (IPS, SARIE, internal transfer, "TO<NAME>", "/NAME" in the notes): item "Transfer",
-  note "To <Name>" or "From <Name>" with the person's name in normal capitals (e.g. "To Waleed Ali Ahmed", "From Zubair").
-  Never write only "Credit Transfer" when a name is shown.
+- Transfers to or from a person (IPS, SARIE, internal transfer, "TO<NAME>", "/NAME" in the notes): type "transfer_out" or "transfer_in", item "Transfer",
+  person is the person's full name, note "To <Name>" or "From <Name>". These transfers do not create a debt.
+  Transfers between own accounts and ATM cash withdrawals/deposits use the transfer types with person "". Never write only "Credit Transfer" when a name is shown.
 - Bank charges for a transfer: expense, category fees, item "Transfer fee", note "Fee: transfer to <Name>".
 - Shops and card purchases: item is the shop's clean name (e.g. "Sasco", "Express Food"), note the shop and city.
 - time: the time printed for the line as "HH:MM" (24-hour), else "".
@@ -878,14 +879,14 @@ A single statement can contain multiple calendar years; preserve the printed yea
 Only for dates with no four-digit year: choose the reading that gives a date on or before today and closest
 to today. Labels a phone shows next to a message ("Today", "Yesterday", a weekday) win only when the
 source is a screenshot of a message, NOT when it is a dated bank statement.
-- Money taken from the account or paid (purchase, POS, mada, Apple Pay, ATM, transfer out, bill, fee) is "expense",
-  unless it is clearly a loan to a named person ("gave") or money returned to someone ("paid_back").
-- Money that came in (salary, deposit, refund, transfer in) is "income", unless it is clearly a named person repaying ("got_back").
+- Purchases, bills and bank fees are "expense"; salary, refunds and credits from a company are "income".
+- A transfer to/from a person or between your own accounts is "transfer_out" / "transfer_in", NOT expense/income or a loan.
+  Keep the named recipient/sender in "person"; own-account transfers have an empty person. ATM withdrawals/deposits are transfers too.
+- Only use "gave", "took", "got_back" or "paid_back" when the statement clearly records a loan or its repayment.
 - A receipt or bill with several items is ONE expense for its total, with the shop name as item.
-- Transfers to or from a person (IPS, SARIE, internal transfer, "TO<NAME>", "/NAME" in the notes): item "Transfer",
-  note "To <Name>" or "From <Name>" with the FULL name exactly as printed.
-  Copy every part of the name (including initials and middle/family names) into "p" without dropping, rearranging,
-  guessing, or correcting its spelling. Never write only "Credit Transfer" when a name is shown.
+- Transfers to or from a person (IPS, SARIE, internal transfer, "TO<NAME>", "/NAME" in the notes): type "transfer_out" or "transfer_in", item "Transfer",
+  note "To <Name>" or "From <Name>" with the FULL name exactly as printed. Copy every part of the name into "p".
+  These transfers do not create a debt. Transfers between own accounts and ATM withdrawals/deposits are transfer types with person "".
 - Bank charges for a transfer: expense, category fees, item "Transfer fee", note "Fee: transfer to <Name>".
 - Shops and card purchases: item is the shop's clean name (e.g. "Sasco", "Express Food"), note the shop and city.
 - time: the time printed for the line as "HH:MM" (24-hour), else "".
@@ -1159,7 +1160,8 @@ Return ONLY valid JSON in this exact shape: {"reply":"your answer here"}
 
     private val typeNames = mapOf(
         Type.KHARCHA to "expense", Type.AAMDANI to "income", Type.DIYA to "gave", Type.LIYA to "took",
-        Type.WAPIS_MILA to "got_back", Type.WAPIS_DIYA to "paid_back", Type.SALE to "sale", Type.PURCHASE to "purchase"
+        Type.WAPIS_MILA to "got_back", Type.WAPIS_DIYA to "paid_back", Type.SALE to "sale", Type.PURCHASE to "purchase",
+        Type.TRANSFER_IN to "transfer_in", Type.TRANSFER_OUT to "transfer_out"
     )
     private val catNames = mapOf(
         Cat.KHANA to "food", Cat.TRANSPORT to "transport", Cat.RENT to "rent", Cat.BIJLI to "bills",
@@ -1178,7 +1180,7 @@ Return ONLY valid JSON in this exact shape: {"reply":"your answer here"}
         val prompt = """
 Money diary. Today is $today. The sentence is Roman Urdu / Hindi / English, often misspelled ("ptrol", "rote", "dia").
 Return ONLY JSON: {"items":[{"intent":"","amount":0,"category":"","sub_item":"","contact":"","date":"YYYY-MM-DD","time":"HH:MM","note":""}]}
-intent: expense | income | lent (I gave a person money they owe back) | borrowed (a person gave me money I owe) | got_back | paid_back.
+intent: expense | income | transfer_out | transfer_in | lent (I gave a person money they owe back) | borrowed (a person gave me money I owe) | got_back | paid_back. Transfers do not create debt.
 "X ne 50 diya" = borrowed from X, unless it is clearly salary or a repayment. One item per amount. Ignore currency words.
 category: food, transport, rent, bills, mobile, home, shopping, health, personal, fees, education, charity, assets, other.
 sub_item: the thing in English, 1-3 words (Petrol, Roti, Taxi). contact: a saved name if it matches (${contacts.take(40).joinToString(", ")}), else the name said, else "".
@@ -1191,7 +1193,7 @@ Sentence: "$said"
         for (i in 0 until items.length()) {
             val o = items.optJSONObject(i) ?: continue
             val type = when (o.optString("intent").lowercase()) {
-                "income" -> "income"; "lent" -> "gave"; "borrowed" -> "took"
+                "income" -> "income"; "transfer_in" -> "transfer_in"; "transfer_out" -> "transfer_out"; "lent" -> "gave"; "borrowed" -> "took"
                 "got_back" -> "got_back"; "paid_back" -> "paid_back"; else -> "expense"
             }
             entries.put(
@@ -1392,6 +1394,7 @@ If nothing matches, return {"edits":[],"delete":[],"message":"I couldn't find th
                 isLoan(e.type) -> e.copy(category = Cat.UDHAAR, item = e.item.ifBlank { "Loans" })
                 e.type == Type.AAMDANI && e.category == Cat.ASSETS -> e.copy(person = "")
                 e.type == Type.AAMDANI -> e.copy(category = Cat.TANKHWAH, person = "")
+                isTransfer(e.type) -> e.copy(category = Cat.OTHER, item = e.item.ifBlank { "Transfer" })
                 e.category == Cat.UDHAAR || e.category == Cat.TANKHWAH || e.category == Cat.SALES || e.category == Cat.STOCK ->
                     e.copy(category = Cat.OTHER, item = "Other", person = "")
                 else -> e.copy(person = "")
@@ -1520,6 +1523,8 @@ type, one of:
 - "paid_back": they returned money they owed to a person
 - "sale": they sold goods (to a customer if named; on credit the customer then owes them)
 - "purchase": they bought goods or stock for a shop or business (from a supplier if named; on credit they then owe the supplier)
+- "transfer_in" / "transfer_out": money moved from or to a named person or between own accounts; it is NOT income, expense or a loan.
+  Keep the other person's name in person if known, but do not change their debt balance. ATM cash withdrawals/deposits are transfers too.
   Everyday personal shopping (food, petrol, clothes) is "expense", not "purchase".
   A part payment in the same sentence is a separate "got_back" (customer paid) or "paid_back" (they paid the supplier) entry.
 category (expense and income), one of: food, transport, rent, bills, mobile, home, shopping, health, personal, assets, fees, education, charity, other
@@ -1824,6 +1829,8 @@ Make one entry per transaction. Skip anything without an amount. Number words co
                 "took" -> Type.LIYA
                 "got_back" -> Type.WAPIS_MILA
                 "paid_back" -> Type.WAPIS_DIYA
+                "transfer_in", "transfer_received", "transfer in" -> Type.TRANSFER_IN
+                "transfer_out", "transfer_sent", "transfer out" -> Type.TRANSFER_OUT
                 else -> Type.KHARCHA
             }
             val person = o.optString("person").trim().replaceFirstChar { it.uppercase() }
@@ -1832,6 +1839,7 @@ Make one entry per transaction. Skip anything without an amount. Number words co
                 type == Type.SALE -> Cat.SALES
                 type == Type.PURCHASE -> Cat.STOCK
                 isLoan(type) -> Cat.UDHAAR
+                isTransfer(type) -> Cat.OTHER
                 type == Type.AAMDANI && o.optString("category").lowercase() == "assets" -> Cat.ASSETS
                 type == Type.AAMDANI -> Cat.TANKHWAH
                 else -> when (o.optString("category").lowercase()) {
@@ -1853,6 +1861,7 @@ Make one entry per transaction. Skip anything without an amount. Number words co
             }
             val item = when {
                 isLoan(type) -> o.optString("item").trim().ifBlank { "Loans" }
+                isTransfer(type) -> o.optString("item").trim().ifBlank { "Transfer" }
                 isTrade(type) -> o.optString("item").trim().ifBlank { if (type == Type.SALE) "Sale" else "Purchase" }
                 else -> o.optString("item").trim().ifBlank { if (type == Type.AAMDANI) "Income" else cat.label }
             }

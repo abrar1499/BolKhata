@@ -32,7 +32,8 @@ public final class StatementParser {
         public double balance = Double.NaN;
         public boolean checked;       // amount confirmed by the running balance
         // What the app saves:
-        public String kind = "expense";   // expense | income
+        public String kind = "expense";   // expense | income | transfer_in | transfer_out
+        public String person = "";
         public String item = "";
         public String note = "";
         public String category = "OTHER"; // a Cat name
@@ -374,23 +375,46 @@ public final class StatementParser {
             return;
         }
         if (SALARY.matcher(t).find() && r.in) {
+            r.kind = "income";
             r.item = "Salary";
             String from = merchant(t.replaceAll("(?i)salary|payroll|wages|credit|transfer|inward|ips|sarie", " "));
             r.note = from.isEmpty() ? "Salary" : "Salary from " + from;
             r.category = "TANKHWAH";
             return;
         }
-        if (TRANSFER.matcher(t).find()) {
+        // An incoming credit from a business is income even when the bank calls it a transfer.
+        if (r.in && isCompanyCredit(t, personIn(t)) && !ATM.matcher(t).find()) {
             String name = personIn(t);
-            r.item = "Transfer";
-            r.note = name.isEmpty() ? (r.in ? "Transfer in" : "Transfer out") : (r.in ? "From " : "To ") + name;
-            r.category = r.in ? "TANKHWAH" : "OTHER";
+            r.kind = "income";
+            r.item = "Company credit";
+            r.note = name.isEmpty() ? "Company credit" : "Company credit from " + name;
+            r.category = "TANKHWAH";
             return;
         }
-        if (ATM.matcher(t).find() || Pattern.compile("(?i)cash deposit").matcher(t).find()) {
-            r.item = r.in ? "Cash deposit" : "Cash withdrawal";
-            r.note = "ATM";
-            r.category = r.in ? "TANKHWAH" : "OTHER";
+        // ATM deposits/withdrawals and account transfers move money; they are not spending or income.
+        if (ATM.matcher(t).find()) {
+            r.kind = r.in ? "transfer_in" : "transfer_out";
+            r.item = r.in ? "Cash deposit" : "ATM withdrawal";
+            r.note = "ATM cash movement";
+            r.category = "OTHER";
+            return;
+        }
+        if (TRANSFER.matcher(t).find()) {
+            String name = personIn(t);
+            boolean internal = Pattern.compile("(?i)\\b(internal transfer|own account|self transfer|between own accounts)\\b").matcher(t).find();
+            if (internal) name = "";
+            if (r.in && isCompanyCredit(t, name)) {
+                r.kind = "income";
+                r.item = "Company credit";
+                r.note = name.isEmpty() ? "Company credit" : "Company credit from " + name;
+                r.category = "TANKHWAH";
+                return;
+            }
+            r.kind = r.in ? "transfer_in" : "transfer_out";
+            r.item = "Transfer";
+            r.person = name;
+            r.note = name.isEmpty() ? (r.in ? "Transfer in" : "Transfer out") : (r.in ? "From " : "To ") + name;
+            r.category = "OTHER";
             return;
         }
         if (REFUND.matcher(t).find() && r.in) {
@@ -412,6 +436,13 @@ public final class StatementParser {
         r.item = shop;
         r.note = city.isEmpty() ? shop : shop + ", " + city;
         r.category = r.in ? "TANKHWAH" : category(t);
+    }
+
+    /** Incoming credits from a business are income, not personal transfers. */
+    private static boolean isCompanyCredit(String text, String name) {
+        String s = (text + " " + name).toLowerCase(Locale.US);
+        if (Pattern.compile("(?i)\\b(internal transfer|own account|self transfer|between own accounts|refund|reversal|returned)\\b").matcher(s).find()) return false;
+        return Pattern.compile("(?i)\\b(company|establishment|trading|contracting|services|enterprise|ltd|llc|corp|corporation|inc|wll|llp|co\\.?)\\b").matcher(s).find();
     }
 
     /** A person's name in a transfer line: ".../WALEED ALI AHMED", "TOZUBAIR-", "to Ahmed Khan". */

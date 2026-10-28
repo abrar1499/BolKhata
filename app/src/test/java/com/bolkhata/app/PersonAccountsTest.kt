@@ -34,6 +34,17 @@ class PersonAccountsTest {
     }
 
     @Test
+    fun personTransfersDoNotCreateDebt() {
+        val out = Entry("t1", Type.TRANSFER_OUT, 500.0, Cat.OTHER, "Transfer", "Nisar", "To Nisar", 10L, 10L)
+        val inn = Entry("t2", Type.TRANSFER_IN, 100.0, Cat.OTHER, "Transfer", "Nisar", "From Nisar", 20L, 20L)
+        assertEquals(0.0, balances(listOf(out, inn))["Nisar"] ?: 0.0, 0.001)
+        val account = personAccounts(listOf(out, inn)).single()
+        assertEquals(0.0, account.balance, 0.001)
+        assertEquals(500.0, account.history.first().first.amount, 0.001)
+        assertEquals(100.0, account.history.last().first.amount, 0.001)
+    }
+
+    @Test
     fun movingAnEntryKeepsItsDetails() {
         val fuel = Entry("9", Type.KHARCHA, 100.0, Cat.OTHER, "Sasco", "", "Sasco, Riyadh", 5L, 5L)
         val moved = movedTo(fuel, listOf(fuel), Cat.TRANSPORT, false, null)
