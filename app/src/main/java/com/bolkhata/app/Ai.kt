@@ -1245,7 +1245,8 @@ kind=open: show records (f.person opens a khata). kind=sort_other: put expenses 
 kind=chat: greeting / small talk, reply = short friendly answer (max 12 words). kind=unsupported: reply says briefly why.
 f (all optional): "from","to" (YYYY-MM-DD, inclusive), "type" [expense,income,lent,borrowed,got_back,paid_back,sale,purchase],
 "person" [names], "category" [food,transport,rent,bills,mobile,home,shopping,health,personal,fees,education,charity,assets,other],
-"item" [words], "min", "max", "last" (newest N; "last entry" = 1). Days: aaj = today, kal (past) = yesterday, "3 din pehle" = that day.${if (near.isEmpty()) "" else "\nSaved names: " + near.joinToString(", ")}
+"item" [words], "not_item" [words to leave out], "no_people" (true = leave out transfers and money to/from people, "people ke ilawa"),
+"min", "max", "last" (newest N; "last entry" = 1). A follow-up like "people ke ilawa" / "sirf petrol" repeats the previous request with the extra condition. Days: aaj = today, kal (past) = yesterday, "3 din pehle" = that day.${if (near.isEmpty()) "" else "\nSaved names: " + near.joinToString(", ")}
 ${if (previous.isBlank()) "" else "Previous message (resolve wo / unko / sab / same from it): \"" + previous.replace("\"", "'").take(200) + "\"\n"}Text: "$said"
 """.trim()
             val raw = if (fastKey.isNotBlank()) {
@@ -1275,7 +1276,9 @@ ${if (previous.isBlank()) "" else "Previous message (resolve wo / unko / sab / s
                 items = list(f, "item"),
                 min = f.optDouble("min").takeIf { !it.isNaN() && it > 0 },
                 max = f.optDouble("max").takeIf { !it.isNaN() && it > 0 },
-                last = f.optInt("last", 0).coerceAtLeast(0)
+                last = f.optInt("last", 0).coerceAtLeast(0),
+                noPeople = f.optBoolean("no_people", false),
+                notItems = list(f, "not_item")
             )
             val s = o.optJSONObject("set")
             val set = s?.keys()?.asSequence()?.associateWith { s.optString(it).trim() }?.filterValues { it.isNotEmpty() && it != "0" }.orEmpty()

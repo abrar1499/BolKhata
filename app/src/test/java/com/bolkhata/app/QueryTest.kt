@@ -37,4 +37,11 @@ class QueryTest {
     }
 
     @Test fun emptyFilterIsRefused() { assertTrue(Query.Filter().isEmpty) }
+
+    @Test fun withoutPeople() {
+        val list = all + Entry("6", Type.KHARCHA, 300.0, Cat.OTHER, "Transfer", "", "To Muhammad", daysAgo(1), daysAgo(1)) +
+            Entry("7", Type.KHARCHA, 40.0, Cat.OTHER, "Panda", "", "Panda", daysAgo(1), daysAgo(1))
+        val f = Query.Filter(cats = setOf(Cat.OTHER), types = setOf(Type.KHARCHA), noPeople = true)
+        assertEquals(listOf("7"), Query.select(list, f).map { it.id })
+    }
 }

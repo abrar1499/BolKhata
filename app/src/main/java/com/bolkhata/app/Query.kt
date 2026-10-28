@@ -17,11 +17,15 @@ object Query {
         val items: List<String> = emptyList(),
         val min: Double? = null,
         val max: Double? = null,
-        val last: Int = 0
+        val last: Int = 0,
+        /** Leave out money to / from people (transfers, loans): "people ke ilawa". */
+        val noPeople: Boolean = false,
+        /** Leave out these words: "petrol ke ilawa". */
+        val notItems: List<String> = emptyList()
     ) {
         /** True when nothing narrows it down (then deleting or changing is refused). */
         val isEmpty get() = from == null && to == null && types.isEmpty() && persons.isEmpty() && cats.isEmpty() &&
-            items.isEmpty() && min == null && max == null && last == 0
+            items.isEmpty() && min == null && max == null && last == 0 && !noPeople && notItems.isEmpty()
     }
 
     val typeWords = mapOf(
@@ -58,7 +62,9 @@ object Query {
                 (f.persons.isEmpty() || f.persons.any { samePerson(e.person, it) }) &&
                 (f.cats.isEmpty() || e.category in f.cats) &&
                 (f.items.isEmpty() || f.items.any { w -> val q = w.lowercase(); e.item.lowercase().contains(q) || e.note.lowercase().contains(q) }) &&
-                (f.min == null || e.amount >= f.min) && (f.max == null || e.amount <= f.max)
+                (f.min == null || e.amount >= f.min) && (f.max == null || e.amount <= f.max) &&
+                (!f.noPeople || (e.person.isBlank() && !Recat.isTransfer(e) && !e.note.startsWith("To ") && !e.note.startsWith("From "))) &&
+                (f.notItems.isEmpty() || f.notItems.none { w -> val q = w.lowercase(); e.item.lowercase().contains(q) || e.note.lowercase().contains(q) })
         }.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt })
         return if (f.last > 0) list.take(f.last) else list
     }
@@ -76,6 +82,8 @@ object Query {
             parts += if (a != null && b != null && a != b) "$a – $b" else (a ?: b)!!
         }
         if (f.last > 0) parts += "last ${f.last}"
+        if (f.noPeople) parts += "without transfers / people"
+        if (f.notItems.isNotEmpty()) parts += "without " + f.notItems.joinToString(", ")
         return parts.joinToString(" · ").ifBlank { "all" }
     }
 

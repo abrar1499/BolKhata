@@ -669,7 +669,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     val main = Query.answer(Query.select(entries, q), f.what.ifBlank { "sum" }, q, currency)
                     // "kitna kharcha": money that went out as loans or paybacks that day is shown too, so nothing looks missing.
                     if (q.types == setOf(Type.KHARCHA) && f.what.ifBlank { "sum" } == "sum") {
-                        val outs = Query.Filter(q.from, q.to, setOf(Type.DIYA, Type.WAPIS_DIYA), q.persons, emptySet(), q.items, q.min, q.max, q.last)
+                        val outs = Query.Filter(q.from, q.to, setOf(Type.DIYA, Type.WAPIS_DIYA), q.persons, emptySet(), q.items, q.min, q.max, q.last, false, q.notItems)
                         val other = Query.select(entries, outs)
                         if (other.isEmpty()) main else main + "\nAlso out: " + Query.answer(other, "sum", outs, currency)
                     } else main
@@ -698,7 +698,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             "paid_by" -> {
                 // "Aaj jo khana khaya us ke paise Nadeem ne diye": find that meal and make it "Nadeem paid".
                 val payer = f.payer.ifBlank { return "Who paid? e.g. \"nadeem ne pay kiya\"" }
-                val q2 = Query.Filter(q.from, q.to, setOf(Type.KHARCHA), emptyList(), q.cats, q.items, q.min, q.max, q.last)
+                val q2 = Query.Filter(q.from, q.to, setOf(Type.KHARCHA), emptyList(), q.cats, q.items, q.min, q.max, q.last, q.noPeople, q.notItems)
                 if (q2.from == null && q2.cats.isEmpty() && q2.items.isEmpty()) return "Which one? e.g. \"aaj ka khana\""
                 val hits = Query.select(entries, q2)
                 // The one that mentions the payer comes first ("Khana with nadeem").
