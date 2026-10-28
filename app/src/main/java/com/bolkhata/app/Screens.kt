@@ -72,7 +72,11 @@ fun HomeScreen(
     onTab: (Tab) -> Unit = {}
 ) {
     // Today and this year's months start open; older years start closed.
-    var open by remember { mutableStateOf(setOf("today", "y" + Calendar.getInstance().get(Calendar.YEAR))) }
+    // Today, this year and this month start open; days inside a month open on tap.
+    var open by remember {
+        val c = Calendar.getInstance()
+        mutableStateOf(setOf("today", "y" + c.get(Calendar.YEAR), "m" + c.get(Calendar.YEAR) + "-" + c.get(Calendar.MONTH)))
+    }
     // The five main accounts open their own screens (Expense / Income / To pay / To receive / Cash in hand).
     val openMain = LocalMainOpener.current
     fun toggle(k: String) {
@@ -100,8 +104,9 @@ fun HomeScreen(
             pay = -bal.values.filter { it < 0 }.sum(),
             cashInHand = entries.filter { it.isCashInFlow() }.sumOf { it.amount } - entries.filter { it.isCashOutFlow() }.sumOf { it.amount },
             todayList = sortedAll.filter { sameDay(it.date, nowMs) },
-            dayGroups = sortedAll.filter { !sameDay(it.date, nowMs) && inMonth(it.date) }.groupBy { dayKey(it.date) },
-            monthGroups = sortedAll.filter { !inMonth(it.date) }.groupBy { monthKey(it.date) }
+            dayGroups = emptyMap(),
+            // Every day but today sits inside its year and month: 2026 -> October -> 27 Oct.
+            monthGroups = sortedAll.filter { !sameDay(it.date, nowMs) }.groupBy { monthKey(it.date) }
         ).also { h ->
             h.monthDays = h.monthGroups.mapValues { m -> m.value.groupBy { dayKey(it.date) } }
             // Real expense and income per year (loans are not counted), for the year headings.
@@ -271,16 +276,6 @@ fun HomeScreen(
             }
         }
 
-        dayGroups.forEach { (key, list) ->
-            item(key = "dh-$key") {
-                Box(Modifier.padding(horizontal = 16.dp)) {
-                    DailyCashHeader(dayLabel(list.first().date), list.size, key in open, dailyCashSummary(entries, list), currency) { toggle(key) }
-                }
-            }
-            if (key in open) {
-                dayEntries(list, currency, onEdit)
-            }
-        }
 
         // Past months sit inside their year: "2026" (year in / out) -> "September" (month in / out) -> days.
         var lastYear = -1
@@ -310,19 +305,19 @@ fun HomeScreen(
             }
             if (key in open) {
                 (d.monthDays[key] ?: emptyMap()).forEach { (day, dayList) ->
+                    val dKey = "day-$day"
                     item(key = "md-$key-$day") {
                         Box(Modifier.padding(horizontal = 16.dp)) {
                             DailyCashHeader(
                                 dayLabel(dayList.first().date),
                                 dayList.size,
-                                true,
+                                dKey in open,
                                 dailyCashSummary(entries, dayList),
-                                currency,
-                                onToggle = null
-                            )
+                                currency
+                            ) { toggle(dKey) }
                         }
                     }
-                    dayEntries(dayList, currency, onEdit)
+                    if (dKey in open) dayEntries(dayList, currency, onEdit)
                 }
             }
         }
