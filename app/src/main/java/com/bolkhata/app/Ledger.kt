@@ -58,6 +58,7 @@ class PersonAcct(
 fun personEffect(e: Entry): Double = when (e.type) {
     Type.DIYA, Type.WAPIS_DIYA, Type.SALE -> e.amount
     Type.LIYA, Type.WAPIS_MILA, Type.PURCHASE -> -e.amount
+    Type.TRANSFER_IN, Type.TRANSFER_OUT -> 0.0
     else -> 0.0
 }
 
@@ -87,7 +88,7 @@ private val expenseCats = Cat.values().filter { it !in setOf(Cat.TANKHWAH, Cat.U
 private val incomeCats = listOf(Cat.TANKHWAH, Cat.ASSETS, Cat.OTHER)
 
 private fun isOutflow(e: Entry) = when (e.type) {
-    Type.KHARCHA, Type.DIYA, Type.WAPIS_DIYA, Type.PURCHASE -> true
+    Type.KHARCHA, Type.DIYA, Type.WAPIS_DIYA, Type.PURCHASE, Type.TRANSFER_OUT -> true
     else -> false
 }
 
