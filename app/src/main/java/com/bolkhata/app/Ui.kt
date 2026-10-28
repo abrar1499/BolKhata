@@ -208,8 +208,10 @@ fun isLoan(t: Type) = t == Type.DIYA || t == Type.LIYA || t == Type.WAPIS_MILA |
 
 fun isTrade(t: Type) = t == Type.SALE || t == Type.PURCHASE
 
-/** True when this entry changes what a person owes: loans, and sales or purchases on credit. */
-fun withPerson(e: Entry) = e.person.isNotBlank() && (isLoan(e.type) || isTrade(e.type))
+fun isTransfer(t: Type) = t == Type.TRANSFER_IN || t == Type.TRANSFER_OUT
+
+/** True when this entry belongs in a named person history: loans, trades, and transfers. */
+fun withPerson(e: Entry) = e.person.isNotBlank() && (isLoan(e.type) || isTrade(e.type) || isTransfer(e.type))
 
 /** "On credit" / "Paid" for a sale or purchase with a person, else empty. */
 fun creditTag(e: Entry) = if (isTrade(e.type) && e.person.isNotBlank()) (if (e.paid) "Paid" else "On credit") else ""
@@ -218,7 +220,7 @@ fun creditTag(e: Entry) = if (isTrade(e.type) && e.person.isNotBlank()) (if (e.p
 fun balances(entries: List<Entry>): Map<String, Double> {
     val map = linkedMapOf<String, Double>()
     for (e in entries) {
-        if (!withPerson(e) || e.paid) continue
+        if (!withPerson(e) || e.paid || isTransfer(e.type)) continue
         val p = e.person.trim()
         val v = map[p] ?: 0.0
         map[p] = when (e.type) {
@@ -324,12 +326,12 @@ fun profitBreakdown(allEntries: List<Entry>, periodEntries: List<Entry>): Profit
 fun signColor(t: Type) = when (t) {
     Type.KHARCHA, Type.WAPIS_DIYA, Type.PURCHASE -> RedSpend
     Type.AAMDANI, Type.WAPIS_MILA, Type.SALE -> GreenIn
-    Type.DIYA, Type.LIYA -> OrangeOwe
+    Type.DIYA, Type.LIYA, Type.TRANSFER_IN, Type.TRANSFER_OUT -> OrangeOwe
 }
 
 fun prefix(t: Type) = when (t) {
-    Type.KHARCHA, Type.WAPIS_DIYA, Type.PURCHASE -> "−"
-    Type.AAMDANI, Type.WAPIS_MILA, Type.SALE -> "+"
+    Type.KHARCHA, Type.WAPIS_DIYA, Type.PURCHASE, Type.TRANSFER_OUT -> "−"
+    Type.AAMDANI, Type.WAPIS_MILA, Type.SALE, Type.TRANSFER_IN -> "+"
     else -> ""
 }
 
@@ -344,6 +346,8 @@ fun typeLabel(t: Type, person: String): String {
         Type.WAPIS_DIYA -> if (p.isEmpty()) "Paid back" else "Returned to $p"
         Type.SALE -> if (p.isEmpty()) "Sale" else "Sold to $p"
         Type.PURCHASE -> if (p.isEmpty()) "Purchase" else "Bought from $p"
+        Type.TRANSFER_IN -> if (p.isEmpty()) "Transfer in" else "Transfer from $p"
+        Type.TRANSFER_OUT -> if (p.isEmpty()) "Transfer out" else "Transfer to $p"
     }
 }
 
@@ -355,6 +359,7 @@ fun qtyText(e: Entry): String {
 }
 
 fun entryTitle(e: Entry): String = when {
+    isTransfer(e.type) -> typeLabel(e.type, e.person)
     isLoan(e.type) -> typeLabel(e.type, e.person)
     isTrade(e.type) && e.person.isNotBlank() -> typeLabel(e.type, e.person)
     isTrade(e.type) -> typeLabel(e.type, "") + (if (e.item.isNotBlank() && e.item != "Loans") ": " + e.item else "")
