@@ -26,7 +26,8 @@ object Recat {
         Cat.SEHAT to listOf("nahdi", "dawaa", "pharmacy", "pharma", "hospital", "clinic", "medical", "dental", "lab", "whites"),
         Cat.SHOPPING to listOf(
             "jarir", "extra", "ikea", "centrepoint", "centerpoint", "max", "shein", "noon", "amazon", "namshi", "redtag",
-            "splash", "home", "abyat", "saco", "electronics", "mobile", "store", "mall", "shop", "trading", "est"
+            "splash", "abyat", "saco", "electronics", "store", "mall", "shop", "trading", "tradin", "tamara", "tabby", "online",
+            "purchase", "aliexpress", "temu"
         ),
         Cat.BIJLI to listOf("sec", "electricity", "water", "nwc", "bill", "sadad"),
         Cat.PERSONAL to listOf("salon", "barber", "hallaq", "laundry", "gym", "fitness"),
@@ -35,7 +36,7 @@ object Recat {
         Cat.CHARITY to listOf("ehsan", "charity", "donation", "zakat", "sadaqa")
     )
 
-    private val transferWords = listOf("transfer", "ips", "sarie", "remittance", "wire", "western", "enjaz", "stcpay", "urpay")
+    private val transferWords = listOf("transfer", "ips", "sarie", "remittance", "wire", "western", "enjaz", "stcpay", "urpay", "withdrawal", "atm", "cash withdrawal")
 
     /** The shop or item name of an entry, without numbers and bank words. */
     fun nameOf(e: Entry): String {
@@ -53,7 +54,8 @@ object Recat {
     fun guess(name: String): Cat? {
         val words = name.lowercase().split(Regex("[^\\p{L}]+")).filter { it.length >= 2 }
         shops.firstOrNull { (_, keys) -> words.any { w -> keys.any { k -> w == k || (k.length >= 5 && w.startsWith(k)) } } }?.let { return it.first }
-        return Parser.guessCategory(name)?.first?.takeIf { it != Cat.OTHER && it != Cat.UDHAAR }
+        // Only shops the person sorted before (exact words); no fuzzy guessing, so "Cash withdrawal" never becomes Food.
+        return words.firstNotNullOfOrNull { Parser.learned[it]?.first }?.takeIf { it != Cat.OTHER && it != Cat.UDHAAR }
     }
 
     /** Expenses in Other, grouped by name, with the app's guess (Other when it can't tell). */

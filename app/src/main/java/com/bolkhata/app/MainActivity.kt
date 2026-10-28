@@ -685,13 +685,45 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 if (q.cats == setOf(Cat.OTHER) && (f.set["category"].isNullOrBlank() || f.set["category"].equals("expense", true))) {
                     recat = Recat.plan(entries); return null
                 }
-                if (q.isEmpty || f.set.isEmpty()) return "What should change? e.g. \"petrol 50 nahi 40 tha\""
+                if (q.isEmpty) return "Which entry? e.g. \"laptop wali entry\""
+                if (f.set.isEmpty()) return runFixed(Ai.Fixed("", "reread", "", "", q), said, inChat)
                 val hits = Query.select(entries, q)
                 if (hits.isEmpty()) return "Nothing found (${Query.label(q)})."
                 val changed = hits.map { it to Query.change(it, f.set) }.filter { (a, b) -> a != b }
                 if (changed.isEmpty()) return "Already like that."
                 applyPlan(Ai.EditPlan(changed, emptyList(), "Changed ${changed.size} " + (if (changed.size == 1) "entry" else "entries")))
-                null
+                changed.take(3).joinToString("; ") { (a, b) -> entryTitle(a) + " " + fmt(a.amount) + " → " + entryTitle(b) + " " + fmt(b.amount) } +
+                    if (changed.size > 3) " +${changed.size - 3} more" else ""
+            }
+            "reread" -> {
+                // "Galat hai, theek karo": the app reads each entry's own note again with what it knows now.
+                if (q.isEmpty) return "Which entry? e.g. \"laptop wali entry\""
+                val hits = Query.select(entries, q)
+                if (hits.isEmpty()) return "Nothing found (${Query.label(q)})."
+                val names = contactNames()
+                val swaps = hits.mapNotNull { old ->
+                    // The note keeps the words ("Khana ali"); the amount is put back when it isn't in it.
+                    val said = if (old.note.any { it.isDigit() }) old.note else old.note + " " + fmt(old.amount).replace(",", "")
+                    val u = runCatching { Understand.read(said, names, wordFixes) }.getOrNull() ?: return@mapNotNull null
+                    val fresh = Split.detect(u.text, names)?.let { Split.entries(it) } ?: Parser.parse(u.text).entries
+                    val list = fresh.mapIndexed { i, e -> e.copy(id = old.id + "r" + i, date = old.date, createdAt = old.createdAt + i) }
+                    val same = list.size == 1 && list[0].type == old.type && list[0].category == old.category &&
+                        list[0].item == old.item && list[0].amount == old.amount && list[0].person == old.person
+                    if (list.isEmpty() || same) null else old to list
+                }
+                if (swaps.isEmpty()) return "Looks right to the app. Say what should change, e.g. \"laptop nahi khana tha\"."
+                val before = entries
+                val gone = swaps.map { it.first.id }.toSet()
+                save(swaps.flatMap { it.second } + entries.filter { it.id !in gone })
+                val line = swaps.joinToString("; ") { (o, n) ->
+                    entryTitle(o) + " " + fmt(o.amount) + " → " + n.joinToString(" · ") { entryTitle(it) + " " + fmt(it.amount) }
+                }
+                scope.launch {
+                    snackbar.currentSnackbarData?.dismiss()
+                    val res = snackbar.showSnackbar("✓ Fixed ${swaps.size}", actionLabel = "Undo", duration = SnackbarDuration.Long)
+                    if (res == SnackbarResult.ActionPerformed) save(before)
+                }
+                line
             }
             "open" -> {
                 val name = q.persons.firstOrNull()
