@@ -699,7 +699,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         val person = ledgerPerson?.takeIf { ledger != null } ?: return null
         val m = runCatching { Translit.toRoman(text) }.getOrDefault(text).lowercase()
         val all = Regex("""\b(all|sab|sari|saari|tamam|here|yahan|yaha|these|ye|in sab)\b""").containsMatchIn(m)
-        val records = Regex("""\b(entries?|records?|transactions?)\b""").containsMatchIn(m)
+        val records = Regex("""\b(entr(?:y|ies)|records?|transactions?)\b""").containsMatchIn(m)
         val directions = Regex("""\b(gave|give|given|received|receive|got|diye|diya|mila|mili)\b""").containsMatchIn(m)
         val action = Regex("""\b(kar do|kr do|kardo|krdo|bana do|bna do|convert|change|make|set|darj|dalo|dal do|karo|kro)\b""").containsMatchIn(m)
         if (!all || !records || !directions || !action) return null
