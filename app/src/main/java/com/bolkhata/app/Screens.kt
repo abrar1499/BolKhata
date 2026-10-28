@@ -472,14 +472,27 @@ private fun MonthHeader(title: String, count: Int, income: Double, expense: Doub
         Spacer(Modifier.width(6.dp))
         Text("$count", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
         Spacer(Modifier.weight(1f))
-        if (expense > 0) Text("↑ " + fmt(expense), fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = RedSpend, maxLines = 1)
-        if (expense > 0 && income > 0) Spacer(Modifier.width(10.dp))
-        if (income > 0) Text("↓ " + fmt(income), fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = GreenIn, maxLines = 1)
+        if (expense > 0) MiniFlowChip(fmt(expense), RedSpend, Icons.Filled.ArrowUpward, 13)
+        if (expense > 0 && income > 0) Spacer(Modifier.width(5.dp))
+        if (income > 0) MiniFlowChip(fmt(income), GreenIn, Icons.Filled.ArrowDownward, 13)
         Icon(
             if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
             contentDescription = if (expanded) "Close" else "Open",
             tint = primary, modifier = Modifier.padding(start = 4.dp, end = 8.dp).size(20.dp)
         )
+    }
+}
+
+/** The small out / in pill (arrow icon + amount) used on month and day lines, like the day headers. */
+@Composable
+private fun MiniFlowChip(text: String, color: Color, icon: ImageVector, size: Int) {
+    Row(
+        Modifier.clip(CircleShape).background(color.copy(alpha = 0.10f)).padding(start = 5.dp, end = 8.dp, top = 2.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size((size - 1).dp))
+        Spacer(Modifier.width(2.dp))
+        Text(text, color = color, fontSize = size.sp, fontWeight = FontWeight.Bold, maxLines = 1)
     }
 }
 
@@ -502,9 +515,9 @@ private fun DayLine(title: String, count: Int, expanded: Boolean, cashIn: Double
         Spacer(Modifier.width(6.dp))
         Text("$count", fontSize = 11.sp, color = sub, maxLines = 1)
         Spacer(Modifier.weight(1f))
-        if (cashOut > 0) Text("↑ " + fmt(cashOut), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = RedSpend, maxLines = 1)
-        if (cashOut > 0 && cashIn > 0) Spacer(Modifier.width(8.dp))
-        if (cashIn > 0) Text("↓ " + fmt(cashIn), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = GreenIn, maxLines = 1)
+        if (cashOut > 0) MiniFlowChip(fmt(cashOut), RedSpend, Icons.Filled.ArrowUpward, 12)
+        if (cashOut > 0 && cashIn > 0) Spacer(Modifier.width(5.dp))
+        if (cashIn > 0) MiniFlowChip(fmt(cashIn), GreenIn, Icons.Filled.ArrowDownward, 12)
         Icon(
             if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
             contentDescription = if (expanded) "Close" else "Open", tint = sub, modifier = Modifier.size(18.dp).padding(start = 2.dp)
