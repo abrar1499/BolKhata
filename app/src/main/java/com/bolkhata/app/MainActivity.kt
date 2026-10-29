@@ -233,7 +233,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
 
     /** A command inside an open khata must never silently act on another account. */
     fun scopeKhataEntries(list: List<Entry>): List<Entry> {
-        val person = (activeLedgerPerson ?: ledgerPerson)?.takeIf { ledger != null }
+        val person = if (ledger != null) ledgerPerson ?: activeLedgerPerson
+            else account?.takeIf { it.main == PEOPLE }?.sub
         return if (person == null) list
         else list.filter { it.person.equals(person, ignoreCase = true) }
     }
@@ -363,7 +364,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     }
 
     fun contextualizeCurrentKhata(list: List<Entry>): List<Entry> =
-        applyKhataContext(list, (activeLedgerPerson ?: ledgerPerson)?.takeIf { ledger != null })
+        applyKhataContext(list, if (ledger != null) ledgerPerson ?: activeLedgerPerson else account?.takeIf { it.main == PEOPLE }?.sub)
 
     fun addOffline(r: Parser.Result) {
         val contextualEntries = contextualizeCurrentKhata(r.entries)
@@ -720,14 +721,16 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
 
     /** The records on the screen the person is looking at (a search or a khata), so "inko" / "ye sari" means them. */
     fun screenList(): Pair<String, List<Entry>>? {
+        val activePerson = if (ledger != null) ledgerPerson ?: activeLedgerPerson
+            else account?.takeIf { it.main == PEOPLE }?.sub
+        activePerson?.let { p ->
+            val list = entries.filter { it.person.equals(p, true) }
+            return "$p's khata (${list.size} records)" to list
+        }
         results?.let { (q, _) ->
             val person = entries.map { it.person.trim() }.firstOrNull { it.isNotEmpty() && it.equals(q.trim(), true) }
             val list = if (person != null) entries.filter { it.person.trim().equals(person, true) && withPerson(it) } else matchEntries(entries, q)
             return "search '$q' (${list.size} records)" to list
-        }
-        (activeLedgerPerson ?: ledgerPerson)?.takeIf { ledger != null }?.let { p ->
-            val list = entries.filter { it.person.equals(p, true) }
-            return "$p's khata (${list.size} records)" to list
         }
         return null
     }
@@ -738,7 +741,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
      * Returns null when this is not that command.
      */
     fun handleCurrentKhataBulkCommand(text: String): String? {
-        val person = (activeLedgerPerson ?: ledgerPerson)?.takeIf { ledger != null } ?: return null
+        val person = (if (ledger != null) ledgerPerson ?: activeLedgerPerson else account?.takeIf { it.main == PEOPLE }?.sub) ?: return null
         val m = runCatching { Translit.toRoman(text) }.getOrDefault(text).lowercase()
         val all = Regex("""\b(all|sab|sari|saari|tamam|here|yahan|yaha|these|ye|in sab)\b""").containsMatchIn(m)
         val records = Regex("""\b(entr(?:y|ies)|records?|transactions?)\b""").containsMatchIn(m)
@@ -1863,7 +1866,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     CompositionLocalProvider(LocalEntryMenu provides { e: Entry -> menuFor = e }) {
                         LedgerScreen(
                             start = start, entries = entries, currency = currency,
-                            onClose = { ledger = null; ledgerPerson = null }, onEdit = { editing = it }, onNew = { trade = it },
+                            onClose = { ledger = null; ledgerPerson = null; activeLedgerPerson = null }, onEdit = { editing = it }, onNew = { trade = it },
                             person = ledgerPerson,
                             onActivePerson = { activeLedgerPerson = it },
                             onBulkMove = { ids, destination ->
