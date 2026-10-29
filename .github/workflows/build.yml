@@ -36,9 +36,8 @@ jobs:
           name: BolKhata-apk
           path: app/build/outputs/apk/release/app-release.apk
       - name: Publish update
-        if: github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp app/build/outputs/apk/release/app-release.apk BolKhata.apk
-          gh release create "v${{ github.run_number }}" BolKhata.apk --repo "${{ github.repository }}" --title "Smart Expense ${{ github.run_number }}" --notes "Manually requested build" --latest
+          gh release create "v${{ github.run_number }}" BolKhata.apk --repo "${{ github.repository }}" --title "Smart Expense ${{ github.run_number }}" --notes "Approved build with khata scroll restoration fix" --latest
