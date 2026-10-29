@@ -3,8 +3,11 @@ package com.bolkhata.app
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
@@ -338,17 +341,25 @@ fun LedgerScreen(
     onClose: () -> Unit,
     onEdit: (Entry) -> Unit,
     onNew: (Entry) -> Unit,
-    person: String? = null
+    person: String? = null,
+    onRenamePerson: (String, String) -> Unit = { _, _ -> }
 ) {
     val stack = remember(start, person) {
         mutableStateListOf<Level>(Level.Main(start)).apply { if (person != null) add(Level.Person(person)) }
     }
+    // Keep the account list's scroll position alive while a person's khata is open.
+    val peopleListState = rememberLazyListState()
     BackHandler(enabled = stack.size > 1) { stack.removeAt(stack.lastIndex) }
     fun back() { if (stack.size > 1) stack.removeAt(stack.lastIndex) else onClose() }
     when (val level = stack.last()) {
         is Level.Main -> when (level.acct) {
             MainAcct.EXPENSE, MainAcct.INCOME -> TreeView(level.acct == MainAcct.INCOME, entries, currency, ::back, onEdit)
-            else -> PeopleView(level.acct == MainAcct.TO_RECEIVE, entries, currency, ::back) { stack.add(Level.Person(it)) }
+            else -> PeopleView(
+                level.acct == MainAcct.TO_RECEIVE, entries, currency, ::back,
+                onOpen = { stack.add(Level.Person(it)) },
+                listState = peopleListState,
+                onRenamePerson = onRenamePerson
+            )
         }
         is Level.Sub -> SubView(level.income, level.cat, entries, currency, ::back, onEdit) { stack.add(Level.Vendor(level.income, level.cat, it)) }
         is Level.Vendor -> VendorView(level, entries, currency, ::back, onEdit)
@@ -499,14 +510,21 @@ private fun VendorView(level: Level.Vendor, entries: List<Entry>, currency: Stri
 }
 
 @Composable
-private fun PeopleView(receive: Boolean, entries: List<Entry>, currency: String, onBack: () -> Unit, onOpen: (String) -> Unit) {
+private fun PeopleView(
+    receive: Boolean, entries: List<Entry>, currency: String,
+    onBack: () -> Unit, onOpen: (String) -> Unit,
+    listState: LazyListState, onRenamePerson: (String, String) -> Unit
+) {
     val list = remember(entries, receive) {
         personAccounts(entries).filter { it.toReceive == receive }
             .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name.trim() })
     }
+    var actionPerson by remember { mutableStateOf<String?>(null) }
+    var editAction by remember { mutableStateOf<String?>(null) }
+    var actionName by remember { mutableStateOf("") }
     val total = list.sumOf { kotlin.math.abs(it.balance) }
     val color = if (receive) GreenIn else OrangeOwe
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = 24.dp)) {
         item { Header(if (receive) "To receive" else "To pay", if (list.size == 1) "1 person" else "${list.size} people", onBack) }
         item { TotalsStrip((if (receive) "They owe you" else "You owe") to money(currency, total), color = color) }
         if (list.isEmpty()) item {
@@ -517,7 +535,13 @@ private fun PeopleView(receive: Boolean, entries: List<Entry>, currency: String,
         }
         itemsIndexed(list, key = { _, p -> "p-" + p.name.lowercase() }) { i, p ->
             val settled = kotlin.math.abs(p.balance) < 0.005
-            CardLine(i == 0, i == list.lastIndex, 0, 46.dp, modifier = Modifier.clickable { onOpen(p.name) }) {
+            CardLine(
+                i == 0, i == list.lastIndex, 0, 46.dp,
+                modifier = Modifier.combinedClickable(
+                    onClick = { onOpen(p.name) },
+                    onLongClick = { actionPerson = p.name }
+                )
+            ) {
                 Box(
                     Modifier.size(26.dp).clip(RoundedCornerShape(13.dp)).background(color.copy(alpha = 0.16f)),
                     contentAlignment = Alignment.Center
@@ -532,6 +556,64 @@ private fun PeopleView(receive: Boolean, entries: List<Entry>, currency: String,
                 )
             }
         }
+    }
+    if (actionPerson != null) {
+        AlertDialog(
+            onDismissRequest = { actionPerson = null },
+            title = { Text(actionPerson!!, fontWeight = FontWeight.Bold) },
+            text = { Text("Khata ke liye kya karna hai?") },
+            confirmButton = {
+                Column(horizontalAlignment = Alignment.End) {
+                    TextButton(onClick = {
+                        actionName = actionPerson.orEmpty()
+                        editAction = "Rename"
+                        actionPerson = null
+                    }) { Text("Rename khata") }
+                    TextButton(onClick = {
+                        actionName = ""
+                        editAction = "Move"
+                        actionPerson = null
+                    }) { Text("Move / merge into another khata") }
+                }
+            },
+            dismissButton = { TextButton(onClick = { actionPerson = null }) { Text("Cancel") } }
+        )
+    }
+    if (editAction != null) {
+        val oldName = list.firstOrNull { it.name.equals(actionName, true) }?.name
+            ?: (actionName.takeIf { editAction == "Rename" } ?: "")
+        AlertDialog(
+            onDismissRequest = { editAction = null },
+            title = { Text(if (editAction == "Rename") "Rename khata" else "Move / merge khata") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        if (editAction == "Rename") "Naya naam likhein."
+                        else "Is khata ki tamam entries doosre khata mein move/merge hongi."
+                    )
+                    OutlinedTextField(
+                        value = actionName,
+                        onValueChange = { actionName = it },
+                        singleLine = true,
+                        label = { Text(if (editAction == "Rename") "New khata name" else "Target khata name") }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = actionName.isNotBlank() &&
+                        (editAction != "Rename" || !actionName.trim().equals(oldName, true)),
+                    onClick = {
+                        val target = actionName.trim()
+                        val source = if (editAction == "Rename") oldName else actionPerson
+                        if (!source.isNullOrBlank() && target.isNotBlank()) onRenamePerson(source, target)
+                        editAction = null
+                        actionName = ""
+                    }
+                ) { Text(if (editAction == "Rename") "Rename" else "Move khata") }
+            },
+            dismissButton = { TextButton(onClick = { editAction = null; actionName = "" }) { Text("Cancel") } }
+        )
     }
 }
 
