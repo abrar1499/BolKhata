@@ -721,6 +721,13 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         val onScreen = screenList()
         val q = if (f.filter.isEmpty && onScreen != null && f.kind in setOf("delete", "change", "to_khata", "reread", "ask", "paid_by"))
             Query.Filter(ids = onScreen.second.map { it.id }.toSet()) else f.filter
+        // When chatting inside a khata, destructive commands must never touch another khata.
+        fun scoped(list: List<Entry>): List<Entry> {
+            val active = activeLedgerPerson ?: ledgerPerson
+            return if (ledger != null && !active.isNullOrBlank())
+                list.filter { it.person.equals(active, ignoreCase = true) }
+            else list
+        }
         return when (f.kind) {
             "entry" -> {
                 if (f.text.none { it.isDigit() }) return f.reply.ifBlank { "How much? e.g. \"${f.text.ifBlank { "petrol" }} 50\"" }
@@ -742,7 +749,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             }
             "delete" -> {
                 if (q.isEmpty) return "Which entries? e.g. \"aaj ki sari entries delete karo\""
-                askDelete(Query.label(q), Query.select(entries, q))
+                askDelete(Query.label(q), scoped(Query.select(entries, q)))
                 null
             }
             "change" -> {
@@ -752,7 +759,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 }
                 if (q.isEmpty) return "Which entry? e.g. \"laptop wali entry\""
                 if (f.set.isEmpty()) return runFixed(Ai.Fixed("", "reread", "", "", q), said, inChat)
-                val hits = Query.select(entries, q)
+                val hits = scoped(Query.select(entries, q))
                 if (hits.isEmpty()) return "Nothing found (${Query.label(q)})."
                 val changed = hits.map { it to Query.change(it, f.set) }.filter { (a, b) -> a != b }
                 if (changed.isEmpty()) return "Already like that."
@@ -765,7 +772,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 // each one a loan or a repayment by the running balance (money out = they owe me, money in = back / I owe).
                 val name = f.set["person"]?.trim()?.takeIf { it.isNotEmpty() } ?: f.payer.ifBlank { return "Which khata? e.g. \"Abrar D360 ka khata\"" }
                 if (q.isEmpty) return "Which entries? e.g. \"d360 wali entries\""
-                val hits = Query.select(entries, q)
+                val hits = scoped(Query.select(entries, q))
                     .filter { !it.person.equals(name, true) }.sortedWith(compareBy<Entry> { it.date }.thenBy { it.createdAt })
                 if (hits.isEmpty()) return "Nothing found (${Query.label(q)})."
                 var work = entries
@@ -812,7 +819,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             "reread" -> {
                 // "Galat hai, theek karo": the app reads each entry's own note again with what it knows now.
                 if (q.isEmpty) return "Which entry? e.g. \"laptop wali entry\""
-                val hits = Query.select(entries, q)
+                val hits = scoped(Query.select(entries, q))
                 if (hits.isEmpty()) return "Nothing found (${Query.label(q)})."
                 val names = contactNames()
                 val swaps = hits.mapNotNull { old ->
