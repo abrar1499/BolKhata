@@ -398,14 +398,19 @@ class Store(context: Context) {
         prefs.edit().putString(key, arr.toString()).apply()
     }
 
-    /** Voice language. Hindi voice understands spoken Urdu best; its letters are turned into Roman Urdu. */
+    /** Voice recognition language, independent of the app's English interface and chat input. */
+    private fun defaultVoiceLanguage(): String =
+        if (java.util.Locale.getDefault().language in setOf("hi", "ur")) "hi-IN" else "en-US"
+
     var language: String
         get() {
-            // Move everyone from the old English voice to the better Hindi voice once.
+            // Respect a previous explicit choice; new English-language users must not be forced into Hindi.
             if (!prefs.getBoolean("langV2", false)) {
-                prefs.edit().putBoolean("langV2", true).putString("lang", "hi-IN").apply()
+                val selected = prefs.getString("lang", null)?.takeIf { it.isNotBlank() }
+                    ?: defaultVoiceLanguage()
+                prefs.edit().putBoolean("langV2", true).putString("lang", selected).apply()
             }
-            return prefs.getString("lang", "hi-IN") ?: "hi-IN"
+            return prefs.getString("lang", defaultVoiceLanguage()) ?: defaultVoiceLanguage()
         }
         set(v) = prefs.edit().putString("lang", v).apply()
 
