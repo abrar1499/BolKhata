@@ -1,7 +1,9 @@
 name: Build APK
 
 on:
-  # Build only when explicitly requested from the Actions tab.
+  # Normal commits never build. Only a commit explicitly marked [build-apk] does.
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -9,6 +11,7 @@ permissions:
 
 jobs:
   build:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[build-apk]')
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
