@@ -371,7 +371,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         val beforeTrash = trash
         val map = plan.changed.associate { it.first.id to it.second }
         val gone = plan.deleted.map { it.id }.toSet()
-        save(entries.filter { it.id !in gone }.map { map[it.id] ?: it })
+        val afterEntries = entries.filter { it.id !in gone }.map { map[it.id] ?: it }
+        val moveRecord = store.recordMove(beforeEntries, afterEntries)
+        save(afterEntries)
         if (gone.isNotEmpty()) {
             store.markTrashed(gone)
             saveTrash(plan.deleted + trash.filter { it.id !in gone })
@@ -383,6 +385,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             if (res == SnackbarResult.ActionPerformed) {
                 save(beforeEntries)
                 saveTrash(beforeTrash)
+                moveRecord?.let { store.forgetMove(it.id) }
             }
         }
     }
@@ -1836,18 +1839,32 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                             person = ledgerPerson,
                             onActivePerson = { activeLedgerPerson = it },
                             onBulkMove = { ids, destination ->
-                                val matches = entries.filter { it.id in ids }
-                                if (matches.isNotEmpty() && destination.isNotBlank()) {
-                                    val before = matches.associateBy { it.id }
-                                    save(entries.map { if (it.id in ids) it.copy(person = destination) else it })
-                                    scope.launch {
-                                        val result = snackbar.showSnackbar("Moved ${matches.size} entries", actionLabel = "Undo", duration = SnackbarDuration.Long)
-                                        if (result == SnackbarResult.ActionPerformed) {
-                                            save(entries.map { before[it.id] ?: it })
+                                val matches = scopeKhataEntries(entries).filter { it.id in ids }
+                                val safeIds = matches.map { it.id }.toSet()
+                                if (safeIds.isNotEmpty() && destination.isNotBlank()) {
+                                    val after = entries.map { entry ->
+                                        if (entry.id in safeIds) entry.copy(person = destination.trim()) else entry
+                                    }
+                                    val record = store.recordMove(entries, after)
+                                    if (record != null) {
+                                        save(after)
+                                        scope.launch {
+                                            val result = snackbar.showSnackbar(
+                                                "Moved ${safeIds.size} entries", actionLabel = "Undo",
+                                                duration = SnackbarDuration.Long
+                                            )
+                                            if (result == SnackbarResult.ActionPerformed) {
+                                                val restored = restoreMoveBatch(entries, record)
+                                                if (restored != null) {
+                                                    save(restored)
+                                                    store.forgetMove(record.id)
+                                                } else toast("Cannot undo: one or more entries changed.")
+                                            }
                                         }
                                     }
                                 }
                             },
+                            onMoveHistory = { showMoveHistory = true },
                             onRenamePerson = { oldName, newName ->
                                 val cleanName = newName.trim()
                                 if (cleanName.isNotBlank()) {
@@ -1878,6 +1895,23 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     }
                 )
             }
+            if (showMoveHistory) {
+                MoveHistoryDialog(
+                    history = store.loadMoveHistory(),
+                    onRestore = { record ->
+                        val restored = restoreMoveBatch(entries, record)
+                        if (restored == null) {
+                            toast("Cannot restore: entries were deleted or changed after this move.")
+                        } else {
+                            save(restored)
+                            store.forgetMove(record.id)
+                            showMoveHistory = false
+                            toast("✓ Restored ${record.changes.size} entries")
+                        }
+                    },
+                    onDismiss = { showMoveHistory = false }
+                )
+            }
             menuFor?.let { e ->
                 EntryMenu(
                     e, currency,
@@ -1889,9 +1923,21 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             moving?.let { e ->
                 MoveDialog(e, entries, onMove = { moved ->
                     moving = null
-                    if (moved != e) {
-                        save(entries.map { if (it.id == moved.id) moved else it })
-                        toast("✓ Moved")
+                    val current = entries.firstOrNull { it.id == moved.id }
+                    if (current != null && current != moved) {
+                        val after = entries.map { if (it.id == moved.id) moved else it }
+                        val record = store.recordMove(entries, after)
+                        save(after)
+                        scope.launch {
+                            val result = snackbar.showSnackbar("✓ Moved entry", actionLabel = "Undo", duration = SnackbarDuration.Long)
+                            if (result == SnackbarResult.ActionPerformed && record != null) {
+                                val restored = restoreMoveBatch(entries, record)
+                                if (restored != null) {
+                                    save(restored)
+                                    store.forgetMove(record.id)
+                                } else toast("Cannot undo: this entry changed.")
+                            }
+                        }
                     }
                 }, onDismiss = { moving = null })
             }
