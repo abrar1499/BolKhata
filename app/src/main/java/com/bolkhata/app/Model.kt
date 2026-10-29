@@ -73,6 +73,37 @@ data class ChatMessage(
     val meta: String = ""
 )
 
+/** A reversible account move. Store only the fields that a move is allowed to change. */
+data class MoveChange(
+    val id: String,
+    val fromPerson: String, val fromType: Type, val fromCategory: Cat,
+    val fromItem: String, val fromPaid: Boolean,
+    val toPerson: String, val toType: Type, val toCategory: Cat,
+    val toItem: String, val toPaid: Boolean
+) {
+    fun matches(e: Entry): Boolean =
+        e.person == toPerson && e.type == toType && e.category == toCategory &&
+            e.item == toItem && e.paid == toPaid
+
+    fun restore(e: Entry): Entry = e.copy(
+        person = fromPerson, type = fromType, category = fromCategory,
+        item = fromItem, paid = fromPaid
+    )
+}
+
+data class MoveBatch(val id: String, val timestamp: Long, val changes: List<MoveChange>)
+
+/** Refuse a stale restore rather than overwrite entries moved or edited afterwards. */
+fun restoreMoveBatch(entries: List<Entry>, batch: MoveBatch): List<Entry>? {
+    val byId = entries.associateBy { it.id }
+    if (batch.changes.isEmpty() || batch.changes.any { change ->
+        val current = byId[change.id]
+        current == null || !change.matches(current)
+    }) return null
+    val changes = batch.changes.associateBy { it.id }
+    return entries.map { e -> changes[e.id]?.restore(e) ?: e }
+}
+
 /** Saves entries on the phone itself (no internet needed). */
 class Store(context: Context) {
     private val prefs = context.getSharedPreferences("bolkhata", Context.MODE_PRIVATE)
@@ -262,6 +293,71 @@ class Store(context: Context) {
         } catch (e: Exception) {
             emptyList()
         }
+    }
+
+    /** Recent account moves, persisted with the backup so they can be restored after reopening the app. */
+    fun loadMoveHistory(): List<MoveBatch> = try {
+        val arr = JSONArray(prefs.getString("moveHistory", "[]") ?: "[]")
+        (0 until arr.length()).mapNotNull { i ->
+            runCatching {
+                val o = arr.getJSONObject(i)
+                val moves = o.getJSONArray("changes")
+                val changes = (0 until moves.length()).map { j ->
+                    val m = moves.getJSONObject(j)
+                    MoveChange(
+                        m.getString("id"),
+                        m.getString("fromPerson"), Type.valueOf(m.getString("fromType")),
+                        Cat.valueOf(m.getString("fromCategory")), m.getString("fromItem"),
+                        m.getBoolean("fromPaid"),
+                        m.getString("toPerson"), Type.valueOf(m.getString("toType")),
+                        Cat.valueOf(m.getString("toCategory")), m.getString("toItem"),
+                        m.getBoolean("toPaid")
+                    )
+                }
+                MoveBatch(o.getString("id"), o.getLong("timestamp"), changes)
+            }.getOrNull()
+        }
+    } catch (e: Exception) { emptyList() }
+
+    fun recordMove(before: List<Entry>, after: List<Entry>): MoveBatch? {
+        val originals = before.associateBy { it.id }
+        val changes = after.mapNotNull { a ->
+            val b = originals[a.id] ?: return@mapNotNull null
+            if (a.person == b.person) return@mapNotNull null
+            MoveChange(b.id, b.person, b.type, b.category, b.item, b.paid,
+                a.person, a.type, a.category, a.item, a.paid)
+        }
+        if (changes.isEmpty()) return null
+        val batch = MoveBatch("move-" + System.currentTimeMillis() + "-" + System.nanoTime(),
+            System.currentTimeMillis(), changes)
+        val previous = JSONArray(prefs.getString("moveHistory", "[]") ?: "[]")
+        val history = JSONArray()
+        val jsonMoves = JSONArray()
+        changes.forEach { m ->
+            jsonMoves.put(JSONObject()
+                .put("id", m.id)
+                .put("fromPerson", m.fromPerson).put("fromType", m.fromType.name)
+                .put("fromCategory", m.fromCategory.name).put("fromItem", m.fromItem)
+                .put("fromPaid", m.fromPaid)
+                .put("toPerson", m.toPerson).put("toType", m.toType.name)
+                .put("toCategory", m.toCategory.name).put("toItem", m.toItem)
+                .put("toPaid", m.toPaid))
+        }
+        history.put(JSONObject().put("id", batch.id).put("timestamp", batch.timestamp)
+            .put("changes", jsonMoves))
+        for (i in 0 until minOf(previous.length(), 49)) history.put(previous.get(i))
+        prefs.edit().putString("moveHistory", history.toString()).apply()
+        return batch
+    }
+
+    fun forgetMove(id: String) {
+        val old = JSONArray(prefs.getString("moveHistory", "[]") ?: "[]")
+        val next = JSONArray()
+        for (i in 0 until old.length()) {
+            val item = old.optJSONObject(i) ?: continue
+            if (item.optString("id") != id) next.put(item)
+        }
+        prefs.edit().putString("moveHistory", next.toString()).apply()
     }
 
     fun save(list: List<Entry>) = write("entries", list)
