@@ -469,6 +469,7 @@ fun LedgerScreen(
     onNew: (Entry) -> Unit,
     person: String? = null,
     onRenamePerson: (String, String) -> Unit = { _, _ -> },
+    onMergePerson: (String, String) -> Unit = { _, _ -> },
     onBulkMove: (Set<String>, String) -> Unit = { _, _ -> },
     onActivePerson: (String?) -> Unit = {},
     onMoveHistory: () -> Unit = {}
@@ -514,7 +515,8 @@ fun LedgerScreen(
                     stack.add(Level.Person(it))
                 },
                 listState = peopleListState,
-                onRenamePerson = onRenamePerson
+                onRenamePerson = onRenamePerson,
+                onMergePerson = onMergePerson
             )
         }
         is Level.Sub -> SubView(level.income, level.cat, entries, currency, ::back, onEdit) { stack.add(Level.Vendor(level.income, level.cat, it)) }
@@ -669,7 +671,8 @@ private fun VendorView(level: Level.Vendor, entries: List<Entry>, currency: Stri
 private fun PeopleView(
     receive: Boolean, entries: List<Entry>, currency: String,
     onBack: () -> Unit, onOpen: (String) -> Unit,
-    listState: LazyListState, onRenamePerson: (String, String) -> Unit
+    listState: LazyListState, onRenamePerson: (String, String) -> Unit,
+    onMergePerson: (String, String) -> Unit
 ) {
     val list = remember(entries, receive) {
         personAccounts(entries).filter { it.toReceive == receive }
@@ -781,9 +784,12 @@ private fun PeopleView(
                     if (editAction == "Rename") {
                         OutlinedTextField(actionName, { actionName = it }, modifier = Modifier.fillMaxWidth(),
                             label = { Text("New name") }, singleLine = true, shape = RoundedCornerShape(16.dp))
+                        if (targets.any { it.equals(actionName.trim(), true) }) {
+                            Text("This khata already exists. Use Move / merge instead.", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+                        }
                     } else if (confirmMerge) {
                         Text("Merge $oldName into ${actionName.trim()}?")
-                        Text("All entries will move to the selected khata.",
+                        Text("${entries.count { it.person.equals(oldName, true) }} entries will move into a khata with ${entries.count { it.person.equals(actionName.trim(), true) }} existing entries.",
                             fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     } else if (!searchOpen) {
                         Text("Tap the search icon to find a khata.",
@@ -810,11 +816,14 @@ private fun PeopleView(
             },
             confirmButton = {
                 TextButton(enabled = if (editAction == "Rename")
-                    actionName.isNotBlank() && !actionName.trim().equals(oldName, true)
+                    actionName.isNotBlank() && !actionName.trim().equals(oldName, true) &&
+                        targets.none { it.equals(actionName.trim(), true) }
                     else confirmMerge && targets.any { it.equals(actionName.trim(), true) },
                     onClick = {
-                        if (oldName.isNotBlank() && actionName.isNotBlank())
-                            onRenamePerson(oldName, actionName.trim())
+                        if (oldName.isNotBlank() && actionName.isNotBlank()) {
+                            if (editAction == "Rename") onRenamePerson(oldName, actionName.trim())
+                            else if (confirmMerge) onMergePerson(oldName, actionName.trim())
+                        }
                         editAction = null
                         actionSource = null
                         actionName = ""
