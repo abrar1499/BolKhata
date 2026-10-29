@@ -168,6 +168,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         store.saveSuggestions(left)
     }
     var results by remember { mutableStateOf<Pair<String, Boolean>?>(null) }      // query, edit mode
+    var confirmEmptyTrash by remember { mutableStateOf(false) }
     var confirm by remember { mutableStateOf<Pair<String, Set<String>>?>(null) }  // message, ids to delete  // entries the app did not understand
     var newVersion by remember { mutableStateOf<UpdateInfo?>(null) }
     var progress by remember { mutableIntStateOf(-1) }
@@ -1623,10 +1624,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         saveTrash(emptyList())
                         toast("✓ All restored")
                     },
-                    onEmpty = {
-                        saveTrash(emptyList())
-                        toast("Trash emptied")
-                    }
+                    onEmpty = { if (trash.isNotEmpty()) confirmEmptyTrash = true }
                 )
                 tab == Tab.CHAT -> {
                     DisposableEffect(Unit) { onDispose { if (voiceOn) stopVoice() } }
@@ -1858,6 +1856,23 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         )
                     }
                 }
+            }
+            if (confirmEmptyTrash) {
+                AlertDialog(
+                    onDismissRequest = { confirmEmptyTrash = false },
+                    title = { Text("Permanently empty Trash?") },
+                    text = { Text("This will permanently delete ${trash.size} entries. This action cannot be undone.") },
+                    confirmButton = {
+                        Button(onClick = {
+                            confirmEmptyTrash = false
+                            saveTrash(emptyList())
+                            toast("Trash emptied")
+                        }) { Text("Delete permanently") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { confirmEmptyTrash = false }) { Text("Cancel") }
+                    }
+                )
             }
             menuFor?.let { e ->
                 EntryMenu(
