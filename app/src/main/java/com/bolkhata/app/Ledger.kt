@@ -167,7 +167,7 @@ fun movedTo(e: Entry, all: List<Entry>, cat: Cat?, income: Boolean, person: Stri
 }
 
 @Composable
-fun EntryMenu(e: Entry, currency: String, onEdit: () -> Unit, onMove: () -> Unit, onDismiss: () -> Unit) {
+fun EntryMenu(e: Entry, currency: String, onEdit: () -> Unit, onMove: () -> Unit, onDismiss: () -> Unit, onHistory: () -> Unit = {}) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(entryTitle(e), maxLines = 1, overflow = TextOverflow.Ellipsis) },
@@ -176,6 +176,7 @@ fun EntryMenu(e: Entry, currency: String, onEdit: () -> Unit, onMove: () -> Unit
             Column(horizontalAlignment = Alignment.End) {
                 TextButton(onClick = onEdit) { Text("Edit entry") }
                 TextButton(onClick = onMove) { Text("Move entry") }
+                TextButton(onClick = onHistory) { Text("Move history & restore") }
             }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
@@ -404,7 +405,7 @@ fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: (
                     }
                 ) { Text("Review destination") }
             } else if (selectedPerson != null) {
-                Button(onClick = {
+                Button(enabled = !selectedPerson.orEmpty().equals(e.person, ignoreCase = true), onClick = {
                     val person = selectedPerson ?: return@Button
                     onMove(movedTo(e, all, null, false, person))
                 }) { Text(if (count == 1) "Confirm move" else "Move $count entries") }
