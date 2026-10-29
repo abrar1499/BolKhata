@@ -169,6 +169,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     }
     var results by remember { mutableStateOf<Pair<String, Boolean>?>(null) }      // query, edit mode
     var confirmEmptyTrash by remember { mutableStateOf(false) }
+    var showMoveHistory by remember { mutableStateOf(false) }
     var confirm by remember { mutableStateOf<Pair<String, Set<String>>?>(null) }  // message, ids to delete  // entries the app did not understand
     var newVersion by remember { mutableStateOf<UpdateInfo?>(null) }
     var progress by remember { mutableIntStateOf(-1) }
@@ -230,20 +231,28 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         }
     }
 
+    /** A command inside an open khata must never silently act on another account. */
+    fun scopeKhataEntries(list: List<Entry>): List<Entry> {
+        val person = (activeLedgerPerson ?: ledgerPerson)?.takeIf { ledger != null }
+        return if (person == null) list
+        else list.filter { it.person.equals(person, ignoreCase = true) }
+    }
+
     /** Handles typed or spoken commands: search, edit, delete, clear all. Returns true if it was a command. */
     fun handleCommand(text: String): Boolean {
         val c = Commands.read(text) ?: return false
         when (c.action) {
             Commands.Action.SEARCH -> { results = c.query to false; people = null }
             Commands.Action.EDIT -> { results = c.query to true; people = null }
-            Commands.Action.DELETE -> askDelete(c.query, matchEntries(entries, c.query))
+            Commands.Action.DELETE -> askDelete(c.query, scopeKhataEntries(matchEntries(entries, c.query)))
             Commands.Action.DELETE_PERIOD -> {
                 val period = c.period ?: return false
-                askDelete(period.label(), matchEntriesByPeriod(entries, period))
+                askDelete(period.label(), scopeKhataEntries(matchEntriesByPeriod(entries, period)))
             }
             Commands.Action.CLEAR_ALL -> {
-                if (entries.isEmpty()) toast("There are no entries to delete")
-                else confirm = "Delete ALL ${entries.size} entries? This removes every entry." to entries.map { it.id }.toSet()
+                val targets = scopeKhataEntries(entries)
+                if (targets.isEmpty()) toast("There are no entries to delete")
+                else confirm = "Delete ALL ${targets.size} entries in this view?" to targets.map { it.id }.toSet()
             }
         }
         return true
@@ -326,7 +335,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     }
 
     fun contextualizeCurrentKhata(list: List<Entry>): List<Entry> =
-        applyKhataContext(list, ledgerPerson?.takeIf { ledger != null })
+        applyKhataContext(list, (activeLedgerPerson ?: ledgerPerson)?.takeIf { ledger != null })
 
     fun addOffline(r: Parser.Result) {
         val contextualEntries = contextualizeCurrentKhata(r.entries)
@@ -685,7 +694,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             val list = if (person != null) entries.filter { it.person.trim().equals(person, true) && withPerson(it) } else matchEntries(entries, q)
             return "search '$q' (${list.size} records)" to list
         }
-        (activeLedgerPerson ?: ledgerPerson)?.let { p ->
+        (activeLedgerPerson ?: ledgerPerson)?.takeIf { ledger != null }?.let { p ->
             val list = entries.filter { it.person.equals(p, true) }
             return "$p's khata (${list.size} records)" to list
         }
@@ -698,7 +707,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
      * Returns null when this is not that command.
      */
     fun handleCurrentKhataBulkCommand(text: String): String? {
-        val person = ledgerPerson?.takeIf { ledger != null } ?: return null
+        val person = (activeLedgerPerson ?: ledgerPerson)?.takeIf { ledger != null } ?: return null
         val m = runCatching { Translit.toRoman(text) }.getOrDefault(text).lowercase()
         val all = Regex("""\b(all|sab|sari|saari|tamam|here|yahan|yaha|these|ye|in sab)\b""").containsMatchIn(m)
         val records = Regex("""\b(entr(?:y|ies)|records?|transactions?)\b""").containsMatchIn(m)
@@ -723,12 +732,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         val q = if (f.filter.isEmpty && onScreen != null && f.kind in setOf("delete", "change", "to_khata", "reread", "ask", "paid_by"))
             Query.Filter(ids = onScreen.second.map { it.id }.toSet()) else f.filter
         // When chatting inside a khata, destructive commands must never touch another khata.
-        fun scoped(list: List<Entry>): List<Entry> {
-            val active = activeLedgerPerson ?: ledgerPerson
-            return if (ledger != null && !active.isNullOrBlank())
-                list.filter { it.person.equals(active, ignoreCase = true) }
-            else list
-        }
+        fun scoped(list: List<Entry>): List<Entry> = scopeKhataEntries(list)
         return when (f.kind) {
             "entry" -> {
                 if (f.text.none { it.isDigit() }) return f.reply.ifBlank { "How much? e.g. \"${f.text.ifBlank { "petrol" }} 50\"" }
