@@ -1857,18 +1857,18 @@ fun SettingsScreen(
                 HorizontalDivider(Modifier.padding(vertical = 6.dp))
                 SettingRow(
                     "Voice language",
-                    when (lang) {
-                        "ur-PK" -> "Urdu script (اردو)"
-                        "en-IN" -> "English only"
-                        else -> "Urdu / Hindi speech, written in Roman (best)"
+                    when {
+                        lang == "ur-PK" -> "Urdu speech recognition · menus remain in English"
+                        lang.startsWith("en") -> "English speech recognition · menus remain in English"
+                        else -> "Hindi / Roman Urdu speech · menus remain in English"
                     }
                 ) {
                     Row {
-                        FilterChip(selected = lang != "ur-PK" && lang != "en-IN", onClick = { onLang("hi-IN") }, label = { Text("Roman") })
+                        FilterChip(selected = lang != "ur-PK" && !lang.startsWith("en"), onClick = { onLang("hi-IN") }, label = { Text("Roman") })
                         Spacer(Modifier.width(4.dp))
-                        FilterChip(selected = lang == "en-IN", onClick = { onLang("en-IN") }, label = { Text("Eng") })
+                        FilterChip(selected = lang.startsWith("en"), onClick = { onLang("en-US") }, label = { Text("English") })
                         Spacer(Modifier.width(4.dp))
-                        FilterChip(selected = lang == "ur-PK", onClick = { onLang("ur-PK") }, label = { Text("اردو") })
+                        FilterChip(selected = lang == "ur-PK", onClick = { onLang("ur-PK") }, label = { Text("Urdu") })
                     }
                 }
                 HorizontalDivider(Modifier.padding(vertical = 6.dp))
