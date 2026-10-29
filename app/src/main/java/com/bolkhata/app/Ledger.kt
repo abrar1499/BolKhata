@@ -502,7 +502,7 @@ private fun VendorView(level: Level.Vendor, entries: List<Entry>, currency: Stri
 private fun PeopleView(receive: Boolean, entries: List<Entry>, currency: String, onBack: () -> Unit, onOpen: (String) -> Unit) {
     val list = remember(entries, receive) {
         personAccounts(entries).filter { it.toReceive == receive }
-            .sortedWith(compareByDescending<PersonAcct> { kotlin.math.abs(it.balance) }.thenBy { it.name.lowercase() })
+            .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name.trim() })
     }
     val total = list.sumOf { kotlin.math.abs(it.balance) }
     val color = if (receive) GreenIn else OrangeOwe
