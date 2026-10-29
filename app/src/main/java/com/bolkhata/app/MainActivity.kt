@@ -1952,7 +1952,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     e, currency,
                     onEdit = { menuFor = null; editing = e },
                     onMove = { menuFor = null; moving = e },
-                    onDismiss = { menuFor = null }
+                    onDismiss = { menuFor = null },
+                    onHistory = { menuFor = null; showMoveHistory = true }
                 )
             }
             moving?.let { e ->
