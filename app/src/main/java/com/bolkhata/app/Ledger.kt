@@ -194,107 +194,188 @@ private fun cleanMoveKhataName(value: String): String {
     return name.trim().trim('.', '-', '/', ' ')
 }
 
-/** Where to move an entry: an expense category, an income category, or a person's account. */
+/** Search-first khata picker: the large category lists stay out of the Move Entry flow. */
 @Composable
 fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: () -> Unit) {
-    // Prefer actual khata names over raw bank-statement descriptions.
+    // Keep the real account key for moving entries; clean only the display label.
     val people = remember(all) {
         (personAccounts(all).map { it.name } + all.map { it.person })
-            .map(::cleanMoveKhataName)
+            .map { it.trim() }
             .filter { it.isNotBlank() }
             .distinctBy { it.lowercase(Locale.ROOT) }
-            .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it })
+            .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { cleanMoveKhataName(it) })
     }
-    var newName by remember { mutableStateOf("") }
     var searchOpen by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
-    val filteredPeople = remember(people, searchQuery) {
-        if (searchQuery.isBlank()) people
-        else people.filter { it.contains(searchQuery.trim(), ignoreCase = true) }
+    var selectedPerson by remember { mutableStateOf<String?>(null) }
+    val query = searchQuery.trim()
+    val filteredPeople = remember(people, query) {
+        if (query.isBlank()) emptyList()
+        else people.filter {
+            cleanMoveKhataName(it).contains(query, ignoreCase = true) ||
+                it.contains(query, ignoreCase = true)
+        }
     }
+    val exactMatch = people.any {
+        cleanMoveKhataName(it).equals(query, ignoreCase = true) ||
+            it.equals(query, ignoreCase = true)
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(26.dp),
         title = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Move entry to", fontWeight = FontWeight.Bold)
-                Text("Choose a category or khata", fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text("Move entry", fontWeight = FontWeight.Bold, fontSize = 21.sp)
+                    Text(
+                        if (selectedPerson != null) "Confirm the destination"
+                        else "Find the right khata",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(
+                    onClick = {
+                        selectedPerson = null
+                        searchOpen = !searchOpen
+                        if (!searchOpen) searchQuery = ""
+                    },
+                    modifier = Modifier.size(40.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.primaryContainer)
+                ) {
+                    Icon(
+                        if (searchOpen) Icons.Filled.Close else Icons.Filled.Search,
+                        contentDescription = if (searchOpen) "Close khata search" else "Search khata",
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
             }
         },
         text = {
-            Column(Modifier.heightIn(max = 500.dp).verticalScroll(rememberScrollState())) {
-                Text("Date, amount and note will stay the same.", fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 4.dp))
-                MoveSection("Expense")
-                expenseCats.forEach { c ->
-                    MoveRow(c.label, selected = e.type == Type.KHARCHA && e.category == c) {
-                        onMove(movedTo(e, all, c, false, null))
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (selectedPerson != null) {
+                    Text("Move this entry to:", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer
+                    ) {
+                        Text(
+                            cleanMoveKhataName(selectedPerson!!),
+                            modifier = Modifier.padding(16.dp),
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
                     }
-                }
-                MoveSection("Income")
-                incomeCats.forEach { c ->
-                    MoveRow(
-                        if (c == Cat.TANKHWAH) "Salary / income" else c.label + " (income)",
-                        selected = e.type == Type.AAMDANI && e.category == c
-                    ) { onMove(movedTo(e, all, c, true, null)) }
-                }
-                Row(Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Khata", fontWeight = FontWeight.Bold, fontSize = 14.sp,
-                            color = MaterialTheme.colorScheme.primary)
-                        Text("${filteredPeople.size} of ${people.size} people · A–Z",
-                            fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    IconButton(onClick = {
-                        searchOpen = !searchOpen
-                        if (!searchOpen) searchQuery = ""
-                    }, modifier = Modifier.size(36.dp)) {
-                        Icon(if (searchOpen) Icons.Filled.Close else Icons.Filled.Search,
-                            contentDescription = if (searchOpen) "Close search" else "Search khata")
-                    }
-                }
-                if (searchOpen) {
+                    Text(
+                        "Amount, date and note will stay unchanged.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else if (!searchOpen) {
+                    Text(
+                        "Tap the search icon to find a khata.",
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
                     OutlinedTextField(
-                        value = searchQuery, onValueChange = { searchQuery = it },
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
-                        singleLine = true, placeholder = { Text("Search khata name…") },
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("Search khata by name") },
                         leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                         trailingIcon = {
-                            if (searchQuery.isNotEmpty()) IconButton(onClick = { searchQuery = "" }) {
-                                Icon(Icons.Filled.Close, contentDescription = "Clear search")
+                            if (searchQuery.isNotEmpty()) {
+                                IconButton(onClick = { searchQuery = "" }) {
+                                    Icon(Icons.Filled.Close, contentDescription = "Clear search")
+                                }
+                            }
+                        },
+                        shape = RoundedCornerShape(16.dp),
+                        singleLine = true
+                    )
+                    if (query.isBlank()) {
+                        Text(
+                            "Start typing to see matching khatas · A–Z",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        Text(
+                            "${filteredPeople.size} matching khata${if (filteredPeople.size == 1) "" else "s"} · A–Z",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        LazyColumn(
+                            modifier = Modifier.fillMaxWidth().heightIn(max = 320.dp),
+                            verticalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            items(filteredPeople, key = { it }) { person ->
+                                val current = e.person.equals(person, ignoreCase = true)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth()
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(
+                                            if (current) MaterialTheme.colorScheme.primaryContainer
+                                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.50f)
+                                        )
+                                        .clickable { selectedPerson = person }
+                                        .padding(horizontal = 14.dp, vertical = 13.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        cleanMoveKhataName(person),
+                                        modifier = Modifier.weight(1f),
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    if (current) {
+                                        Text("Current", fontSize = 11.sp,
+                                            color = MaterialTheme.colorScheme.primary)
+                                    } else {
+                                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
                             }
                         }
-                    )
-                }
-                if (filteredPeople.isEmpty()) {
-                    Text(if (people.isEmpty()) "No khata yet. Add a new person below."
-                        else "No khata found for “$searchQuery”.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp,
-                        modifier = Modifier.padding(vertical = 12.dp))
-                } else {
-                    filteredPeople.forEach { p ->
-                        MoveRow(p, selected = e.person.equals(p, true)) {
-                            onMove(movedTo(e, all, null, false, p))
+                        if (filteredPeople.isEmpty()) {
+                            Text("No matching khata found.",
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        if (!exactMatch && query.isNotBlank()) {
+                            TextButton(onClick = { selectedPerson = query }) {
+                                Text("+ Create new khata: \"$query\"")
+                            }
                         }
                     }
-                }
-                HorizontalDivider(Modifier.padding(top = 10.dp, bottom = 8.dp))
-                Text("Create new khata", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(value = newName, onValueChange = { newName = it },
-                        singleLine = true, label = { Text("Person name") },
-                        modifier = Modifier.weight(1f))
-                    TextButton(onClick = { onMove(movedTo(e, all, null, false, newName.trim())) },
-                        enabled = newName.isNotBlank()) { Text("Move") }
                 }
             }
         },
-        confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        confirmButton = {
+            if (selectedPerson != null) {
+                Button(onClick = {
+                    val person = selectedPerson ?: return@Button
+                    onMove(movedTo(e, all, null, false, person))
+                }) { Text("Confirm move") }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = {
+                if (selectedPerson != null) selectedPerson = null else onDismiss()
+            }) { Text(if (selectedPerson != null) "Back" else "Cancel") }
+        }
     )
 }
+
 @Composable
 private fun MoveSection(title: String) {
     Text(title, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 12.dp, bottom = 2.dp))
