@@ -350,14 +350,40 @@ fun LedgerScreen(
     }
     // Keep the account list's scroll position alive while a person's khata is open.
     val peopleListState = rememberLazyListState()
-    BackHandler(enabled = stack.size > 1) { stack.removeAt(stack.lastIndex) }
-    fun back() { if (stack.size > 1) stack.removeAt(stack.lastIndex) else onClose() }
+    var savedPeopleIndex by remember { mutableIntStateOf(0) }
+    var savedPeopleOffset by remember { mutableIntStateOf(0) }
+    // Explicitly restore position because the list leaves composition while a khata is open.
+    LaunchedEffect(stack.last()) {
+        if (stack.last() is Level.Main) {
+            peopleListState.scrollToItem(savedPeopleIndex, savedPeopleOffset)
+        }
+    }
+    BackHandler(enabled = stack.size > 1) {
+        if (stack.last() is Level.Person && stack[stack.lastIndex - 1] is Level.Main) {
+            savedPeopleIndex = peopleListState.firstVisibleItemIndex
+            savedPeopleOffset = peopleListState.firstVisibleItemScrollOffset
+        }
+        stack.removeAt(stack.lastIndex)
+    }
+    fun back() {
+        if (stack.size > 1) {
+            if (stack.last() is Level.Person && stack[stack.lastIndex - 1] is Level.Main) {
+                savedPeopleIndex = peopleListState.firstVisibleItemIndex
+                savedPeopleOffset = peopleListState.firstVisibleItemScrollOffset
+            }
+            stack.removeAt(stack.lastIndex)
+        } else onClose()
+    }
     when (val level = stack.last()) {
         is Level.Main -> when (level.acct) {
             MainAcct.EXPENSE, MainAcct.INCOME -> TreeView(level.acct == MainAcct.INCOME, entries, currency, ::back, onEdit)
             else -> PeopleView(
                 level.acct == MainAcct.TO_RECEIVE, entries, currency, ::back,
-                onOpen = { stack.add(Level.Person(it)) },
+                onOpen = {
+                    savedPeopleIndex = peopleListState.firstVisibleItemIndex
+                    savedPeopleOffset = peopleListState.firstVisibleItemScrollOffset
+                    stack.add(Level.Person(it))
+                },
                 listState = peopleListState,
                 onRenamePerson = onRenamePerson
             )
