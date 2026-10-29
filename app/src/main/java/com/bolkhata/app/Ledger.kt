@@ -13,6 +13,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -179,21 +181,40 @@ fun EntryMenu(e: Entry, currency: String, onEdit: () -> Unit, onMove: () -> Unit
 /** Where to move an entry: an expense category, an income category, or a person's account. */
 @Composable
 fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: () -> Unit) {
+    // Prefer actual khata names over raw bank-statement descriptions.
     val people = remember(all) {
-        (personAccounts(all).map { it.name } + all.mapNotNull { x ->
-            x.note.trim().takeIf { it.startsWith("To ") || it.startsWith("From ") }?.substringAfter(' ')?.trim()
-        }).filter { it.isNotBlank() }.distinctBy { it.lowercase() }.sorted()
+        (personAccounts(all).map { it.name } + all.map { it.person })
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinctBy { it.lowercase(Locale.ROOT) }
+            .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it })
     }
     var newName by remember { mutableStateOf("") }
+    var searchOpen by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
+    val filteredPeople = remember(people, searchQuery) {
+        if (searchQuery.isBlank()) people
+        else people.filter { it.contains(searchQuery.trim(), ignoreCase = true) }
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Move entry to") },
+        title = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("Move entry to", fontWeight = FontWeight.Bold)
+                Text("Choose a category or khata", fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        },
         text = {
-            Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState())) {
-                Text("Date, amount and note stay the same.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Column(Modifier.heightIn(max = 500.dp).verticalScroll(rememberScrollState())) {
+                Text("Date, amount and note will stay the same.", fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 4.dp))
                 MoveSection("Expense")
                 expenseCats.forEach { c ->
-                    MoveRow(c.label, selected = e.type == Type.KHARCHA && e.category == c) { onMove(movedTo(e, all, c, false, null)) }
+                    MoveRow(c.label, selected = e.type == Type.KHARCHA && e.category == c) {
+                        onMove(movedTo(e, all, c, false, null))
+                    }
                 }
                 MoveSection("Income")
                 incomeCats.forEach { c ->
@@ -202,16 +223,55 @@ fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: (
                         selected = e.type == Type.AAMDANI && e.category == c
                     ) { onMove(movedTo(e, all, c, true, null)) }
                 }
-                MoveSection("A person (To pay / To receive)")
-                people.forEach { p ->
-                    MoveRow(p, selected = e.person.equals(p, true)) { onMove(movedTo(e, all, null, false, p)) }
+                Row(Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Khata", fontWeight = FontWeight.Bold, fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.primary)
+                        Text("${filteredPeople.size} of ${people.size} people · A–Z",
+                            fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    IconButton(onClick = {
+                        searchOpen = !searchOpen
+                        if (!searchOpen) searchQuery = ""
+                    }, modifier = Modifier.size(36.dp)) {
+                        Icon(if (searchOpen) Icons.Filled.Close else Icons.Filled.Search,
+                            contentDescription = if (searchOpen) "Close search" else "Search khata")
+                    }
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                if (searchOpen) {
                     OutlinedTextField(
-                        value = newName, onValueChange = { newName = it }, singleLine = true,
-                        label = { Text("New person") }, modifier = Modifier.weight(1f)
+                        value = searchQuery, onValueChange = { searchQuery = it },
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+                        singleLine = true, placeholder = { Text("Search khata name…") },
+                        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                        trailingIcon = {
+                            if (searchQuery.isNotEmpty()) IconButton(onClick = { searchQuery = "" }) {
+                                Icon(Icons.Filled.Close, contentDescription = "Clear search")
+                            }
+                        }
                     )
-                    TextButton(onClick = { onMove(movedTo(e, all, null, false, newName)) }, enabled = newName.isNotBlank()) { Text("Move") }
+                }
+                if (filteredPeople.isEmpty()) {
+                    Text(if (people.isEmpty()) "No khata yet. Add a new person below."
+                        else "No khata found for “$searchQuery”.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp,
+                        modifier = Modifier.padding(vertical = 12.dp))
+                } else {
+                    filteredPeople.forEach { p ->
+                        MoveRow(p, selected = e.person.equals(p, true)) {
+                            onMove(movedTo(e, all, null, false, p))
+                        }
+                    }
+                }
+                HorizontalDivider(Modifier.padding(top = 10.dp, bottom = 8.dp))
+                Text("Create new khata", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(value = newName, onValueChange = { newName = it },
+                        singleLine = true, label = { Text("Person name") },
+                        modifier = Modifier.weight(1f))
+                    TextButton(onClick = { onMove(movedTo(e, all, null, false, newName.trim())) },
+                        enabled = newName.isNotBlank()) { Text("Move") }
                 }
             }
         },
@@ -219,7 +279,6 @@ fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: (
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
 }
-
 @Composable
 private fun MoveSection(title: String) {
     Text(title, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 12.dp, bottom = 2.dp))
