@@ -8,6 +8,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyListScope
@@ -1550,13 +1551,15 @@ private fun ProfitSummaryRow(label: String, amount: Double, currency: String, co
 fun PeopleScreen(entries: List<Entry>, currency: String, receive: Boolean, onBack: () -> Unit, onEdit: (Entry) -> Unit) {
     val bal = balances(entries)
         .filter { if (receive) it.value.roundToLong() > 0 else it.value.roundToLong() < 0 }
-        .toList().sortedByDescending { abs(it.second) }
+        .toList().sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.first.trim() })
     val total = bal.sumOf { abs(it.second) }
     val color = if (receive) GreenIn else OrangeOwe
     var open by remember { mutableStateOf(setOf<String>()) }
+    val listState = rememberLazyListState()
 
     LazyColumn(
         Modifier.fillMaxSize(),
+        state = listState,
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
