@@ -1823,7 +1823,16 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         LedgerScreen(
                             start = start, entries = entries, currency = currency,
                             onClose = { ledger = null; ledgerPerson = null }, onEdit = { editing = it }, onNew = { trade = it },
-                            person = ledgerPerson
+                            person = ledgerPerson,
+                            onRenamePerson = { oldName, newName ->
+                                val cleanName = newName.trim()
+                                if (cleanName.isNotBlank()) {
+                                    save(entries.map { entry ->
+                                        if (entry.person.equals(oldName, true)) entry.copy(person = cleanName) else entry
+                                    })
+                                    toast("✓ Khata updated")
+                                }
+                            }
                         )
                     }
                 }
