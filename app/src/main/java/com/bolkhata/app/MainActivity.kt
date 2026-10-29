@@ -114,6 +114,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var ledger by remember { mutableStateOf<MainAcct?>(null) }
     var menuFor by remember { mutableStateOf<Entry?>(null) }
     var ledgerPerson by remember { mutableStateOf<String?>(null) }
+    var activeLedgerPerson by remember { mutableStateOf<String?>(null) }
     // Smart understanding: entries the AI read (shown before saving), a name to pick, what was just added (Undo),
     // the entry being edited from the card (to learn from), and words the person corrected before.
     var confirmNew by remember { mutableStateOf<Pair<List<Entry>, String>?>(null) }
@@ -683,7 +684,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             val list = if (person != null) entries.filter { it.person.trim().equals(person, true) && withPerson(it) } else matchEntries(entries, q)
             return "search '$q' (${list.size} records)" to list
         }
-        ledgerPerson?.let { p ->
+        (activeLedgerPerson ?: ledgerPerson)?.let { p ->
             val list = entries.filter { it.person.equals(p, true) }
             return "$p's khata (${list.size} records)" to list
         }
@@ -1824,6 +1825,20 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                             start = start, entries = entries, currency = currency,
                             onClose = { ledger = null; ledgerPerson = null }, onEdit = { editing = it }, onNew = { trade = it },
                             person = ledgerPerson,
+                            onActivePerson = { activeLedgerPerson = it },
+                            onBulkMove = { ids, destination ->
+                                val matches = entries.filter { it.id in ids }
+                                if (matches.isNotEmpty() && destination.isNotBlank()) {
+                                    val before = matches.associateBy { it.id }
+                                    save(entries.map { if (it.id in ids) it.copy(person = destination) else it })
+                                    scope.launch {
+                                        val result = snackbar.showSnackbar("Moved ${matches.size} entries", actionLabel = "Undo", duration = SnackbarDuration.Long)
+                                        if (result == SnackbarResult.ActionPerformed) {
+                                            save(entries.map { before[it.id] ?: it })
+                                        }
+                                    }
+                                }
+                            },
                             onRenamePerson = { oldName, newName ->
                                 val cleanName = newName.trim()
                                 if (cleanName.isNotBlank()) {
