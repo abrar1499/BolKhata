@@ -181,9 +181,9 @@ fun EntryMenu(e: Entry, currency: String, onEdit: () -> Unit, onMove: () -> Unit
 /** Strip common bank-transfer metadata from names shown in the Move Entry picker. */
 private fun cleanMoveKhataName(value: String): String {
     var name = value.trim()
-    name = Regex("""(?i)\\.\\s*(?:from|to)\\s+the account of.*$""").replace(name, "")
+    name = Regex("""(?i)\.\s*(?:from|to)\s+the account of.*$""").replace(name, "")
     name = Regex("""(?i)/TOACCT/.*$""").replace(name, "")
-    name = Regex("""(?i)\\s+W-\\s*$""").replace(name, "")
+    name = Regex("""(?i)\s+W-\s*$""").replace(name, "")
     if (name.contains("/") && name.substringBefore("/").all { it.isDigit() }) {
         name = name.substringAfterLast("/")
     }
