@@ -469,7 +469,8 @@ fun LedgerScreen(
     onNew: (Entry) -> Unit,
     person: String? = null,
     onRenamePerson: (String, String) -> Unit = { _, _ -> },
-    onBulkMove: (Set<String>, String) -> Unit = { _, _ -> }
+    onBulkMove: (Set<String>, String) -> Unit = { _, _ -> },
+    onActivePerson: (String?) -> Unit = {}
 ) {
     val stack = remember(start, person) {
         mutableStateListOf<Level>(Level.Main(start)).apply { if (person != null) add(Level.Person(person)) }
@@ -500,6 +501,7 @@ fun LedgerScreen(
             stack.removeAt(stack.lastIndex)
         } else onClose()
     }
+    SideEffect { onActivePerson((stack.last() as? Level.Person)?.name) }
     when (val level = stack.last()) {
         is Level.Main -> when (level.acct) {
             MainAcct.EXPENSE, MainAcct.INCOME -> TreeView(level.acct == MainAcct.INCOME, entries, currency, ::back, onEdit)
