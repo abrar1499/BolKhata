@@ -11,6 +11,8 @@ Bolo aur hisaab khud apni jagah chala jaye. 🎤 dabao, bolo "Ahmed ko 200 riyal
 5. Hara ✓ aane par us run ko kholein, neeche **Artifacts** mein `BolKhata-apk` download karein.
 6. Zip kholein, `app-debug.apk` phone par bhejein aur install karein ("Unknown sources" allow karna hoga).
 
+Note: APK builds are triggered only after explicit user approval, not after ordinary changes.
+
 ## Android Studio se
 Folder ko Android Studio mein "Open" karein, sync hone dein, phone USB se lagayein aur ▶ Run dabayein.
 
