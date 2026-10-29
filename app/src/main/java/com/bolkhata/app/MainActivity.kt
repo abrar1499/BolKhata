@@ -238,6 +238,34 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         else list.filter { it.person.equals(person, ignoreCase = true) }
     }
 
+    /** Rename and merge use the same reversible move log; merging requires an existing destination. */
+    fun renameOrMergeKhata(oldName: String, newName: String, merge: Boolean) {
+        val from = oldName.trim()
+        val to = newName.trim()
+        if (from.isEmpty() || to.isEmpty() || from.equals(to, ignoreCase = true)) return
+        val source = entries.filter { it.person.equals(from, ignoreCase = true) }
+        if (source.isEmpty()) { toast("Source khata not found"); return }
+        val targetExists = entries.any { it.person.equals(to, ignoreCase = true) }
+        if (merge && !targetExists) { toast("Choose an existing destination khata"); return }
+        if (!merge && targetExists) { toast("Khata exists. Use Move / merge."); return }
+        val after = entries.map { if (it.person.equals(from, ignoreCase = true)) it.copy(person = to) else it }
+        val record = store.recordMove(entries, after) ?: return
+        save(after)
+        scope.launch {
+            val response = snackbar.showSnackbar(
+                if (merge) "Merged ${source.size} entries into $to" else "Renamed khata to $to",
+                actionLabel = "Undo", duration = SnackbarDuration.Long
+            )
+            if (response == SnackbarResult.ActionPerformed) {
+                val restored = restoreMoveBatch(entries, record)
+                if (restored != null) {
+                    save(restored)
+                    store.forgetMove(record.id)
+                } else toast("Cannot undo: entries were changed after the move.")
+            }
+        }
+    }
+
     /** Handles typed or spoken commands: search, edit, delete, clear all. Returns true if it was a command. */
     fun handleCommand(text: String): Boolean {
         val c = Commands.read(text) ?: return false
@@ -1866,13 +1894,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                             },
                             onMoveHistory = { showMoveHistory = true },
                             onRenamePerson = { oldName, newName ->
-                                val cleanName = newName.trim()
-                                if (cleanName.isNotBlank()) {
-                                    save(entries.map { entry ->
-                                        if (entry.person.equals(oldName, true)) entry.copy(person = cleanName) else entry
-                                    })
-                                    toast("✓ Khata updated")
-                                }
+                                renameOrMergeKhata(oldName, newName, merge = false)
+                            },
+                            onMergePerson = { oldName, newName ->
+                                renameOrMergeKhata(oldName, newName, merge = true)
                             }
                         )
                     }
