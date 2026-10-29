@@ -1660,14 +1660,25 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 tab == Tab.TRASH -> TrashScreen(
                     trash = trash, currency = currency, onMenu = { openMenu() },
                     onRestore = { e ->
-                        save(listOf(e) + entries)
-                        saveTrash(trash.filter { it.id != e.id })
-                        toast("✓ Restored")
+                        if (entries.any { it.id == e.id }) {
+                            toast("This entry already exists; restore cancelled.")
+                        } else {
+                            save(listOf(e) + entries)
+                            saveTrash(trash.filter { it.id != e.id })
+                            toast("✓ Restored")
+                        }
                     },
                     onRestoreAll = {
-                        save(trash + entries)
-                        saveTrash(emptyList())
-                        toast("✓ All restored")
+                        val existing = entries.map { it.id }.toSet()
+                        val safe = trash.filter { it.id !in existing }.distinctBy { it.id }
+                        if (safe.isEmpty()) {
+                            toast("No entries to restore without duplicates.")
+                        } else {
+                            save(safe + entries)
+                            val restoredIds = safe.map { it.id }.toSet()
+                            saveTrash(trash.filter { it.id !in restoredIds })
+                            toast("✓ Restored ${safe.size} entries")
+                        }
                     },
                     onEmpty = { if (trash.isNotEmpty()) confirmEmptyTrash = true }
                 )
