@@ -40,4 +40,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp app/build/outputs/apk/release/app-release.apk BolKhata.apk
-          gh release create "v${{ github.run_number }}" BolKhata.apk --repo "${{ github.repository }}" --title "Smart Expense ${{ github.run_number }}" --notes "Approved build with khata scroll restoration fix" --latest
+          gh release create "v${{ github.run_number }}" BolKhata.apk --repo "${{ github.repository }}" --title "Smart Expense ${{ github.run_number }}" --notes "Approved build from commit ${{ github.sha }}. Includes khata-scoped chat safety, Select All / bulk move, move history with guarded restore, merge preview and Undo, Trash confirmation, and voice-language defaults. GitHub Actions unit tests and release compilation must pass before publication. On-device validation is still recommended." --latest
