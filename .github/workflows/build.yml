@@ -1,7 +1,7 @@
 name: Build APK
 
 on:
-  # Normal commits never build. Only a commit explicitly marked [build-apk] does.
+  # Normal commits never build. Only an explicitly approved [build-apk] commit triggers this workflow.
   push:
     branches: [main]
   workflow_dispatch:
