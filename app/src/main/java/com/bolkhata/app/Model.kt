@@ -330,7 +330,7 @@ class Store(context: Context) {
         if (changes.isEmpty()) return null
         val batch = MoveBatch("move-" + System.currentTimeMillis() + "-" + System.nanoTime(),
             System.currentTimeMillis(), changes)
-        val previous = JSONArray(prefs.getString("moveHistory", "[]") ?: "[]")
+        val previous = runCatching { JSONArray(prefs.getString("moveHistory", "[]") ?: "[]") }.getOrDefault(JSONArray())
         val history = JSONArray()
         val jsonMoves = JSONArray()
         changes.forEach { m ->
@@ -351,7 +351,7 @@ class Store(context: Context) {
     }
 
     fun forgetMove(id: String) {
-        val old = JSONArray(prefs.getString("moveHistory", "[]") ?: "[]")
+        val old = runCatching { JSONArray(prefs.getString("moveHistory", "[]") ?: "[]") }.getOrDefault(JSONArray())
         val next = JSONArray()
         for (i in 0 until old.length()) {
             val item = old.optJSONObject(i) ?: continue
