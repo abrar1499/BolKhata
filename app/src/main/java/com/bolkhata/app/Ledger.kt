@@ -468,7 +468,8 @@ fun LedgerScreen(
     onEdit: (Entry) -> Unit,
     onNew: (Entry) -> Unit,
     person: String? = null,
-    onRenamePerson: (String, String) -> Unit = { _, _ -> }
+    onRenamePerson: (String, String) -> Unit = { _, _ -> },
+    onBulkMove: (Set<String>, String) -> Unit = { _, _ -> }
 ) {
     val stack = remember(start, person) {
         mutableStateListOf<Level>(Level.Main(start)).apply { if (person != null) add(Level.Person(person)) }
@@ -515,7 +516,7 @@ fun LedgerScreen(
         }
         is Level.Sub -> SubView(level.income, level.cat, entries, currency, ::back, onEdit) { stack.add(Level.Vendor(level.income, level.cat, it)) }
         is Level.Vendor -> VendorView(level, entries, currency, ::back, onEdit)
-        is Level.Person -> PersonView(level.name, entries, currency, ::back, onEdit, onNew)
+        is Level.Person -> PersonView(level.name, entries, currency, ::back, onEdit, onNew, onBulkMove)
     }
 }
 
@@ -829,8 +830,11 @@ private fun PeopleView(
 @Composable
 private fun PersonView(
     name: String, entries: List<Entry>, currency: String,
-    onBack: () -> Unit, onEdit: (Entry) -> Unit, onNew: (Entry) -> Unit
+    onBack: () -> Unit, onEdit: (Entry) -> Unit, onNew: (Entry) -> Unit,
+    onBulkMove: (Set<String>, String) -> Unit
 ) {
+    val selectedIds = remember(name) { mutableStateListOf<String>() }
+    var pickingDestination by remember(name) { mutableStateOf(false) }
     val p = remember(entries, name) { personAccounts(entries).firstOrNull { it.name.equals(name, true) } }
     val df = SimpleDateFormat("d MMM yyyy", Locale.US)
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
@@ -869,11 +873,40 @@ private fun PersonView(
                     ) { Text("+ Got", fontWeight = FontWeight.Bold) }
                 }
             }
-            item { SectionTitle("History (balance after each entry)") }
             val hist = p.history.reversed()
+            item {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Text("History", modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold)
+                    TextButton(onClick = {
+                        if (selectedIds.size == hist.size) selectedIds.clear()
+                        else { selectedIds.clear(); selectedIds.addAll(hist.map { it.first.id }) }
+                    }) { Text(if (selectedIds.size == hist.size && hist.isNotEmpty()) "Clear all" else "Select all") }
+                    if (selectedIds.isNotEmpty()) {
+                        Button(onClick = { pickingDestination = true }) { Text("Move ${selectedIds.size}") }
+                    }
+                }
+            }
             itemsIndexed(hist, key = { _, h -> "h-" + h.first.id }) { i, (e, after) ->
                 val outflow = personHistoryIsOutflow(e)
-                CardLine(i == 0, i == hist.lastIndex, 0, 46.dp, modifier = Modifier.entryTap(e) { onEdit(e) }) {
+                CardLine(i == 0, i == hist.lastIndex, 0, 46.dp,
+                    modifier = Modifier.pointerInput(e.id, selectedIds.size) {
+                        detectTapGestures(
+                            onLongPress = { if (e.id !in selectedIds) selectedIds.add(e.id) },
+                            onTap = {
+                                if (selectedIds.isEmpty()) onEdit(e)
+                                else if (e.id in selectedIds) selectedIds.remove(e.id)
+                                else selectedIds.add(e.id)
+                            }
+                        )
+                    }) {
+                    if (selectedIds.isNotEmpty()) {
+                        Checkbox(checked = e.id in selectedIds,
+                            onCheckedChange = { checked ->
+                                if (checked && e.id !in selectedIds) selectedIds.add(e.id)
+                                if (!checked) selectedIds.remove(e.id)
+                            })
+                    }
                     Text(SimpleDateFormat("d MMM", Locale.US).format(Date(e.date)), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(48.dp))
                     Text(
                         e.type.label + (if (e.note.isNotBlank() && e.note != "Loans") " · " + e.note else ""),
@@ -892,6 +925,17 @@ private fun PersonView(
                     }
                 }
             }
+        }
+    }
+    if (pickingDestination && selectedIds.isNotEmpty()) {
+        val sample = p?.history?.firstOrNull { it.first.id in selectedIds }?.first
+        if (sample != null) {
+            MoveDialog(sample, entries, onMove = { moved ->
+                val ids = selectedIds.toSet()
+                pickingDestination = false
+                selectedIds.clear()
+                if (!moved.person.equals(name, ignoreCase = true)) onBulkMove(ids, moved.person)
+            }, onDismiss = { pickingDestination = false })
         }
     }
 }
