@@ -668,64 +668,116 @@ private fun PeopleView(
             }
         }
     }
+
     if (actionPerson != null) {
         AlertDialog(
-            onDismissRequest = { actionPerson = null; actionSource = null },
-            title = { Text(actionPerson!!, fontWeight = FontWeight.Bold) },
-            text = { Text("Khata ke liye kya karna hai?") },
-            confirmButton = {
-                Column(horizontalAlignment = Alignment.End) {
-                    TextButton(onClick = {
+            onDismissRequest = { actionPerson = null },
+            shape = RoundedCornerShape(26.dp),
+            title = { Text(actionPerson.orEmpty(), fontWeight = FontWeight.Bold, fontSize = 21.sp) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Khata actions", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Surface(Modifier.fillMaxWidth().clickable {
                         actionSource = actionPerson
                         actionName = actionPerson.orEmpty()
                         editAction = "Rename"
                         actionPerson = null
-                    }) { Text("Rename khata") }
-                    TextButton(onClick = {
+                    }, shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant) {
+                        Text("✎   Rename khata", Modifier.padding(16.dp), fontWeight = FontWeight.SemiBold)
+                    }
+                    Surface(Modifier.fillMaxWidth().clickable {
                         actionSource = actionPerson
                         actionName = ""
                         editAction = "Move"
                         actionPerson = null
-                    }) { Text("Move / merge into another khata") }
+                    }, shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer) {
+                        Text("⇄   Move / merge khata", Modifier.padding(16.dp), fontWeight = FontWeight.SemiBold)
+                    }
                 }
             },
-            dismissButton = { TextButton(onClick = { actionPerson = null }) { Text("Cancel") } }
+            confirmButton = { TextButton(onClick = { actionPerson = null }) { Text("Close") } }
         )
     }
     if (editAction != null) {
         val oldName = actionSource.orEmpty()
+        var searchOpen by remember(editAction) { mutableStateOf(false) }
+        var confirmMerge by remember(editAction) { mutableStateOf(false) }
+        val targets = remember(entries, oldName) {
+            personAccounts(entries).map { it.name }.filterNot { it.equals(oldName, true) }
+                .distinctBy { it.lowercase(Locale.ROOT) }
+                .sortedWith(String.CASE_INSENSITIVE_ORDER)
+        }
+        val filtered = remember(targets, actionName) {
+            if (actionName.isBlank()) emptyList()
+            else targets.filter { it.contains(actionName.trim(), ignoreCase = true) }
+        }
         AlertDialog(
             onDismissRequest = { editAction = null },
-            title = { Text(if (editAction == "Rename") "Rename khata" else "Move / merge khata") },
+            shape = RoundedCornerShape(26.dp),
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(if (editAction == "Rename") "Rename khata" else "Move / merge", fontWeight = FontWeight.Bold)
+                        Text(oldName, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    if (editAction != "Rename") IconButton(onClick = {
+                        searchOpen = !searchOpen
+                        actionName = ""
+                    }) { Icon(if (searchOpen) Icons.Filled.Close else Icons.Filled.Search, contentDescription = "Search destination") }
+                }
+            },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        if (editAction == "Rename") "Naya naam likhein."
-                        else "Is khata ki tamam entries doosre khata mein move/merge hongi."
-                    )
-                    OutlinedTextField(
-                        value = actionName,
-                        onValueChange = { actionName = it },
-                        singleLine = true,
-                        label = { Text(if (editAction == "Rename") "New khata name" else "Target khata name") }
-                    )
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (editAction == "Rename") {
+                        OutlinedTextField(actionName, { actionName = it }, modifier = Modifier.fillMaxWidth(),
+                            label = { Text("New name") }, singleLine = true, shape = RoundedCornerShape(16.dp))
+                    } else if (confirmMerge) {
+                        Text("Merge $oldName into ${actionName.trim()}?")
+                        Text("All entries will move to the selected khata.",
+                            fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else if (!searchOpen) {
+                        Text("Tap the search icon to find a khata.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
+                        OutlinedTextField(actionName, { actionName = it }, modifier = Modifier.fillMaxWidth(),
+                            label = { Text("Search khata") }, singleLine = true, shape = RoundedCornerShape(16.dp),
+                            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) })
+                        Text("${filtered.size} results · A–Z", fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        LazyColumn(Modifier.fillMaxWidth().heightIn(max = 280.dp)) {
+                            items(filtered, key = { it }) { target ->
+                                Surface(Modifier.fillMaxWidth().padding(vertical = 3.dp).clickable {
+                                    actionName = target
+                                    confirmMerge = true
+                                }, shape = RoundedCornerShape(14.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant) {
+                                    Text(target, Modifier.padding(14.dp))
+                                }
+                            }
+                        }
+                    }
                 }
             },
             confirmButton = {
-                TextButton(
-                    enabled = actionName.isNotBlank() &&
-                        (editAction != "Rename" || !actionName.trim().equals(oldName, true)),
+                TextButton(enabled = if (editAction == "Rename")
+                    actionName.isNotBlank() && !actionName.trim().equals(oldName, true)
+                    else confirmMerge && targets.any { it.equals(actionName.trim(), true) },
                     onClick = {
-                        val target = actionName.trim()
-                        val source = actionSource
-                        if (!source.isNullOrBlank() && target.isNotBlank()) onRenamePerson(source, target)
+                        if (oldName.isNotBlank() && actionName.isNotBlank())
+                            onRenamePerson(oldName, actionName.trim())
                         editAction = null
                         actionSource = null
                         actionName = ""
-                    }
-                ) { Text(if (editAction == "Rename") "Rename" else "Move khata") }
+                    }) { Text(if (editAction == "Rename") "Save" else "Confirm merge") }
             },
-            dismissButton = { TextButton(onClick = { editAction = null; actionSource = null; actionName = "" }) { Text("Cancel") } }
+            dismissButton = {
+                TextButton(onClick = {
+                    if (confirmMerge) { confirmMerge = false; searchOpen = true }
+                    else { editAction = null; actionSource = null; actionName = "" }
+                }) { Text(if (confirmMerge) "Back" else "Cancel") }
+            }
         )
     }
 }
