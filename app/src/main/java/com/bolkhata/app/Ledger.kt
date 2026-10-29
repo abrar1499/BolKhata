@@ -208,6 +208,8 @@ fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: (
     var searchOpen by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     var selectedPerson by remember { mutableStateOf<String?>(null) }
+    var creatingKhata by remember { mutableStateOf(false) }
+    var newKhataName by remember { mutableStateOf("") }
     val query = searchQuery.trim()
     val filteredPeople = remember(people, query) {
         if (query.isBlank()) emptyList()
@@ -235,21 +237,36 @@ fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: (
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                IconButton(
-                    onClick = {
-                        selectedPerson = null
-                        searchOpen = !searchOpen
-                        if (!searchOpen) searchQuery = ""
-                    },
-                    modifier = Modifier.size(40.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.primaryContainer)
-                ) {
-                    Icon(
-                        if (searchOpen) Icons.Filled.Close else Icons.Filled.Search,
-                        contentDescription = if (searchOpen) "Close khata search" else "Search khata",
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    IconButton(
+                        onClick = {
+                            creatingKhata = false
+                            selectedPerson = null
+                            searchOpen = !searchOpen
+                            if (!searchOpen) searchQuery = ""
+                        },
+                        modifier = Modifier.size(40.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.primaryContainer)
+                    ) {
+                        Icon(if (searchOpen && !creatingKhata) Icons.Filled.Close else Icons.Filled.Search,
+                            contentDescription = "Search khata",
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                    }
+                    IconButton(
+                        onClick = {
+                            selectedPerson = null
+                            searchOpen = false
+                            creatingKhata = true
+                            newKhataName = ""
+                        },
+                        modifier = Modifier.size(40.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.primaryContainer)
+                    ) {
+                        Text("+", fontWeight = FontWeight.Bold, fontSize = 24.sp,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    }
                 }
             }
         },
@@ -275,6 +292,22 @@ fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: (
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                } else if (creatingKhata) {
+                    OutlinedTextField(
+                        value = newKhataName,
+                        onValueChange = { newKhataName = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("New khata name") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(16.dp)
+                    )
+                    if (people.any { it.equals(newKhataName.trim(), ignoreCase = true) }) {
+                        Text("This khata already exists. Use Search to select it.",
+                            fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+                    } else {
+                        Text("Create the khata and move this entry after confirmation.",
+                            fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 } else if (!searchOpen) {
                     Text(
                         "Tap the search icon to find a khata.",
@@ -361,7 +394,16 @@ fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: (
             }
         },
         confirmButton = {
-            if (selectedPerson != null) {
+            if (creatingKhata) {
+                Button(
+                    enabled = newKhataName.trim().isNotBlank() &&
+                        people.none { it.equals(newKhataName.trim(), ignoreCase = true) },
+                    onClick = {
+                        selectedPerson = newKhataName.trim()
+                        creatingKhata = false
+                    }
+                ) { Text("Create & move") }
+            } else if (selectedPerson != null) {
                 Button(onClick = {
                     val person = selectedPerson ?: return@Button
                     onMove(movedTo(e, all, null, false, person))
@@ -370,7 +412,9 @@ fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: (
         },
         dismissButton = {
             TextButton(onClick = {
-                if (selectedPerson != null) selectedPerson = null else onDismiss()
+                if (selectedPerson != null) selectedPerson = null
+                else if (creatingKhata) creatingKhata = false
+                else onDismiss()
             }) { Text(if (selectedPerson != null) "Back" else "Cancel") }
         }
     )
