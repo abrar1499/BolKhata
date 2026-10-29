@@ -178,13 +178,25 @@ fun EntryMenu(e: Entry, currency: String, onEdit: () -> Unit, onMove: () -> Unit
     )
 }
 
+/** Strip common bank-transfer metadata from names shown in the Move Entry picker. */
+private fun cleanMoveKhataName(value: String): String {
+    var name = value.trim()
+    name = Regex("""(?i)\\.\\s*(?:from|to)\\s+the account of.*$""").replace(name, "")
+    name = Regex("""(?i)/TOACCT/.*$""").replace(name, "")
+    name = Regex("""(?i)\\s+W-\\s*$""").replace(name, "")
+    if (name.contains("/") && name.substringBefore("/").all { it.isDigit() }) {
+        name = name.substringAfterLast("/")
+    }
+    return name.trim().trim('.', '-', '/', ' ')
+}
+
 /** Where to move an entry: an expense category, an income category, or a person's account. */
 @Composable
 fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: () -> Unit) {
     // Prefer actual khata names over raw bank-statement descriptions.
     val people = remember(all) {
         (personAccounts(all).map { it.name } + all.map { it.person })
-            .map { it.trim() }
+            .map(::cleanMoveKhataName)
             .filter { it.isNotBlank() }
             .distinctBy { it.lowercase(Locale.ROOT) }
             .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it })
