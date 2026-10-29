@@ -520,6 +520,7 @@ private fun PeopleView(
             .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name.trim() })
     }
     var actionPerson by remember { mutableStateOf<String?>(null) }
+    var actionSource by remember { mutableStateOf<String?>(null) }
     var editAction by remember { mutableStateOf<String?>(null) }
     var actionName by remember { mutableStateOf("") }
     val total = list.sumOf { kotlin.math.abs(it.balance) }
@@ -565,11 +566,13 @@ private fun PeopleView(
             confirmButton = {
                 Column(horizontalAlignment = Alignment.End) {
                     TextButton(onClick = {
+                        actionSource = actionPerson
                         actionName = actionPerson.orEmpty()
                         editAction = "Rename"
                         actionPerson = null
                     }) { Text("Rename khata") }
                     TextButton(onClick = {
+                        actionSource = actionPerson
                         actionName = ""
                         editAction = "Move"
                         actionPerson = null
@@ -580,8 +583,7 @@ private fun PeopleView(
         )
     }
     if (editAction != null) {
-        val oldName = list.firstOrNull { it.name.equals(actionName, true) }?.name
-            ?: (actionName.takeIf { editAction == "Rename" } ?: "")
+        val oldName = actionSource.orEmpty()
         AlertDialog(
             onDismissRequest = { editAction = null },
             title = { Text(if (editAction == "Rename") "Rename khata" else "Move / merge khata") },
@@ -605,14 +607,15 @@ private fun PeopleView(
                         (editAction != "Rename" || !actionName.trim().equals(oldName, true)),
                     onClick = {
                         val target = actionName.trim()
-                        val source = if (editAction == "Rename") oldName else actionPerson
+                        val source = actionSource
                         if (!source.isNullOrBlank() && target.isNotBlank()) onRenamePerson(source, target)
                         editAction = null
+                        actionSource = null
                         actionName = ""
                     }
                 ) { Text(if (editAction == "Rename") "Rename" else "Move khata") }
             },
-            dismissButton = { TextButton(onClick = { editAction = null; actionName = "" }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { editAction = null; actionSource = null; actionName = "" }) { Text("Cancel") } }
         )
     }
 }
