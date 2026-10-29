@@ -1,9 +1,7 @@
 name: Build APK
 
 on:
-  push:
-    branches: [main]
-  pull_request:
+  # Build only when explicitly requested from the Actions tab.
   workflow_dispatch:
 
 permissions:
@@ -35,9 +33,9 @@ jobs:
           name: BolKhata-apk
           path: app/build/outputs/apk/release/app-release.apk
       - name: Publish update
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp app/build/outputs/apk/release/app-release.apk BolKhata.apk
-          gh release create "v${{ github.run_number }}" BolKhata.apk --repo "${{ github.repository }}" --title "Smart Expense ${{ github.run_number }}" --notes "Automatic build" --latest
+          gh release create "v${{ github.run_number }}" BolKhata.apk --repo "${{ github.repository }}" --title "Smart Expense ${{ github.run_number }}" --notes "Manually requested build" --latest
