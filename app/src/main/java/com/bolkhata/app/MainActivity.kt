@@ -763,6 +763,13 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     fun runFixed(f: Ai.Fixed, said: String, inChat: Boolean): String? {
         // "Inko / ye sari": nothing narrowed down, so it means the records on screen.
         val onScreen = screenList()
+        // A vague singular instruction must never silently edit or delete an entire khata.
+        val saidRoman = runCatching { Translit.toRoman(said) }.getOrDefault(said).lowercase()
+        val explicitlyAll = Regex("""\\b(all|every|sab|sari|saari|tamam|these|in sab)\\b""").containsMatchIn(saidRoman)
+        if (f.filter.isEmpty && onScreen != null && onScreen.second.size > 1 &&
+            f.kind in setOf("delete", "change", "to_khata") && !explicitlyAll) {
+            return "Which entry in ${onScreen.first}? Tell me the amount or date, or say 'all entries'."
+        }
         val q = if (f.filter.isEmpty && onScreen != null && f.kind in setOf("delete", "change", "to_khata", "reread", "ask", "paid_by"))
             Query.Filter(ids = onScreen.second.map { it.id }.toSet()) else f.filter
         // When chatting inside a khata, destructive commands must never touch another khata.
