@@ -840,11 +840,11 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 val payer = f.payer.ifBlank { return "Who paid? e.g. \"nadeem ne pay kiya\"" }
                 val q2 = Query.Filter(q.from, q.to, setOf(Type.KHARCHA), emptyList(), q.cats, q.items, q.min, q.max, q.last, q.noPeople, q.notItems, q.ids)
                 if (q2.from == null && q2.cats.isEmpty() && q2.items.isEmpty() && q2.ids.isEmpty()) return "Which one? e.g. \"aaj ka khana\""
-                val hits = Query.select(entries, q2)
+                val hits = scoped(Query.select(entries, q2))
                 // The one that mentions the payer comes first ("Khana with nadeem").
                 val h = hits.firstOrNull { it.note.contains(payer, true) } ?: hits.firstOrNull() ?: return "Nothing found (${Query.label(q2)})."
                 // A bill I split earlier: the others' shares were "to receive" for me; now the payer is owed instead.
-                val siblings = entries.filter { it.id != h.id && it.createdAt == h.createdAt && it.type == Type.DIYA && it.note.contains("share of", true) }
+                val siblings = scoped(entries).filter { it.id != h.id && it.createdAt == h.createdAt && it.type == Type.DIYA && it.note.contains("share of", true) }
                 val shared = siblings.isNotEmpty() || h.note.contains(payer, true)
                 val total = h.amount + siblings.sumOf { it.amount }
                 val mine = if (siblings.isNotEmpty()) h.amount else if (shared) Math.round(h.amount * 50.0) / 100.0 else h.amount
