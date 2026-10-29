@@ -3,7 +3,7 @@ package com.bolkhata.app
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -23,6 +23,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -538,10 +539,12 @@ private fun PeopleView(
             val settled = kotlin.math.abs(p.balance) < 0.005
             CardLine(
                 i == 0, i == list.lastIndex, 0, 46.dp,
-                modifier = Modifier.combinedClickable(
-                    onClick = { onOpen(p.name) },
-                    onLongClick = { actionPerson = p.name }
-                )
+                modifier = Modifier.pointerInput(p.name) {
+                    detectTapGestures(
+                        onTap = { onOpen(p.name) },
+                        onLongPress = { actionPerson = p.name }
+                    )
+                }
             ) {
                 Box(
                     Modifier.size(26.dp).clip(RoundedCornerShape(13.dp)).background(color.copy(alpha = 0.16f)),
@@ -560,7 +563,7 @@ private fun PeopleView(
     }
     if (actionPerson != null) {
         AlertDialog(
-            onDismissRequest = { actionPerson = null },
+            onDismissRequest = { actionPerson = null; actionSource = null },
             title = { Text(actionPerson!!, fontWeight = FontWeight.Bold) },
             text = { Text("Khata ke liye kya karna hai?") },
             confirmButton = {
