@@ -196,7 +196,7 @@ private fun cleanMoveKhataName(value: String): String {
 
 /** Search-first khata picker: the large category lists stay out of the Move Entry flow. */
 @Composable
-fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: () -> Unit) {
+fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: () -> Unit, count: Int = 1) {
     // Keep the real account key for moving entries; clean only the display label.
     val people = remember(all) {
         (personAccounts(all).map { it.name } + all.map { it.person })
@@ -229,7 +229,7 @@ fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: (
         title = {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text("Move entry", fontWeight = FontWeight.Bold, fontSize = 21.sp)
+                    Text(if (count == 1) "Move entry" else "Move $count entries", fontWeight = FontWeight.Bold, fontSize = 21.sp)
                     Text(
                         if (selectedPerson != null) "Confirm the destination"
                         else "Find the right khata",
@@ -273,7 +273,7 @@ fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: (
         text = {
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (selectedPerson != null) {
-                    Text("Move this entry to:", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(if (count == 1) "Move this entry to:" else "Move $count selected entries to:", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(16.dp),
@@ -305,7 +305,7 @@ fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: (
                         Text("This khata already exists. Use Search to select it.",
                             fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
                     } else {
-                        Text("Create the khata and move this entry after confirmation.",
+                        Text("Choose this new khata, then review and confirm the move.",
                             fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 } else if (!searchOpen) {
@@ -402,12 +402,12 @@ fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: (
                         selectedPerson = newKhataName.trim()
                         creatingKhata = false
                     }
-                ) { Text("Create & move") }
+                ) { Text("Review destination") }
             } else if (selectedPerson != null) {
                 Button(onClick = {
                     val person = selectedPerson ?: return@Button
                     onMove(movedTo(e, all, null, false, person))
-                }) { Text("Confirm move") }
+                }) { Text(if (count == 1) "Confirm move" else "Move $count entries") }
             }
         },
         dismissButton = {
@@ -470,7 +470,8 @@ fun LedgerScreen(
     person: String? = null,
     onRenamePerson: (String, String) -> Unit = { _, _ -> },
     onBulkMove: (Set<String>, String) -> Unit = { _, _ -> },
-    onActivePerson: (String?) -> Unit = {}
+    onActivePerson: (String?) -> Unit = {},
+    onMoveHistory: () -> Unit = {}
 ) {
     val stack = remember(start, person) {
         mutableStateListOf<Level>(Level.Main(start)).apply { if (person != null) add(Level.Person(person)) }
@@ -518,7 +519,7 @@ fun LedgerScreen(
         }
         is Level.Sub -> SubView(level.income, level.cat, entries, currency, ::back, onEdit) { stack.add(Level.Vendor(level.income, level.cat, it)) }
         is Level.Vendor -> VendorView(level, entries, currency, ::back, onEdit)
-        is Level.Person -> PersonView(level.name, entries, currency, ::back, onEdit, onNew, onBulkMove)
+        is Level.Person -> PersonView(level.name, entries, currency, ::back, onEdit, onNew, onBulkMove, onMoveHistory)
     }
 }
 
@@ -833,7 +834,8 @@ private fun PeopleView(
 private fun PersonView(
     name: String, entries: List<Entry>, currency: String,
     onBack: () -> Unit, onEdit: (Entry) -> Unit, onNew: (Entry) -> Unit,
-    onBulkMove: (Set<String>, String) -> Unit
+    onBulkMove: (Set<String>, String) -> Unit,
+    onMoveHistory: () -> Unit
 ) {
     val selectedIds = remember(name) { mutableStateListOf<String>() }
     var pickingDestination by remember(name) { mutableStateOf(false) }
@@ -841,6 +843,7 @@ private fun PersonView(
     val df = SimpleDateFormat("d MMM yyyy", Locale.US)
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
         item { Header(name, if (p == null) "" else (if (p.toReceive) "To receive" else "To pay") + " · " + count(p.history.size), onBack) }
+        item { TextButton(onClick = onMoveHistory, modifier = Modifier.padding(horizontal = 16.dp)) { Text("Move history & restore") } }
         if (p == null) {
             item { Text("No entries with $name.", modifier = Modifier.padding(20.dp)) }
         } else {
@@ -937,9 +940,50 @@ private fun PersonView(
                 pickingDestination = false
                 selectedIds.clear()
                 if (!moved.person.equals(name, ignoreCase = true)) onBulkMove(ids, moved.person)
-            }, onDismiss = { pickingDestination = false })
+            }, onDismiss = { pickingDestination = false }, count = selectedIds.size)
         }
     }
+}
+
+/** Recent moves can be restored even after the app is restarted. */
+@Composable
+fun MoveHistoryDialog(
+    history: List<MoveBatch>,
+    onRestore: (MoveBatch) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Move history") },
+        text = {
+            if (history.isEmpty()) {
+                Text("No recent account moves to restore.")
+            } else {
+                LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 390.dp)) {
+                    items(history, key = { it.id }) { batch ->
+                        val first = batch.changes.firstOrNull()
+                        Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                            Text(
+                                (first?.fromPerson?.ifBlank { "Unassigned" } ?: "Unassigned") +
+                                    " → " + (first?.toPerson ?: "") +
+                                    " · " + batch.changes.size + " entries",
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 2
+                            )
+                            Text(
+                                SimpleDateFormat("d MMM, h:mm a", Locale.US).format(Date(batch.timestamp)),
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            TextButton(onClick = { onRestore(batch) }) { Text("Restore this move") }
+                            HorizontalDivider()
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }
+    )
 }
 
 private fun template(type: Type, person: String): Entry {
