@@ -13,6 +13,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -179,12 +181,20 @@ fun EntryMenu(e: Entry, currency: String, onEdit: () -> Unit, onMove: () -> Unit
 /** Where to move an entry: an expense category, an income category, or a person's account. */
 @Composable
 fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: () -> Unit) {
+    fun labelOf(name: String): String =
+        name.trim().replace(Regex("\\s+"), " ")
+            .replace(Regex("^\\d{8,}/"), "")
+            .substringBefore(". From the Account of")
+            .substringBefore(" W-/TOACCT/")
+            .trim().ifBlank { name.trim() }
     val people = remember(all) {
-        (personAccounts(all).map { it.name } + all.mapNotNull { x ->
-            x.note.trim().takeIf { it.startsWith("To ") || it.startsWith("From ") }?.substringAfter(' ')?.trim()
-        }).filter { it.isNotBlank() }.distinctBy { it.lowercase() }.sorted()
+        personAccounts(all).map { it.name }.filter { it.isNotBlank() }
+            .distinctBy { it.lowercase(Locale.ROOT) }
+            .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { labelOf(it) })
     }
-    var newName by remember { mutableStateOf("") }
+    var newName by remember(e.id) { mutableStateOf("") }
+    var searchOpen by remember(e.id) { mutableStateOf(false) }
+    var searchText by remember(e.id) { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Move entry to") },
@@ -202,9 +212,29 @@ fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: (
                         selected = e.type == Type.AAMDANI && e.category == c
                     ) { onMove(movedTo(e, all, c, true, null)) }
                 }
-                MoveSection("A person (To pay / To receive)")
-                people.forEach { p ->
-                    MoveRow(p, selected = e.person.equals(p, true)) { onMove(movedTo(e, all, null, false, p)) }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("A person (A–Z)", fontWeight = FontWeight.Bold, fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
+                    IconButton(onClick = { searchOpen = !searchOpen; if (!searchOpen) searchText = "" },
+                        modifier = Modifier.size(40.dp)) {
+                        Icon(if (searchOpen) Icons.Default.Close else Icons.Default.Search,
+                            contentDescription = if (searchOpen) "Close search" else "Search accounts")
+                    }
+                }
+                if (searchOpen) OutlinedTextField(
+                    value = searchText, onValueChange = { searchText = it },
+                    placeholder = { Text("Search accounts") }, singleLine = true,
+                    shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()
+                )
+                val visiblePeople = people.filter {
+                    searchText.isBlank() || labelOf(it).contains(searchText.trim(), ignoreCase = true)
+                }
+                if (visiblePeople.isEmpty()) Text("No matching accounts", fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                visiblePeople.forEach { p ->
+                    MoveRow(labelOf(p), selected = e.person.equals(p, true)) {
+                        onMove(movedTo(e, all, null, false, p))
+                    }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(
@@ -233,7 +263,8 @@ private fun MoveRow(label: String, selected: Boolean, onClick: () -> Unit) {
             .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(label, modifier = Modifier.weight(1f), fontSize = 15.sp)
+        Text(label, modifier = Modifier.weight(1f), fontSize = 14.sp,
+            maxLines = 1, overflow = TextOverflow.Ellipsis)
         if (selected) Text("now", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
     }
 }
