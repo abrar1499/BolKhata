@@ -5,6 +5,13 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class AssistantSafetyTest {
+    @Test fun ambiguousMultiMatchRequiresClarificationUnlessAllWasExplicit() {
+        assertEquals(true, Accounts.requiresTargetClarification(3, explicitlyAll = false))
+        assertEquals(false, Accounts.requiresTargetClarification(3, explicitlyAll = true))
+        assertEquals(true, Accounts.requiresTargetClarification(3, explicitlyAll = true, allowAll = false))
+        assertEquals(false, Accounts.requiresTargetClarification(1, explicitlyAll = false))
+    }
+
     @Test fun mutationRequiresTheExactLiveSnapshot() {
         val old = Entry("entry-1", Type.KHARCHA, 10.0, Cat.KHANA, "Tea", "", "Tea", 1L, 1L)
         val changed = old.copy(amount = 12.0)
