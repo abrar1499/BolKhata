@@ -1603,11 +1603,11 @@ fun SettingsScreen(
                         }
                     }
                     ListDivider()
-                    ListRow("Dark mode", null, onClick = { onDark(!dark) }) { Switch(checked = dark, onCheckedChange = onDark) }
+                    ListRow("Dark mode", null, trailing = { Switch(checked = dark, onCheckedChange = onDark) }) { onDark(!dark) }
                     ListDivider()
                     ListRow("Theme", themeName) { dialog = "theme" }
                     ListDivider()
-                    ListRow("Bank alerts", null, onClick = onBank) { Switch(checked = bankOn, onCheckedChange = { onBank() }) }
+                    ListRow("Bank alerts", null, trailing = { Switch(checked = bankOn, onCheckedChange = { onBank() }) }, onClick = onBank)
                     ListDivider()
                     ListRow("Chat review", if (logTokenSet) "On" else "Off", valueColor = if (logTokenSet) GreenIn else faint) { dialog = "review" }
                     ListDivider()
@@ -1620,7 +1620,7 @@ fun SettingsScreen(
                         }
                     }
                     ListDivider()
-                    ListRow("Version", if (checking) "Checking…" else version, onClick = { if (!checking) onCheckUpdate() })
+                    ListRow("Version", if (checking) "Checking…" else version) { if (!checking) onCheckUpdate() }
                 }
             }
         }
@@ -1668,7 +1668,7 @@ fun SettingsScreen(
 @Composable
 private fun ListRow(
     label: String, value: String?, valueColor: Color = Color.Unspecified,
-    onClick: () -> Unit, trailing: (@Composable () -> Unit)? = null
+    trailing: (@Composable () -> Unit)? = null, onClick: () -> Unit
 ) {
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 54.dp).padding(horizontal = 16.dp, vertical = 8.dp),
