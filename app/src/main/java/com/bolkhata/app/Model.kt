@@ -57,7 +57,9 @@ data class Entry(
     /** Price per unit (or per 1000 for bricks) when said. 0 when not said. */
     val rate: Double = 0.0,
     /** Sale or purchase with a person that was settled in cash, so it does not go in the khata. */
-    val paid: Boolean = false
+    val paid: Boolean = false,
+    /** Stable hash of a structured bank alert, used to prevent the same notification being saved twice. */
+    val sourceFingerprint: String = ""
 )
 
 data class ChatMessage(
@@ -295,7 +297,8 @@ class Store(context: Context) {
                         qty = o.optDouble("qty", 0.0).let { if (it.isNaN()) 0.0 else it },
                         unit = o.optString("unit", ""),
                         rate = o.optDouble("rate", 0.0).let { if (it.isNaN()) 0.0 else it },
-                        paid = o.optBoolean("paid", false)
+                        paid = o.optBoolean("paid", false),
+                        sourceFingerprint = o.optString("sourceFingerprint", "")
                     )
                 } catch (e: Exception) {
                     null
@@ -404,6 +407,7 @@ class Store(context: Context) {
                     .put("unit", e.unit)
                     .put("rate", e.rate)
                     .put("paid", e.paid)
+                    .put("sourceFingerprint", e.sourceFingerprint)
             )
         }
         prefs.edit().putString(key, arr.toString()).apply()
