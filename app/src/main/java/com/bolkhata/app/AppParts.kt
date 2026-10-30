@@ -17,6 +17,11 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.animation.core.*
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Delete
@@ -137,8 +142,63 @@ internal fun InputBar(
     }
 }
 
-/** Voice chat as the message bar shows it: on/off, what it is doing, what it heard so far; [toggle] connects or stops. */
+/** The voice call as the message bar shows it: on/off, what it is doing, what it heard so far; [toggle] connects or stops. */
 class VoiceState(val on: Boolean, val status: String, val heard: String, val toggle: () -> Unit)
+
+/**
+ * The voice call, like ChatGPT's: a full screen with a circle that grows while the person talks, breathes while the
+ * app thinks and pulses while it answers aloud. Tapping the circle while it speaks cuts it short and listens again.
+ */
+@Composable
+internal fun VoiceCall(status: String, heard: String, reply: String, level: Float, onInterrupt: () -> Unit, onEnd: () -> Unit) {
+    val speaking = status == "Speaking…"
+    val listening = status.isBlank() || status == "Listening…"
+    val pulse by rememberInfiniteTransition(label = "call").animateFloat(
+        initialValue = 0.94f, targetValue = 1.06f,
+        animationSpec = infiniteRepeatable(tween(if (speaking) 450 else 1100), RepeatMode.Reverse), label = "pulse"
+    )
+    // The recognizer reports about -2…10 dB; quiet stays at full size, a loud voice makes it about a third bigger.
+    val voice by animateFloatAsState(1f + (level.coerceIn(0f, 10f) / 10f) * 0.35f, tween(120), label = "voice")
+    Dialog(onDismissRequest = onEnd, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            Column(
+                Modifier.fillMaxSize().systemBarsPadding().padding(horizontal = 24.dp, vertical = 20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text("Voice call", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    "Talk naturally: add entries, ask totals, open a khata.",
+                    fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center
+                )
+                Spacer(Modifier.weight(1f))
+                Box(
+                    Modifier.size(180.dp).scale(if (listening) voice else pulse).clip(CircleShape)
+                        .background(Brush.radialGradient(listOf(GreenDeep.copy(alpha = 0.55f), GreenDeep)))
+                        .clickable(enabled = speaking, onClick = onInterrupt)
+                )
+                Spacer(Modifier.height(28.dp))
+                Text(status.ifBlank { "Listening…" }, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = GreenDeep)
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    if (speaking) reply else heard.ifBlank { reply },
+                    fontSize = 17.sp, lineHeight = 24.sp, textAlign = TextAlign.Center,
+                    color = if (speaking || heard.isNotBlank()) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 6, overflow = TextOverflow.Ellipsis, modifier = Modifier.heightIn(min = 72.dp)
+                )
+                if (speaking) Text("Tap the circle to interrupt", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.weight(1f))
+                Box(
+                    Modifier.size(64.dp).clip(CircleShape).background(RedSpend).clickable(onClick = onEnd),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Filled.Close, contentDescription = "End call", tint = Color.White, modifier = Modifier.size(28.dp))
+                }
+                Spacer(Modifier.height(6.dp))
+                Text("End", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
 
 /** One or two small lines above the bar while voice chat is on: a green dot, the status, and the words heard. */
 @Composable

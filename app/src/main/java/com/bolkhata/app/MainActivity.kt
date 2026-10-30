@@ -44,6 +44,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
+import kotlin.reflect.KProperty
 import androidx.core.view.WindowCompat
 
 class MainActivity : ComponentActivity() {
@@ -75,6 +76,19 @@ class MainActivity : ComponentActivity() {
 
 enum class Tab { HOME, STOCK, CHAT, ENTRIES, REPORTS, TRASH, SETTINGS }
 
+/** The open tab and the tabs it was reached from, so Back returns the same way. Home starts over. */
+class TabNav {
+    private val now = mutableStateOf(Tab.HOME)
+    private val past = mutableStateListOf<Tab>()
+    operator fun getValue(thisRef: Any?, property: KProperty<*>): Tab = now.value
+    operator fun setValue(thisRef: Any?, property: KProperty<*>, t: Tab) {
+        if (t == now.value) return
+        if (t == Tab.HOME) past.clear() else { past.remove(t); past.add(now.value) }
+        now.value = t
+    }
+    fun back() { now.value = past.removeLastOrNull() ?: Tab.HOME }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: String, onTheme: (String) -> Unit) {
@@ -86,7 +100,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var currency by remember { mutableStateOf(store.currency) }
     var name by remember { mutableStateOf(store.name) }
     var lang by remember { mutableStateOf(store.language) }
-    var tab by remember { mutableStateOf(Tab.HOME) }
+    val tabNav = remember { TabNav() }
+    var tab by tabNav
     var chatMessages by remember { mutableStateOf(store.loadChatMessages()) }
     // Chats from before the log existed are copied in once, so they can be reviewed too.
     val chatLog = remember { ChatLog(context).also { log -> if (log.isEmpty()) chatMessages.forEach(log::record) } }
@@ -97,6 +112,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var logToken by remember { mutableStateOf(store.logToken) }
     var groqKey by remember { mutableStateOf(store.groqKey) }
     var groqVoice by remember { mutableStateOf(store.groqVoice) }
+    var elevenKey by remember { mutableStateOf(store.elevenKey) }
+    var elevenVoice by remember { mutableStateOf(store.elevenVoice) }
     var logRepo by remember { mutableStateOf(store.logRepo) }
     var logStatus by remember { mutableStateOf("") }
     var logSending by remember { mutableStateOf(false) }
@@ -896,7 +913,6 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     val p = personAccounts(entries).firstOrNull { it.name.equals(name, true) }
                     ledgerPerson = p?.name ?: name
                     ledger = if (p == null || p.toReceive) MainAcct.TO_RECEIVE else MainAcct.TO_PAY
-                    if (inChat) tab = Tab.HOME
                     null
                 } else {
                     val term = (q.items + q.cats.map { it.label }).firstOrNull()
@@ -908,7 +924,6 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         return "What should I show? Add a category, person, date, or amount range."
                     }
                     results = term to false; people = null
-                    if (inChat) tab = Tab.HOME
                     null
                 }
             }
@@ -1265,6 +1280,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var voicePartial by remember { mutableStateOf("") }
     var voiceAwaiting by remember { mutableStateOf(false) }
     var voiceMisses by remember { mutableIntStateOf(0) }
+    // Call screen: how loud the person is (the circle grows with it) and the answer being spoken.
+    var voiceLevel by remember { mutableFloatStateOf(0f) }
+    var voiceReply by remember { mutableStateOf("") }
     // Set when the phone has no recognizer for the chosen language; voice chat then uses the phone's default.
     var voiceDefaultLanguage by remember { mutableStateOf(false) }
     val ttsReady = remember { mutableStateOf(false) }
@@ -1281,11 +1299,137 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         }
     }
 
+    // Groq Whisper, for the mic and the voice call: sends by itself when the person stops talking (or tap ■).
+    // Audio goes to Groq only.
+    var recorder by remember { mutableStateOf<android.media.MediaRecorder?>(null) }
+    var recordFile by remember { mutableStateOf<File?>(null) }
+    // What to do with the words heard, and what to do when nothing usable was heard.
+    var recordHeard by remember { mutableStateOf<(String) -> Unit>({}) }
+    var recordMissed by remember { mutableStateOf<() -> Unit>({}) }
+    val recordPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        if (!ok) toast("Microphone permission is needed to record.")
+    }
+
+    /** Stops recording and sends the audio to Whisper; [send] false throws it away. */
+    fun finishRecording(send: Boolean = true) {
+        val r = recorder ?: return
+        recorder = null
+        runCatching { r.stop() }
+        runCatching { r.release() }
+        val file = recordFile ?: return
+        if (!send) { runCatching { file.delete() }; return }
+        val heard = recordHeard
+        val missed = recordMissed
+        if (file.length() < 2_000) { missed(); return }
+        chatLoading = true
+        loadingLabel = "Listening with Groq…"
+        if (voiceOn) voiceStatus = "Thinking…"
+        val language = when { lang == "ur-PK" -> "ur"; lang.startsWith("en") -> "en"; else -> "" }
+        scope.launch {
+            val said = Groq.transcribe(groqKey, file, language)
+            runCatching { file.delete() }
+            chatLoading = false
+            loadingLabel = "Thinking…"
+            said.fold(
+                onSuccess = { text -> if (text.isBlank()) missed() else heard(text.trim()) },
+                onFailure = { toast((it.message ?: "Groq voice failed") + ". You can turn off Groq voice in Settings."); missed() }
+            )
+        }
+    }
+
+    /**
+     * Ends the recording once the person stops talking. If they never start, nothing goes to Whisper
+     * (it makes up words for silence and background noise).
+     */
+    fun stopAtPause(r: android.media.MediaRecorder) = scope.launch {
+        val start = System.currentTimeMillis()
+        var spoke = false
+        var lastSound = start
+        while (recorder === r) {
+            kotlinx.coroutines.delay(150)
+            val now = System.currentTimeMillis()
+            val amp = runCatching { r.maxAmplitude }.getOrDefault(0)
+            if (voiceOn) voiceLevel = amp / 3000f
+            if (amp > 2500) { spoke = true; lastSound = now }
+            if (spoke && now - lastSound > 1500) { finishRecording(); break }
+            if (!spoke && now - start > 8000) { finishRecording(send = false); recordMissed(); break }
+        }
+    }
+
+    fun startRecording(heard: (String) -> Unit, missed: () -> Unit) {
+        if (recorder != null) { finishRecording(); return }
+        val granted = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (!granted) { recordPermission.launch(android.Manifest.permission.RECORD_AUDIO); return }
+        val file = File(context.cacheDir, "voice.m4a")
+        val r = (if (Build.VERSION.SDK_INT >= 31) android.media.MediaRecorder(context) else @Suppress("DEPRECATION") android.media.MediaRecorder())
+        runCatching {
+            r.setAudioSource(android.media.MediaRecorder.AudioSource.MIC)
+            r.setOutputFormat(android.media.MediaRecorder.OutputFormat.MPEG_4)
+            r.setAudioEncoder(android.media.MediaRecorder.AudioEncoder.AAC)
+            r.setAudioSamplingRate(16_000)
+            r.setAudioEncodingBitRate(32_000)
+            r.setMaxDuration(30_000)
+            r.setOutputFile(file.absolutePath)
+            r.setOnInfoListener { _, what, _ -> if (what == android.media.MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED) finishRecording() }
+            r.prepare()
+            r.start()
+        }.onSuccess {
+            recordFile = file
+            recordHeard = heard
+            recordMissed = missed
+            recorder = r
+            stopAtPause(r)
+        }.onFailure {
+            runCatching { r.release() }
+            toast("Couldn't start recording.")
+            missed()
+        }
+    }
+
+    // The ElevenLabs answer playing in the call.
+    var player by remember { mutableStateOf<android.media.MediaPlayer?>(null) }
+    fun stopReply() {
+        player?.let { runCatching { it.stop() }; runCatching { it.release() } }
+        player = null
+    }
+
+    fun stopVoice(message: String? = null) {
+        voiceOn = false
+        voiceAwaiting = false
+        voiceStatus = ""
+        voicePartial = ""
+        voiceReply = ""
+        voiceLevel = 0f
+        finishRecording(send = false)
+        runCatching { recognizer?.cancel() }
+        runCatching { tts.stop() }
+        stopReply()
+        if (message != null) toast(message)
+    }
+
+    /** The call listens with Groq Whisper when Groq voice is on (it hears Urdu far better), else with the phone. */
     fun listenNow() {
-        val r = recognizer ?: return
         if (!voiceOn) return
         voicePartial = ""
         voiceStatus = "Listening…"
+        if (groqKey.isNotBlank() && groqVoice) {
+            startRecording(
+                heard = heard@{ said ->
+                    if (!voiceOn) return@heard
+                    voiceMisses = 0
+                    voicePartial = said
+                    voiceAwaiting = true
+                    chatInput(said)
+                },
+                missed = {
+                    voiceMisses++
+                    if (voiceMisses >= 3) stopVoice("Call ended: nothing heard for a while.") else listenNow()
+                }
+            )
+            return
+        }
+        val r = recognizer ?: return
         val i = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             // No "prefer offline": when the offline model for this language is missing that made every attempt fail
@@ -1300,31 +1444,58 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         runCatching { r.cancel(); r.startListening(i) }
     }
 
-    fun stopVoice(message: String? = null) {
-        voiceOn = false
-        voiceAwaiting = false
-        voiceStatus = ""
-        voicePartial = ""
-        runCatching { recognizer?.cancel() }
-        runCatching { tts.stop() }
-        if (message != null) toast(message)
-    }
-
-    /** Reads [text] aloud: Urdu script with an Urdu voice, otherwise English. Listens again when done. */
-    fun speak(text: String) {
-        val clean = text.replace(Regex("""[✓•*#_]"""), " ").replace(Regex("""(?m)^\s*-\s*"""), "").trim()
-        if (clean.isEmpty() || !ttsReady.value) {
-            listenNow()
-            return
-        }
-        val urduScript = clean.any { it in '\u0600'..'\u06FF' }
+    /** Reads [text] with the phone's voice: Urdu script with an Urdu voice, otherwise English. */
+    fun phoneSpeak(text: String) {
+        if (!ttsReady.value) { listenNow(); return }
+        val urduScript = text.any { it in '\u0600'..'\u06FF' }
         val wanted = if (urduScript) java.util.Locale("ur", "PK") else java.util.Locale("en", "IN")
         val ok = tts.setLanguage(wanted)
         if (ok == android.speech.tts.TextToSpeech.LANG_MISSING_DATA || ok == android.speech.tts.TextToSpeech.LANG_NOT_SUPPORTED) {
             tts.setLanguage(java.util.Locale.ENGLISH)
         }
+        // The most natural installed voice for that language (the online ones sound far less robotic).
+        runCatching {
+            val language = tts.voice?.locale?.language
+            tts.voices.filter { it.locale.language == language && "notInstalled" !in it.features }
+                .maxByOrNull { it.quality }?.let { tts.voice = it }
+        }
         voiceStatus = "Speaking…"
-        tts.speak(clean.take(3500), android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "reply-" + System.nanoTime())
+        tts.speak(text, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "reply-" + System.nanoTime())
+    }
+
+    /** Plays an ElevenLabs answer, then listens again; falls back to the phone's voice if it can't play. */
+    fun playReply(file: File, text: String) {
+        stopReply()
+        val p = android.media.MediaPlayer()
+        runCatching {
+            p.setDataSource(file.absolutePath)
+            p.setOnCompletionListener { stopReply(); if (voiceOn) listenNow() }
+            p.prepare()
+            p.start()
+        }.onSuccess {
+            player = p
+            voiceStatus = "Speaking…"
+        }.onFailure {
+            runCatching { p.release() }
+            phoneSpeak(text)
+        }
+    }
+
+    /** Says the short form of an answer in the call: ElevenLabs when set up, else the phone's voice. Listens again after. */
+    fun speak(text: String) {
+        val clean = shortSpoken(text.replace(Regex("""[✓•*#_]"""), " ").replace(Regex("""(?m)^\s*-\s*"""), ""))
+        if (clean.isEmpty()) { listenNow(); return }
+        voiceReply = clean
+        voiceLevel = 0f
+        if (elevenKey.isBlank() || elevenVoice.isBlank()) { phoneSpeak(clean); return }
+        scope.launch {
+            val reply = Eleven.speech(elevenKey, elevenVoice, clean, File(context.cacheDir, "reply.mp3"))
+            if (!voiceOn) return@launch
+            reply.fold(
+                onSuccess = { playReply(it, clean) },
+                onFailure = { toast((it.message ?: "ElevenLabs failed") + "; using the phone's voice."); phoneSpeak(clean) }
+            )
+        }
     }
 
     DisposableEffect(tts) {
@@ -1383,7 +1554,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         recognizer?.setRecognitionListener(object : android.speech.RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) { voiceStatus = "Listening…" }
             override fun onBeginningOfSpeech() {}
-            override fun onRmsChanged(rmsdB: Float) {}
+            override fun onRmsChanged(rmsdB: Float) { voiceLevel = rmsdB }
             override fun onBufferReceived(buffer: ByteArray?) {}
             override fun onEndOfSpeech() { voiceStatus = "Thinking…" }
             override fun onEvent(eventType: Int, params: Bundle?) {}
@@ -1411,7 +1582,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     android.speech.SpeechRecognizer.ERROR_NO_MATCH, android.speech.SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> {
                         voiceMisses++
                         // Quiet for a while: stop instead of listening forever.
-                        if (voiceMisses >= 3) stopVoice("Voice chat paused. Tap the green button to talk again.") else listenNow()
+                        if (voiceMisses >= 3) stopVoice("Call ended: nothing heard for a while.") else listenNow()
                     }
                     android.speech.SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> stopVoice("Allow the microphone for Smart Expense to talk.")
                     android.speech.SpeechRecognizer.ERROR_NETWORK, android.speech.SpeechRecognizer.ERROR_NETWORK_TIMEOUT ->
@@ -1453,7 +1624,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
 
     fun toggleVoice() {
         if (voiceOn) { stopVoice(); return }
-        if (recognizer == null) { toast("Speech recognition is not available on this phone."); return }
+        if (recognizer == null && !(groqKey.isNotBlank() && groqVoice)) { toast("Speech recognition is not available on this phone."); return }
         val granted = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) ==
             android.content.pm.PackageManager.PERMISSION_GRANTED
         if (granted) { voiceOn = true; voiceMisses = 0; listenNow() } else micPermission.launch(android.Manifest.permission.RECORD_AUDIO)
@@ -1471,65 +1642,15 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         }
     }
 
-    // Mic button with Groq Whisper: tap to record, tap again (or the ■) to send. Audio goes to Groq only.
-    var recorder by remember { mutableStateOf<android.media.MediaRecorder?>(null) }
-    var recordFile by remember { mutableStateOf<File?>(null) }
-    val recordPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
-        if (!ok) toast("Microphone permission is needed to record.")
-    }
-
-    fun finishRecording() {
-        val r = recorder ?: return
-        recorder = null
-        runCatching { r.stop() }
-        runCatching { r.release() }
-        val file = recordFile ?: return
-        if (file.length() < 2_000) { toast("Too short. Hold on a little longer next time."); return }
-        chatLoading = true
-        loadingLabel = "Listening with Groq…"
-        val language = when { lang == "ur-PK" -> "ur"; lang.startsWith("en") -> "en"; else -> "" }
-        scope.launch {
-            val said = Groq.transcribe(groqKey, file, language)
-            runCatching { file.delete() }
-            chatLoading = false
-            loadingLabel = "Thinking…"
-            said.fold(
-                onSuccess = { text -> if (text.isBlank()) toast("Couldn't catch that. Try again.") else if (voiceForChat) chatInput(text) else homeInput(text) },
-                onFailure = { toast((it.message ?: "Groq voice failed") + ". You can turn off Groq voice in Settings.") }
-            )
-        }
-    }
-
-    fun toggleRecording() {
-        if (recorder != null) { finishRecording(); return }
-        val granted = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) ==
-            android.content.pm.PackageManager.PERMISSION_GRANTED
-        if (!granted) { recordPermission.launch(android.Manifest.permission.RECORD_AUDIO); return }
-        val file = File(context.cacheDir, "voice.m4a")
-        val r = (if (Build.VERSION.SDK_INT >= 31) android.media.MediaRecorder(context) else @Suppress("DEPRECATION") android.media.MediaRecorder())
-        runCatching {
-            r.setAudioSource(android.media.MediaRecorder.AudioSource.MIC)
-            r.setOutputFormat(android.media.MediaRecorder.OutputFormat.MPEG_4)
-            r.setAudioEncoder(android.media.MediaRecorder.AudioEncoder.AAC)
-            r.setAudioSamplingRate(16_000)
-            r.setAudioEncodingBitRate(32_000)
-            r.setMaxDuration(60_000)
-            r.setOutputFile(file.absolutePath)
-            r.setOnInfoListener { _, what, _ -> if (what == android.media.MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED) finishRecording() }
-            r.prepare()
-            r.start()
-        }.onSuccess {
-            recordFile = file
-            recorder = r
-        }.onFailure {
-            runCatching { r.release() }
-            toast("Couldn't start recording.")
-        }
-    }
-
     fun startVoice(forChat: Boolean = false) {
         voiceForChat = forChat
-        if (groqKey.isNotBlank() && groqVoice) { toggleRecording(); return }
+        if (groqKey.isNotBlank() && groqVoice) {
+            startRecording(
+                heard = { text -> if (forChat) chatInput(text) else homeInput(text) },
+                missed = { toast("Couldn't catch that. Try again.") }
+            )
+            return
+        }
         val hints = buildList {
             addAll(entries.take(30).flatMap { listOf(it.item, it.person) })
             addAll(listOf(
@@ -1583,19 +1704,20 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         scope.launch { drawer.open() }
     }
 
+    // Back closes whatever is on top first (an account opens over a khata), then walks back through the tabs.
     BackHandler(enabled = ledger != null || account != null || results != null || people != null || tab != Tab.HOME) {
-        if (ledger != null) {
+        if (account != null) {
+            account = null
+        } else if (ledger != null) {
             ledger = null
             ledgerPerson = null
-        } else if (account != null) {
-            account = null
         } else if (results != null) {
             results = null
             answerText = null
         } else if (people != null) {
             people = null
         } else {
-            tab = Tab.HOME
+            tabNav.back()
         }
     }
 
@@ -1624,7 +1746,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     onSend = { chatInput(it) }, onMic = { startVoice(forChat = true) }, placeholder = "Speak, type or ask…",
                     onAttach = { pickFile.launch(arrayOf("image/*", "application/pdf")) },
                     busy = chatLoading,
-                    voice = if (recorder != null) VoiceState(true, "Recording…", "tap ■ to send") { toggleRecording() }
+                    voice = if (recorder != null) VoiceState(true, "Listening…", "sends when you stop") { finishRecording() }
                         else VoiceState(voiceOn, voiceStatus, voicePartial) { toggleVoice() }
                 )
             } else {
@@ -1636,8 +1758,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         placeholder = "Speak, type or ask…",
                         onAttach = { pickFile.launch(arrayOf("image/*", "application/pdf")) },
                         busy = chatLoading,
-                        // Voice chat answers in the chat, so starting it from Home opens the Chat tab.
-                        voice = if (recorder != null) VoiceState(true, "Recording…", "tap ■ to send") { toggleRecording() }
+                        // The call's answers also go to the chat, so starting it from Home opens the Chat tab.
+                        voice = if (recorder != null) VoiceState(true, "Listening…", "sends when you stop") { finishRecording() }
                             else VoiceState(voiceOn, voiceStatus, voicePartial) { tab = Tab.CHAT; toggleVoice() }
                     )
                 }
@@ -1857,6 +1979,14 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     onGroqSave = { key -> store.groqKey = key; groqKey = store.groqKey; toast("✓ Groq turned on") },
                     onGroqVoice = { on -> store.groqVoice = on; groqVoice = on },
                     onGroqOff = { store.groqKey = ""; groqKey = ""; toast("Groq turned off. The app is fully offline again.") },
+                    elevenVoice = elevenVoice,
+                    elevenOn = elevenKey.isNotBlank() && elevenVoice.isNotBlank(),
+                    onElevenSave = { key, voiceId ->
+                        if (key.isNotBlank()) { store.elevenKey = key; elevenKey = store.elevenKey }
+                        store.elevenVoice = voiceId; elevenVoice = store.elevenVoice
+                        toast("✓ ElevenLabs voice on for calls")
+                    },
+                    onElevenOff = { store.elevenKey = ""; elevenKey = ""; toast("Calls use the phone's voice again.") },
                     onLogOff = {
                         store.logToken = ""; logToken = ""
                         logStatus = "Chat log sending is off"
@@ -2058,6 +2188,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
                         .pointerInput(Unit) { detectTapGestures { } }
                 ) {
+                    // Comes before the khata's own Back, which would otherwise step the khata underneath.
+                    BackHandler { account = null }
                     CompositionLocalProvider(LocalAccountOpener provides null) {
                         AccountScreen(
                             key = acct, entries = entries, currency = currency,
@@ -2112,6 +2244,12 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             )
         }
     }
+
+    if (voiceOn) VoiceCall(
+        status = voiceStatus, heard = voicePartial, reply = voiceReply, level = voiceLevel,
+        onInterrupt = { runCatching { tts.stop() }; stopReply(); listenNow() },
+        onEnd = { stopVoice() }
+    )
 
     if (searching) {
         var q by remember { mutableStateOf("") }

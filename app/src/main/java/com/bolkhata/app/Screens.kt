@@ -1566,8 +1566,12 @@ fun SettingsScreen(
     onGroqSave: (String) -> Unit = {},
     onGroqVoice: (Boolean) -> Unit = {},
     onGroqOff: () -> Unit = {},
+    elevenOn: Boolean = false,
+    elevenVoice: String = "",
+    onElevenSave: (key: String, voice: String) -> Unit = { _, _ -> },
+    onElevenOff: () -> Unit = {},
 ) {
-    var dialog by remember { mutableStateOf<String?>(null) }   // "name", "theme", "groq" or "review"
+    var dialog by remember { mutableStateOf<String?>(null) }   // "name", "theme", "groq", "eleven" or "review"
     val faint = MaterialTheme.colorScheme.onSurfaceVariant
     val langLabel = when {
         lang == "ur-PK" -> "Urdu"
@@ -1615,6 +1619,8 @@ fun SettingsScreen(
                     ListRow("Bank alerts", null, trailing = { Switch(checked = bankOn, onCheckedChange = { onBank() }) }, onClick = onBank)
                     ListDivider()
                     ListRow("Groq AI", if (groqOn) "On" else "Off", valueColor = if (groqOn) GreenIn else faint) { dialog = "groq" }
+                    ListDivider()
+                    ListRow("Call voice", if (elevenOn) "ElevenLabs" else "Phone", valueColor = if (elevenOn) GreenIn else faint) { dialog = "eleven" }
                     ListDivider()
                     ListRow("Chat review", if (logTokenSet) "On" else "Off", valueColor = if (logTokenSet) GreenIn else faint) { dialog = "review" }
                     ListDivider()
@@ -1685,7 +1691,7 @@ fun SettingsScreen(
                         Text("Get a free key at console.groq.com → API Keys.", fontSize = 12.sp, color = faint)
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
-                                Text("Groq voice for the mic", fontSize = 15.sp)
+                                Text("Groq voice for the mic and call", fontSize = 15.sp)
                                 Text("Whisper hears Urdu and mixed speech better", fontSize = 12.sp, color = faint)
                             }
                             Switch(checked = groqVoice, onCheckedChange = onGroqVoice, enabled = groqOn)
@@ -1698,6 +1704,45 @@ fun SettingsScreen(
                 dismissButton = {
                     Row {
                         if (groqOn) TextButton(onClick = { onGroqOff(); dialog = null }) { Text("Turn off") }
+                        TextButton(onClick = { dialog = null }) { Text("Close") }
+                    }
+                }
+            )
+        }
+        "eleven" -> {
+            var key by remember { mutableStateOf("") }
+            var voiceId by remember { mutableStateOf(elevenVoice) }
+            AlertDialog(
+                onDismissRequest = { dialog = null },
+                title = { Text("Call voice") },
+                text = {
+                    Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(
+                            "Optional. The voice call answers in a real ElevenLabs voice. Only the short spoken answer is " +
+                                "sent, never your entries. Without internet or credits the phone's voice is used.",
+                            fontSize = 13.sp, color = faint
+                        )
+                        OutlinedTextField(
+                            key, { key = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                            label = { Text(if (elevenOn) "Key saved · paste to replace" else "ElevenLabs API key") },
+                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
+                        )
+                        OutlinedTextField(
+                            voiceId, { voiceId = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                            label = { Text("Voice ID") }
+                        )
+                        Text("elevenlabs.io → API Keys for the key; Voice Library → a voice → copy its Voice ID.", fontSize = 12.sp, color = faint)
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = { onElevenSave(key.trim(), voiceId.trim()); dialog = null },
+                        enabled = voiceId.trim().length >= 10 && (elevenOn || key.trim().length > 20)
+                    ) { Text("Save") }
+                },
+                dismissButton = {
+                    Row {
+                        if (elevenOn) TextButton(onClick = { onElevenOff(); dialog = null }) { Text("Turn off") }
                         TextButton(onClick = { dialog = null }) { Text("Close") }
                     }
                 }

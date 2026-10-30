@@ -451,15 +451,11 @@ fun LedgerScreen(
             peopleListState.scrollToItem(savedPeopleIndex, savedPeopleOffset)
         }
     }
-    BackHandler(enabled = stack.size > 1) {
-        if (stack.last() is Level.Person && stack[stack.lastIndex - 1] is Level.Main) {
-            savedPeopleIndex = peopleListState.firstVisibleItemIndex
-            savedPeopleOffset = peopleListState.firstVisibleItemScrollOffset
-        }
-        stack.removeAt(stack.lastIndex)
-    }
+    // A khata opened straight to one person (from chat) goes back to where it was opened from.
+    val direct = person != null
     fun back() {
-        if (stack.size > 1) {
+        if (direct && stack.size == 2) onClose()
+        else if (stack.size > 1) {
             if (stack.last() is Level.Person && stack[stack.lastIndex - 1] is Level.Main) {
                 savedPeopleIndex = peopleListState.firstVisibleItemIndex
                 savedPeopleOffset = peopleListState.firstVisibleItemScrollOffset
@@ -467,6 +463,7 @@ fun LedgerScreen(
             stack.removeAt(stack.lastIndex)
         } else onClose()
     }
+    BackHandler(enabled = stack.size > 1) { back() }
     SideEffect { onActivePerson((stack.last() as? Level.Person)?.name) }
     when (val level = stack.last()) {
         is Level.Main -> when (level.acct) {
