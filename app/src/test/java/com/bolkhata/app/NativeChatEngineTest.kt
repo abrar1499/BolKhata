@@ -419,3 +419,16 @@ class NameChoicesTest {
         assertEquals(listOf("Nargis Salim Rashid"), r.filter.persons)
     }
 }
+
+/** Only sentences the local engine cannot read are offered to Groq. */
+class NativeChatEngineUnsureTest {
+    private fun read(text: String) = NativeChatEngine.interpret(text, emptyList(), contacts = listOf("Hamid Akram"))
+
+    @Test fun gibberishIsMarkedUnsure() = assertTrue(read("blorp zingle").unsure)
+
+    @Test fun understoodMessagesAreNotUnsure() {
+        assertTrue(!read("kya hal hai").unsure)
+        assertTrue(!read("hello").unsure)
+        assertTrue(!read("aaj kitna kharcha huwa").unsure)
+    }
+}

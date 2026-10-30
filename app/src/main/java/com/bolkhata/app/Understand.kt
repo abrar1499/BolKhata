@@ -99,6 +99,16 @@ object Understand {
         return Triple(null, emptyList(), null)
     }
 
+    /** Saved names that look like a word of the message (sound, spelling or first letters), at most [limit]. */
+    fun similarNames(words: List<String>, contacts: Collection<String>, limit: Int = 8): List<String> {
+        val ws = words.map { it.lowercase() }.filter { it.length >= 3 && it !in notNames && it.none(Char::isDigit) }
+        if (ws.isEmpty()) return emptyList()
+        return contacts.filter { it.isNotBlank() }.distinctBy { it.lowercase() }.filter { n ->
+            val parts = n.lowercase().split(Regex("[^\\p{L}]+")).filter { it.length >= 3 }
+            ws.any { w -> parts.any { p -> closeName(w, p) || p.startsWith(w.take(3)) } }
+        }.take(limit)
+    }
+
     /** Of [names], those that match the largest number of the [words] said (by spelling or sound). */
     fun mostWordsMatched(words: List<String>, names: List<String>): List<String> {
         val counts = names.associateWith { n ->

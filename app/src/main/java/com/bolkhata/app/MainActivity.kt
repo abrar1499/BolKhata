@@ -95,6 +95,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         mutableStateOf(chatLog.load().mapNotNull { r -> if (r.flagged) r.id to false else if (r.liked) r.id to true else null }.toMap())
     }
     var logToken by remember { mutableStateOf(store.logToken) }
+    var groqKey by remember { mutableStateOf(store.groqKey) }
+    var groqVoice by remember { mutableStateOf(store.groqVoice) }
     var logRepo by remember { mutableStateOf(store.logRepo) }
     var logStatus by remember { mutableStateOf("") }
     var logSending by remember { mutableStateOf(false) }
@@ -1068,8 +1070,21 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         chatLoading = true
         scope.launch {
             try {
+                // With the owner's Groq key, every message is first corrected by Groq (spelling, script, names).
+                // Groq only rewrites; the local engine below still decides and answers from the saved records.
+                var groqTrace = ""
+                val read = if (groqKey.isBlank()) roman else {
+                    val names = Understand.similarNames(roman.split(Regex("""\s+""")), contactNames())
+                    val lastAnswer = history.lastOrNull { !it.isUser }?.text.orEmpty()
+                    val fixed = Groq.correct(groqKey, text, lastAnswer, names)
+                    if (fixed == null) { groqTrace = "; groq=unavailable"; roman }
+                    else {
+                        groqTrace = if (fixed.equals(text, ignoreCase = true)) "; groq=same" else "; groq=" + fixed.take(120)
+                        runCatching { Translit.toRoman(fixed) }.getOrDefault(fixed)
+                    }
+                }
                 val intent = NativeChatEngine.interpret(
-                    roman, scopeKhataEntries(entries), contactNames(), wordFixes, history, currency = currency
+                    read, scopeKhataEntries(entries), contactNames(), wordFixes, history, currency = currency
                 )
                 if (intent.kind in setOf("delete", "clear_all", "change", "to_khata", "paid_by", "reread", "undo")) {
                     val actionSnapshot = entries
@@ -1091,7 +1106,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 } else null
                 val trace = "engine=NativeChatEngine; intent=" + intent.kind +
                     (if (intent.what.isBlank()) "" else "; query=" + intent.what) +
-                    (matchCount?.let { "; matched=" + it } ?: "") + "; execution=" + executionStatus
+                    (matchCount?.let { "; matched=" + it } ?: "") + "; execution=" + executionStatus + groqTrace
                 if (!reply.isNullOrBlank()) {
                     lastSpeech = reply
                     postChat(reply, isUser = false, meta = trace)
@@ -1456,8 +1471,65 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         }
     }
 
+    // Mic button with Groq Whisper: tap to record, tap again (or the ■) to send. Audio goes to Groq only.
+    var recorder by remember { mutableStateOf<android.media.MediaRecorder?>(null) }
+    var recordFile by remember { mutableStateOf<File?>(null) }
+    val recordPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        if (!ok) toast("Microphone permission is needed to record.")
+    }
+
+    fun finishRecording() {
+        val r = recorder ?: return
+        recorder = null
+        runCatching { r.stop() }
+        runCatching { r.release() }
+        val file = recordFile ?: return
+        if (file.length() < 2_000) { toast("Too short. Hold on a little longer next time."); return }
+        chatLoading = true
+        loadingLabel = "Listening with Groq…"
+        val language = when { lang == "ur-PK" -> "ur"; lang.startsWith("en") -> "en"; else -> "" }
+        scope.launch {
+            val said = Groq.transcribe(groqKey, file, language)
+            runCatching { file.delete() }
+            chatLoading = false
+            loadingLabel = "Thinking…"
+            said.fold(
+                onSuccess = { text -> if (text.isBlank()) toast("Couldn't catch that. Try again.") else if (voiceForChat) chatInput(text) else homeInput(text) },
+                onFailure = { toast((it.message ?: "Groq voice failed") + ". You can turn off Groq voice in Settings.") }
+            )
+        }
+    }
+
+    fun toggleRecording() {
+        if (recorder != null) { finishRecording(); return }
+        val granted = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (!granted) { recordPermission.launch(android.Manifest.permission.RECORD_AUDIO); return }
+        val file = File(context.cacheDir, "voice.m4a")
+        val r = (if (Build.VERSION.SDK_INT >= 31) android.media.MediaRecorder(context) else @Suppress("DEPRECATION") android.media.MediaRecorder())
+        runCatching {
+            r.setAudioSource(android.media.MediaRecorder.AudioSource.MIC)
+            r.setOutputFormat(android.media.MediaRecorder.OutputFormat.MPEG_4)
+            r.setAudioEncoder(android.media.MediaRecorder.AudioEncoder.AAC)
+            r.setAudioSamplingRate(16_000)
+            r.setAudioEncodingBitRate(32_000)
+            r.setMaxDuration(60_000)
+            r.setOutputFile(file.absolutePath)
+            r.setOnInfoListener { _, what, _ -> if (what == android.media.MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED) finishRecording() }
+            r.prepare()
+            r.start()
+        }.onSuccess {
+            recordFile = file
+            recorder = r
+        }.onFailure {
+            runCatching { r.release() }
+            toast("Couldn't start recording.")
+        }
+    }
+
     fun startVoice(forChat: Boolean = false) {
         voiceForChat = forChat
+        if (groqKey.isNotBlank() && groqVoice) { toggleRecording(); return }
         val hints = buildList {
             addAll(entries.take(30).flatMap { listOf(it.item, it.person) })
             addAll(listOf(
@@ -1552,7 +1624,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     onSend = { chatInput(it) }, onMic = { startVoice(forChat = true) }, placeholder = "Speak, type or ask…",
                     onAttach = { pickFile.launch(arrayOf("image/*", "application/pdf")) },
                     busy = chatLoading,
-                    voice = VoiceState(voiceOn, voiceStatus, voicePartial) { toggleVoice() }
+                    voice = if (recorder != null) VoiceState(true, "Recording…", "tap ■ to send") { toggleRecording() }
+                        else VoiceState(voiceOn, voiceStatus, voicePartial) { toggleVoice() }
                 )
             } else {
                 Column {
@@ -1564,7 +1637,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         onAttach = { pickFile.launch(arrayOf("image/*", "application/pdf")) },
                         busy = chatLoading,
                         // Voice chat answers in the chat, so starting it from Home opens the Chat tab.
-                        voice = VoiceState(voiceOn, voiceStatus, voicePartial) { tab = Tab.CHAT; toggleVoice() }
+                        voice = if (recorder != null) VoiceState(true, "Recording…", "tap ■ to send") { toggleRecording() }
+                            else VoiceState(voiceOn, voiceStatus, voicePartial) { tab = Tab.CHAT; toggleVoice() }
                     )
                 }
             }
@@ -1778,6 +1852,11 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         sendChatLog(force = true)
                     },
                     onLogSendNow = { sendChatLog(force = true) },
+                    groqOn = groqKey.isNotBlank(),
+                    groqVoice = groqVoice,
+                    onGroqSave = { key -> store.groqKey = key; groqKey = store.groqKey; toast("✓ Groq turned on") },
+                    onGroqVoice = { on -> store.groqVoice = on; groqVoice = on },
+                    onGroqOff = { store.groqKey = ""; groqKey = ""; toast("Groq turned off. The app is fully offline again.") },
                     onLogOff = {
                         store.logToken = ""; logToken = ""
                         logStatus = "Chat log sending is off"
