@@ -1451,7 +1451,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         if (talking.decrementAndGet() <= 0) { talking.set(0); if (voiceOn && !voiceAwaiting) listenNow() }
     }
 
-    /** Reads [text] with the phone's voice: Urdu script with an Urdu voice, otherwise English. */
+    /** Reads [text] with the phone's voice: Urdu script with an Urdu voice, Hindi script with a Hindi one, otherwise English. */
     fun phoneSpeak(text: String) {
         if (!ttsReady.value) { toast("The phone's voice isn't ready; set up ElevenLabs or a text-to-speech voice."); spokenDone(); return }
         val urduScript = text.any { it in '\u0600'..'\u06FF' }
