@@ -31,6 +31,11 @@ class QueryTest {
 
     @Test fun lastOne() { assertEquals(1, Query.select(all, Query.Filter(last = 1)).size) }
 
+    @Test fun changeTransactionDescription() {
+        val changed = Query.change(all[0], mapOf("note" to "Client lunch at cafe"))
+        assertEquals("Client lunch at cafe", changed.note)
+    }
+
     @Test fun changeAmountAndCategory() {
         val x = Query.change(all[0], mapOf("amount" to "40", "category" to "transport"))
         assertEquals(40.0, x.amount, 0.001); assertEquals(Cat.TRANSPORT, x.category)
