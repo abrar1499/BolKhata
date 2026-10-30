@@ -88,7 +88,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var lang by remember { mutableStateOf(store.language) }
     var tab by remember { mutableStateOf(Tab.HOME) }
     var chatMessages by remember { mutableStateOf(store.loadChatMessages()) }
-    val chatLog = remember { ChatLog(context) }
+    // Chats from before the log existed are copied in once, so they can be reviewed too.
+    val chatLog = remember { ChatLog(context).also { log -> if (log.isEmpty()) chatMessages.forEach(log::record) } }
     var flaggedChatIds by remember { mutableStateOf(chatLog.load().filter { it.flagged }.map { it.id }.toSet()) }
     var logToken by remember { mutableStateOf(store.logToken) }
     var logRepo by remember { mutableStateOf(store.logRepo) }

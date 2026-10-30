@@ -46,9 +46,8 @@ class ChatLog(context: Context) {
         if (file.exists()) parseChatLog(runCatching { file.readLines(Charsets.UTF_8) }.getOrDefault(emptyList()))
         else emptyList()
 
-    fun clear() {
-        runCatching { file.delete() }
-    }
+    /** True until the first message is recorded. */
+    fun isEmpty(): Boolean = !file.exists() || file.length() == 0L
 
     private fun append(line: JSONObject) {
         runCatching {
