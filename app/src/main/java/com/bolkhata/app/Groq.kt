@@ -15,7 +15,9 @@ import java.net.URL
  *   saved spelling: "nrgs ka khata kholo" -> "Nargis Rashid ka khata"). Groq only corrects; the app's own engine
  *   then reads the message and answers from the saved records. Only the message, the app's last reply and a few
  *   similar saved names are sent; entries never are.
- * - [transcribe]: Whisper speech-to-text for the mic button.
+ * - [transcribe]: Whisper speech-to-text for the mic button and the voice call.
+ * - [spoken]: in the voice call, turns the app's answer into one or two natural spoken sentences. The facts and
+ *   numbers still come only from the app's answer.
  */
 object Groq {
     private const val CHAT_URL = "https://api.groq.com/openai/v1/chat/completions"
@@ -61,6 +63,38 @@ object Groq {
             // Never let a correction change money: the digits must stay exactly the same.
             fun digits(s: String) = Regex("""\d+(?:[.,]\d+)?""").findAll(s).map { it.value.replace(",", "") }.toList()
             fixed.takeIf { it.isNotBlank() && it.length <= 400 && digits(it) == digits(said) }
+        }.getOrNull()
+    }
+
+    private val voiceInstructions = """
+        You are the friendly voice of a khata (ledger) app on a phone call. Say the app's answer back to the person
+        in one or two short, natural spoken sentences, in the language they spoke (Roman Urdu or English).
+        Use ONLY the facts in the app's answer and keep every number exactly, written in digits; never add, guess or
+        calculate.
+        No lists, symbols or emojis. Reply with the sentences only.
+    """.trimIndent()
+
+    /**
+     * The voice call's answer as natural speech, or null when Groq is unreachable or the reply has a number the
+     * app's answer doesn't (the call then says the app's own first sentence).
+     */
+    suspend fun spoken(key: String, said: String, answer: String): String? = withContext(Dispatchers.IO) {
+        runCatching {
+            val body = JSONObject()
+                .put("model", CHAT_MODEL)
+                .put("temperature", 0.3)
+                .put("max_tokens", 200)
+                .put("reasoning_effort", "low")
+                .put("messages", JSONArray()
+                    .put(JSONObject().put("role", "system").put("content", voiceInstructions))
+                    .put(JSONObject().put("role", "user").put("content", "Person said: " + said.take(300) + "\nApp's answer: " + answer.take(800))))
+                .toString().toByteArray(Charsets.UTF_8)
+            val (code, text) = post(CHAT_URL, key, "application/json", body)
+            if (code !in 200..299) error(describe(code))
+            val reply = JSONObject(text).getJSONArray("choices").getJSONObject(0).getJSONObject("message")
+                .optString("content").trim().removeSurrounding("\"")
+            fun digits(s: String) = Regex("""\d+(?:[.,]\d+)?""").findAll(s).map { it.value.replace(",", "") }.toSet()
+            reply.takeIf { it.isNotBlank() && it.length <= 300 && digits(answer).containsAll(digits(it)) }
         }.getOrNull()
     }
 

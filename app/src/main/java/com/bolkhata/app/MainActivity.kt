@@ -1347,7 +1347,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             val now = System.currentTimeMillis()
             val amp = runCatching { r.maxAmplitude }.getOrDefault(0)
             if (amp > 2500) { spoke = true; lastSound = now }
-            if (spoke && now - lastSound > 1500) { finishRecording(); break }
+            // A call answers sooner after a pause than the mic, so it feels live.
+            if (spoke && now - lastSound > (if (voiceOn) 900 else 1500)) { finishRecording(); break }
             if (!spoke && now - start > 8000) { finishRecording(send = false); recordMissed(); break }
         }
     }
@@ -1475,12 +1476,15 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         }
     }
 
-    /** Says the short form of an answer in the call: ElevenLabs when set up, else the phone's voice. Listens again after. */
-    fun speak(text: String) {
-        val clean = shortSpoken(text.replace(Regex("""[✓•*#_]"""), " ").replace(Regex("""(?m)^\s*-\s*"""), ""))
-        if (clean.isEmpty()) { listenNow(); return }
-        if (elevenKey.isBlank() || elevenVoice.isBlank()) { phoneSpeak(clean); return }
+    /** Says an answer in the call, short and natural: ElevenLabs when set up, else the phone's voice. Listens again after. */
+    fun speak(said: String, text: String) {
+        val answer = text.replace(Regex("""[✓•*#_]"""), " ").replace(Regex("""(?m)^\s*-\s*"""), "").trim()
+        if (answer.isEmpty()) { listenNow(); return }
         scope.launch {
+            // Groq says the answer like a person would; without it, the answer's first sentence is read.
+            val clean = (if (groqKey.isNotBlank()) Groq.spoken(groqKey, said, answer) else null) ?: shortSpoken(answer)
+            if (!voiceOn) return@launch
+            if (elevenKey.isBlank() || elevenVoice.isBlank()) { phoneSpeak(clean); return@launch }
             val reply = Eleven.speech(elevenKey, elevenVoice, clean, File(context.cacheDir, "reply.mp3"))
             if (!voiceOn) return@launch
             reply.fold(
@@ -1602,11 +1606,11 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         val lastUser = chatMessages.indexOfLast { it.isUser }
         val answers = chatMessages.drop(lastUser + 1).filter { !it.isUser }
         if (answers.isEmpty()) return@LaunchedEffect
-        kotlinx.coroutines.delay(400) // let any follow-up line (changes, "Remembered") arrive
+        kotlinx.coroutines.delay(250) // let any follow-up line (changes, "Remembered") arrive
         voiceAwaiting = false
         val spoken = lastSpeech.takeIf { it.isNotBlank() } ?: answers.joinToString(". ") { it.text }
         lastSpeech = ""
-        speak(spoken)
+        speak(chatMessages.getOrNull(lastUser)?.text.orEmpty(), spoken)
     }
 
     val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
@@ -1738,7 +1742,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     onSend = { chatInput(it) }, onMic = { startVoice(forChat = true) }, placeholder = "Speak, type or ask…",
                     onAttach = { pickFile.launch(arrayOf("image/*", "application/pdf")) },
                     busy = chatLoading,
-                    voice = if (recorder != null) VoiceState(true, "Listening…", "sends when you stop") { finishRecording() }
+                    voice = if (recorder != null && !voiceOn) VoiceState(true, "Listening…", "sends when you stop") { finishRecording() }
                         else VoiceState(voiceOn, voiceStatus, voicePartial) { toggleVoice() }
                 )
             } else {
@@ -1751,7 +1755,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         onAttach = { pickFile.launch(arrayOf("image/*", "application/pdf")) },
                         busy = chatLoading,
                         // The call's answers also go to the chat, so starting it from Home opens the Chat tab.
-                        voice = if (recorder != null) VoiceState(true, "Listening…", "sends when you stop") { finishRecording() }
+                        voice = if (recorder != null && !voiceOn) VoiceState(true, "Listening…", "sends when you stop") { finishRecording() }
                             else VoiceState(voiceOn, voiceStatus, voicePartial) { tab = Tab.CHAT; toggleVoice() }
                     )
                 }

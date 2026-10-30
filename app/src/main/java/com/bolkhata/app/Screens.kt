@@ -1679,7 +1679,8 @@ fun SettingsScreen(
                         Text(
                             "Optional. Every chat message is first corrected by Groq (spelling, Urdu script, names), then the " +
                                 "app answers from your own records. Groq never answers or changes amounts. Only the message, the " +
-                                "app's last reply and a few similar khata names are sent, never your entries. Needs internet; " +
+                                "app's last reply and a few similar khata names are sent, never your entries. In a voice call the app's " +
+                                "answer is also sent, so it can be said naturally. Needs internet; " +
                                 "without it the app works as before.",
                             fontSize = 13.sp, color = faint
                         )
