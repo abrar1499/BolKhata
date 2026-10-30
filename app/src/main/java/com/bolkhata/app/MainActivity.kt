@@ -144,7 +144,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var importDupes by remember { mutableStateOf(setOf<String>()) }
     // For each imported row that matches a saved entry: the saved entry's id.
     var importMatch by remember { mutableStateOf(mapOf<String, String>()) }
-    // Changes the chat AI wants to make to saved entries, shown for the person to Apply or Cancel.
+    // Changes the local engine proposes, shown for the person to Apply or Cancel.
     var pendingPlan by remember { mutableStateOf<EditPlan?>(null) }
 
     DisposableEffect(Unit) {
@@ -337,11 +337,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     }
 
     /**
-     * Offline first. Only when the offline reader is unsure (something it could not place,
-     * an "Other" expense, or no amount at all) and an AI key is set, the sentence goes to Gemini.
-     * If the local engine fails or there is no internet, the offline result is used as before.
+     * Reads entries locally. Unclear amounts or categories are shown for review; no remote model is called.
      */
-    /** Applies an AI change only while every target still matches the exact snapshot it was based on. */
+    /** Applies a local change only while every target still matches the exact snapshot it was based on. */
     fun applyPlan(plan: EditPlan): Boolean {
         val expected = plan.changed.map { it.first } + plan.deleted
         if (expected.isEmpty() || !Accounts.snapshotsMatch(entries, expected)) return false
@@ -737,8 +735,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             }
             "plan" -> {
                 val plan = f.plan ?: return "I couldn't build a safe change plan. Nothing was changed."
-                if (!applyPlan(plan)) return "That entry changed before the update could be applied. Nothing was changed."
-                plan.message
+                pendingPlan = plan
+                "I prepared a change for review. Check the proposed entry details and tap Apply or Cancel. Nothing has changed yet."
             }
             "clear_all" -> {
                 val targets = scoped(entries)
