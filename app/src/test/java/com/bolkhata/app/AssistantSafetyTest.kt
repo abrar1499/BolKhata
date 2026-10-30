@@ -13,6 +13,10 @@ class AssistantSafetyTest {
         assertEquals(false, Accounts.isRecentDuplicateMutationRequest(
             "coffee 5", previousAt, "What date?", previousAt + 1_000, false, "coffee 5", previousAt + 2_000
         ))
+        assertEquals(true, Accounts.isRecentDuplicateMutationRequest(
+            "change petrol to 60", previousAt, "Updated 1 entry", previousAt + 1_000, false,
+            "change petrol to 60", previousAt + 2_000
+        ))
         assertEquals(false, Accounts.isRecentDuplicateMutationRequest(
             "coffee 5", previousAt, "Saved coffee", previousAt + 1_000, true, "coffee 5", previousAt + 40_000
         ))
