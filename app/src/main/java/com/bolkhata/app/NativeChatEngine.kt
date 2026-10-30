@@ -10,7 +10,9 @@ object NativeChatEngine {
     class Fixed(
         val text: String, val kind: String, val reply: String, val what: String = "",
         val filter: Query.Filter = Query.Filter(), val set: Map<String, String> = emptyMap(),
-        val payer: String = "", val plan: EditPlan? = null
+        val payer: String = "", val plan: EditPlan? = null,
+        /** The engine did not understand the sentence; the app may ask Groq (when turned on) to rephrase it. */
+        val unsure: Boolean = false
     )
 
     private val expense = setOf("expense", "expenses", "spent", "spend", "spending", "kharcha", "kharch", "cashout")
@@ -216,7 +218,7 @@ object NativeChatEngine {
 
         if (lower.contains("how are you") || lower.contains("what can you do") ||
             has(words, setOf("hello", "hi", "hey", "salam", "assalam", "thanks", "thank", "bye", "goodbye"))) {
-            return chat(smallTalk(lower))
+            return talk(lower)
         }
 
         // Reports use the requested period instead of silently defaulting yearly reports to this month.
@@ -243,7 +245,7 @@ object NativeChatEngine {
                 "khata", "qarz", "udhar", "udhaar", "report", "summary", "overview"
             )) || words.any { token -> categories.values.any { token in it } } || dateBounds(lower, now) != null
             if (!knownDomain)
-                return chat("I can answer from your saved transactions. Try 'food this month', 'last 5 entries', or 'Ali ka balance'.")
+                return Fixed("", "chat", "I can answer from your saved transactions. Try 'food this month', 'last 5 entries', or 'Ali ka balance'.", unsure = true)
             val periodWords = setOf("today", "yesterday", "aaj", "aj", "kal", "this", "last", "month", "week", "year",
                 "mahina", "mahine", "saal", "all", "time", "overall", "lifetime", "ever", "alltime")
             val simpleLookup = (words.any { token -> categories.values.any { token in it } } || has(words, expense + income)) &&
@@ -270,7 +272,7 @@ object NativeChatEngine {
         val parsed = if (split == null) runCatching { Parser.parse(text, now) }.getOrNull() else null
         if (split != null || (parsed != null && (parsed.entries.isNotEmpty() || parsed.unclear.isNotEmpty())))
             return Fixed(text, "entry", "")
-        return chat(smallTalk(lower))
+        return talk(lower)
     }
 
     /** The saved names offered in "Which A or B do you mean?" / "Please choose one saved name: A or B." */
@@ -282,6 +284,11 @@ object NativeChatEngine {
     }
 
     private fun chat(reply: String) = Fixed("", "chat", reply)
+
+    private const val NOT_UNDERSTOOD = "I can help with your saved khata, transactions, balances, searches and edits. Try 'chai 5', 'food this month' or 'Ali ka khata'."
+
+    /** Small talk, or the not-understood reply marked [Fixed.unsure]. */
+    private fun talk(text: String): Fixed = smallTalk(text).let { Fixed("", "chat", it, unsure = it == NOT_UNDERSTOOD) }
 
     private fun smallTalk(text: String): String {
         val w = tokens(text)
@@ -296,7 +303,7 @@ object NativeChatEngine {
             has(w, setOf("bye", "goodbye", "allahhafiz", "khuda")) -> "Take care. Your saved khata will be here when you return."
             has(w, setOf("help", "commands", "examples", "madad")) ->
                 "Try: 'chai 5', 'Ali ko 100 diye', 'food this month kitna', 'last 5 transactions', or 'petrol 50 nahi 40 tha'."
-            else -> "I can help with your saved khata, transactions, balances, searches and edits. I don't invent answers or use an online AI service."
+            else -> NOT_UNDERSTOOD
         }
     }
 

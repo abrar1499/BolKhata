@@ -126,7 +126,7 @@ class Store(context: Context) {
     // ---------- Backup: everything the app keeps, in one file ----------
 
     /** Keys left out of a backup: AI keys are private and stay on this phone. */
-    private val notBackedUp = setOf("aiKey", "fastKey", "aiModel", "fileKey")
+    private val notBackedUp = setOf("aiKey", "fastKey", "aiModel", "fileKey", "groqKey", "logToken")
 
     /** All saved data (entries, trash, chat, memory, settings) as one JSON text. */
     fun exportJson(): String {
@@ -446,6 +446,16 @@ class Store(context: Context) {
     var logRepo: String
         get() = prefs.getString("logRepo", "abrar1499/bolkhata-logs") ?: "abrar1499/bolkhata-logs"
         set(v) = prefs.edit().putString("logRepo", v.trim()).apply()
+
+    /** The owner's own Groq API key. Blank means the app stays fully offline. Never backed up or uploaded. */
+    var groqKey: String
+        get() = prefs.getString("groqKey", "") ?: ""
+        set(v) = prefs.edit().putString("groqKey", v.trim()).apply()
+
+    /** Use Groq Whisper for the mic button instead of the phone's speech recognition. */
+    var groqVoice: Boolean
+        get() = prefs.getBoolean("groqVoice", true)
+        set(v) = prefs.edit().putBoolean("groqVoice", v).apply()
 
     /** When the chat log was last sent successfully. */
     var logSentAt: Long

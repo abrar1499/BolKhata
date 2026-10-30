@@ -1561,8 +1561,13 @@ fun SettingsScreen(
     onLogSave: (repo: String, token: String) -> Unit = { _, _ -> },
     onLogSendNow: () -> Unit = {},
     onLogOff: () -> Unit = {},
+    groqOn: Boolean = false,
+    groqVoice: Boolean = true,
+    onGroqSave: (String) -> Unit = {},
+    onGroqVoice: (Boolean) -> Unit = {},
+    onGroqOff: () -> Unit = {},
 ) {
-    var dialog by remember { mutableStateOf<String?>(null) }   // "name", "theme" or "review"
+    var dialog by remember { mutableStateOf<String?>(null) }   // "name", "theme", "groq" or "review"
     val faint = MaterialTheme.colorScheme.onSurfaceVariant
     val langLabel = when {
         lang == "ur-PK" -> "Urdu"
@@ -1609,6 +1614,8 @@ fun SettingsScreen(
                     ListDivider()
                     ListRow("Bank alerts", null, trailing = { Switch(checked = bankOn, onCheckedChange = { onBank() }) }, onClick = onBank)
                     ListDivider()
+                    ListRow("Groq AI", if (groqOn) "On" else "Off", valueColor = if (groqOn) GreenIn else faint) { dialog = "groq" }
+                    ListDivider()
                     ListRow("Chat review", if (logTokenSet) "On" else "Off", valueColor = if (logTokenSet) GreenIn else faint) { dialog = "review" }
                     ListDivider()
                     Box {
@@ -1627,7 +1634,7 @@ fun SettingsScreen(
         item {
             Text(
                 "Tap Version to check for updates. Your entries stay on this phone and the assistant works offline; " +
-                    "chat leaves the phone only when Chat review is on.",
+                    "chat leaves the phone only when Groq AI or Chat review is on.",
                 fontSize = 12.sp, color = faint, modifier = Modifier.padding(horizontal = 24.dp, vertical = 14.dp)
             )
         }
@@ -1656,6 +1663,45 @@ fun SettingsScreen(
             },
             confirmButton = { TextButton(onClick = { dialog = null }) { Text("Close") } }
         )
+        "groq" -> {
+            var key by remember { mutableStateOf("") }
+            AlertDialog(
+                onDismissRequest = { dialog = null },
+                title = { Text("Groq AI") },
+                text = {
+                    Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(
+                            "Optional. When the app doesn't understand a message, it asks Groq to rephrase it, then the app " +
+                                "answers from your own records (Groq never makes up amounts). Only that message, the last few " +
+                                "chat lines and your khata names are sent, never your entries. Needs internet.",
+                            fontSize = 13.sp, color = faint
+                        )
+                        OutlinedTextField(
+                            key, { key = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                            label = { Text(if (groqOn) "Key saved · paste to replace" else "Groq API key") },
+                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
+                        )
+                        Text("Get a free key at console.groq.com → API Keys.", fontSize = 12.sp, color = faint)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text("Groq voice for the mic", fontSize = 15.sp)
+                                Text("Whisper hears Urdu and mixed speech better", fontSize = 12.sp, color = faint)
+                            }
+                            Switch(checked = groqVoice, onCheckedChange = onGroqVoice, enabled = groqOn)
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { onGroqSave(key.trim()); dialog = null }, enabled = key.trim().length > 20) { Text("Save") }
+                },
+                dismissButton = {
+                    Row {
+                        if (groqOn) TextButton(onClick = { onGroqOff(); dialog = null }) { Text("Turn off") }
+                        TextButton(onClick = { dialog = null }) { Text("Close") }
+                    }
+                }
+            )
+        }
         "review" -> AlertDialog(
             onDismissRequest = { dialog = null },
             text = { Column(Modifier.verticalScroll(rememberScrollState())) { ChatReviewPanel(logRepo, logTokenSet, logStatus, onLogSave, onLogSendNow, onLogOff) } },
