@@ -50,8 +50,40 @@ object Translit {
         "کر" to "kar", "کرو" to "karo", "خرچہ" to "kharcha", "آمدنی" to "aamdani",
         "تنخواہ" to "tankhwah", "پٹرول" to "petrol", "کرایہ" to "kiraya", "کھانا" to "khana",
         "رقم" to "raqam", "ادھار" to "udhaar", "نقد" to "naqad", "کیش" to "cash", "بینک" to "bank",
-        "ریال" to "riyal", "روپے" to "rupay", "درہم" to "dirham"
+        "ریال" to "riyal", "روپے" to "rupay", "درہم" to "dirham",
+        "مجھے" to "mujhe", "مجھ" to "mujh", "میرا" to "mera", "میری" to "meri", "میرے" to "mere",
+        "ٹرانزیکشن" to "transactions", "ٹرانزیکشنز" to "transactions", "ٹرانزیکشنس" to "transactions",
+        "دکھاؤ" to "dikhao", "دکھائیں" to "dikhao", "دکھا" to "dikha", "بتاؤ" to "batao", "بتائیں" to "batao",
+        "کھاتہ" to "khata", "کھاتا" to "khata", "کھاتے" to "khate", "کھولو" to "kholo", "کھولیں" to "kholo",
+        "کتنا" to "kitna", "کتنے" to "kitne", "کتنی" to "kitni", "خرچ" to "kharch", "خرچے" to "kharche",
+        "کیا" to "kya", "حال" to "hal", "یار" to "yar", "اور" to "aur", "تو" to "to", "والا" to "wala", "والی" to "wali",
+        "ٹھیک" to "theek", "صحیح" to "sahi", "لیکن" to "lekin", "اردو" to "urdu", "انگلش" to "english", "رومن" to "roman",
+        "وائس" to "voice", "سب" to "sab", "ساری" to "sari", "سارے" to "sare", "پرسوں" to "parson", "مہینے" to "mahine",
+        "مہینہ" to "mahina", "سال" to "saal", "لیا" to "liya", "لیے" to "liye", "واپس" to "wapas"
     )
+
+    /** Letter by letter, for Urdu words not in [urduFixes]; good enough for names ("نرگس" -> "nrgs" ~ "Nargis"). */
+    private val urduLetterSounds = mapOf(
+        'ا' to "a", 'آ' to "aa", 'ب' to "b", 'پ' to "p", 'ت' to "t", 'ٹ' to "t", 'ث' to "s", 'ج' to "j", 'چ' to "ch",
+        'ح' to "h", 'خ' to "kh", 'د' to "d", 'ڈ' to "d", 'ذ' to "z", 'ر' to "r", 'ڑ' to "r", 'ز' to "z", 'ژ' to "zh",
+        'س' to "s", 'ش' to "sh", 'ص' to "s", 'ض' to "z", 'ط' to "t", 'ظ' to "z", 'ع' to "a", 'غ' to "gh", 'ف' to "f",
+        'ق' to "q", 'ک' to "k", 'ك' to "k", 'گ' to "g", 'ل' to "l", 'م' to "m", 'ن' to "n", 'ں' to "n", 'و' to "o",
+        'ہ' to "h", 'ھ' to "h", 'ة' to "a", 'ی' to "i", 'ي' to "i", 'ے' to "e", 'ۓ' to "e", 'ئ' to "", 'ء' to "", 'ؤ' to "o",
+        'أ' to "a", 'إ' to "i"
+    )
+
+    private fun urduWord(word: String): String {
+        val sb = StringBuilder()
+        word.forEachIndexed { i, c ->
+            when {
+                c == 'و' && i == 0 -> sb.append("w")
+                c == 'ی' && i == 0 -> sb.append("y")
+                c == 'ہ' && i == word.lastIndex && i > 0 -> sb.append("a")   // final "ہ" is a vowel: "شاہدہ" -> "shahida"
+                else -> sb.append(urduLetterSounds[c] ?: "")
+            }
+        }
+        return sb.toString()
+    }
 
     fun hasDevanagari(s: String) = s.any { it in 'ऀ'..'ॿ' }
 
@@ -59,7 +91,8 @@ object Translit {
         var input = text
         if (input.any { it in '\u0600'..'\u06FF' || it in '\u0750'..'\u077F' }) {
             input = urduLetters.replace(input) { match ->
-                urduFixes[match.value] ?: match.value
+                val w = match.value
+                urduFixes[w] ?: if (w.first() in '\u0600'..'\u06FF' || w.first() in '\u0750'..'\u077F') urduWord(w) else w
             }
         }
         if (!hasDevanagari(input)) return input

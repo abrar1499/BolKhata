@@ -39,7 +39,12 @@ object Understand {
         "dalwaya", "kharida", "bheja", "wapas", "udhaar", "kholo", "dikhao", "karo", "delete", "entry", "last", "khata",
         "undo", "summary", "petrol", "diesel", "roti", "chai", "doodh", "pani", "khana", "nashta", "sabzi", "chawal",
         "biryani", "taxi", "kiraya", "bijli", "recharge", "dawai", "doctor", "mobile", "ghar", "riyal", "riyals",
-        "rupay", "rupees", "wala", "wali", "wale", "liye", "mein", "main", "aur", "kuch", "sab", "nahi", "please"
+        "rupay", "rupees", "wala", "wali", "wale", "liye", "mein", "main", "aur", "kuch", "sab", "nahi", "please",
+        // Everyday chat words that sound like short names ("hai", "hal" are close to many 4-letter names).
+        "hai", "hain", "kya", "kia", "hal", "haal", "kaise", "kaisa", "kaisi", "yar", "yaar", "acha", "accha", "theek", "thik",
+        "han", "haan", "hello", "hey", "salam", "how", "are", "you", "what", "the", "and", "tha", "thi", "the", "mujhe", "mujh",
+        "sahi", "lekin", "voice", "urdu", "english", "roman", "transaction", "transactions", "chalta", "karta", "kholo", "dikhao",
+        "batao", "kitna", "kitne", "kitni", "hua", "huwa", "tum", "aap", "mera", "meri", "mere", "apna", "apni"
     )
 
     /** Common names, so a misspelled name is fixed even before it is saved ("ashrf" -> "Ashraf"). */
@@ -86,13 +91,26 @@ object Understand {
             if (scored.isEmpty()) continue
             val top = scored.first().second
             val tied = scored.filter { top - it.second < 0.03 }.map { it.first }
-            return if (tied.size == 1) Triple(tied.first(), emptyList(), w) else Triple(null, tied, w)
+            if (tied.size == 1) return Triple(tied.first(), emptyList(), w)
+            // Several names share this word ("Salim"): the one matching the most words said wins ("Salim Rashid").
+            val best = mostWordsMatched(words, tied)
+            return if (best.size == 1) Triple(best.first(), emptyList(), w) else Triple(null, best, w)
         }
         return Triple(null, emptyList(), null)
     }
 
+    /** Of [names], those that match the largest number of the [words] said (by spelling or sound). */
+    fun mostWordsMatched(words: List<String>, names: List<String>): List<String> {
+        val counts = names.associateWith { n ->
+            val parts = n.lowercase().split(Regex("[^\\p{L}]+")).filter { it.length >= 3 }
+            words.count { w -> w.length >= 3 && w !in notNames && parts.any { p -> closeName(w, p) } }
+        }
+        val max = counts.values.maxOrNull() ?: return names
+        return counts.filterValues { it == max }.keys.toList()
+    }
+
     /** "ashrf" ~ "ashraf", "abraar" ~ "abrar", "imraan" ~ "imran": close in spelling or in sound. */
-    private fun closeName(said: String, name: String): Boolean {
+    fun closeName(said: String, name: String): Boolean {
         if (said == name) return true
         val sim = Normalizer.similarity(said, name)
         val dist = Normalizer.distance(said, name)
@@ -156,7 +174,9 @@ object Understand {
         val kind = when {
             "delete" in ws && "last" in ws -> Kind.DELETE_LAST
             "undo" in ws && !hasNumber && words.size <= 4 -> Kind.UNDO
-            "khata" in ws && ("kholo" in ws || "dikhao" in ws || words.size <= 4) && !hasNumber && (contact != null || choices.isNotEmpty()) -> Kind.OPEN_KHATA
+            // "<name> ka khata"; a full name said in several words ("nargis salim rashid ka khata") counts as one.
+            "khata" in ws && ("kholo" in ws || "dikhao" in ws || words.size <= 4 + (contact ?: "").count { it == ' ' }) &&
+                !hasNumber && (contact != null || choices.isNotEmpty()) -> Kind.OPEN_KHATA
             "summary" in ws && !hasNumber && contact != null -> Kind.OPEN_KHATA
             "summary" in ws && !hasNumber -> Kind.SUMMARY
             else -> Kind.ENTRY

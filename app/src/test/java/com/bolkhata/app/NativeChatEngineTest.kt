@@ -341,3 +341,55 @@ class NativeChatEngineDayQuestionTest {
         assertEquals(null, read("detail do").filter.from)
     }
 }
+
+/** Mistakes the owner marked 👎 in the chat log (names changed). */
+class NativeChatEngineNameTest {
+    private val contacts = listOf("Hamid Akram", "Hiba", "Nargis Salim Mazhar", "Nargis Salim Rashid", "Kamil Salim Bahadar")
+
+    private fun read(text: String, history: List<ChatMessage> = emptyList()) =
+        NativeChatEngine.interpret(text, emptyList(), contacts = contacts, history = history)
+
+    private fun msg(text: String, user: Boolean) = ChatMessage(text.hashCode().toString() + user, user, text)
+
+    @Test fun kyaHalHaiIsSmallTalkNotANameQuestion() {
+        val r = read("kya hal hai")
+        assertEquals("chat", r.kind)
+        assertTrue(r.reply, r.reply.contains("theek"))
+    }
+
+    @Test fun twoMatchingWordsPickThatPerson() {
+        val r = read("salim rashid ka khata")
+        assertEquals("open", r.kind)
+        assertEquals(listOf("Nargis Salim Rashid"), r.filter.persons)
+    }
+
+    @Test fun aNewRequestAfterAWhichNameQuestionIsNotForcedIntoTheOldChoice() {
+        val history = listOf(msg("kya hal hai", true), msg("Which Hamid Akram or Hiba do you mean?", false))
+        val r = read("nargis ka khata", history)
+        assertTrue(r.reply, !r.reply.startsWith("Please choose"))
+        assertTrue(r.reply, r.reply.contains("Nargis Salim Mazhar") && r.reply.contains("Nargis Salim Rashid"))
+    }
+
+    @Test fun answeringWithTheDistinctiveWordsPicksThatName() {
+        val history = listOf(
+            msg("nargis ka khata", true),
+            msg("Which Nargis Salim Mazhar or Nargis Salim Rashid do you mean?", false)
+        )
+        val r = read("Deepak Salim Rashid", history)
+        assertEquals("open", r.kind)
+        assertEquals(listOf("Nargis Salim Rashid"), r.filter.persons)
+    }
+
+    @Test fun urduScriptNameOpensTheKhata() {
+        val r = read("نرگس سلیم راشد کا کھاتہ")
+        assertEquals("open", r.kind)
+        assertEquals(listOf("Nargis Salim Rashid"), r.filter.persons)
+    }
+
+    @Test fun urduShowTransactionsListsEntries() {
+        val r = read("مجھے ٹرانزیکشن دکھاؤ")
+        assertEquals("ask", r.kind)
+        assertEquals("list", r.what)
+        assertTrue(r.filter.items.toString(), r.filter.items.isEmpty())
+    }
+}
