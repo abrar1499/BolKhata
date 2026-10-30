@@ -56,7 +56,7 @@ object NativeChatEngine {
     fun interpret(
         input: String, entries: List<Entry>, contacts: List<String> = emptyList(),
         wordFixes: Map<String, String> = emptyMap(), history: List<ChatMessage> = emptyList(),
-        now: Long = System.currentTimeMillis()
+        currency: String = "SAR", now: Long = System.currentTimeMillis()
     ): Fixed {
         val raw = input.trim()
         if (raw.isBlank()) return chat("Please type a message and I'll help with your khata.")
@@ -71,7 +71,7 @@ object NativeChatEngine {
         if (history.isNotEmpty() && isDateFollowUp(lower)) {
             val previous = history.lastOrNull { it.isUser }?.text
             if (!previous.isNullOrBlank()) {
-                val base = interpret(previous, entries, contacts, wordFixes, emptyList(), now)
+                val base = interpret(previous, entries, contacts, wordFixes, emptyList(), currency, now)
                 val date = dateBounds(lower, now)
                 if (base.kind == "ask" && date != null) return Fixed("", "ask", "", base.what, copyFilter(base.filter, date))
             }
@@ -103,12 +103,6 @@ object NativeChatEngine {
         val clear = has(words, setOf("clear", "wipe"))
         val all = has(words, setOf("all", "every", "sab", "sari", "saari", "tamam", "everything"))
         val command = runCatching { Commands.read(text) }.getOrNull()
-        if ((delete || clear) && !has(words, setOf("nahi", "nahin", "nhi", "not", "mat"))) {
-            if ((all || clear) && words.none { it.all(Char::isDigit) }) return Fixed("", "clear_all", "")
-            val f = buildFilter(text, contacts, now, false)
-            return if (f.isEmpty) chat("Which entries should I delete? Give an item, person, date, or say 'delete all' to review everything.")
-            else Fixed("", "delete", "", filter = f)
-        }
         if (command?.action == Commands.Action.DELETE_PERIOD && command.period != null) {
             val b = periodBounds(command.period, now)
             return Fixed("", "delete", "", filter = Query.Filter(from = b.from, to = b.to))
@@ -118,13 +112,23 @@ object NativeChatEngine {
             return Fixed("", "open", "", filter = buildFilter(command.query, contacts, now, false))
         if (command?.action == Commands.Action.EDIT)
             return Fixed("", "change", "", filter = buildFilter(command.query, contacts, now, false))
+        if ((delete || clear) && !has(words, setOf("nahi", "nahin", "nhi", "not", "mat"))) {
+            val f = buildFilter(text, contacts, now, false)
+            if ((all || clear) && f.isEmpty) return Fixed("", "clear_all", "")
+            return if (f.isEmpty) chat("Which entries should I delete? Give an item, person, date, or say 'delete all' to review everything.")
+            else Fixed("", "delete", "", filter = f)
+        }
 
         if (isQuestion(lower)) {
             val financial = has(words, setOf("profit", "nafa", "munafa", "loss", "stock", "balance", "owe", "owed", "qarz", "udhar"))
-            val special = if (financial && !text.any(Char::isDigit)) runCatching { Questions.answer(text, entries, "SAR") }.getOrNull() else null
+            val special = if (financial && !text.any(Char::isDigit)) runCatching { Questions.answer(text, entries, currency) }.getOrNull() else null
             if (special != null && special.text.isNotBlank()) return Fixed("", "chat", special.text)
             val filter = buildFilter(text, contacts, now, has(words, expense))
-            if (filter.isEmpty && !has(words, questionWords + expense + income + setOf("entries", "transactions", "records", "balance", "profit")))
+            val knownDomain = has(words, expense + income + lent + borrowed + setOf(
+                "entries", "entry", "transactions", "transaction", "records", "record", "balance", "profit", "stock",
+                "khata", "qarz", "udhar", "udhaar"
+            )) || words.any { token -> categories.values.any { token in it } }
+            if (!knownDomain)
                 return chat("I can answer from your saved transactions. Try 'food this month', 'last 5 entries', or 'Ali ka balance'.")
             val what = when {
                 has(words, setOf("highest", "largest", "biggest", "maximum", "max", "most")) -> "highest"
@@ -196,7 +200,8 @@ object NativeChatEngine {
         val personWords = people.flatMap { tokens(it.lowercase()) }.toSet()
         val knownCats = categories.values.flatten().toSet()
         val knownTypes = expense + income + lent + borrowed
-        val itemWords = w.filter { it.length >= 2 && it !in stop && it !in knownCats && it !in knownTypes &&
+        val itemAliases = setOf("petrol", "diesel", "taxi", "uber", "careem", "chai", "tea", "coffee", "milk", "doodh", "lunch", "breakfast", "dinner", "roti", "biryani", "bread", "water", "pani", "recharge")
+        val itemWords = w.filter { it.length >= 2 && it !in stop && (it !in knownCats || it in itemAliases) && it !in knownTypes &&
             it !in personWords && it !in exclude && it.none(Char::isDigit) }.distinct().take(6)
         val noPeople = lower.contains("people ke ilawa") || lower.contains("people kay ilawa") ||
             lower.contains("without transfers") || lower.contains("excluding people")
