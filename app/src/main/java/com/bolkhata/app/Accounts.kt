@@ -47,6 +47,25 @@ object Accounts {
     fun byStableId(entries: List<Entry>, id: String): Entry? =
         id.takeIf { it.isNotBlank() }?.let { stable -> entries.firstOrNull { it.id == stable } }
 
+    /** Match a destination khata by its full saved name in a natural-language request. */
+    fun khataNameMentionedIn(text: String, currentName: String, knownNames: List<String>): String? {
+        fun normalize(value: String): String = value.lowercase(Locale.ROOT)
+            .replace(Regex("""[^\\p{L}\\p{N}]+"""), " ")
+            .trim().replace(Regex("""\\s+"""), " ")
+        val haystack = " " + normalize(text) + " "
+        val current = normalize(currentName)
+        val matches = knownNames.map { it.trim() }.filter { it.isNotBlank() }
+            .distinctBy { normalize(it) }
+            .filter { name ->
+                val candidate = normalize(name)
+                candidate.isNotBlank() && candidate != current && haystack.contains(" $candidate ")
+            }
+        if (matches.isEmpty()) return null
+        val longest = matches.maxOf { normalize(it).length }
+        val best = matches.filter { normalize(it).length == longest }
+        return best.singleOrNull()
+    }
+
     /** True when multiple candidates need clarification rather than an implicit bulk action. */
     fun requiresTargetClarification(matchCount: Int, explicitlyAll: Boolean, allowAll: Boolean = true): Boolean =
         matchCount > 1 && !(explicitlyAll && allowAll)
