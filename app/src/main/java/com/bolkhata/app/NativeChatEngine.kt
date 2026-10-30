@@ -81,7 +81,9 @@ object NativeChatEngine {
             previousAssistant.contains(" do you mean?", ignoreCase = true)) {
             val candidates = contacts.filter { it.isNotBlank() && previousAssistant.contains(it, ignoreCase = true) }
                 .distinctBy { it.lowercase(Locale.ROOT) }
-            val answerWords = words.filter { it !in setOf("yes", "yeah", "yep", "haan", "han", "ji", "please", "plz") }
+            // Use the user's literal answer before contact-name normalization can expand or rewrite it.
+            val answerWords = tokens(prepared.lowercase(Locale.ROOT))
+                .filter { it !in setOf("yes", "yeah", "yep", "haan", "han", "ji", "please", "plz") }
             val chosen = candidates.filter { candidate ->
                 val nameWords = tokens(candidate)
                 answerWords.isNotEmpty() && answerWords.all { answer ->
