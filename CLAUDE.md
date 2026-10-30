@@ -45,3 +45,11 @@ Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Packa
 - Floating ChatGPT-style message bar (`AppParts.kt` `InputBar`); screens scroll under it, lists end with
   `barSpace()`.
 - Match the surrounding code: short KDoc comments, no dead code, reuse helpers in `Ui.kt`.
+
+## Token saving
+- Read only the files the task needs; search with grep/rg first. Never read build/, .gradle/ or big logs.
+- Don't re-read a file already read; don't scan the whole repo.
+- Make only the requested change: no extra refactoring, files, docs or duplicate code; reuse existing helpers.
+- Few tool calls, short terminal output (`head`, `-q`). No subagents for simple tasks.
+- Replies: short, list only changed files and important errors, don't repeat earlier explanations.
+- When compacting keep: current task, files changed, decisions, remaining work, build/test results.
