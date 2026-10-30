@@ -93,8 +93,10 @@ object Accounts {
     ): Boolean {
         fun normalize(s: String) = s.trim().lowercase().replace(Regex("""\s+"""), " ")
         val sameRequest = normalize(previousUserText).isNotBlank() && normalize(previousUserText) == normalize(newText)
+        // A generic "Done / entries updated" bubble is not proof that a mutation succeeded.
+        // Suppress a repeated command only when the app confirms a concrete affected-record count.
         val mutationConfirmed = previousCreatedEntries ||
-            Regex("""(?i)\b(changed|updated|deleted|removed|moved|converted|marked paid|marked unpaid)\b""")
+            Regex("""(?i)\b(changed|updated|deleted|removed|moved|converted|fixed|marked paid|marked unpaid)\s+\d+\b""")
                 .containsMatchIn(latestAssistantText)
         return sameRequest && mutationConfirmed && latestAssistantAt >= previousUserAt &&
             now >= previousUserAt && now - previousUserAt <= windowMs
