@@ -42,6 +42,17 @@ class ParserBankFingerprintTest {
         assertNotEquals(original, otherTime)
     }
 
+    @Test fun fullAndTruncatedCardAlertsParseToTheSameDeduplicatedEntry() {
+        val full = (Parser.parse(fullAlert).entries + Parser.parse(fullAlert).unclear).single()
+        val short = (Parser.parse(shortenedAlert).entries + Parser.parse(shortenedAlert).unclear).single()
+        assertEquals(29.0, full.amount, 0.001)
+        assertEquals(29.0, short.amount, 0.001)
+        assertEquals(full.sourceFingerprint, short.sourceFingerprint)
+        val result = BankTransactionDeduplicator.filterNew(listOf(short), listOf(full))
+        assertEquals(1, result.skipped)
+        assertTrue(result.fresh.isEmpty())
+    }
+
     @Test fun deduplicatorSkipsOnlyMatchingStructuredBankAlerts() {
         val saved = Entry("saved", Type.KHARCHA, 29.0, Cat.OTHER, "Other", "", "AlJidar A", 1L, 1L,
             sourceFingerprint = "bank:exact")
