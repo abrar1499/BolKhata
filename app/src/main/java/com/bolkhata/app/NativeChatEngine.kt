@@ -17,7 +17,7 @@ object NativeChatEngine {
     private val income = setOf("income", "aamdani", "salary", "tankhwah", "earning", "earned", "cashin")
     private val lent = setOf("lent", "gave", "given", "diya", "diye", "udhar", "udhaar")
     private val borrowed = setOf("borrowed", "borrow", "took", "liya", "liye", "lia")
-    private val questionWords = setOf("how", "much", "many", "what", "which", "when", "where", "show", "find", "search", "list", "total", "sum", "count", "highest", "largest", "biggest", "last", "latest", "recent", "kitna", "kitne", "kitni", "kitnay", "kitny", "kul", "hisab", "hisaab", "kharcha", "kharch", "dikhao", "batao", "kahan", "kab")
+    private val questionWords = setOf("how", "much", "many", "what", "which", "when", "where", "show", "find", "search", "list", "total", "sum", "count", "highest", "largest", "biggest", "last", "latest", "recent", "kitna", "kitne", "kitni", "kitnay", "kitny", "kul", "hisab", "hisaab", "kharcha", "kharch", "dikhao", "batao", "kahan", "kab", "balance", "profit", "stock", "owe", "owed")
     private val stop = setOf(
         "a", "an", "the", "i", "me", "my", "we", "our", "you", "your", "did", "do", "does", "is", "are", "was", "were",
         "have", "has", "had", "what", "which", "when", "where", "who", "how", "much", "many", "show", "find", "search",
@@ -29,7 +29,8 @@ object NativeChatEngine {
         "today", "yesterday", "aaj", "aj", "kal", "parso", "parson", "this", "last", "month", "months", "week", "weeks",
         "year", "years", "mahina", "mahine", "mahiny", "saal", "pichle", "pichhle", "previous", "ago", "day", "days",
         "date", "tareekh", "tarikh", "exactly", "equal", "between", "above", "over", "more", "than", "below", "under",
-        "less", "except", "excluding", "siwa", "ilawa", "alawa", "people", "log", "logon", "cash", "out", "into"
+        "less", "except", "excluding", "siwa", "ilawa", "alawa", "people", "log", "logon", "cash", "out", "into",
+        "it", "that", "this", "those", "these", "isko", "usko", "ye", "yeh", "inko"
     )
     private val categories = mapOf(
         Cat.KHANA to setOf("food", "khana", "khaana", "grocery", "groceries", "meal", "meals", "ration", "sabzi"),
@@ -123,7 +124,8 @@ object NativeChatEngine {
             val financial = has(words, setOf("profit", "nafa", "munafa", "loss", "stock", "balance", "owe", "owed", "qarz", "udhar"))
             val special = if (financial && !text.any(Char::isDigit)) runCatching { Questions.answer(text, entries, currency) }.getOrNull() else null
             if (special != null && special.text.isNotBlank()) return Fixed("", "chat", special.text)
-            val filter = buildFilter(text, contacts, now, has(words, expense))
+            val defaultMonth = has(words, expense) && has(words, setOf("how", "much", "kitna", "kitne", "kitni", "total", "sum"))
+            val filter = buildFilter(text, contacts, now, defaultMonth)
             val knownDomain = has(words, expense + income + lent + borrowed + setOf(
                 "entries", "entry", "transactions", "transaction", "records", "record", "balance", "profit", "stock",
                 "khata", "qarz", "udhar", "udhaar"
