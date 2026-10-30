@@ -18,6 +18,10 @@ android {
         targetSdk = 34
         versionCode = buildNumber
         versionName = "1.$buildNumber"
+        ndk {
+            // Real phones only: the x86 copies of the OCR library are for PC emulators and added ~23 MB.
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+        }
     }
 
     signingConfigs {
@@ -47,6 +51,12 @@ android {
     }
     kotlinOptions {
         jvmTarget = "17"
+    }
+    packaging {
+        resources {
+            // Post-quantum crypto tables pulled in with BouncyCastle (via pdfbox); PDF reading never uses them.
+            excludes += "org/bouncycastle/pqc/**"
+        }
     }
     buildFeatures {
         compose = true
