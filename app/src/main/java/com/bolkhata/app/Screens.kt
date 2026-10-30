@@ -24,11 +24,8 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.TrendingDown
-import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -105,7 +102,6 @@ fun HomeScreen(
             pay = -bal.values.filter { it < 0 }.sum(),
             cashInHand = entries.filter { it.isCashInFlow() }.sumOf { it.amount } - entries.filter { it.isCashOutFlow() }.sumOf { it.amount },
             todayList = sortedAll.filter { sameDay(it.date, nowMs) },
-            dayGroups = emptyMap(),
             // Every day but today sits inside its year and month: 2026 -> October -> 27 Oct.
             monthGroups = sortedAll.filter { !sameDay(it.date, nowMs) }.groupBy { monthKey(it.date) }
         ).also { h ->
@@ -253,7 +249,6 @@ fun HomeScreen(
         item { Spacer(Modifier.height(10.dp)) }
 
         val todayList = d.todayList
-        val dayGroups = d.dayGroups
         val monthGroups = d.monthGroups
 
         if (entries.isEmpty()) {
@@ -276,7 +271,6 @@ fun HomeScreen(
                 dayEntries(todayList, currency, onEdit)
             }
         }
-
 
         // Past months sit inside their year: "2026" (year in / out) -> "September" (month in / out) -> days.
         var lastYear = -1
@@ -418,7 +412,6 @@ private class HomeData(
     val pay: Double,
     val cashInHand: Double,
     val todayList: List<Entry>,
-    val dayGroups: Map<String, List<Entry>>,
     val monthGroups: Map<String, List<Entry>>
 ) {
     var monthDays: Map<String, Map<String, List<Entry>>> = emptyMap()
@@ -537,23 +530,12 @@ private fun InOutFigures(income: Double, expense: Double) {
 
 private fun dayKey(ms: Long): String = cal(ms).let { "d" + it.get(Calendar.YEAR) + "-" + it.get(Calendar.DAY_OF_YEAR) }
 private fun monthKey(ms: Long): String = cal(ms).let { "m" + it.get(Calendar.YEAR) + "-" + it.get(Calendar.MONTH) }
-private fun spentLabel(currency: String, list: List<Entry>): String? {
-    val spent = list.filter { it.type == Type.KHARCHA }.sumOf { it.amount }
-    return if (spent > 0) money(currency, spent) else null
-}
 
 private data class DailyCashSummary(
     val cashIn: Double,
     val cashOut: Double,
     val cashInHand: Double
 )
-
-private fun localDayStart(ms: Long): Long = cal(ms).apply {
-    set(Calendar.HOUR_OF_DAY, 0)
-    set(Calendar.MINUTE, 0)
-    set(Calendar.SECOND, 0)
-    set(Calendar.MILLISECOND, 0)
-}.timeInMillis
 
 /** Running cash balance through the selected local calendar day; only recorded cash flows are counted. */
 private fun dailyCashSummary(allEntries: List<Entry>, dayEntries: List<Entry>): DailyCashSummary {
@@ -649,53 +631,6 @@ private fun GroupedTxRow(e: Entry, currency: String, first: Boolean, last: Boole
         TxRowContent(e, currency, showDate = false)
     }
 }
-
-@Composable
-private fun DailyCashMetric(
-    label: String,
-    amount: Double,
-    currency: String,
-    glyph: ImageVector,
-    color: Color,
-    modifier: Modifier,
-    valueColor: Color = color
-) {
-    Row(
-        modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(color.copy(alpha = 0.075f))
-            .padding(horizontal = 7.dp, vertical = 7.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                label,
-                fontSize = 10.sp,
-                lineHeight = 12.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                moneyA(currency, amount),
-                fontSize = 12.sp,
-                lineHeight = 14.sp,
-                fontWeight = FontWeight.Bold,
-                color = valueColor,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-        Spacer(Modifier.width(3.dp))
-        Box(
-            Modifier.size(23.dp).clip(CircleShape).background(color.copy(alpha = 0.16f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(glyph, contentDescription = null, tint = color, modifier = Modifier.size(15.dp))
-        }
-    }
-}
-
 
 @Composable
 private fun MainSummaryTile(

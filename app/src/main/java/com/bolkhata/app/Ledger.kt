@@ -10,9 +10,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -141,7 +139,6 @@ fun personAccounts(entries: List<Entry>): List<PersonAcct> =
 // ---------------------------------------------------------------- moving an entry
 
 private val expenseCats = Cat.values().filter { it !in setOf(Cat.TANKHWAH, Cat.UDHAAR, Cat.SALES, Cat.STOCK) }
-private val incomeCats = listOf(Cat.TANKHWAH, Cat.ASSETS, Cat.OTHER)
 
 private fun isOutflow(e: Entry) = when (e.type) {
     Type.KHARCHA, Type.DIYA, Type.WAPIS_DIYA, Type.PURCHASE, Type.TRANSFER_OUT -> true
@@ -421,24 +418,6 @@ fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: (
     )
 }
 
-@Composable
-private fun MoveSection(title: String) {
-    Text(title, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 12.dp, bottom = 2.dp))
-}
-
-@Composable
-private fun MoveRow(label: String, selected: Boolean, onClick: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().heightIn(min = 44.dp).clip(RoundedCornerShape(10.dp)).clickable(onClick = onClick)
-            .background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.10f) else MaterialTheme.colorScheme.surface)
-            .padding(horizontal = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(label, modifier = Modifier.weight(1f), fontSize = 15.sp)
-        if (selected) Text("now", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
-    }
-}
-
 // ---------------------------------------------------------------- the account screens
 
 /** One level of the account screens. */
@@ -572,33 +551,6 @@ private fun SectionTitle(text: String) {
 }
 
 private fun count(n: Int) = if (n == 1) "1 entry" else "$n entries"
-
-@Composable
-private fun CategoriesView(income: Boolean, entries: List<Entry>, currency: String, onBack: () -> Unit, onOpen: (Cat) -> Unit) {
-    val type = if (income) Type.AAMDANI else Type.KHARCHA
-    val mine = remember(entries, income) { entries.filter { it.type == type } }
-    val m0 = monthStart()
-    val groups = remember(mine) { mine.groupBy { it.category }.entries.sortedByDescending { g -> g.value.sumOf { it.amount } } }
-    val color = if (income) GreenIn else RedSpend
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
-        item { Header(if (income) "Income" else "Expense", count(mine.size), onBack) }
-        item {
-            Figures(
-                Triple("This month", fmt(mine.filter { it.date >= m0 }.sumOf { it.amount }), color),
-                Triple("All time", fmt(mine.sumOf { it.amount }), color)
-            )
-        }
-        item { SectionTitle(if (income) "Income categories" else "Expense categories") }
-        if (groups.isEmpty()) item { Text("Nothing here yet.", modifier = Modifier.padding(20.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        items(groups, key = { it.key.name }) { g ->
-            val month = g.value.filter { it.date >= m0 }.sumOf { it.amount }
-            NavRow(
-                g.key.label, count(g.value.size) + " · this month " + fmt(month),
-                fmt(g.value.sumOf { it.amount }), color
-            ) { onOpen(g.key) }
-        }
-    }
-}
 
 @Composable
 private fun SubView(
@@ -1003,7 +955,6 @@ private fun template(type: Type, person: String): Entry {
         person = person, note = "", date = now, createdAt = now
     )
 }
-
 
 // ---------------------------------------------------------------- tree view
 

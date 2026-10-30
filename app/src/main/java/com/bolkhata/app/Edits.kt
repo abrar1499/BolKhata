@@ -1,7 +1,5 @@
 package com.bolkhata.app
 
-import java.util.Calendar
-
 /**
  * Changes an existing entry without AI. Understands, in any mix:
  *  - date:     "nashta wali entry 2 din pehle ki hai", "petrol kal ka tha", "cheeni 14 date ki thi", "last entry 13 oct ki"
@@ -240,10 +238,4 @@ object Edits {
     }
 
     private fun cap(s: String) = s.lowercase().replaceFirstChar { it.uppercase() }
-
-    private fun sameDay(a: Long, b: Long): Boolean {
-        val x = Calendar.getInstance().apply { timeInMillis = a }
-        val y = Calendar.getInstance().apply { timeInMillis = b }
-        return x.get(Calendar.YEAR) == y.get(Calendar.YEAR) && x.get(Calendar.DAY_OF_YEAR) == y.get(Calendar.DAY_OF_YEAR)
-    }
 }

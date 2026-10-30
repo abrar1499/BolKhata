@@ -38,7 +38,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
@@ -136,7 +135,6 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     // "Other wali entries theek karo": the list of shops to sort, before anything changes.
     var recat by remember { mutableStateOf<List<Recat.Group>?>(null) }
     // The last thing said and the app's answer, so "wo sab expense me dal do" knows what "wo" is.
-    var lastTalk by remember { mutableStateOf("") }
     var lastAdded by remember { mutableStateOf(listOf<String>()) }
     var editFrom by remember { mutableStateOf<Pair<Entry, String>?>(null) }
     var wordFixes by remember { mutableStateOf(store.loadWordFixes()) }
@@ -508,22 +506,6 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     }
 
     /**
-     * The AI rewrites a sentence the app could not read into the app's own simple words; the app then reads it
-     * again (no second AI call). Word fixes are remembered, so next time no AI is needed at all.
-     */
-    /** Words the local engine fixed ("ptrl" -> "petrol") are remembered, so the app reads them itself next time. */
-    fun learnWordFixes(said: String, fixed: String) {
-        val a = said.lowercase().split(Regex("[^\\p{L}]+")).filter { it.length >= 3 }
-        val b = fixed.lowercase().split(Regex("[^\\p{L}]+")).filter { it.length >= 3 }
-        var any = false
-        a.filter { it !in b }.forEach { w ->
-            val best = b.filter { it !in a }.maxByOrNull { Normalizer.similarity(w, it) } ?: return@forEach
-            if (Normalizer.similarity(w, best) >= 0.75) { store.addWordFix(w, best); any = true }
-        }
-        if (any) wordFixes = store.loadWordFixes()
-    }
-
-    /**
      * The "Sort Other" list. Shops the app knows get their category straight away; for names it doesn't know
      * ("Atheer Meed Taiba", "Kholoud Rajeh") only the names go to the local engine once, and the person checks the list.
      */
@@ -538,8 +520,6 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         )
     }
 
-    // handleText is written further down; this lets the local engine-fix step hand the fixed sentence back to it.
-    var readAgain: (String, String) -> Unit = { _, _ -> }
     // chatViaReader is written further down too.
     var chatRead: (String) -> Unit = { }
 
@@ -689,8 +669,6 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             toast("Sorry, I couldn't read that. Tap + to add it by hand.")
         }
     }
-
-    readAgain = { fixed, said -> handleText(fixed, said) }
 
     /** The records on the screen the person is looking at (a search or a khata), so "inko" / "ye sari" means them. */
     fun screenList(): Pair<String, List<Entry>>? {
@@ -1156,7 +1134,6 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 val trace = "engine=NativeChatEngine; intent=" + intent.kind +
                     (if (intent.what.isBlank()) "" else "; query=" + intent.what) +
                     (matchCount?.let { "; matched=" + it } ?: "") + "; execution=" + executionStatus
-                lastTalk = roman + (if (!reply.isNullOrBlank()) " → app: " + reply.take(100) else "")
                 if (!reply.isNullOrBlank()) {
                     lastSpeech = reply
                     postChat(reply, isUser = false, meta = trace)
@@ -1179,11 +1156,6 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         chatInput(text)
         // Clear the home-chat presentation flag when no asynchronous work was started.
         if (!chatLoading && chatMessages.lastOrNull()?.isUser == false) homeChatFlash = false
-    }
-
-    /** An entry already in the khata on the same day with the same amount and kind is probably the same one. */
-    fun isDuplicate(e: Entry): Boolean = entries.any {
-        it.type == e.type && kotlin.math.abs(it.amount - e.amount) < 0.01 && sameDay(it.date, e.date)
     }
 
     /** Auto-match only when minute, amount, direction and identity agree. */

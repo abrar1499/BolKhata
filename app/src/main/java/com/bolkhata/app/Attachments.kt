@@ -99,7 +99,6 @@ object Attachments {
         }
     }
 
-
     /**
      * Extracts text entirely on-device. The Latin OCR model is bundled in the APK, so it is available offline.
      * PDF pages are rasterized and processed one at a time to keep memory use bounded.

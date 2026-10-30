@@ -4,14 +4,10 @@ import androidx.compose.foundation.BorderStroke
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -46,7 +42,6 @@ import kotlin.math.roundToLong
 // ---------- colours & theme ----------
 
 val GreenDeep = Color(0xFF047857)
-val GreenNight = Color(0xFF0B0B0F)
 
 /** Emerald gradient for the mic and other accent buttons. */
 val AccentBrush = Brush.linearGradient(
@@ -184,7 +179,6 @@ fun dayLabel(d: Long): String {
 fun timeLabel(ms: Long): String = SimpleDateFormat("h:mm a", Locale.US).format(Date(ms))
 
 fun shortDate(d: Long): String = SimpleDateFormat("d MMM", Locale.US).format(Date(d))
-fun fullDate(d: Long): String = SimpleDateFormat("EEE, d MMM yyyy", Locale.US).format(Date(d))
 
 /** Local date -> UTC midnight (what the date picker uses). */
 fun toUtcMidnight(ms: Long): Long {
@@ -249,7 +243,6 @@ fun stock(entries: List<Entry>): List<StockLine> {
     }
     return map.values.toList()
 }
-
 
 data class ProfitItemBreakdown(
     val item: String,
@@ -405,39 +398,6 @@ fun SmallLabel(s: String) =
         s.uppercase(), fontSize = 12.sp, letterSpacing = 1.sp, fontWeight = FontWeight.SemiBold,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
-
-@Composable
-fun SectionHeader(title: String, count: Int?, expanded: Boolean, total: String? = null, onToggle: () -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .clickable { onToggle() }
-            .padding(vertical = 8.dp, horizontal = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(title, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-        if (count != null) {
-            Spacer(Modifier.width(8.dp))
-            Box(
-                Modifier
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer)
-                    .padding(horizontal = 8.dp, vertical = 1.dp)
-            ) { Text("$count", fontSize = 12.sp, color = MaterialTheme.colorScheme.onPrimaryContainer) }
-        }
-        Spacer(Modifier.weight(1f))
-        if (total != null) {
-            Text(total, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = RedSpend)
-            Spacer(Modifier.width(6.dp))
-        }
-        Icon(
-            if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-            contentDescription = if (expanded) "Close" else "Open",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
 
 @Composable
 fun TxRow(e: Entry, currency: String, showDate: Boolean = true, onClick: () -> Unit) {
