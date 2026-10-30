@@ -163,6 +163,15 @@ class NativeChatEngineTest {
         assertEquals(setOf(Type.KHARCHA), result.filter.types)
         assertTrue(result.filter.items.isEmpty())
         assertEquals(Query.day("2026-01-01"), result.filter.from)
+
+        val month = read("expense this month")
+        assertEquals(setOf(Type.KHARCHA), month.filter.types)
+        assertTrue(month.filter.items.isEmpty())
+
+        val food = read("food expense this month")
+        assertEquals(setOf(Type.KHARCHA), food.filter.types)
+        assertEquals(setOf(Cat.KHANA), food.filter.cats)
+        assertTrue(food.filter.items.isEmpty())
     }
 
     @Test fun lastDayExpenseMeansYesterday() {
