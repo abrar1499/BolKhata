@@ -549,7 +549,7 @@ private fun SubView(
     val vendors = remember(mine) { mine.groupBy { vendorKey(it) }.values.sortedByDescending { v -> v.sumOf { it.amount } } }
     val m0 = monthStart()
     val color = if (income) GreenIn else RedSpend
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = barSpace())) {
         item { Header(cat.label, (if (income) "Income" else "Expense") + " · " + count(mine.size), onBack) }
         item {
             Figures(
@@ -582,7 +582,7 @@ private fun VendorView(level: Level.Vendor, entries: List<Entry>, currency: Stri
     val df = SimpleDateFormat("d MMM yyyy", Locale.US)
     val color = if (level.income) GreenIn else RedSpend
     val name = mine.firstOrNull()?.item?.ifBlank { level.cat.label } ?: level.vendor
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = barSpace())) {
         item { Header(name, level.cat.label + " · " + (if (mine.size == 1) "1 time" else "${mine.size} times"), onBack) }
         item {
             Figures(
@@ -622,7 +622,7 @@ private fun PeopleView(
     var actionName by remember { mutableStateOf("") }
     val total = list.sumOf { kotlin.math.abs(it.balance) }
     val color = if (receive) GreenIn else OrangeOwe
-    LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = 24.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = barSpace())) {
         item { Header(if (receive) "To receive" else "To pay", if (list.size == 1) "1 person" else "${list.size} people", onBack) }
         item { TotalsStrip((if (receive) "They owe you" else "You owe") to money(currency, total), color = color) }
         if (list.isEmpty()) item {
@@ -773,7 +773,7 @@ private fun PersonView(
     var pickingDestination by remember(name) { mutableStateOf(false) }
     val p = remember(entries, name) { personAccounts(entries).firstOrNull { it.name.equals(name, true) } }
     val df = SimpleDateFormat("d MMM yyyy", Locale.US)
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = barSpace())) {
         item { Header(name, if (p == null) "" else (if (p.toReceive) "To receive" else "To pay") + " · " + count(p.history.size), onBack) }
         item { TextButton(onClick = onMoveHistory, modifier = Modifier.padding(horizontal = 16.dp)) { Text("Move history & restore") } }
         if (p == null) {
@@ -1052,7 +1052,7 @@ private fun TreeView(income: Boolean, entries: List<Entry>, currency: String, on
     }
     val timeFmt = SimpleDateFormat("d MMM", Locale.US)
     val clockFmt = SimpleDateFormat("h:mm a", Locale.US)
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = barSpace())) {
         item { Header(if (income) "Income" else "Expense", count(mine.size), onBack) }
         item {
             TotalsStrip(

@@ -94,7 +94,7 @@ fun StockScreen(
     val stockList = remember(entries) { stockItems(entries) }
     val value = stockList.sumOf { if (it.line.qty > 0) it.line.qty * it.buyRate else 0.0 }
 
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = barSpace())) {
         item {
             Box(Modifier.fillMaxWidth()) {
                 Box(

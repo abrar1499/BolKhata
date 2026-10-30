@@ -133,7 +133,7 @@ fun HomeScreen(
     }
     val monthName = SimpleDateFormat("MMMM", Locale.US).format(now.time)
 
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = barSpace())) {
         item {
             Box(Modifier.fillMaxWidth()) {
                 Box(
@@ -655,7 +655,7 @@ fun TransactionsScreen(entries: List<Entry>, currency: String, onEdit: (Entry) -
 
     LazyColumn(
         Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
+        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = barSpace(16.dp)),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         item {
@@ -1114,7 +1114,7 @@ fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit, st
     val toReceive = rd.toReceive
     val toPay = rd.toPay
 
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = barSpace(16.dp)), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item { ScreenTitle("Reports", onMenu = onMenu) }
         item {
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1422,7 +1422,7 @@ fun PeopleScreen(entries: List<Entry>, currency: String, receive: Boolean, onBac
     LazyColumn(
         Modifier.fillMaxSize(),
         state = listState,
-        contentPadding = PaddingValues(16.dp),
+        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = barSpace(16.dp)),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         item { ScreenTitle(if (receive) "To receive" else "To pay", onBack) }
@@ -1570,7 +1570,7 @@ fun SettingsScreen(
         else -> "Roman Urdu"
     }
 
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = barSpace())) {
         item {
             Row(Modifier.fillMaxWidth().padding(start = 4.dp, top = 14.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onMenu) { Icon(Icons.Filled.Menu, contentDescription = "Menu") }
@@ -1712,7 +1712,7 @@ fun ResultsScreen(
 
     LazyColumn(
         Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
+        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = barSpace(16.dp)),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         item {
@@ -1855,7 +1855,7 @@ fun TrashScreen(
 
     LazyColumn(
         Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
+        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = barSpace(16.dp)),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         item { ScreenTitle("Trash", onMenu = onMenu) }

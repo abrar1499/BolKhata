@@ -31,6 +31,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -120,6 +121,13 @@ fun headerTheme(name: String, dark: Boolean = false): HeaderTheme {
 }
 
 val LocalHeader = staticCompositionLocalOf { HEADER_THEMES.first() }
+
+/** Height of the floating message bar; screens scroll underneath it, so lists end with this much empty space. */
+val LocalBarSpace = compositionLocalOf { 0.dp }
+
+/** Bottom padding for a full-screen list: room for the floating bar plus [extra]. */
+@Composable
+fun barSpace(extra: Dp = 24.dp): Dp = LocalBarSpace.current + extra
 
 val Green = Color(0xFF10B981)
 val RedSpend = Color(0xFFE5484D)
