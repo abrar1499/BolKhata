@@ -14,7 +14,7 @@ import java.net.URLEncoder
  */
 object Eleven {
     // One model: the fastest and cheapest (half the credits), good with Hindi/Urdu and English.
-    private const val MODEL = "eleven_v3"
+    private const val MODEL = "eleven_v4_turbo"
 
     /** Turns [text] into speech with [voice] (a Voice ID from the ElevenLabs voice library) and saves it to [out]. */
     suspend fun speech(key: String, voice: String, text: String, out: File): Result<File> = withContext(Dispatchers.IO) {
