@@ -22,6 +22,18 @@ class AssistantSafetyTest {
         ))
     }
 
+    @Test fun romanUrduBulkMoveRequestIsRecognized() {
+        assertEquals(true, Accounts.isExplicitBulkKhataMoveRequest(
+            "es khata ki sari entry haji ashiq waly khata me move kr do"
+        ))
+        assertEquals(false, Accounts.isExplicitBulkKhataMoveRequest(
+            "move the petrol expense to food category"
+        ))
+        assertEquals(false, Accounts.isExplicitBulkKhataMoveRequest(
+            "show all entries in this khata"
+        ))
+    }
+
     @Test fun naturalLanguageDestinationKhataMatchesSavedName() {
         assertEquals(
             "Haji Ashiq",
