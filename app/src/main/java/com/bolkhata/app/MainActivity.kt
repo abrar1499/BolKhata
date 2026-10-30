@@ -1404,6 +1404,16 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     val agentCall = remember { arrayOf<ElevenAgent?>(null) }
     val toolAnswer = remember { arrayOf<((String) -> Unit)?>(null) }
 
+    /** Phone-call audio mode during the agent call, so the phone's echo cancelling works, on the loudspeaker. */
+    fun callAudio(on: Boolean) {
+        val audio = context.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
+        runCatching {
+            audio.mode = if (on) android.media.AudioManager.MODE_IN_COMMUNICATION else android.media.AudioManager.MODE_NORMAL
+            @Suppress("DEPRECATION")
+            audio.isSpeakerphoneOn = on
+        }
+    }
+
     fun stopVoice(message: String? = null) {
         voiceOn = false
         voiceAwaiting = false
@@ -1411,6 +1421,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         voicePartial = ""
         voiceReply = ""
         talking.set(0)
+        if (agentCall[0] != null) callAudio(false)
         agentCall[0]?.stop(); agentCall[0] = null
         toolAnswer[0] = null
         finishRecording(send = false)
@@ -1671,6 +1682,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     /** Calls the owner's ElevenLabs agent: it talks by itself and sends app commands here through its tool. */
     fun startAgentCall() {
         voiceStatus = "Connecting…"
+        callAudio(true)
         agentCall[0] = ElevenAgent(
             elevenKey, elevenAgent,
             onCommand = { command, answer ->
@@ -1679,7 +1691,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 chatInput(command)
             },
             onHeard = { voicePartial = it },
-            onReply = { voiceReply = it; voicePartial = "" },
+            onReply = { voicePartial = "" },
             onLevel = { voiceLevel = it },
             onSpeaking = { voiceStatus = if (it) "Speaking…" else if (toolAnswer[0] != null) "Thinking…" else "Listening…" },
             onEnd = { error -> stopVoice(error) },

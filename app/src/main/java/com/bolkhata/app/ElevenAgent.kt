@@ -44,6 +44,7 @@ class ElevenAgent(
     private var track: AudioTrack? = null
     // Plays the agent's audio pieces one after another, in the order they came.
     private val speaker = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private val effects = mutableListOf<android.media.audiofx.AudioEffect>()
     @Volatile private var running = false
     // Until this time the agent's audio is still playing (the mic level is then the agent, not the owner).
     @Volatile private var speakingUntil = 0L
@@ -64,6 +65,7 @@ class ElevenAgent(
         if (!running) return
         running = false
         runCatching { socket?.close(1000, null) }
+        effects.forEach { runCatching { it.release() } }; effects.clear()
         runCatching { recorder?.stop() }; runCatching { recorder?.release() }
         runCatching { track?.stop() }; runCatching { track?.release() }
         recorder = null; track = null; socket = null
@@ -108,6 +110,7 @@ class ElevenAgent(
                 "conversation_initiation_metadata" -> {
                     val meta = m.optJSONObject("conversation_initiation_metadata_event")
                     startAudio(rate(meta?.optString("user_input_audio_format")), rate(meta?.optString("agent_output_audio_format")))
+                    webSocket.send(JSONObject().put("type", "contextual_update").put("text", RULES).toString())
                 }
                 "audio" -> m.optJSONObject("audio_event")?.optString("audio_base_64")?.let { play(Base64.decode(it, Base64.DEFAULT)) }
                 "interruption" -> runCatching { track?.pause(); track?.flush(); track?.play(); speakingUntil = 0L }
@@ -136,6 +139,15 @@ class ElevenAgent(
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
             main.post { end("ElevenLabs agent: " + (t.message ?: "connection lost")) }
         }
+    }
+
+    private companion object {
+        // Sent at the start of every call, so the call stays short and on topic whatever the agent's own prompt says.
+        const val RULES = "Rules for this call: answer in ONE short line (at most 8 words), either an answer or one " +
+            "question, never both. Talk only about what the person said or the BolKhata app (khata, expenses, udhaar, " +
+            "totals). Never start talking by yourself; if the person is quiet, stay quiet. Ignore noise and half words. " +
+            "For anything the app should do, call app_command and say only \"ek minute\", then say its answer in one line. " +
+            "Never make up amounts."
     }
 
     private fun answer(webSocket: WebSocket, id: String, result: String, isError: Boolean) {
@@ -169,6 +181,12 @@ class ElevenAgent(
         val rec = AudioRecord(MediaRecorder.AudioSource.VOICE_COMMUNICATION, inRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, inSize)
         if (rec.state != AudioRecord.STATE_INITIALIZED) { main.post { end("Microphone is busy.") }; return }
         recorder = rec
+        // Cleaner input: less of the agent's own voice and less background noise reach the agent.
+        if (android.media.audiofx.AcousticEchoCanceler.isAvailable())
+            effects += listOfNotNull(android.media.audiofx.AcousticEchoCanceler.create(rec.audioSessionId))
+        if (android.media.audiofx.NoiseSuppressor.isAvailable())
+            effects += listOfNotNull(android.media.audiofx.NoiseSuppressor.create(rec.audioSessionId))
+        effects.forEach { runCatching { it.enabled = true } }
         rec.startRecording()
         thread(name = "agent-mic") {
             val chunk = ByteArray(inRate / 10 * 2) // 100 ms
