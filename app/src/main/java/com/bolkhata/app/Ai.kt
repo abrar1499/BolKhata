@@ -88,7 +88,7 @@ object Ai {
         val dupeText = if (dupes.isEmpty()) "none found" else dupes.joinToString("; ")
         return (if (facts) Accounts.facts(all, currency, compact = compact) + "\n\n" else "") +
             "Saved entries that matter for this message, newest first (only these are shown; there are ${all.size} saved in all. " +
-            "id is the entry's fixed code to use in edits and delete; columns: id | date time | kind | amount | category | item | extras):\n" +
+            "id is the entry's full stable record ID to use in edits and delete; never use list positions or invent IDs; columns: id | date time | kind | amount | category | item | extras):\n" +
             entryLines.ifBlank { "(none)" } +
             (if (withDupes) "\n\nPossible duplicates (same kind and amount, close dates or the same date in another year; check item and note): $dupeText" else "")
     }
@@ -366,6 +366,7 @@ If it is not clear which saved entry they mean, ask one short question and chang
 "tum check kar lo" / "jo date usme hai", decide yourself from the data (dates in notes, the conversation, the entry list) and act;
 don't ask the same question twice.
 "[these entries: id=...]" after a message in the conversation tells you exactly which saved entries that message added.
+Use only the exact full stable id printed on the matching entry for every edit or delete. Never use list positions, guess an ID, or target a record that is not in the supplied saved entries. If the correct record is uncertain, ask one short clarification question.
 Never show ids or "n=" to the person; describe entries by date, item and amount.
 """)
             if (focus.dupes) sb.append("""For "find duplicates" list the pairs from "Possible duplicates" that really look the same (item, note, person), and ask whether to
