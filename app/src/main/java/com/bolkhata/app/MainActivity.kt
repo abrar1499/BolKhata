@@ -708,10 +708,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         val source = (if (ledger != null) ledgerPerson ?: activeLedgerPerson
             else account?.takeIf { it.main == PEOPLE }?.sub) ?: return null
         val roman = runCatching { Translit.toRoman(text) }.getOrDefault(text).lowercase()
-        val all = Regex("""\\b(all|every|sab|sari|saari|tamam|entire|poori|poora|these|in sab)\\b""").containsMatchIn(roman)
-        val records = Regex("""\\b(entries|entry|records?|transactions?)\\b""").containsMatchIn(roman)
-        val move = Regex("""\\b(move|shift|transfer|bhej(?:o|na)?|send|daal|dal)\\b""").containsMatchIn(roman)
-        val khata = Regex("""\\b(khata|account)\\b""").containsMatchIn(roman)
+        val all = Regex("""\b(all|every|sab|sari|saari|tamam|entire|poori|poora|these|in sab)\b""").containsMatchIn(roman)
+        val records = Regex("""\b(entries|entry|records?|transactions?)\b""").containsMatchIn(roman)
+        val move = Regex("""\b(move|shift|transfer|bhej(?:o|na)?|send|daal|dal)\b""").containsMatchIn(roman)
+        val khata = Regex("""\b(khata|account)\b""").containsMatchIn(roman)
         if (!all || !records || !move || !khata) return null
 
         val destination = Accounts.khataNameMentionedIn(roman, source, entries.map { it.person })
