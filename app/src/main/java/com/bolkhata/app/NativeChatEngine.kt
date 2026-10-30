@@ -73,13 +73,23 @@ object NativeChatEngine {
         val lower = text.lowercase(Locale.ROOT)
         val words = tokens(lower)
 
-        // Date-only follow-ups inherit the previous question's category, item and transaction type.
-        if (history.isNotEmpty() && isDateFollowUp(lower)) {
-            val previous = history.lastOrNull { it.isUser }?.text
-            if (!previous.isNullOrBlank()) {
-                val base = interpret(previous, entries, contacts, wordFixes, emptyList(), currency, now)
-                val date = dateBounds(lower, now)
-                if (base.kind == "ask" && date != null) return Fixed("", "ask", "", base.what, copyFilter(base.filter, date))
+        // Date-only follow-ups and "search again" inherit the last real search, not just the last chat message.
+        val dateOnlyFollowUp = isDateFollowUp(lower)
+        val repeatSearch = isRepeatSearch(lower)
+        if (history.isNotEmpty() && (dateOnlyFollowUp || repeatSearch)) {
+            val priorSearch = history.asReversed()
+                .filter { it.isUser }
+                .asSequence()
+                .map { it.text to interpret(it.text, entries, contacts, wordFixes, emptyList(), currency, now) }
+                .firstOrNull { it.second.kind == "ask" }
+            if (priorSearch != null) {
+                val priorDateOnly = history.lastOrNull { it.isUser }?.text?.takeIf { isDateFollowUp(it.lowercase(Locale.ROOT)) }
+                val dateText = if (dateOnlyFollowUp) lower else priorDateOnly?.lowercase(Locale.ROOT)
+                val date = dateText?.let { dateBounds(it, now) }
+                val base = priorSearch.second
+                return if (date != null) Fixed("", "ask", "", base.what, copyFilter(base.filter, date))
+                else if (repeatSearch) base
+                else chat("Which date should I use for that search?")
             }
         }
 
@@ -305,6 +315,36 @@ object NativeChatEngine {
         val lastDays = Regex("""\b(?:last|past)\s+(\d{1,3})\s+days?\b""").find(text)?.groupValues?.get(1)?.toIntOrNull()
         if (lastDays != null) return Bounds(now - lastDays.coerceAtMost(365) * 86_400_000L, now)
 
+        // Explicit day + month (e.g. "28 Oct", "Oct 28", "28 October 2026").
+        val monthNumbers = mapOf(
+            "jan" to 1, "january" to 1, "feb" to 2, "february" to 2, "mar" to 3, "march" to 3,
+            "apr" to 4, "april" to 4, "may" to 5, "jun" to 6, "june" to 6, "jul" to 7, "july" to 7,
+            "aug" to 8, "august" to 8, "sep" to 9, "sept" to 9, "september" to 9,
+            "oct" to 10, "october" to 10, "nov" to 11, "november" to 11, "dec" to 12, "december" to 12
+        )
+        val dayMonth = Regex("""\\b(\\d{1,2})(?:st|nd|rd|th)?[\\s,/-]+([a-z]+)(?:[\\s,/-]+(\\d{4}))?\\b""")
+            .find(text)
+        val monthDay = Regex("""\\b([a-z]+)[\\s,/-]+(\\d{1,2})(?:st|nd|rd|th)?(?:[\\s,/-]+(\\d{4}))?\\b""")
+            .find(text)
+        val explicitMonth = dayMonth?.groupValues?.get(2) ?: monthDay?.groupValues?.get(1)
+        val explicitDay = (dayMonth?.groupValues?.get(1) ?: monthDay?.groupValues?.get(2))?.toIntOrNull()
+        val explicitYear = (dayMonth?.groupValues?.get(3)?.takeIf { it.isNotBlank() }
+            ?: monthDay?.groupValues?.get(3)?.takeIf { it.isNotBlank() })?.toIntOrNull()
+        val explicitMonthNumber = explicitMonth?.let { monthNumbers[it] }
+        if (explicitDay != null && explicitMonthNumber != null) {
+            val year = explicitYear ?: Calendar.getInstance().apply { timeInMillis = now }.get(Calendar.YEAR)
+            val c = Calendar.getInstance().apply {
+                isLenient = false
+                set(year, explicitMonthNumber - 1, explicitDay, 0, 0, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+            val start = runCatching { c.timeInMillis }.getOrNull()
+            if (start != null) {
+                val end = Calendar.getInstance().apply { timeInMillis = start; set(Calendar.HOUR_OF_DAY, 23); set(Calendar.MINUTE, 59); set(Calendar.SECOND, 59); set(Calendar.MILLISECOND, 999) }.timeInMillis
+                return Bounds(start, end)
+            }
+        }
+
         val explicit = runCatching { Parser.extractDate(text, now).first }.getOrNull()
         if (explicit != null) {
             val start = Calendar.getInstance().apply { timeInMillis = explicit; set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }.timeInMillis
@@ -372,10 +412,28 @@ object NativeChatEngine {
         return Bounds(from, c.timeInMillis)
     }
 
+    private val monthWords = setOf(
+        "jan", "january", "feb", "february", "mar", "march", "apr", "april", "may", "jun", "june",
+        "jul", "july", "aug", "august", "sep", "sept", "september", "oct", "october", "nov", "november", "dec", "december"
+    )
+
     private fun isDateFollowUp(text: String): Boolean {
         val w = tokens(text)
-        val allowed = setOf("what", "about", "and", "how", "much", "yesterday", "today", "aaj", "aj", "kal", "parso", "parson", "this", "last", "month", "week", "year", "mahina", "mahine", "saal", "day", "then", "phir")
-        return w.isNotEmpty() && w.any { it in setOf("yesterday", "today", "aaj", "aj", "kal", "parso", "parson", "month", "week", "year", "mahina", "mahine", "saal") } && w.all { it in allowed }
+        val relative = setOf("yesterday", "today", "aaj", "aj", "kal", "parso", "parson", "tomorrow", "month", "week", "year", "mahina", "mahine", "saal")
+        val allowed = relative + monthWords + setOf(
+            "what", "about", "and", "how", "much", "this", "last", "day", "then", "phir", "on", "the", "of", "st", "nd", "rd", "th"
+        )
+        val hasCalendarDate = w.any { it in relative || it in monthWords } &&
+            w.all { it in allowed || it.toIntOrNull()?.let { n -> n in 1..2200 } == true }
+        return w.isNotEmpty() && hasCalendarDate
+    }
+
+    private fun isRepeatSearch(text: String): Boolean {
+        val w = tokens(text)
+        return w.isNotEmpty() && (
+            w.joinToString(" ") in setOf("search again", "find again", "show again", "repeat search", "same search", "search same", "dobara search", "phir se search", "wapas search") ||
+                w == listOf("again") || w == listOf("dobara") || w == listOf("repeat")
+            )
     }
 
     private fun has(words: List<String>, set: Set<String>) = words.any { it in set }
