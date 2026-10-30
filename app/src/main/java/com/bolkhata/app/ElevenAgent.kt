@@ -44,6 +44,8 @@ class ElevenAgent(
     private var track: AudioTrack? = null
     // Plays the agent's audio pieces one after another, in the order they came.
     private val speaker = java.util.concurrent.Executors.newSingleThreadExecutor()
+    // Until this time the agent's audio is played; later audio (talk it started by itself) is dropped.
+    @Volatile private var talkUntil = 0L
     // When the mic last heard something louder than background noise.
     private var lastLoud = 0L
     private val effects = mutableListOf<android.media.audiofx.AudioEffect>()
@@ -54,6 +56,7 @@ class ElevenAgent(
     /** Connects (with a signed link when a key is saved, so the agent can stay private) and starts the mic. */
     fun start() {
         running = true
+        mayTalk(15_000)
         thread(name = "agent-call") {
             val url = runCatching { signedUrl() }.getOrElse {
                 main.post { end("ElevenLabs agent: " + (it.message ?: "can't connect")) }
@@ -114,12 +117,16 @@ class ElevenAgent(
                     startAudio(rate(meta?.optString("user_input_audio_format")), rate(meta?.optString("agent_output_audio_format")))
                     webSocket.send(JSONObject().put("type", "contextual_update").put("text", RULES).toString())
                 }
-                "audio" -> m.optJSONObject("audio_event")?.optString("audio_base_64")?.let { play(Base64.decode(it, Base64.DEFAULT)) }
+                "audio" -> m.optJSONObject("audio_event")?.optString("audio_base_64")
+                    ?.takeIf { System.currentTimeMillis() < talkUntil }?.let { play(Base64.decode(it, Base64.DEFAULT)) }
                 "interruption" -> runCatching { track?.pause(); track?.flush(); track?.play(); speakingUntil = 0L }
                 "user_transcript" -> m.optJSONObject("user_transcription_event")?.optString("user_transcript")
-                    ?.takeIf { it.isNotBlank() }?.let { main.post { onHeard(it) } }
+                    ?.takeIf { it.isNotBlank() }?.let { mayTalk(15_000); main.post { onHeard(it) } }
                 "agent_response" -> m.optJSONObject("agent_response_event")?.optString("agent_response")
-                    ?.takeIf { it.isNotBlank() }?.let { main.post { onReply(it) } }
+                    ?.takeIf { it.isNotBlank() }?.let {
+                        talkUntil = minOf(talkUntil, System.currentTimeMillis() + 5_000) // this reply may finish, no more
+                        main.post { onReply(it) }
+                    }
                 "ping" -> m.optJSONObject("ping_event")?.optLong("event_id")?.let {
                     webSocket.send(JSONObject().put("type", "pong").put("event_id", it).toString())
                 }
@@ -156,7 +163,11 @@ class ElevenAgent(
             "Never make up amounts."
     }
 
+    /** The agent may be heard only for a while after the person spoke or the app answered, so it never talks by itself. */
+    private fun mayTalk(ms: Long) { talkUntil = System.currentTimeMillis() + ms }
+
     private fun answer(webSocket: WebSocket, id: String, result: String, isError: Boolean) {
+        mayTalk(15_000)
         webSocket.send(
             JSONObject().put("type", "client_tool_result").put("tool_call_id", id)
                 .put("result", result).put("is_error", isError).toString()
