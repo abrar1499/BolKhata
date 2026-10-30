@@ -393,3 +393,29 @@ class NativeChatEngineNameTest {
         assertTrue(r.filter.items.toString(), r.filter.items.isEmpty())
     }
 }
+
+class NameChoicesTest {
+    @Test fun readsTheNamesOfferedInAWhichQuestion() {
+        assertEquals(
+            listOf("Nargis Salim Mazhar", "Nargis Salim Rashid"),
+            NativeChatEngine.nameChoices("Which Nargis Salim Mazhar or Nargis Salim Rashid do you mean?")
+        )
+        assertEquals(listOf("Hamid", "Hiba", "Kamil"), NativeChatEngine.nameChoices("Please choose one saved name: Hamid or Hiba or Kamil."))
+    }
+
+    @Test fun otherAnswersOfferNoChoices() {
+        assertTrue(NativeChatEngine.nameChoices("Spent 79 SAR (3 entries, 28 Oct)").isEmpty())
+        assertTrue(NativeChatEngine.nameChoices("Which one do you mean? Give the date or amount").isEmpty())
+    }
+
+    @Test fun tappingANameOpensThatKhata() {
+        val contacts = listOf("Nargis Salim Mazhar", "Nargis Salim Rashid")
+        val history = listOf(
+            ChatMessage("u", true, "nargis ka khata"),
+            ChatMessage("a", false, "Which Nargis Salim Mazhar or Nargis Salim Rashid do you mean?")
+        )
+        val r = NativeChatEngine.interpret("Nargis Salim Rashid ka khata", emptyList(), contacts = contacts, history = history)
+        assertEquals("open", r.kind)
+        assertEquals(listOf("Nargis Salim Rashid"), r.filter.persons)
+    }
+}

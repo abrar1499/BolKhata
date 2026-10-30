@@ -1250,6 +1250,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var voicePartial by remember { mutableStateOf("") }
     var voiceAwaiting by remember { mutableStateOf(false) }
     var voiceMisses by remember { mutableIntStateOf(0) }
+    // Set when the phone has no recognizer for the chosen language; voice chat then uses the phone's default.
+    var voiceDefaultLanguage by remember { mutableStateOf(false) }
     val ttsReady = remember { mutableStateOf(false) }
     val tts = remember {
         android.speech.tts.TextToSpeech(context) { status -> ttsReady.value = status == android.speech.tts.TextToSpeech.SUCCESS }
@@ -1271,8 +1273,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         voiceStatus = "Listening…"
         val i = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, lang)
-            putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+            // No "prefer offline": when the offline model for this language is missing that made every attempt fail
+            // silently and voice chat sat on "Listening…". Android now uses whichever recognizer it has.
+            if (!voiceDefaultLanguage) putExtra(RecognizerIntent.EXTRA_LANGUAGE, lang)
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
             // Give the person time to finish a long story before it stops listening.
@@ -1323,6 +1326,44 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         onDispose { }
     }
 
+    /** Rank alternatives by how well they fit khata commands, not just their list position. */
+    fun voiceGuessScore(text: String, confidence: Float?): Int {
+        var score = confidence?.takeIf { it >= 0f }?.let { (it * 20f).toInt() } ?: 0
+        val parsed = runCatching { Parser.parse(text) }.getOrNull()
+        if (runCatching { Questions.isQuestion(text) }.getOrDefault(false)) score += 80
+        if (runCatching { Parser.payStatus(text) != null }.getOrDefault(false)) score += 100
+        if (runCatching { Commands.read(text) != null }.getOrDefault(false)) score += 100
+        if (runCatching { Edits.looksLikeEdit(text) }.getOrDefault(false)) score += 80
+        if (parsed != null && parsed.entries.isNotEmpty()) {
+            score += if (parsed.unclear.isEmpty()) 65 else 30
+        }
+        val lower = text.lowercase()
+        if (lower.any { it.isDigit() }) score += 8
+        val knownItemOrPerson = entries.any { entry ->
+            listOf(entry.item, entry.person).filter { it.isNotBlank() }.any { value ->
+                val v = value.lowercase()
+                lower.contains(v) || v.split(Regex("""\s+""")).any { word ->
+                    word.length >= 3 && lower.contains(word)
+                }
+            }
+        }
+        if (knownItemOrPerson) score += 15
+        if (text.length < 3) score -= 50
+        return score
+    }
+
+    /**
+     * Picks the best of the recognizer's guesses: each is scored in Roman letters, since the first transcript can be
+     * fluent but still be the wrong words. Urdu script is returned as said (shown that way in the chat; the chat
+     * engine reads it itself); Hindi letters are returned in Roman Urdu.
+     */
+    fun bestVoiceGuess(guesses: List<String>, confidence: FloatArray?): String =
+        guesses.mapIndexedNotNull { index, raw ->
+            val roman = runCatching { Translit.toRoman(raw) }.getOrDefault(raw).trim()
+            if (roman.isBlank()) null
+            else (if (raw.any { it in '\u0600'..'\u06FF' }) raw.trim() else roman) to voiceGuessScore(roman, confidence?.getOrNull(index))
+        }.maxByOrNull { it.second }?.first.orEmpty()
+
     DisposableEffect(recognizer) {
         recognizer?.setRecognitionListener(object : android.speech.RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) { voiceStatus = "Listening…" }
@@ -1336,9 +1377,11 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     ?.let { voicePartial = it }
             }
             override fun onResults(results: Bundle?) {
-                val said = results?.getStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION)
-                    ?.firstOrNull()?.let { runCatching { Translit.toRoman(it) }.getOrDefault(it) }?.trim().orEmpty()
                 if (!voiceOn) return
+                val said = bestVoiceGuess(
+                    results?.getStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION).orEmpty(),
+                    results?.getFloatArray(android.speech.SpeechRecognizer.CONFIDENCE_SCORES)
+                )
                 if (said.isBlank()) { listenNow(); return }
                 voiceMisses = 0
                 voicePartial = said
@@ -1348,16 +1391,27 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             }
             override fun onError(error: Int) {
                 if (!voiceOn) return
+                val retryLater = { android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ if (voiceOn) listenNow() }, 400) }
                 when (error) {
                     android.speech.SpeechRecognizer.ERROR_NO_MATCH, android.speech.SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> {
                         voiceMisses++
                         // Quiet for a while: stop instead of listening forever.
-                        if (voiceMisses >= 3) stopVoice("Voice chat paused. Tap the headset to talk again.") else listenNow()
+                        if (voiceMisses >= 3) stopVoice("Voice chat paused. Tap the green button to talk again.") else listenNow()
                     }
                     android.speech.SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> stopVoice("Allow the microphone for Smart Expense to talk.")
                     android.speech.SpeechRecognizer.ERROR_NETWORK, android.speech.SpeechRecognizer.ERROR_NETWORK_TIMEOUT ->
                         stopVoice("No internet for voice. Try again when online.")
-                    else -> listenNow()
+                    // 12 / 13: this phone has no recognizer for the chosen language. Use the phone's default once.
+                    12, 13 -> if (!voiceDefaultLanguage) {
+                        voiceDefaultLanguage = true
+                        toast("Voice for this language isn't installed; using the phone's default language.")
+                        retryLater()
+                    } else stopVoice("Speech recognition isn't available. Check Google voice typing in phone settings.")
+                    else -> {
+                        // Busy or client errors repeat instantly; wait a moment, and stop after a few in a row.
+                        voiceMisses++
+                        if (voiceMisses >= 4) stopVoice("Voice chat stopped (error $error). Tap the green button to try again.") else retryLater()
+                    }
                 }
             }
         })
@@ -1390,42 +1444,12 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         if (granted) { voiceOn = true; voiceMisses = 0; listenNow() } else micPermission.launch(android.Manifest.permission.RECORD_AUDIO)
     }
 
-    /** Rank alternatives by how well they fit khata commands, not just their list position. */
-    fun voiceGuessScore(text: String, confidence: Float?): Int {
-        var score = confidence?.takeIf { it >= 0f }?.let { (it * 20f).toInt() } ?: 0
-        val parsed = runCatching { Parser.parse(text) }.getOrNull()
-        if (runCatching { Questions.isQuestion(text) }.getOrDefault(false)) score += 80
-        if (runCatching { Parser.payStatus(text) != null }.getOrDefault(false)) score += 100
-        if (runCatching { Commands.read(text) != null }.getOrDefault(false)) score += 100
-        if (runCatching { Edits.looksLikeEdit(text) }.getOrDefault(false)) score += 80
-        if (parsed != null && parsed.entries.isNotEmpty()) {
-            score += if (parsed.unclear.isEmpty()) 65 else 30
-        }
-        val lower = text.lowercase()
-        if (lower.any { it.isDigit() }) score += 8
-        val knownItemOrPerson = entries.any { entry ->
-            listOf(entry.item, entry.person).filter { it.isNotBlank() }.any { value ->
-                val v = value.lowercase()
-                lower.contains(v) || v.split(Regex("""\s+""")).any { word ->
-                    word.length >= 3 && lower.contains(word)
-                }
-            }
-        }
-        if (knownItemOrPerson) score += 15
-        if (text.length < 3) score -= 50
-        return score
-    }
-
     val voice = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
         if (res.resultCode == Activity.RESULT_OK) {
-            val rawGuesses = res.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS).orEmpty()
-            val confidenceScores = res.data?.getFloatArrayExtra(RecognizerIntent.EXTRA_CONFIDENCE_SCORES) ?: floatArrayOf()
-            val guesses = rawGuesses.mapIndexed { index, raw ->
-                val converted = Translit.toRoman(raw).trim()
-                converted to voiceGuessScore(converted, confidenceScores.getOrNull(index))
-            }.filter { it.first.isNotBlank() }
-            // Score every alternative: the first transcript can be fluent but still be the wrong words.
-            val said = guesses.maxByOrNull { it.second }?.first.orEmpty()
+            val said = bestVoiceGuess(
+                res.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS).orEmpty(),
+                res.data?.getFloatArrayExtra(RecognizerIntent.EXTRA_CONFIDENCE_SCORES)
+            )
             if (said.isNotBlank()) {
                 if (voiceForChat) chatInput(said) else homeInput(said)
             } else toast("Couldn't catch that. Tap the mic again and speak a little slower.")
