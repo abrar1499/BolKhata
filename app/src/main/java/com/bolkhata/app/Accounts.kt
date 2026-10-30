@@ -47,6 +47,10 @@ object Accounts {
     fun byStableId(entries: List<Entry>, id: String): Entry? =
         id.takeIf { it.isNotBlank() }?.let { stable -> entries.firstOrNull { it.id == stable } }
 
+    /** True when multiple candidates need clarification rather than an implicit bulk action. */
+    fun requiresTargetClarification(matchCount: Int, explicitlyAll: Boolean, allowAll: Boolean = true): Boolean =
+        matchCount > 1 && !(explicitlyAll && allowAll)
+
     /** True only if every target still exactly matches the live record snapshot used to plan the action. */
     fun snapshotsMatch(entries: List<Entry>, expected: List<Entry>): Boolean {
         val ids = expected.map { it.id }
