@@ -47,6 +47,14 @@ object Accounts {
     fun byStableId(entries: List<Entry>, id: String): Entry? =
         id.takeIf { it.isNotBlank() }?.let { stable -> entries.firstOrNull { it.id == stable } }
 
+    /** True only if every target still exactly matches the live record snapshot used to plan the action. */
+    fun snapshotsMatch(entries: List<Entry>, expected: List<Entry>): Boolean {
+        val ids = expected.map { it.id }
+        if (ids.distinct().size != ids.size) return false
+        val live = entries.associateBy { it.id }
+        return expected.all { live[it.id] == it }
+    }
+
     /** One compact line per entry: cheaper for the AI to read than JSON, so far more entries fit. */
     fun line(e: Entry): String {
         val d = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date(e.createdAt.takeIf { sameDay(it, e.date) } ?: e.date))
