@@ -16,6 +16,7 @@ import java.net.URL
  *   then reads the message and answers from the saved records. Only the message, the app's last reply and a few
  *   similar saved names are sent; entries never are.
  * - [transcribe]: Whisper speech-to-text for the mic button and the voice call.
+ * - [talk]: in the voice call, the assistant answers small talk itself and passes requests on to the app.
  * - [spoken]: in the voice call, turns the app's answer into one or two natural spoken sentences. The facts and
  *   numbers still come only from the app's answer.
  */
@@ -96,6 +97,65 @@ object Groq {
             fun digits(s: String) = Regex("""\d+(?:[.,]\d+)?""").findAll(s).map { it.value.replace(",", "") }.toSet()
             reply.takeIf { it.isNotBlank() && it.length <= 300 && digits(answer).containsAll(digits(it)) }
         }.getOrNull()
+    }
+
+    private val callInstructions = """
+        You are the friendly female voice assistant of a khata (ledger) app, on a phone call with its owner.
+        If they ask the app to do or show anything (add or edit an entry, a balance, a khata, totals, a search,
+        a reminder, delete or undo), reply {"say": a very short "one moment" line like "Ek minute, check karti hun.",
+        "command": their request as one short clear message for the app, every number and name kept exactly}.
+        For greetings, small talk or questions about you, reply {"say": a friendly answer of one or two short
+        sentences, "command": ""}. You know nothing about their money: never state amounts or balances yourself.
+        If the words are noise or make no sense, reply {"say": "", "command": ""}.
+        Speak the way they spoke: Roman Urdu for Urdu or Hindi, else English. Reply with the JSON only.
+    """.trimIndent()
+
+    /** One turn of the voice call: what to say now, and the request to send to the app (blank for none). */
+    data class Turn(val say: String, val command: String)
+
+    /**
+     * Lets the call feel like talking to an assistant. Null when Groq is unreachable (the call then sends what
+     * was heard straight to the app). A command whose numbers differ from what was heard is replaced by the words
+     * as heard, so money is never changed.
+     */
+    suspend fun talk(key: String, said: String, lastAnswer: String): Turn? = withContext(Dispatchers.IO) {
+        runCatching {
+            val prompt = buildString {
+                if (lastAnswer.isNotBlank()) append("App's last reply: ").append(lastAnswer.take(200)).append('\n')
+                append("Person said: ").append(said.take(300))
+            }
+            val body = JSONObject()
+                .put("model", CHAT_MODEL)
+                .put("temperature", 0.3)
+                .put("max_tokens", 300)
+                .put("reasoning_effort", "low")
+                .put("response_format", JSONObject().put("type", "json_object"))
+                .put("messages", JSONArray()
+                    .put(JSONObject().put("role", "system").put("content", callInstructions))
+                    .put(JSONObject().put("role", "user").put("content", prompt)))
+                .toString().toByteArray(Charsets.UTF_8)
+            val (code, text) = post(CHAT_URL, key, "application/json", body)
+            if (code !in 200..299) error(describe(code))
+            val reply = JSONObject(JSONObject(text).getJSONArray("choices").getJSONObject(0).getJSONObject("message").optString("content"))
+            fun digits(s: String) = Regex("""\d+(?:[.,]\d+)?""").findAll(s).map { it.value.replace(",", "") }.toList()
+            val command = reply.optString("command").trim().take(400)
+            Turn(
+                say = reply.optString("say").trim().take(300),
+                command = if (command.isNotBlank() && digits(command) != digits(said)) said else command
+            )
+        }.getOrNull()
+    }
+
+    /**
+     * Whisper makes up words for silence and noise ("Subtitles by…", "Thanks for watching", a lone "."). True for
+     * such text, so it is never sent as a message.
+     */
+    fun isNoise(text: String): Boolean {
+        val t = text.trim().lowercase()
+        if (t.none { it.isLetterOrDigit() }) return true
+        if (t.any { it in '\u0370'..'\u03FF' || it in '\u0400'..'\u04FF' || it in '\u3040'..'\u9FFF' }) return true
+        return listOf("subtitle", "thanks for watching", "thank you for watching", "amara.org", "subscribe", "authorwave")
+            .any { it in t }
     }
 
     /** Whisper speech-to-text. [language] is "ur", "en" or "" to let Whisper detect it. */
