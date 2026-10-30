@@ -90,10 +90,16 @@ object NativeChatEngine {
                     nameWords.any { name -> name == answer || (answer.length >= 3 && name.startsWith(answer)) }
                 }
             }
-            if (chosen.size == 1 && previousUser != null) {
-                return Fixed("", "open", "", filter = Query.Filter(persons = listOf(chosen.single())))
+            // "Salim Rashid" for "Nargis Salim Mazhar or Nargis Salim Rashid": the name matching most words.
+            val best = if (chosen.size == 1) chosen else Understand.mostWordsMatched(answerWords, candidates)
+                .takeIf { b -> b.size == 1 && answerWords.any { w -> tokens(b.single()).any { Understand.closeName(w, it) } } }
+                .orEmpty()
+            if (best.size == 1 && previousUser != null) {
+                return Fixed("", "open", "", filter = Query.Filter(persons = listOf(best.single())))
             }
-            if (candidates.size > 1 && (answerWords.isEmpty() || chosen.size != 1)) {
+            // Insist only when the answer is about these names; anything else is a new request ("<other name> ka khata").
+            val aboutCandidates = answerWords.any { w -> candidates.any { c -> tokens(c).any { Understand.closeName(w, it) || (w.length >= 3 && it.startsWith(w)) } } }
+            if (candidates.size > 1 && (answerWords.isEmpty() || aboutCandidates)) {
                 return chat("Please choose one saved name: " + candidates.joinToString(" or ") + ".")
             }
         }
@@ -246,7 +252,7 @@ object NativeChatEngine {
             val what = when {
                 has(words, setOf("highest", "largest", "biggest", "maximum", "max", "most")) -> "highest"
                 has(words, setOf("count", "howmany", "kitne", "kitni", "number")) -> "count"
-                has(words, setOf("show", "find", "search", "list", "which", "kahan", "kab")) ||
+                has(words, setOf("show", "find", "search", "list", "which", "kahan", "kab", "dikhao", "dikha")) ||
                     Regex("""\blast\s+\d+\b""").containsMatchIn(lower) || simpleLookup -> "list"
                 else -> "sum"
             }
@@ -274,6 +280,8 @@ object NativeChatEngine {
         return when {
             has(w, setOf("hi", "hello", "hey", "good", "morning", "evening", "salam", "assalam", "assalamualaikum", "aoa")) ->
                 "Wa alaikum assalam! I'm your offline khata assistant. Add expenses, ask about your money, or manage saved entries."
+            has(w, setOf("hal", "haal", "kaise", "kaisa", "kaisi")) || (has(w, setOf("kya", "kia")) && has(w, setOf("hal", "haal"))) ->
+                "Main theek hoon, shukriya! Batayein, aaj kya likhna ya dekhna hai?"
             has(w, setOf("how", "are", "you")) -> "I'm ready to help with your khata. I work locally on this phone."
             has(w, setOf("what", "can", "you", "do")) -> "I can record money, search transactions, calculate balances, correct entries, move khatas, read receipts, and remember facts you explicitly save."
             has(w, setOf("thanks", "thank", "shukriya", "shukria", "jazakallah")) -> "You're welcome. Your khata stays on this device."
@@ -299,7 +307,7 @@ object NativeChatEngine {
         val howMuch = has(w, setOf("kitna", "kitne", "kitni", "kitnay", "kitny"))
         return text.endsWith("?") || has(w, setOf("report", "summary", "overview")) ||
             (howMuch && has(w, periods + dayBeforeYesterday + "aj")) ||
-            has(w, setOf("show", "find", "search", "list", "total", "sum", "count", "highest", "largest", "biggest")) ||
+            has(w, setOf("show", "find", "search", "list", "total", "sum", "count", "highest", "largest", "biggest", "dikhao", "dikha")) ||
             (has(w, expense + income) && has(w, periods)) ||
             (categoryMentioned && has(w, periods)) || simpleLedgerLookup ||
             Regex("""\b(last|latest|recent)\s+\d+\s+(entry|entries|record|records|transaction|transactions)\b""").containsMatchIn(text) ||
