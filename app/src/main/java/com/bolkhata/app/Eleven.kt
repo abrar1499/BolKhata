@@ -14,7 +14,7 @@ import java.net.URLEncoder
  */
 object Eleven {
     // One model: the fastest and cheapest (half the credits), good with Hindi/Urdu and English.
-    private const val MODEL = "eleven_flash_v2_5"
+    private const val MODEL = "eleven_multilingual_v2"
 
     /** Turns [text] into speech with [voice] (a Voice ID from the ElevenLabs voice library) and saves it to [out]. */
     suspend fun speech(key: String, voice: String, text: String, out: File): Result<File> = withContext(Dispatchers.IO) {
@@ -31,8 +31,7 @@ object Eleven {
             conn.setRequestProperty("Accept", "audio/mpeg")
             try {
                 conn.outputStream.use {
-                    it.write(JSONObject().put("text", text).put("model_id", MODEL)
-                        .apply { if (text.any { it in '\u0900'..'\u097F' }) put("language_code", "hi") }.toString().toByteArray(Charsets.UTF_8))
+                    it.write(JSONObject().put("text", text).put("model_id", MODEL).toString().toByteArray(Charsets.UTF_8))
                 }
                 val code = conn.responseCode
                 if (code !in 200..299) {

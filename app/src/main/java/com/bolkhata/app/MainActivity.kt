@@ -1538,7 +1538,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         voiceStatus = "Thinking…"
         if (groqKey.isBlank()) { voiceAwaiting = true; chatInput(said); return }
         scope.launch {
-            val turn = Groq.talk(groqKey, said, chatMessages.lastOrNull { !it.isUser }?.text.orEmpty())
+            val recent = chatMessages.takeLast(8).joinToString("\n") { (if (it.isUser) "Person: " else "App: ") + it.text.take(150) }
+            val turn = Groq.talk(groqKey, said, recent)
             if (!voiceOn) return@launch
             when {
                 turn == null -> { voiceAwaiting = true; chatInput(said) }

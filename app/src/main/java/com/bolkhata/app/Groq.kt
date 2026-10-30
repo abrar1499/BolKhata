@@ -24,6 +24,8 @@ object Groq {
     private const val CHAT_URL = "https://api.groq.com/openai/v1/chat/completions"
     private const val VOICE_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
     private const val CHAT_MODEL = "openai/gpt-oss-20b"
+    // The call needs a model that tells small talk from requests reliably and keeps up a conversation.
+    private const val CALL_MODEL = "openai/gpt-oss-120b"
     private const val VOICE_MODEL = "whisper-large-v3"
 
     private val instructions = """
@@ -75,7 +77,7 @@ object Groq {
 
     private val voiceInstructions = """
         You are the friendly voice of a khata (ledger) app on a phone call. Say the app's answer back to the person
-        in one or two short, natural spoken sentences, in the language they spoke (Roman Urdu or English).
+        in ONE short natural sentence (at most 10 words), in the language they spoke (Roman Urdu or English).
         Use ONLY the facts in the app's answer and keep every number exactly, written in digits; never add, guess or
         calculate.
         No lists, symbols or emojis. Reply with JSON only: {"say": the sentences, "speak": $SPEAK}.
@@ -88,7 +90,7 @@ object Groq {
     suspend fun spoken(key: String, said: String, answer: String): Line? = withContext(Dispatchers.IO) {
         runCatching {
             val body = JSONObject()
-                .put("model", CHAT_MODEL)
+                .put("model", CALL_MODEL)
                 .put("temperature", 0.3)
                 .put("max_tokens", 400)
                 .put("reasoning_effort", "low")
@@ -112,11 +114,13 @@ object Groq {
 
     private val callInstructions = """
         You are the friendly female voice assistant of a khata (ledger) app, on a phone call with its owner.
-        If they ask the app to do or show anything (add or edit an entry, a balance, a khata, totals, a search,
-        a reminder, delete or undo), reply {"say": a very short "one moment" line like "Ek minute, check karti hun.",
-        "speak": $SPEAK, "command": their request as one short clear message for the app, every number and name kept
-        exactly}. For greetings, small talk or questions about you, reply {"say": a friendly answer of one or two
-        short sentences, "speak": $SPEAK, "command": ""}. You know nothing about their money: never state amounts or balances yourself.
+        If they ask the app to do or show anything (open a khata, add or edit an entry, a balance, totals, a search,
+        a reminder, delete or undo; e.g. "Hamid ka khata kholo", "chai 50 likho", "kitna kharcha hua"), reply
+        {"say": a very short "one moment" line like "Ek minute.", "speak": $SPEAK, "command": their request as one
+        short clear Roman Urdu message for the app, every number and name kept exactly}.
+        For greetings or small talk, reply {"say": a natural reply of at most 6 words, "speak": $SPEAK, "command": ""}.
+        Talk like a real person: follow the conversation, never repeat a line you already said, don't keep asking
+        "aap kaise hain". You know nothing about their money: never state amounts or balances yourself.
         If the words are noise or make no sense, reply {"say": "", "command": ""}.
         Speak the way they spoke: Roman Urdu for Urdu or Hindi, else English. Reply with the JSON only.
     """.trimIndent()
@@ -129,16 +133,16 @@ object Groq {
      * was heard straight to the app). A command whose numbers differ from what was heard is replaced by the words
      * as heard, so money is never changed.
      */
-    suspend fun talk(key: String, said: String, lastAnswer: String): Turn? = withContext(Dispatchers.IO) {
+    suspend fun talk(key: String, said: String, recent: String): Turn? = withContext(Dispatchers.IO) {
         runCatching {
             val prompt = buildString {
-                if (lastAnswer.isNotBlank()) append("App's last reply: ").append(lastAnswer.take(200)).append('\n')
+                if (recent.isNotBlank()) append("Conversation so far:\n").append(recent.takeLast(1200)).append("\n\n")
                 append("Person said: ").append(said.take(300))
             }
             val body = JSONObject()
-                .put("model", CHAT_MODEL)
+                .put("model", CALL_MODEL)
                 .put("temperature", 0.3)
-                .put("max_tokens", 300)
+                .put("max_tokens", 600)
                 .put("reasoning_effort", "low")
                 .put("response_format", JSONObject().put("type", "json_object"))
                 .put("messages", JSONArray()
