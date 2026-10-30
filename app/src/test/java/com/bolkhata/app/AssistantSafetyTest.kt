@@ -22,6 +22,18 @@ class AssistantSafetyTest {
         ))
     }
 
+    @Test fun vagueGenericSuccessDoesNotSuppressARepeatedDeleteOrEdit() {
+        val at = 1_000_000L
+        assertEquals(false, Accounts.isRecentDuplicateMutationRequest(
+            "28 oct wali sari entry del karo", at, "✓ Done. Your entries are updated.", at + 1_000,
+            false, "28 oct wali sari entry del karo", at + 2_000
+        ))
+        assertEquals(true, Accounts.isRecentDuplicateMutationRequest(
+            "delete all food entries", at, "Deleted 3 entries", at + 1_000,
+            false, "delete all food entries", at + 2_000
+        ))
+    }
+
     @Test fun romanUrduBulkMoveRequestIsRecognized() {
         assertEquals(true, Accounts.isExplicitBulkKhataMoveRequest(
             "es khata ki sari entry haji ashiq waly khata me move kr do"
