@@ -11,6 +11,8 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.FileProvider
+import java.io.File
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -952,6 +954,55 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         }
     }
 
+    /**
+     * Creates a user-approved, shareable diagnostics file. It contains the saved chat transcript and
+     * local-engine traces only; it never includes the ledger, contact list, credentials, or attachment bytes.
+     */
+    fun shareChatDiagnostics() {
+        try {
+            val dir = File(context.cacheDir, "diagnostics").apply { mkdirs() }
+            dir.listFiles()?.forEach { runCatching { it.delete() } }
+            val report = org.json.JSONObject()
+                .put("app", "Smart Expense")
+                .put("reportVersion", 1)
+                .put("createdAt", java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", java.util.Locale.US).format(java.util.Date()))
+                .put("appVersion", runCatching {
+                    val info = context.packageManager.getPackageInfo(context.packageName, 0)
+                    info.versionName ?: "unknown"
+                }.getOrDefault("unknown"))
+                .put("androidSdk", Build.VERSION.SDK_INT)
+                .put("device", Build.MANUFACTURER + " " + Build.MODEL)
+                .put("chatMessageCount", chatMessages.size)
+                .put("privacy", "Chat text and engine trace only. No ledger records, contacts, credentials, or attachment files are included.")
+                .put("messages", org.json.JSONArray().apply {
+                    chatMessages.takeLast(100).forEach { message ->
+                        put(
+                            org.json.JSONObject()
+                                .put("timestamp", message.timestamp)
+                                .put("role", if (message.isUser) "user" else "assistant")
+                                .put("text", message.text.take(8000))
+                                .put("engineTrace", message.meta)
+                                .put("hasAttachment", message.attachment.isNotBlank())
+                                .put("entryReferenceCount", message.entryIds.size)
+                        )
+                    }
+                })
+            val file = File(dir, "smart-expense-chat-diagnostics.json")
+            file.writeText(report.toString(2), Charsets.UTF_8)
+            val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", file)
+            val send = Intent(Intent.ACTION_SEND).apply {
+                type = "application/json"
+                putExtra(Intent.EXTRA_SUBJECT, "Smart Expense chat diagnostics")
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                clipData = android.content.ClipData.newUri(context.contentResolver, "Chat diagnostics", uri)
+            }
+            context.startActivity(Intent.createChooser(send, "Share diagnostics with ChatGPT or save the report"))
+        } catch (e: Exception) {
+            toast("Couldn't prepare the report: " + (e.message ?: "storage error"))
+        }
+    }
+
     /** Hands a message to the home screen's reader and reports the result in the chat. */
     fun chatViaReader(text: String) {
         val snapshot = entries
@@ -1595,6 +1646,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                             Attachments.cleanUp(context, emptySet())
                             toast("Chat history cleared")
                         },
+                        onShareDiagnostics = { shareChatDiagnostics() },
                         onUndo = { ids -> moveToTrash(ids.toSet()) },
                         onEditEntry = { editing = it },
                         onAddSuggestions = { list ->
