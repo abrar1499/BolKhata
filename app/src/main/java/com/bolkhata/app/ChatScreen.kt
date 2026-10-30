@@ -51,6 +51,8 @@ fun ChatScreen(
     onSend: (String) -> Unit,
     onClear: () -> Unit,
     onShareDiagnostics: () -> Unit = {},
+    flaggedIds: Set<String> = emptySet(),
+    onFlagWrong: (id: String, expected: String) -> Unit = { _, _ -> },
     onUndo: (List<String>) -> Unit,
     onEditEntry: (Entry) -> Unit,
     onAddSuggestions: (List<Entry>) -> Unit,
@@ -71,6 +73,7 @@ fun ChatScreen(
 ) {
     var confirmClear by remember { mutableStateOf(false) }
     var confirmShare by remember { mutableStateOf(false) }
+    var flagging by remember { mutableStateOf<ChatMessage?>(null) }
     val listState = rememberLazyListState()
     val byId = remember(entries) { entries.associateBy { it.id } }
     val itemCount = messages.size + (if (messages.isEmpty()) 1 else 0) + (if (loading) 1 else 0) +
@@ -111,7 +114,7 @@ fun ChatScreen(
                     }
                     IconButton(
                         onClick = { confirmShare = true },
-                        enabled = messages.isNotEmpty() && !loading
+                        enabled = !loading
                     ) {
                         Icon(Icons.Filled.Share, contentDescription = "Share chat diagnostics", tint = LocalHeader.current.on)
                     }
@@ -165,10 +168,12 @@ fun ChatScreen(
             items(messages, key = { it.id }) { message ->
                 if (message.isUser) {
                     UserBubble(message.text, message.attachment)
-                } else if (message.entryIds.isNotEmpty()) {
-                    SavedCard(message, byId, currency, onUndo, onEditEntry)
                 } else {
-                    AssistantBubble(message.text, message.meta)
+                    Column(Modifier.fillMaxWidth()) {
+                        if (message.entryIds.isNotEmpty()) SavedCard(message, byId, currency, onUndo, onEditEntry)
+                        else AssistantBubble(message.text, message.meta)
+                        WrongAnswerMark(message.id in flaggedIds) { flagging = message }
+                    }
                 }
             }
             if (loading) {
@@ -287,12 +292,44 @@ fun ChatScreen(
         }
     }
 
+    flagging?.let { message ->
+        var expected by remember(message.id) { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { flagging = null },
+            title = { Text("Wrong answer?") },
+            text = {
+                Column {
+                    Text(
+                        "\u201C" + message.text.take(160) + (if (message.text.length > 160) "…" else "") + "\u201D",
+                        fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = expected,
+                        onValueChange = { expected = it },
+                        label = { Text("What should the answer be? (optional)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onFlagWrong(message.id, expected.trim())
+                    flagging = null
+                }) { Text("Mark wrong") }
+            },
+            dismissButton = {
+                TextButton(onClick = { flagging = null }) { Text("Cancel") }
+            }
+        )
+    }
+
     if (confirmShare) {
         AlertDialog(
             onDismissRequest = { confirmShare = false },
             title = { Text("Share chat diagnostics?") },
             text = {
-                Text("This prepares your recent chat messages and technical debug details for sharing. Messages may contain private financial information. No ledger or contact list is attached. Review the content and choose ChatGPT in Android's share menu if available.")
+                Text("This prepares the full chat log, including answers you marked wrong, and technical debug details for sharing. Clearing the chat does not delete this log. Messages may contain private financial information. No ledger or contact list is attached. Review the content and choose ChatGPT in Android's share menu if available.")
             },
             confirmButton = {
                 TextButton(onClick = {
@@ -362,6 +399,22 @@ private fun UserBubble(text: String, attachment: String = "") {
                 .padding(horizontal = 14.dp, vertical = 10.dp)
         )
     }
+}
+
+/** Small link under each answer so the person can mark it wrong; the mark is kept in the chat log. */
+@Composable
+private fun WrongAnswerMark(flagged: Boolean, onClick: () -> Unit) {
+    Text(
+        if (flagged) "✗ Marked wrong" else "Wrong answer?",
+        fontSize = 11.sp,
+        color = if (flagged) MaterialTheme.colorScheme.error
+        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+        modifier = Modifier
+            .padding(start = 6.dp, top = 2.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(enabled = !flagged, onClick = onClick)
+            .padding(horizontal = 4.dp, vertical = 2.dp)
+    )
 }
 
 @Composable

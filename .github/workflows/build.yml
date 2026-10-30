@@ -2,7 +2,8 @@ name: Build APK
 
 on:
   push:
-    branches: [main]
+    # auto/** branches hold the nightly chat-review fixes; they are built and tested but never published.
+    branches: [main, 'auto/**']
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -12,7 +13,7 @@ permissions:
 
 jobs:
   build:
-    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[build-apk]'))
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (startsWith(github.ref, 'refs/heads/auto/') || contains(github.event.head_commit.message, '[build-apk]')))
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -35,7 +36,7 @@ jobs:
           name: BolKhata-apk
           path: app/build/outputs/apk/release/app-release.apk
       - name: Publish update
-        if: github.event_name == 'push' && contains(github.event.head_commit.message, '[build-apk]')
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[build-apk]')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

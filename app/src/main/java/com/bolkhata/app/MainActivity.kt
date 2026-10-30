@@ -94,6 +94,13 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var lang by remember { mutableStateOf(store.language) }
     var tab by remember { mutableStateOf(Tab.HOME) }
     var chatMessages by remember { mutableStateOf(store.loadChatMessages()) }
+    val chatLog = remember { ChatLog(context) }
+    var flaggedChatIds by remember { mutableStateOf(chatLog.load().filter { it.flagged }.map { it.id }.toSet()) }
+    var logToken by remember { mutableStateOf(store.logToken) }
+    var logRepo by remember { mutableStateOf(store.logRepo) }
+    var logStatus by remember { mutableStateOf("") }
+    var logSending by remember { mutableStateOf(false) }
+    var logLastTry by remember { mutableStateOf(0L) }
     var chatLoading by remember { mutableStateOf(false) }
     var homeChatFlash by remember { mutableStateOf(false) }
     var loadingLabel by remember { mutableStateOf("Thinking…") }
@@ -195,6 +202,30 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             snackbar.showSnackbar(msg)
         }
     }
+
+    /**
+     * Sends the chat log to the owner's private review repository. Automatic sends are spaced out so
+     * a busy chat does not upload after every message; [force] is the "Send now" button.
+     */
+    fun sendChatLog(force: Boolean = false) {
+        if (logToken.isBlank() || logRepo.isBlank() || logSending) return
+        val nowMs = System.currentTimeMillis()
+        if (!force && nowMs - logLastTry < 3 * 60_000L) return
+        logLastTry = nowMs
+        logSending = true
+        val since = store.logSentAt
+        scope.launch {
+            val result = ChatLogUploader.upload(logRepo, logToken, chatLog.load(), since)
+            logSending = false
+            logStatus = result.fold(
+                onSuccess = { store.logSentAt = nowMs; it },
+                onFailure = { "Not sent: " + (it.message ?: "network error") }
+            )
+            if (force) toast(logStatus)
+        }
+    }
+
+    LaunchedEffect(Unit) { sendChatLog() }
 
     var trash by remember { mutableStateOf(store.loadTrash()) }
 
@@ -940,7 +971,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
 
     /** Adds a message to the chat and keeps it on the phone. */
     fun postChat(text: String, isUser: Boolean, entryIds: List<String> = emptyList(), attachment: String = "", meta: String = "") {
-        val updated = chatMessages + ChatMessage(
+        val message = ChatMessage(
             id = "chat-" + System.currentTimeMillis() + "-" + System.nanoTime(),
             isUser = isUser,
             text = text,
@@ -948,8 +979,11 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             attachment = attachment,
             meta = meta
         )
+        chatLog.record(message)
+        val updated = chatMessages + message
         chatMessages = updated
         store.saveChatMessages(updated)
+        if (!isUser) sendChatLog()
         if (!isUser && homeChatFlash) {
             flash = Flash(text, Flash.Kind.ANSWER)
             homeChatFlash = false
@@ -1008,21 +1042,33 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 }.getOrDefault("unknown"))
                 .put("androidSdk", Build.VERSION.SDK_INT)
                 .put("device", Build.MANUFACTURER + " " + Build.MODEL)
-                .put("chatMessageCount", chatMessages.size)
                 .put("privacy", "Chat text and engine trace only. No ledger records, contacts, credentials, or attachment files are included.")
-                .put("messages", org.json.JSONArray().apply {
-                    chatMessages.takeLast(100).forEach { message ->
-                        put(
-                            org.json.JSONObject()
-                                .put("timestamp", message.timestamp)
-                                .put("role", if (message.isUser) "user" else "assistant")
-                                .put("text", message.text.take(8000))
-                                .put("engineTrace", message.meta)
-                                .put("hasAttachment", message.attachment.isNotBlank())
-                                .put("entryReferenceCount", message.entryIds.size)
-                        )
-                    }
-                })
+            // The full chat log survives "Clear chat"; it is the record used to find and fix wrong answers.
+            val log = chatLog.load()
+            val records = log.ifEmpty {
+                chatMessages.map { ChatLogRecord(it.id, it.timestamp, it.isUser, it.text, it.meta) }
+            }
+            val asJson = { r: ChatLogRecord, question: String? ->
+                org.json.JSONObject()
+                    .put("timestamp", r.timestamp)
+                    .put("role", if (r.isUser) "user" else "assistant")
+                    .apply { if (question != null) put("question", question) }
+                    .put("text", r.text)
+                    .put("engineTrace", r.meta)
+                    .apply { if (r.flagged) put("markedWrong", true).put("expected", r.expected) }
+            }
+            val flagged = org.json.JSONArray()
+            records.forEachIndexed { i, r ->
+                if (r.flagged) {
+                    val question = records.subList(0, i).lastOrNull { it.isUser }?.text ?: ""
+                    flagged.put(asJson(r, question))
+                }
+            }
+            report
+                .put("chatMessageCount", records.size)
+                .put("markedWrongCount", flagged.length())
+                .put("markedWrong", flagged)
+                .put("messages", org.json.JSONArray().apply { records.forEach { put(asJson(it, null)) } })
             val file = File(dir, "smart-expense-chat-diagnostics.txt")
             file.writeText(report.toString(2), Charsets.UTF_8)
             val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", file)
@@ -1701,6 +1747,13 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                             toast("Chat history cleared")
                         },
                         onShareDiagnostics = { shareChatDiagnostics() },
+                        flaggedIds = flaggedChatIds,
+                        onFlagWrong = { id, expected ->
+                            chatLog.flag(id, expected)
+                            flaggedChatIds = flaggedChatIds + id
+                            toast("Marked as wrong")
+                            sendChatLog(force = logToken.isNotBlank())
+                        },
                         onUndo = { ids -> moveToTrash(ids.toSet()) },
                         onEditEntry = { editing = it },
                         onAddSuggestions = { list ->
@@ -1803,6 +1856,22 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     onMenu = { openMenu() },
                     themeName = themeName,
                     onTheme = onTheme,
+                    logRepo = logRepo,
+                    logTokenSet = logToken.isNotBlank(),
+                    logStatus = if (logSending) "Sending…" else logStatus,
+                    onLogSave = { repo, token ->
+                        store.logRepo = repo; logRepo = store.logRepo
+                        store.logToken = token; logToken = store.logToken
+                        // A new destination gets the whole log, not just what changed since the last send.
+                        store.logSentAt = 0L
+                        logStatus = ""
+                        sendChatLog(force = true)
+                    },
+                    onLogSendNow = { sendChatLog(force = true) },
+                    onLogOff = {
+                        store.logToken = ""; logToken = ""
+                        logStatus = "Chat log sending is off"
+                    },
                     bankOn = bankOn,
                     onBank = { bankHelp = true },
                     onExport = {

@@ -437,6 +437,21 @@ class Store(context: Context) {
         get() = prefs.getString("name", "") ?: ""
         set(v) = prefs.edit().putString("name", v).apply()
 
+    /** The owner's own GitHub token for sending the chat log for review. Blank means it is off. */
+    var logToken: String
+        get() = prefs.getString("logToken", "") ?: ""
+        set(v) = prefs.edit().putString("logToken", v.trim()).apply()
+
+    /** Private repository ("owner/name") the chat log is sent to. */
+    var logRepo: String
+        get() = prefs.getString("logRepo", "abrar1499/bolkhata-logs") ?: "abrar1499/bolkhata-logs"
+        set(v) = prefs.edit().putString("logRepo", v.trim()).apply()
+
+    /** When the chat log was last sent successfully. */
+    var logSentAt: Long
+        get() = prefs.getLong("logSentAt", 0L)
+        set(v) = prefs.edit().putLong("logSentAt", v).apply()
+
     /** Words the person taught the app by correcting a category, e.g. "shawarma" -> Food. */
     fun loadLearned(): Map<String, Pair<Cat, String>> = try {
         val o = JSONObject(prefs.getString("learned", "{}") ?: "{}")

@@ -1610,6 +1610,69 @@ fun PeopleScreen(entries: List<Entry>, currency: String, receive: Boolean, onBac
 
 // ======================= SETTINGS =======================
 
+/**
+ * Lets the owner send every chat question and answer to their own private GitHub repository, where
+ * wrong answers are reviewed and fixed in later updates. Off until a token is saved here.
+ */
+@Composable
+private fun ChatReviewPanel(
+    repo: String,
+    tokenSet: Boolean,
+    status: String,
+    onSave: (repo: String, token: String) -> Unit,
+    onSendNow: () -> Unit,
+    onOff: () -> Unit
+) {
+    var repoText by remember(repo) { mutableStateOf(repo) }
+    var tokenText by remember { mutableStateOf("") }
+    Panel(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            SmallLabel("🛠 Chat review")
+            Spacer(Modifier.weight(1f))
+            Text(
+                if (tokenSet) "On" else "Off", fontWeight = FontWeight.Bold,
+                color = if (tokenSet) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "When on, every chat question and answer is sent to your own private GitHub repository so mistakes can be found and fixed in the next update. Chat text may include amounts and names; your khata records and contacts are not sent.",
+            fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(10.dp))
+        OutlinedTextField(
+            value = repoText, onValueChange = { repoText = it },
+            label = { Text("Private repository (owner/name)") },
+            singleLine = true, modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(Modifier.height(6.dp))
+        OutlinedTextField(
+            value = tokenText, onValueChange = { tokenText = it },
+            label = { Text(if (tokenSet) "Token saved · paste to replace" else "GitHub token") },
+            singleLine = true,
+            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Button(
+                onClick = { onSave(repoText, tokenText); tokenText = "" },
+                enabled = tokenText.isNotBlank() && repoText.contains('/')
+            ) { Text("Save") }
+            if (tokenSet) {
+                Spacer(Modifier.width(8.dp))
+                OutlinedButton(onClick = onSendNow) { Text("Send now") }
+                Spacer(Modifier.width(8.dp))
+                TextButton(onClick = onOff) { Text("Turn off") }
+            }
+        }
+        if (status.isNotBlank()) {
+            Spacer(Modifier.height(6.dp))
+            Text(status, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
 @Composable
 fun SettingsScreen(
     name: String,
@@ -1630,6 +1693,12 @@ fun SettingsScreen(
     onBank: () -> Unit = {},
     onExport: () -> Unit = {},
     onImport: () -> Unit = {},
+    logRepo: String = "",
+    logTokenSet: Boolean = false,
+    logStatus: String = "",
+    onLogSave: (repo: String, token: String) -> Unit = { _, _ -> },
+    onLogSendNow: () -> Unit = {},
+    onLogOff: () -> Unit = {},
 ) {
     var nameText by remember(name) { mutableStateOf(name) }
     var currencyMenu by remember { mutableStateOf(false) }
@@ -1686,7 +1755,7 @@ fun SettingsScreen(
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Your financial records and chat are processed on this phone. No Gemini, Groq, OpenRouter, Claude or other hosted AI key is needed, and chat messages are not sent to an AI provider.",
+                    "Your financial records and chat are processed on this phone. No Gemini, Groq, OpenRouter, Claude or other hosted AI key is needed. Chat messages leave the phone only if you turn on Chat review below.",
                     fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(8.dp))
@@ -1696,6 +1765,7 @@ fun SettingsScreen(
                 )
             }
         }
+        item { ChatReviewPanel(logRepo, logTokenSet, logStatus, onLogSave, onLogSendNow, onLogOff) }
         item {
             Panel(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp)) {
                 SmallLabel("Backup")

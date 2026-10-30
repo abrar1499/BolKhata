@@ -69,4 +69,6 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.ui:ui-tooling-preview")
     testImplementation("junit:junit:4.13.2")
+    // Real org.json for unit tests; the Android stub throws "not mocked".
+    testImplementation("org.json:json:20240303")
 }
