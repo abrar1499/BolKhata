@@ -84,3 +84,20 @@ class ChatDiagnosticsReportTest {
         assertEquals(3, report.getJSONArray("messages").length())
     }
 }
+
+class ChatLogRatingTest {
+    @Test
+    fun theLatestThumbWins() {
+        val base = listOf(
+            """{"kind":"msg","id":"a","ts":1,"role":"assistant","text":"x"}""",
+            """{"kind":"good","id":"a","ts":2}"""
+        )
+        val liked = parseChatLog(base).single()
+        assertTrue(liked.liked)
+        assertFalse(liked.flagged)
+        val changed = parseChatLog(base + """{"kind":"flag","id":"a","ts":3}""").single()
+        assertTrue(changed.flagged)
+        assertFalse(changed.liked)
+        assertTrue(chatLogJsonl(listOf(liked)).contains("\"markedGood\":true"))
+    }
+}

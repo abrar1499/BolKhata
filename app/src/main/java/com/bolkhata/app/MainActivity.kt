@@ -90,7 +90,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var chatMessages by remember { mutableStateOf(store.loadChatMessages()) }
     // Chats from before the log existed are copied in once, so they can be reviewed too.
     val chatLog = remember { ChatLog(context).also { log -> if (log.isEmpty()) chatMessages.forEach(log::record) } }
-    var flaggedChatIds by remember { mutableStateOf(chatLog.load().filter { it.flagged }.map { it.id }.toSet()) }
+    // 👍 (true) / 👎 (false) the person gave to answers, read back from the chat log.
+    var chatRatings by remember {
+        mutableStateOf(chatLog.load().mapNotNull { r -> if (r.flagged) r.id to false else if (r.liked) r.id to true else null }.toMap())
+    }
     var logToken by remember { mutableStateOf(store.logToken) }
     var logRepo by remember { mutableStateOf(store.logRepo) }
     var logStatus by remember { mutableStateOf("") }
@@ -1649,11 +1652,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                             toast("Chat history cleared")
                         },
                         onShareDiagnostics = { shareChatDiagnostics() },
-                        flaggedIds = flaggedChatIds,
-                        onFlagWrong = { id, expected ->
-                            chatLog.flag(id, expected)
-                            flaggedChatIds = flaggedChatIds + id
-                            toast("Marked as wrong")
+                        ratings = chatRatings,
+                        onRate = { id, good ->
+                            chatLog.rate(id, good)
+                            chatRatings = chatRatings + (id to good)
                             sendChatLog(force = logToken.isNotBlank())
                         },
                         onUndo = { ids -> moveToTrash(ids.toSet()) },

@@ -14,11 +14,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ThumbDown as ThumbDownFilled
-import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.filled.ThumbUp as ThumbUpFilled
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.ThumbDown
+import androidx.compose.material.icons.outlined.ThumbUp
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -54,8 +55,9 @@ fun ChatScreen(
     onSend: (String) -> Unit,
     onClear: () -> Unit,
     onShareDiagnostics: () -> Unit = {},
-    flaggedIds: Set<String> = emptySet(),
-    onFlagWrong: (id: String, expected: String) -> Unit = { _, _ -> },
+    /** 👍 (true) or 👎 (false) given to answers, by message id. */
+    ratings: Map<String, Boolean> = emptyMap(),
+    onRate: (id: String, good: Boolean) -> Unit = { _, _ -> },
     onUndo: (List<String>) -> Unit,
     onEditEntry: (Entry) -> Unit,
     onAddSuggestions: (List<Entry>) -> Unit,
@@ -73,7 +75,6 @@ fun ChatScreen(
 ) {
     var confirmClear by remember { mutableStateOf(false) }
     var confirmShare by remember { mutableStateOf(false) }
-    var flagging by remember { mutableStateOf<ChatMessage?>(null) }
     val listState = rememberLazyListState()
     val byId = remember(entries) { entries.associateBy { it.id } }
     val itemCount = messages.size + (if (messages.isEmpty()) 1 else 0) + (if (loading) 1 else 0) +
@@ -166,7 +167,7 @@ fun ChatScreen(
                     Column(Modifier.fillMaxWidth()) {
                         if (message.entryIds.isNotEmpty()) SavedCard(message, byId, currency, onUndo, onEditEntry)
                         else AssistantBubble(message.text)
-                        AnswerActions(message.text, message.id in flaggedIds) { flagging = message }
+                        AnswerActions(ratings[message.id]) { good -> onRate(message.id, good) }
                     }
                 }
             }
@@ -260,38 +261,6 @@ fun ChatScreen(
         }
     }
 
-    flagging?.let { message ->
-        var expected by remember(message.id) { mutableStateOf("") }
-        AlertDialog(
-            onDismissRequest = { flagging = null },
-            title = { Text("Wrong answer?") },
-            text = {
-                Column {
-                    Text(
-                        "\u201C" + message.text.take(160) + (if (message.text.length > 160) "…" else "") + "\u201D",
-                        fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    OutlinedTextField(
-                        value = expected,
-                        onValueChange = { expected = it },
-                        label = { Text("What should the answer be? (optional)") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    onFlagWrong(message.id, expected.trim())
-                    flagging = null
-                }) { Text("Mark wrong") }
-            },
-            dismissButton = {
-                TextButton(onClick = { flagging = null }) { Text("Cancel") }
-            }
-        )
-    }
-
     if (confirmShare) {
         AlertDialog(
             onDismissRequest = { confirmShare = false },
@@ -369,24 +338,23 @@ private fun UserBubble(text: String, attachment: String = "") {
     }
 }
 
-/** Small grey actions under each answer, like ChatGPT's: copy the answer, and thumbs-down to mark it wrong. */
+/** 👍 and 👎 under each answer, like ChatGPT's. One tap saves the rating; tapping the other one changes it. */
 @Composable
-private fun AnswerActions(text: String, flagged: Boolean, onWrong: () -> Unit) {
-    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
-    val context = androidx.compose.ui.platform.LocalContext.current
+private fun AnswerActions(rating: Boolean?, onRate: (good: Boolean) -> Unit) {
     val tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
     Row(Modifier.padding(start = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = {
-            clipboard.setText(androidx.compose.ui.text.AnnotatedString(text))
-            android.widget.Toast.makeText(context, "Copied", android.widget.Toast.LENGTH_SHORT).show()
-        }, modifier = Modifier.size(34.dp)) {
-            Icon(Icons.Outlined.ContentCopy, contentDescription = "Copy answer", tint = tint, modifier = Modifier.size(17.dp))
-        }
-        IconButton(onClick = onWrong, enabled = !flagged, modifier = Modifier.size(34.dp)) {
+        IconButton(onClick = { onRate(true) }, enabled = rating != true, modifier = Modifier.size(34.dp)) {
             Icon(
-                if (flagged) Icons.Filled.ThumbDownFilled else Icons.Outlined.ThumbDown,
-                contentDescription = if (flagged) "Marked wrong" else "Wrong answer",
-                tint = if (flagged) MaterialTheme.colorScheme.error else tint, modifier = Modifier.size(17.dp)
+                if (rating == true) Icons.Filled.ThumbUpFilled else Icons.Outlined.ThumbUp,
+                contentDescription = if (rating == true) "Marked good" else "Good answer",
+                tint = if (rating == true) GreenDeep else tint, modifier = Modifier.size(17.dp)
+            )
+        }
+        IconButton(onClick = { onRate(false) }, enabled = rating != false, modifier = Modifier.size(34.dp)) {
+            Icon(
+                if (rating == false) Icons.Filled.ThumbDownFilled else Icons.Outlined.ThumbDown,
+                contentDescription = if (rating == false) "Marked wrong" else "Wrong answer",
+                tint = if (rating == false) MaterialTheme.colorScheme.error else tint, modifier = Modifier.size(17.dp)
             )
         }
     }
