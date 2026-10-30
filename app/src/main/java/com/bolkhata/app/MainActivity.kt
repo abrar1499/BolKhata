@@ -1278,6 +1278,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     // ---------- Voice conversation: talk to the assistant hands-free ----------
     var voiceStatus by remember { mutableStateOf("") }
     var voicePartial by remember { mutableStateOf("") }
+    // What the assistant last said in the call, and how loud the mic is (0..1), for the wave above the bar.
+    var voiceReply by remember { mutableStateOf("") }
+    var voiceLevel by remember { mutableFloatStateOf(0f) }
     var voiceAwaiting by remember { mutableStateOf(false) }
     var voiceMisses by remember { mutableIntStateOf(0) }
     // Set when the phone has no recognizer for the chosen language; voice chat then uses the phone's default.
@@ -1346,6 +1349,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             kotlinx.coroutines.delay(150)
             val now = System.currentTimeMillis()
             val amp = runCatching { r.maxAmplitude }.getOrDefault(0)
+            voiceLevel = amp / 12_000f
             if (amp > 2500) { spoke = true; lastSound = now }
             // A call answers sooner after a pause than the mic, so it feels live.
             if (spoke && now - lastSound > (if (voiceOn) 900 else 1500)) { finishRecording(); break }
@@ -1400,6 +1404,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         voiceAwaiting = false
         voiceStatus = ""
         voicePartial = ""
+        voiceReply = ""
         talking.set(0)
         finishRecording(send = false)
         runCatching { recognizer?.cancel() }
@@ -1448,7 +1453,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
 
     /** Reads [text] with the phone's voice: Urdu script with an Urdu voice, otherwise English. */
     fun phoneSpeak(text: String) {
-        if (!ttsReady.value) { spokenDone(); return }
+        if (!ttsReady.value) { toast("The phone's voice isn't ready; set up ElevenLabs or a text-to-speech voice."); spokenDone(); return }
         val urduScript = text.any { it in '\u0600'..'\u06FF' }
         val wanted = if (urduScript) java.util.Locale("ur", "PK") else java.util.Locale("en", "IN")
         val ok = tts.setLanguage(wanted)
@@ -1496,6 +1501,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             while (voiceOn && (player != null || tts.isSpeaking)) kotlinx.coroutines.delay(100)
             if (!voiceOn) return@launch
             if (clean.isBlank()) { spokenDone(); return@launch }
+            voiceReply = clean
+            voicePartial = ""
+            val audio = context.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
+            if (audio.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) == 0) toast("Media volume is off: turn it up to hear the answer.")
             if (elevenKey.isBlank() || elevenVoice.isBlank()) { phoneSpeak(clean); return@launch }
             val reply = Eleven.speech(elevenKey, elevenVoice, clean, File(context.cacheDir, "reply.mp3"))
             if (!voiceOn) return@launch
@@ -1598,7 +1607,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         recognizer?.setRecognitionListener(object : android.speech.RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) { voiceStatus = "Listening…" }
             override fun onBeginningOfSpeech() {}
-            override fun onRmsChanged(rmsdB: Float) {}
+            override fun onRmsChanged(rmsdB: Float) { voiceLevel = (rmsdB + 2f) / 12f }
             override fun onBufferReceived(buffer: ByteArray?) {}
             override fun onEndOfSpeech() { voiceStatus = "Thinking…" }
             override fun onEvent(eventType: Int, params: Bundle?) {}
@@ -1786,8 +1795,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     onSend = { chatInput(it) }, onMic = { startVoice(forChat = true) }, placeholder = "Speak, type or ask…",
                     onAttach = { pickFile.launch(arrayOf("image/*", "application/pdf")) },
                     busy = chatLoading,
-                    voice = if (recorder != null && !voiceOn) VoiceState(true, "Listening…", "sends when you stop") { finishRecording() }
-                        else VoiceState(voiceOn, voiceStatus, voicePartial) { toggleVoice() }
+                    voice = if (recorder != null && !voiceOn) VoiceState(true, "Listening…", "sends when you stop", level = voiceLevel) { finishRecording() }
+                        else VoiceState(voiceOn, voiceStatus, voicePartial, voiceReply, voiceLevel) { toggleVoice() }
                 )
             } else {
                 Column {
@@ -1799,8 +1808,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         onAttach = { pickFile.launch(arrayOf("image/*", "application/pdf")) },
                         busy = chatLoading,
                         // The call's answers also go to the chat, so starting it from Home opens the Chat tab.
-                        voice = if (recorder != null && !voiceOn) VoiceState(true, "Listening…", "sends when you stop") { finishRecording() }
-                            else VoiceState(voiceOn, voiceStatus, voicePartial) { tab = Tab.CHAT; toggleVoice() }
+                        voice = if (recorder != null && !voiceOn) VoiceState(true, "Listening…", "sends when you stop", level = voiceLevel) { finishRecording() }
+                            else VoiceState(voiceOn, voiceStatus, voicePartial, voiceReply, voiceLevel) { tab = Tab.CHAT; toggleVoice() }
                     )
                 }
             }

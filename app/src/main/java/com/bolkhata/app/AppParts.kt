@@ -1,5 +1,11 @@
 package com.bolkhata.app
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -77,7 +83,7 @@ internal fun InputBar(
     val shade = lerp(bg, if (bg.luminance() > 0.5f) Color.Black else Color.White, 0.09f)
     Column(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(bg.copy(alpha = 0f), shade)))) {
         Spacer(Modifier.height(40.dp))
-        if (talking) VoiceCaption(voice!!.status, voice.heard, Modifier.padding(top = 6.dp))
+        if (talking) VoicePanel(voice!!)
         Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 10.dp)) {
             // Like ChatGPT's bar: a white pill with a soft shadow and no outline, on the off-white page.
             Surface(
@@ -137,26 +143,52 @@ internal fun InputBar(
     }
 }
 
-/** The voice call as the message bar shows it: on/off, what it is doing, what it heard so far; [toggle] connects or stops. */
-class VoiceState(val on: Boolean, val status: String, val heard: String, val toggle: () -> Unit)
+/**
+ * The voice call as the message bar shows it: on/off, what it is doing, what it heard so far, what the assistant
+ * is saying ([reply]) and how loud the mic is (0..1); [toggle] connects or stops.
+ */
+class VoiceState(
+    val on: Boolean, val status: String, val heard: String,
+    val reply: String = "", val level: Float = 0f, val toggle: () -> Unit
+)
 
-/** One or two small lines above the bar while voice chat is on: a green dot, the status, and the words heard. */
+/** Above the bar while voice is on: the assistant's words (or the words heard), then a sound wave across the bar. */
 @Composable
-private fun VoiceCaption(status: String, heard: String, modifier: Modifier) {
-    Row(
-        modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp),
-        verticalAlignment = Alignment.Top
-    ) {
-        Box(Modifier.padding(top = 5.dp).size(6.dp).clip(CircleShape).background(GreenDeep))
-        Spacer(Modifier.width(8.dp))
-        Text(
-            buildAnnotatedString {
-                withStyle(SpanStyle(fontWeight = FontWeight.Medium, color = GreenDeep)) { append(status.ifBlank { "Listening…" }) }
-                if (heard.isNotBlank()) append("  " + heard)
-            },
-            fontSize = 12.sp, lineHeight = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 2, overflow = TextOverflow.Ellipsis
+private fun VoicePanel(voice: VoiceState) {
+    val speaking = voice.status.startsWith("Speaking")
+    val words = if (speaking || voice.heard.isBlank()) voice.reply else voice.heard
+    Column(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 6.dp)) {
+        if (words.isNotBlank()) Text(
+            words, fontSize = 15.sp, lineHeight = 20.sp, maxLines = 4, overflow = TextOverflow.Ellipsis,
+            color = if (words == voice.reply) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 6.dp)
         )
+        val strength = when {
+            speaking -> 1f
+            voice.status.startsWith("Listening") -> 0.25f + 0.75f * voice.level.coerceIn(0f, 1f)
+            else -> 0.15f
+        }
+        VoiceWave(GreenDeep, strength, Modifier.fillMaxWidth().height(36.dp))
+    }
+}
+
+/** Moving bars like a voice wave; taller with more [strength] (0..1). */
+@Composable
+private fun VoiceWave(color: Color, strength: Float, modifier: Modifier) {
+    val phase by rememberInfiniteTransition(label = "wave").animateFloat(
+        0f, (2 * Math.PI).toFloat(),
+        infiniteRepeatable(tween(1200, easing = LinearEasing), RepeatMode.Restart), label = "phase"
+    )
+    Canvas(modifier) {
+        val bars = 36
+        val gap = size.width / bars
+        val w = (gap * 0.45f).coerceAtMost(4.dp.toPx())
+        for (i in 0 until bars) {
+            val wave = (kotlin.math.sin(phase + i * 0.55f) * 0.5f + 0.5f) * (kotlin.math.sin(i * 0.33f) * 0.3f + 0.7f)
+            val h = (size.height * (0.12f + 0.88f * wave * strength)).coerceAtLeast(w)
+            val x = gap * i + gap / 2
+            drawLine(color, Offset(x, (size.height - h) / 2), Offset(x, (size.height + h) / 2), w, StrokeCap.Round)
+        }
     }
 }
 
