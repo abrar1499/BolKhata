@@ -126,7 +126,7 @@ class ElevenAgent(
                     val command = call.optJSONObject("parameters")?.optString("command").orEmpty()
                     main.post {
                         if (command.isBlank()) answer(webSocket, id, "No command given.", true)
-                        else onCommand(command) { answer(webSocket, id, it, false) }
+                        else onCommand(command) { answer(webSocket, id, "Say this in ONE short line (at most 8 words), then stay quiet: $it", false) }
                     }
                 }
             }
@@ -147,6 +147,8 @@ class ElevenAgent(
             "question, never both. Talk only about what the person said or the BolKhata app (khata, expenses, udhaar, " +
             "totals). Never start talking by yourself; if the person is quiet, stay quiet. Ignore noise and half words. " +
             "For anything the app should do, call app_command and say only \"ek minute\", then say its answer in one line. " +
+            "The command must be the person's own words exactly as said, never reworded or translated. " +
+            "Never ask if the person is still there. " +
             "Never make up amounts."
     }
 
