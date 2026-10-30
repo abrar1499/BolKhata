@@ -41,6 +41,15 @@ class QueryTest {
         assertEquals(40.0, x.amount, 0.001); assertEquals(Cat.TRANSPORT, x.category)
     }
 
+    @Test fun duplicateExpenseSearchRequiresMatchingDescriptionAndAmount() {
+        val first = e("dup-a", Type.KHARCHA, 45.0, Cat.KHANA, "Cafe lunch", "", 1)
+        val duplicate = e("dup-b", Type.KHARCHA, 45.0, Cat.KHANA, "Cafe lunch", "", 0)
+        val different = e("different", Type.KHARCHA, 45.0, Cat.SHOPPING, "Phone case", "", 0)
+        val pairs = Query.likelyDuplicateExpenses(listOf(first, duplicate, different))
+        assertEquals(1, pairs.size)
+        assertEquals(setOf("dup-a", "dup-b"), setOf(pairs[0].first.id, pairs[0].second.id))
+    }
+
     @Test fun exactAmountDateAndCategoryFiltersCompose() {
         val f = Query.Filter(
             from = Query.day(ymd(3)),
