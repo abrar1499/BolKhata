@@ -4,7 +4,7 @@ import android.content.Context
 import org.json.JSONObject
 import java.io.File
 
-/** One recorded chat turn, plus the person's "this answer was wrong" mark if they gave one. */
+/** One recorded chat turn, plus the person's 👍 ([liked]) or 👎 ([flagged]) on an answer, if they gave one. */
 data class ChatLogRecord(
     val id: String,
     val timestamp: Long,
@@ -12,13 +12,14 @@ data class ChatLogRecord(
     val text: String,
     val meta: String,
     val flagged: Boolean = false,
-    val expected: String = ""
+    val expected: String = "",
+    val liked: Boolean = false
 )
 
 /**
  * A permanent record of every chat message and answer, kept on the phone so mistakes can be reviewed
  * and fixed later. Unlike the visible chat it survives "Clear chat" and keeps far more than 100 messages.
- * Lines are JSON: a "msg" line per message and a "flag" line whenever an answer is marked wrong.
+ * Lines are JSON: a "msg" line per message, a "flag" line for 👎 and a "good" line for 👍; the latest one counts.
  */
 class ChatLog(context: Context) {
     private val file = File(context.filesDir, "chat-log.jsonl")
@@ -33,13 +34,12 @@ class ChatLog(context: Context) {
             .put("meta", message.meta)
     )
 
-    /** Marks an answer as wrong. [expected] is what the person says the answer should have been. */
-    fun flag(id: String, expected: String) = append(
+    /** 👍 ([good]) or 👎 on an answer. */
+    fun rate(id: String, good: Boolean) = append(
         JSONObject()
-            .put("kind", "flag")
+            .put("kind", if (good) "good" else "flag")
             .put("id", id)
             .put("ts", System.currentTimeMillis())
-            .put("expected", expected.take(MAX_TEXT))
     )
 
     fun load(): List<ChatLogRecord> =
@@ -81,7 +81,8 @@ fun parseChatLog(lines: List<String>): List<ChatLogRecord> {
                 text = o.optString("text"),
                 meta = o.optString("meta")
             )
-            "flag" -> records[id]?.let { records[id] = it.copy(flagged = true, expected = o.optString("expected")) }
+            "flag" -> records[id]?.let { records[id] = it.copy(flagged = true, liked = false, expected = o.optString("expected")) }
+            "good" -> records[id]?.let { records[id] = it.copy(liked = true, flagged = false) }
         }
     }
     return records.values.toList()
@@ -94,6 +95,7 @@ fun ChatLogRecord.toJson(): JSONObject = JSONObject()
     .put("text", text)
     .put("meta", meta)
     .apply { if (flagged) put("markedWrong", true).put("expected", expected) }
+    .apply { if (liked) put("markedGood", true) }
 
 /** Writes records as JSON lines, the format of the uploaded daily log files. */
 fun chatLogJsonl(records: List<ChatLogRecord>): String = records.joinToString("") { it.toJson().toString() + "\n" }

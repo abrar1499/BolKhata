@@ -45,6 +45,9 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
@@ -93,7 +96,7 @@ private fun h(name: String, a: Long, b: Long, c: Long, light: Boolean) = HeaderT
 
 /** All themes the person can pick in Settings. The first one is the default. */
 val HEADER_THEMES = listOf(
-    h("Clean", 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, true),
+    h("Clean", 0xFFF9F9F9, 0xFFF9F9F9, 0xFFF9F9F9, true),
     h("Sand", 0xFFFED7AA, 0xFFFDE7CC, 0xFFFFF5EA, true),
     h("Mint", 0xFFA7F3D0, 0xFFC6F6E0, 0xFFE3FBF1, true),
     h("Sky", 0xFFBAE6FD, 0xFFD6EFFE, 0xFFEEF8FF, true),
@@ -144,6 +147,26 @@ fun catColor(c: Cat): Color = when (c) {
     Cat.OTHER -> Color(0xFF94A3B8)
 }
 
+/** Inter, bundled in res/font (SIL Open Font License, see docs/inter-font-LICENSE.txt). Other scripts fall back to the system font. */
+val Inter = FontFamily(
+    Font(R.font.inter_regular, FontWeight.Normal),
+    Font(R.font.inter_medium, FontWeight.Medium),
+    Font(R.font.inter_semibold, FontWeight.SemiBold),
+    Font(R.font.inter_bold, FontWeight.Bold)
+)
+
+/** Every Material text style in Inter with tight letter spacing, for a cleaner, more modern look. */
+val AppTypography: Typography = Typography().run {
+    fun TextStyle.clean() = copy(fontFamily = Inter, letterSpacing = 0.sp)
+    copy(
+        displayLarge = displayLarge.clean(), displayMedium = displayMedium.clean(), displaySmall = displaySmall.clean(),
+        headlineLarge = headlineLarge.clean(), headlineMedium = headlineMedium.clean(), headlineSmall = headlineSmall.clean(),
+        titleLarge = titleLarge.clean(), titleMedium = titleMedium.clean(), titleSmall = titleSmall.clean(),
+        bodyLarge = bodyLarge.clean(), bodyMedium = bodyMedium.clean(), bodySmall = bodySmall.clean(),
+        labelLarge = labelLarge.clean(), labelMedium = labelMedium.clean(), labelSmall = labelSmall.clean()
+    )
+}
+
 @Composable
 fun BolTheme(dark: Boolean, content: @Composable () -> Unit) {
     val scheme = if (dark) darkColorScheme(
@@ -166,7 +189,7 @@ fun BolTheme(dark: Boolean, content: @Composable () -> Unit) {
         onPrimaryContainer = Color(0xFF065F46),
         secondaryContainer = Color(0xFFD1FAE5),
         onSecondaryContainer = Color(0xFF065F46),
-        background = Color.White,
+        background = Color(0xFFF9F9F9),
         onBackground = Color(0xFF0D0D0D),
         surface = Color.White,
         onSurface = Color(0xFF0D0D0D),
@@ -175,7 +198,7 @@ fun BolTheme(dark: Boolean, content: @Composable () -> Unit) {
         outline = Color(0xFFE5E5E5),
         outlineVariant = Color(0xFFECECEC)
     )
-    MaterialTheme(colorScheme = scheme, content = content)
+    MaterialTheme(colorScheme = scheme, typography = AppTypography, content = content)
 }
 
 // ---------- formatting ----------

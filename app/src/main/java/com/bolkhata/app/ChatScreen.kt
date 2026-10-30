@@ -13,9 +13,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ThumbDown as ThumbDownFilled
+import androidx.compose.material.icons.filled.ThumbUp as ThumbUpFilled
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.ThumbDown
+import androidx.compose.material.icons.outlined.ThumbUp
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -51,8 +55,9 @@ fun ChatScreen(
     onSend: (String) -> Unit,
     onClear: () -> Unit,
     onShareDiagnostics: () -> Unit = {},
-    flaggedIds: Set<String> = emptySet(),
-    onFlagWrong: (id: String, expected: String) -> Unit = { _, _ -> },
+    /** 👍 (true) or 👎 (false) given to answers, by message id. */
+    ratings: Map<String, Boolean> = emptyMap(),
+    onRate: (id: String, good: Boolean) -> Unit = { _, _ -> },
     onUndo: (List<String>) -> Unit,
     onEditEntry: (Entry) -> Unit,
     onAddSuggestions: (List<Entry>) -> Unit,
@@ -70,7 +75,6 @@ fun ChatScreen(
 ) {
     var confirmClear by remember { mutableStateOf(false) }
     var confirmShare by remember { mutableStateOf(false) }
-    var flagging by remember { mutableStateOf<ChatMessage?>(null) }
     val listState = rememberLazyListState()
     val byId = remember(entries) { entries.associateBy { it.id } }
     val itemCount = messages.size + (if (messages.isEmpty()) 1 else 0) + (if (loading) 1 else 0) +
@@ -163,7 +167,7 @@ fun ChatScreen(
                     Column(Modifier.fillMaxWidth()) {
                         if (message.entryIds.isNotEmpty()) SavedCard(message, byId, currency, onUndo, onEditEntry)
                         else AssistantBubble(message.text)
-                        WrongAnswerMark(message.id in flaggedIds) { flagging = message }
+                        AnswerActions(ratings[message.id]) { good -> onRate(message.id, good) }
                     }
                 }
             }
@@ -257,38 +261,6 @@ fun ChatScreen(
         }
     }
 
-    flagging?.let { message ->
-        var expected by remember(message.id) { mutableStateOf("") }
-        AlertDialog(
-            onDismissRequest = { flagging = null },
-            title = { Text("Wrong answer?") },
-            text = {
-                Column {
-                    Text(
-                        "\u201C" + message.text.take(160) + (if (message.text.length > 160) "…" else "") + "\u201D",
-                        fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    OutlinedTextField(
-                        value = expected,
-                        onValueChange = { expected = it },
-                        label = { Text("What should the answer be? (optional)") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    onFlagWrong(message.id, expected.trim())
-                    flagging = null
-                }) { Text("Mark wrong") }
-            },
-            dismissButton = {
-                TextButton(onClick = { flagging = null }) { Text("Cancel") }
-            }
-        )
-    }
-
     if (confirmShare) {
         AlertDialog(
             onDismissRequest = { confirmShare = false },
@@ -366,20 +338,26 @@ private fun UserBubble(text: String, attachment: String = "") {
     }
 }
 
-/** Small link under each answer so the person can mark it wrong; the mark is kept in the chat log. */
+/** 👍 and 👎 under each answer, like ChatGPT's. One tap saves the rating; tapping the other one changes it. */
 @Composable
-private fun WrongAnswerMark(flagged: Boolean, onClick: () -> Unit) {
-    Text(
-        if (flagged) "✗ Marked wrong" else "Wrong answer?",
-        fontSize = 11.sp,
-        color = if (flagged) MaterialTheme.colorScheme.error
-        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-        modifier = Modifier
-            .padding(start = 6.dp, top = 2.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .clickable(enabled = !flagged, onClick = onClick)
-            .padding(horizontal = 4.dp, vertical = 2.dp)
-    )
+private fun AnswerActions(rating: Boolean?, onRate: (good: Boolean) -> Unit) {
+    val tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+    Row(Modifier.padding(start = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        IconButton(onClick = { onRate(true) }, enabled = rating != true, modifier = Modifier.size(34.dp)) {
+            Icon(
+                if (rating == true) Icons.Filled.ThumbUpFilled else Icons.Outlined.ThumbUp,
+                contentDescription = if (rating == true) "Marked good" else "Good answer",
+                tint = if (rating == true) GreenDeep else tint, modifier = Modifier.size(17.dp)
+            )
+        }
+        IconButton(onClick = { onRate(false) }, enabled = rating != false, modifier = Modifier.size(34.dp)) {
+            Icon(
+                if (rating == false) Icons.Filled.ThumbDownFilled else Icons.Outlined.ThumbDown,
+                contentDescription = if (rating == false) "Marked wrong" else "Wrong answer",
+                tint = if (rating == false) MaterialTheme.colorScheme.error else tint, modifier = Modifier.size(17.dp)
+            )
+        }
+    }
 }
 
 @Composable
