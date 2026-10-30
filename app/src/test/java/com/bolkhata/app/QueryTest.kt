@@ -48,6 +48,13 @@ class QueryTest {
         assertEquals(listOf("2"), Query.select(all, f).map { it.id })
     }
 
+    @Test fun addedYesterdayUsesCreatedAtNotTransactionDate() {
+        val oldTransaction = e("added-yesterday", Type.KHARCHA, 55.0, Cat.KHANA, "Dinner", "", 30)
+            .copy(createdAt = daysAgo(1))
+        val f = Query.Filter(createdFrom = Query.day(ymd(1)), createdTo = Query.day(ymd(1), end = true))
+        assertEquals(listOf("added-yesterday"), Query.select(listOf(oldTransaction), f).map { it.id })
+    }
+
     @Test fun listResultsIncludeTheComputedTotal() {
         val f = Query.Filter(types = setOf(Type.KHARCHA))
         val result = Query.answer(Query.select(all, f), "list", f, "SAR")
