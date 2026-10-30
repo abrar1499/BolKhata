@@ -703,6 +703,28 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         return null
     }
 
+    /** Moves every entry in the currently open khata to another saved khata, preserving entry data. */
+    fun handleCurrentKhataMoveCommand(text: String): String? {
+        val source = (if (ledger != null) ledgerPerson ?: activeLedgerPerson
+            else account?.takeIf { it.main == PEOPLE }?.sub) ?: return null
+        val roman = runCatching { Translit.toRoman(text) }.getOrDefault(text).lowercase()
+        val all = Regex("""\\b(all|every|sab|sari|saari|tamam|entire|poori|poora|these|in sab)\\b""").containsMatchIn(roman)
+        val records = Regex("""\\b(entries|entry|records?|transactions?)\\b""").containsMatchIn(roman)
+        val move = Regex("""\\b(move|shift|transfer|bhej(?:o|na)?|send|daal|dal)\\b""").containsMatchIn(roman)
+        val khata = Regex("""\\b(khata|account)\\b""").containsMatchIn(roman)
+        if (!all || !records || !move || !khata) return null
+
+        val destination = Accounts.khataNameMentionedIn(roman, source, entries.map { it.person })
+            ?: return "I couldn't identify the destination khata. Please mention its exact saved name."
+        val sourceEntries = entries.filter { it.person.equals(source, ignoreCase = true) }
+        if (sourceEntries.isEmpty()) return "No entries found in $source's khata. Nothing was moved."
+        val changes = sourceEntries.map { old -> old to old.copy(person = destination) }
+        if (!applyPlan(Ai.EditPlan(changes, emptyList(), "Moved ${changes.size} entries from $source to $destination"))) {
+            return "The khata entries changed before I could move them. Nothing was moved; please try again."
+        }
+        return "Moved ${changes.size} entries from $source to $destination. Amounts, dates, notes and entry types are unchanged. You can Undo or restore this move from Move history."
+    }
+
     /**
      * Handles the explicit "all entries gave and received" request only inside an open person's khata.
      * Transfers are converted using the running balance; ordinary expenses and income are left untouched.
@@ -1061,6 +1083,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         val roman = runCatching { Translit.toRoman(text) }.getOrDefault(text)
         val history = chatMessages.takeLast(20)
         postChat(text, isUser = true)
+        handleCurrentKhataMoveCommand(text)?.let { lastSpeech = it; postChat(it, isUser = false); return }
         handleCurrentKhataBulkCommand(text)?.let { lastSpeech = it; postChat(it, isUser = false); return }
         // Always handle date-based bulk deletion locally, even if AI is enabled.
         // Never let an AI response delete a broad date range without the user's confirmation.
