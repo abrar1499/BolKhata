@@ -20,8 +20,6 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.animation.core.*
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Delete
@@ -146,55 +144,54 @@ internal fun InputBar(
 class VoiceState(val on: Boolean, val status: String, val heard: String, val toggle: () -> Unit)
 
 /**
- * The voice call, like ChatGPT's: a full screen with a circle that grows while the person talks, breathes while the
- * app thinks and pulses while it answers aloud. Tapping the circle while it speaks cuts it short and listens again.
+ * The voice call, in place of the message bar so the chat stays in front: a green circle that grows while the person
+ * talks, breathes while the app thinks and pulses while it answers aloud, the words heard or said, and End.
+ * Tapping the circle while it speaks cuts it short and listens again.
  */
 @Composable
-internal fun VoiceCall(status: String, heard: String, reply: String, level: Float, onInterrupt: () -> Unit, onEnd: () -> Unit) {
+internal fun CallBar(status: String, heard: String, reply: String, level: Float, onInterrupt: () -> Unit, onEnd: () -> Unit) {
     val speaking = status == "Speaking…"
     val listening = status.isBlank() || status == "Listening…"
     val pulse by rememberInfiniteTransition(label = "call").animateFloat(
-        initialValue = 0.94f, targetValue = 1.06f,
+        initialValue = 0.88f, targetValue = 1.08f,
         animationSpec = infiniteRepeatable(tween(if (speaking) 450 else 1100), RepeatMode.Reverse), label = "pulse"
     )
-    // The recognizer reports about -2…10 dB; quiet stays at full size, a loud voice makes it about a third bigger.
+    // The level is about -2…10 dB; quiet stays at full size, a loud voice makes the circle about a third bigger.
     val voice by animateFloatAsState(1f + (level.coerceIn(0f, 10f) / 10f) * 0.35f, tween(120), label = "voice")
-    Dialog(onDismissRequest = onEnd, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            Column(
-                Modifier.fillMaxSize().systemBarsPadding().padding(horizontal = 24.dp, vertical = 20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text("Voice call", fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                Text(
-                    "Talk naturally: add entries, ask totals, open a khata.",
-                    fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center
-                )
-                Spacer(Modifier.weight(1f))
+    val bg = MaterialTheme.colorScheme.background
+    val shade = lerp(bg, if (bg.luminance() > 0.5f) Color.Black else Color.White, 0.09f)
+    Column(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(bg.copy(alpha = 0f), shade)))) {
+        Spacer(Modifier.height(40.dp))
+        Surface(
+            shape = RoundedCornerShape(26.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 3.dp,
+            modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 10.dp)
+        ) {
+            Row(Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(48.dp).clickable(enabled = speaking, onClick = onInterrupt), contentAlignment = Alignment.Center) {
+                    Box(
+                        Modifier.size(34.dp).scale(if (listening) voice else pulse).clip(CircleShape)
+                            .background(Brush.radialGradient(listOf(GreenDeep.copy(alpha = 0.55f), GreenDeep)))
+                    )
+                }
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        if (speaking) "Speaking… tap the circle to talk" else status.ifBlank { "Listening…" },
+                        fontSize = 13.sp, fontWeight = FontWeight.Medium, color = GreenDeep, maxLines = 1
+                    )
+                    val words = if (speaking) reply else heard
+                    if (words.isNotBlank()) Text(
+                        words, fontSize = 14.sp, lineHeight = 18.sp, color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 2, overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
                 Box(
-                    Modifier.size(180.dp).scale(if (listening) voice else pulse).clip(CircleShape)
-                        .background(Brush.radialGradient(listOf(GreenDeep.copy(alpha = 0.55f), GreenDeep)))
-                        .clickable(enabled = speaking, onClick = onInterrupt)
-                )
-                Spacer(Modifier.height(28.dp))
-                Text(status.ifBlank { "Listening…" }, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = GreenDeep)
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    if (speaking) reply else heard.ifBlank { reply },
-                    fontSize = 17.sp, lineHeight = 24.sp, textAlign = TextAlign.Center,
-                    color = if (speaking || heard.isNotBlank()) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 6, overflow = TextOverflow.Ellipsis, modifier = Modifier.heightIn(min = 72.dp)
-                )
-                if (speaking) Text("Tap the circle to interrupt", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.weight(1f))
-                Box(
-                    Modifier.size(64.dp).clip(CircleShape).background(RedSpend).clickable(onClick = onEnd),
+                    Modifier.size(44.dp).clip(CircleShape).background(RedSpend).clickable(onClick = onEnd),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Filled.Close, contentDescription = "End call", tint = Color.White, modifier = Modifier.size(28.dp))
+                    Icon(Icons.Filled.Close, contentDescription = "End call", tint = Color.White, modifier = Modifier.size(22.dp))
                 }
-                Spacer(Modifier.height(6.dp))
-                Text("End", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }

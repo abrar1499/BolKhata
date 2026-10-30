@@ -1741,7 +1741,15 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
             val main = results == null && people == null && account == null && ledger == null
-            if (main && tab == Tab.CHAT) {
+            if (voiceOn) {
+                // The call sits where the message bar was, so the chat stays in front; Back ends it.
+                BackHandler { stopVoice() }
+                CallBar(
+                    status = voiceStatus, heard = voicePartial, reply = voiceReply, level = voiceLevel,
+                    onInterrupt = { runCatching { tts.stop() }; stopReply(); listenNow() },
+                    onEnd = { stopVoice() }
+                )
+            } else if (main && tab == Tab.CHAT) {
                 InputBar(
                     onSend = { chatInput(it) }, onMic = { startVoice(forChat = true) }, placeholder = "Speak, type or ask…",
                     onAttach = { pickFile.launch(arrayOf("image/*", "application/pdf")) },
@@ -2244,12 +2252,6 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             )
         }
     }
-
-    if (voiceOn) VoiceCall(
-        status = voiceStatus, heard = voicePartial, reply = voiceReply, level = voiceLevel,
-        onInterrupt = { runCatching { tts.stop() }; stopReply(); listenNow() },
-        onEnd = { stopVoice() }
-    )
 
     if (searching) {
         var q by remember { mutableStateOf("") }
