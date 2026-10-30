@@ -1239,7 +1239,8 @@ kind=entry: new money record(s); text = in the app's forms, amounts as digits, s
  | "<name> se <amount> liye" (I borrowed) | "<name> ne <amount> wapis diye" (got back) | "<name> ko <amount> wapis diye" (I paid back)
  | "<thing> <amount> <name> <name> ke sath" (bill shared, I paid) | "<name> ne pay kiya <thing> <amount> sath" (shared, he paid)
  | "<name> ne pay kiya <thing> <amount>" (only mine, he paid) | time: aaj, kal, subah 7 baje
-kind=ask: a question about records; what = sum | count | list | balance (what a person owes or is owed); f = which records.
+kind=ask: a question about records; what = sum | count | list | highest | balance (what a person owes or is owed); f = which records.
+For "highest / largest expenses", use what=highest. For an exact amount, set min and max to the same amount. f.item searches item, merchant, description and note words.
 kind=delete: remove records; f = which. kind=change: edit records when the user SAYS the new value; f = which, set = only the new values {"amount","category","date","person","type","item"}.
 kind=paid_by: someone else paid for a record ALREADY saved ("aaj jo khana khaya us ke paise nadeem ne diye"); f = which record (date, item, category; no amount needed), payer = the name.
 kind=to_khata: put records into a person's / account's khata (lene dene ka khata), "ye sari Abrar D360 ka khata bana do"; f = which records, set = {"person":"<khata name>"}.
@@ -1249,7 +1250,7 @@ kind=chat: greeting / small talk, reply = short friendly answer (max 12 words). 
 f (all optional): "from","to" (YYYY-MM-DD, inclusive), "type" [expense,income,lent,borrowed,got_back,paid_back,sale,purchase],
 "person" [names], "category" [food,transport,rent,bills,mobile,home,shopping,health,personal,fees,education,charity,assets,other],
 "item" [words], "not_item" [words to leave out], "no_people" (true = leave out transfers and money to/from people, "people ke ilawa"),
-"min", "max", "last" (newest N; "last entry" = 1). A follow-up like "people ke ilawa" / "sirf petrol" repeats the previous request with the extra condition. Days: aaj = today, kal (past) = yesterday, "3 din pehle" = that day.${if (near.isEmpty()) "" else "\nSaved names: " + near.joinToString(", ")}
+"min", "max", "last" (newest N; "last entry" = 1). Use min=max for an exact amount. A follow-up like "people ke ilawa" / "sirf petrol" repeats the previous request with the extra condition. Days: aaj = today, kal (past) = yesterday, "3 din pehle" = that day.${if (near.isEmpty()) "" else "\nSaved names: " + near.joinToString(", ")}
 ${if (screen.isBlank()) "" else "On screen now: $screen. \"ye / inko / these / sab / in sab\" = the records on screen: leave f empty.\nIf this is a person's khata, use that person as the default for a new give/borrow/repay/receive entry only when the user does not name someone; never assign ordinary expenses/income to them just because their khata is open.\n"}${if (previous.isBlank()) "" else "Previous message (resolve wo / unko / sab / same from it): \"" + previous.replace("\"", "'").take(200) + "\"\n"}Text: "$said"
 """.trim()
             val raw = if (fastKey.isNotBlank()) {
@@ -1350,14 +1351,17 @@ If nothing matches, return {"edits":[],"delete":[],"message":"I couldn't find th
             planFrom(json, recent, json.optString("message").ifBlank { "Here is the change." })
         }
 
-    /** Turns {"edits":[{"n":..}], "delete":[n]} into changes, n counting from 1 in [recent]. */
-    private fun planFrom(json: JSONObject, recent: List<Entry>, message: String): EditPlan {
+    /** Applies only exact stable IDs from the supplied live entry snapshot; positional targets are unsafe.
+     * Internal for focused unit tests of the mutation boundary.
+     */
+    internal fun planFrom(json: JSONObject, recent: List<Entry>, message: String): EditPlan {
             val changed = mutableListOf<Pair<Entry, Entry>>()
         val edits = json.optJSONArray("edits") ?: JSONArray()
         for (i in 0 until edits.length()) {
             val o = edits.optJSONObject(i) ?: continue
-            val byCode = o.optString("id").trim().takeIf { it.isNotEmpty() }?.let { c -> recent.firstOrNull { Accounts.code(it) == c } }
-            val old = byCode ?: recent.getOrNull(o.optInt("n", 0) - 1) ?: continue
+            val stableId = o.optString("id").trim()
+            if (stableId.isBlank()) continue
+            val old = Accounts.byStableId(recent, stableId) ?: continue
             var e = old
             if (o.has("type")) typeNames.entries.firstOrNull { it.value == o.optString("type") }?.let { e = e.copy(type = it.key) }
             if (o.has("amount")) o.optDouble("amount").takeIf { !it.isNaN() && it > 0 }?.let { e = e.copy(amount = it) }
@@ -1405,8 +1409,7 @@ If nothing matches, return {"edits":[],"delete":[],"message":"I couldn't find th
         val del = json.optJSONArray("delete") ?: JSONArray()
         val deleted = (0 until del.length()).mapNotNull { i ->
             val v = del.opt(i)
-            if (v is String && v.toIntOrNull() == null) recent.firstOrNull { Accounts.code(it) == v.trim() }
-            else recent.getOrNull((v?.toString()?.toIntOrNull() ?: 0) - 1)
+            if (v is String) Accounts.byStableId(recent, v.trim()) else null
         }.distinctBy { it.id }
             .filter { d -> changed.none { it.first.id == d.id } }
         return EditPlan(changed, deleted, message)
