@@ -40,8 +40,12 @@ object Accounts {
 
     private fun f(n: Double) = fmt(n)
 
-    /** A short code that stays the same for an entry across chat turns (unlike a list position). */
-    fun code(e: Entry): String = "e" + Integer.toString((e.id.hashCode() and 0x7fffffff) % 1_679_616, 36)
+    /** The full stable record ID. Hash-shortened IDs can collide and must never identify a financial record. */
+    fun code(e: Entry): String = e.id
+
+    /** Resolve only an exact record ID; never interpret a model-provided number as a list position. */
+    fun byStableId(entries: List<Entry>, id: String): Entry? =
+        id.takeIf { it.isNotBlank() }?.let { stable -> entries.firstOrNull { it.id == stable } }
 
     /** One compact line per entry: cheaper for the AI to read than JSON, so far more entries fit. */
     fun line(e: Entry): String {
