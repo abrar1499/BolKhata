@@ -12,7 +12,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
@@ -21,7 +22,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -32,71 +32,74 @@ import androidx.compose.ui.unit.sp
 
 // Parts of the main screen kept out of MainActivity: the chat input bar, the side menu and the "what kind of entry?" dialog.
 
+/**
+ * The message bar at the bottom of Home and Chat: one floating pill with attach (+), the text, the mic, and a round
+ * send button that turns green once something is typed and shows a spinner while the app is answering.
+ */
 @Composable
 internal fun InputBar(
     onSend: (String) -> Unit,
     onMic: () -> Unit,
     placeholder: String = "Type here…",
-    onAttach: (() -> Unit)? = null
+    onAttach: (() -> Unit)? = null,
+    busy: Boolean = false
 ) {
     var text by rememberSaveable { mutableStateOf("") }
     fun send() {
         val t = text.trim()
-        if (t.isNotEmpty()) {
+        if (t.isNotEmpty() && !busy) {
             text = ""
             onSend(t)
         }
     }
-    Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 16.dp) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
+    val ready = text.isNotBlank() && !busy
+    Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 12.dp)) {
+        Surface(
+            shape = RoundedCornerShape(30.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 8.dp,
+            modifier = Modifier.fillMaxWidth()
         ) {
-            if (onAttach != null) {
-                IconButton(onClick = onAttach) {
-                    Icon(
-                        Icons.Filled.AttachFile, contentDescription = "Attach a photo or PDF",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Spacer(Modifier.width(2.dp))
-            }
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it },
-                placeholder = { Text(placeholder) },
-                modifier = Modifier.weight(1f),
-                maxLines = 3,
-                shape = RoundedCornerShape(26.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    unfocusedBorderColor = Color.Transparent,
-                    focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
-                ),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                keyboardActions = KeyboardActions(onSend = { send() })
-            )
-            Spacer(Modifier.width(10.dp))
-            Box(
-                Modifier
-                    .size(56.dp)
-                    .shadow(10.dp, CircleShape, spotColor = Green, ambientColor = Green)
-                    .clip(CircleShape)
-                    .background(AccentBrush)
-                    .clickable { if (text.isNotBlank()) send() else onMic() },
-                contentAlignment = Alignment.Center
-            ) {
-                if (text.isNotBlank()) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.Send, contentDescription = "Send",
-                        tint = Color.White, modifier = Modifier.size(26.dp)
-                    )
-                } else {
-                    MicGlyph(Color.White, 28.dp)
+            Row(Modifier.heightIn(min = 60.dp).padding(start = 4.dp, end = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (onAttach != null) {
+                    IconButton(onClick = onAttach) {
+                        Icon(Icons.Filled.Add, contentDescription = "Attach a photo or PDF", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(28.dp))
+                    }
+                } else Spacer(Modifier.width(12.dp))
+                TextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    placeholder = { Text(placeholder, fontSize = 16.sp, maxLines = 1) },
+                    modifier = Modifier.weight(1f),
+                    maxLines = 4,
+                    textStyle = LocalTextStyle.current.copy(fontSize = 16.sp),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent,
+                        disabledContainerColor = Color.Transparent,
+                        focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
+                        disabledIndicatorColor = Color.Transparent,
+                        unfocusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                        focusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+                    ),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                    keyboardActions = KeyboardActions(onSend = { send() })
+                )
+                IconButton(onClick = onMic) { MicGlyph(MaterialTheme.colorScheme.onSurface, 24.dp) }
+                Box(
+                    Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(if (ready || busy) GreenDeep else MaterialTheme.colorScheme.surfaceVariant)
+                        .clickable(enabled = ready) { send() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (busy) {
+                        CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
+                    } else {
+                        Icon(
+                            Icons.Filled.ArrowUpward, contentDescription = "Send",
+                            tint = if (ready) Color.White else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
                 }
             }
         }

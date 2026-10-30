@@ -1531,7 +1531,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             if (main && tab == Tab.CHAT) {
                 InputBar(
                     onSend = { chatInput(it) }, onMic = { startVoice(forChat = true) }, placeholder = "Speak, type or ask…",
-                    onAttach = { pickFile.launch(arrayOf("image/*", "application/pdf")) }
+                    onAttach = { pickFile.launch(arrayOf("image/*", "application/pdf")) },
+                    busy = chatLoading
                 )
             } else {
                 Column {
@@ -1540,7 +1541,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         onSend = { homeInput(it) },
                         onMic = { startVoice(forChat = true) },
                         placeholder = "Speak, type or ask…",
-                        onAttach = { pickFile.launch(arrayOf("image/*", "application/pdf")) }
+                        onAttach = { pickFile.launch(arrayOf("image/*", "application/pdf")) },
+                        busy = chatLoading
                     )
                 }
             }
