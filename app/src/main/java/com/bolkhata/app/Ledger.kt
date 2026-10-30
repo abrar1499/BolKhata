@@ -163,23 +163,6 @@ fun movedTo(e: Entry, all: List<Entry>, cat: Cat?, income: Boolean, person: Stri
     return e.copy(type = if (income) Type.AAMDANI else Type.KHARCHA, category = c, person = "", item = item, paid = false)
 }
 
-@Composable
-fun EntryMenu(e: Entry, currency: String, onEdit: () -> Unit, onMove: () -> Unit, onDismiss: () -> Unit, onHistory: () -> Unit = {}) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(entryTitle(e), maxLines = 1, overflow = TextOverflow.Ellipsis) },
-        text = { Text(SimpleDateFormat("d MMM yyyy", Locale.US).format(Date(e.date)) + " · " + money(currency, e.amount)) },
-        confirmButton = {
-            Column(horizontalAlignment = Alignment.End) {
-                TextButton(onClick = onEdit) { Text("Edit entry") }
-                TextButton(onClick = onMove) { Text("Move entry") }
-                TextButton(onClick = onHistory) { Text("Move history & restore") }
-            }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
-    )
-}
-
 /** Strip common bank-transfer metadata from names shown in the Move Entry picker. */
 private fun cleanMoveKhataName(value: String): String {
     var name = value.trim()
@@ -450,6 +433,7 @@ fun LedgerScreen(
     person: String? = null,
     onRenamePerson: (String, String) -> Unit = { _, _ -> },
     onMergePerson: (String, String) -> Unit = { _, _ -> },
+    onDeletePerson: (String) -> Unit = {},
     onBulkMove: (Set<String>, String) -> Unit = { _, _ -> },
     onActivePerson: (String?) -> Unit = {},
     onMoveHistory: () -> Unit = {}
@@ -496,7 +480,8 @@ fun LedgerScreen(
                 },
                 listState = peopleListState,
                 onRenamePerson = onRenamePerson,
-                onMergePerson = onMergePerson
+                onMergePerson = onMergePerson,
+                onDeletePerson = onDeletePerson
             )
         }
         is Level.Sub -> SubView(level.income, level.cat, entries, currency, ::back, onEdit) { stack.add(Level.Vendor(level.income, level.cat, it)) }
@@ -625,7 +610,7 @@ private fun PeopleView(
     receive: Boolean, entries: List<Entry>, currency: String,
     onBack: () -> Unit, onOpen: (String) -> Unit,
     listState: LazyListState, onRenamePerson: (String, String) -> Unit,
-    onMergePerson: (String, String) -> Unit
+    onMergePerson: (String, String) -> Unit, onDeletePerson: (String) -> Unit
 ) {
     val list = remember(entries, receive) {
         personAccounts(entries).filter { it.toReceive == receive }
@@ -673,35 +658,20 @@ private fun PeopleView(
         }
     }
 
-    if (actionPerson != null) {
-        AlertDialog(
-            onDismissRequest = { actionPerson = null },
-            shape = RoundedCornerShape(26.dp),
-            title = { Text(actionPerson.orEmpty(), fontWeight = FontWeight.Bold, fontSize = 21.sp) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Khata actions", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Surface(Modifier.fillMaxWidth().clickable {
-                        actionSource = actionPerson
-                        actionName = actionPerson.orEmpty()
-                        editAction = "Rename"
-                        actionPerson = null
-                    }, shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant) {
-                        Text("✎   Rename khata", Modifier.padding(16.dp), fontWeight = FontWeight.SemiBold)
-                    }
-                    Surface(Modifier.fillMaxWidth().clickable {
-                        actionSource = actionPerson
-                        actionName = ""
-                        editAction = "Move"
-                        actionPerson = null
-                    }, shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer) {
-                        Text("⇄   Move / merge khata", Modifier.padding(16.dp), fontWeight = FontWeight.SemiBold)
-                    }
-                }
-            },
-            confirmButton = { TextButton(onClick = { actionPerson = null }) { Text("Close") } }
+    actionPerson?.let { name ->
+        val account = list.firstOrNull { it.name == name }
+        fun open(action: String, initial: String) {
+            actionSource = name
+            actionName = initial
+            editAction = action
+            actionPerson = null
+        }
+        KhataMenu(
+            name, account?.history?.size ?: 0, account?.balance ?: 0.0, currency,
+            onRename = { open("Rename", name) },
+            onMerge = { open("Move", "") },
+            onDelete = { actionPerson = null; onDeletePerson(name) },
+            onDismiss = { actionPerson = null }
         )
     }
     if (editAction != null) {

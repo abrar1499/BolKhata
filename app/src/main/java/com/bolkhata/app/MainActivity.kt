@@ -1823,6 +1823,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                             },
                             onMergePerson = { oldName, newName ->
                                 renameOrMergeKhata(oldName, newName, merge = true)
+                            },
+                            onDeletePerson = { person ->
+                                askDelete(person, entries.filter { it.person.trim().equals(person.trim(), true) })
                             }
                         )
                     }
@@ -1867,8 +1870,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     e, currency,
                     onEdit = { menuFor = null; editing = e },
                     onMove = { menuFor = null; moving = e },
-                    onDismiss = { menuFor = null },
-                    onHistory = { menuFor = null; showMoveHistory = true }
+                    onDelete = { menuFor = null; confirm = "Move \"${entryTitle(e)}\" (${money(currency, e.amount)}) to Trash?" to setOf(e.id) },
+                    onDismiss = { menuFor = null }
                 )
             }
             moving?.let { e ->
