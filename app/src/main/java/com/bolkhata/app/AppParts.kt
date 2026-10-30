@@ -5,7 +5,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.foundation.background
@@ -15,6 +14,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -67,46 +68,45 @@ internal fun InputBar(
     val bg = MaterialTheme.colorScheme.background
     val ink = MaterialTheme.colorScheme.onSurface
     val talking = voice?.on == true
-    Column(Modifier.fillMaxWidth()) {
-        Box(Modifier.fillMaxWidth().height(18.dp).background(Brush.verticalGradient(listOf(bg.copy(alpha = 0f), bg))))
-        if (talking) VoiceCaption(voice!!.status, voice.heard, Modifier.background(bg))
-        Box(Modifier.fillMaxWidth().background(bg).navigationBarsPadding().padding(start = 12.dp, end = 12.dp, bottom = 10.dp)) {
+    val hint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+    Column(Modifier.fillMaxWidth().background(bg)) {
+        if (talking) VoiceCaption(voice!!.status, voice.heard, Modifier.padding(top = 6.dp))
+        Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 10.dp)) {
+            // No shadow: one hairline border keeps the edge sharp, like ChatGPT's bar.
             Surface(
-                shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 6.dp,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                shape = RoundedCornerShape(26.dp), color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Row(Modifier.heightIn(min = 56.dp).padding(start = 6.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.heightIn(min = 48.dp).padding(start = 4.dp, end = 5.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (onAttach != null) {
-                        Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onAttach), contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onAttach), contentAlignment = Alignment.Center) {
                             ThinPlus(ink)
                         }
                     } else Spacer(Modifier.width(12.dp))
-                    TextField(
+                    BasicTextField(
                         value = text,
                         onValueChange = { text = it },
-                        placeholder = { Text(placeholder, fontSize = 17.sp, maxLines = 1) },
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).padding(horizontal = 4.dp, vertical = 12.dp),
                         maxLines = 4,
-                        textStyle = LocalTextStyle.current.copy(fontSize = 17.sp),
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent,
-                            disabledContainerColor = Color.Transparent,
-                            focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
-                            disabledIndicatorColor = Color.Transparent,
-                            unfocusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                            focusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                        ),
+                        textStyle = LocalTextStyle.current.copy(fontSize = 16.sp, color = ink),
+                        cursorBrush = SolidColor(GreenDeep),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                        keyboardActions = KeyboardActions(onSend = { send() })
+                        keyboardActions = KeyboardActions(onSend = { send() }),
+                        decorationBox = { field ->
+                            Box(contentAlignment = Alignment.CenterStart) {
+                                if (text.isEmpty()) Text(placeholder, fontSize = 16.sp, color = hint, maxLines = 1)
+                                field()
+                            }
+                        }
                     )
-                    Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onMic), contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onMic), contentAlignment = Alignment.Center) {
                         ThinMic(ink)
                     }
-                    Spacer(Modifier.width(4.dp))
+                    Spacer(Modifier.width(2.dp))
                     Box(
                         Modifier
-                            .size(44.dp)
+                            .size(38.dp)
                             .clip(CircleShape)
                             .background(GreenDeep)
                             .clickable(enabled = talking || !busy) {
@@ -119,9 +119,9 @@ internal fun InputBar(
                         contentAlignment = Alignment.Center
                     ) {
                         when {
-                            talking -> Box(Modifier.size(14.dp).clip(RoundedCornerShape(3.dp)).background(Color.White))
-                            busy -> CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
-                            text.isNotBlank() -> Icon(Icons.Filled.ArrowUpward, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(22.dp))
+                            talking -> Box(Modifier.size(12.dp).clip(RoundedCornerShape(3.dp)).background(Color.White))
+                            busy -> CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
+                            text.isNotBlank() -> Icon(Icons.Filled.ArrowUpward, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(20.dp))
                             else -> SoundWave(Color.White)
                         }
                     }
@@ -138,7 +138,7 @@ class VoiceState(val on: Boolean, val status: String, val heard: String, val tog
 @Composable
 private fun VoiceCaption(status: String, heard: String, modifier: Modifier) {
     Row(
-        modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 6.dp),
+        modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp),
         verticalAlignment = Alignment.Top
     ) {
         Box(Modifier.padding(top = 5.dp).size(6.dp).clip(CircleShape).background(GreenDeep))
@@ -157,7 +157,7 @@ private fun VoiceCaption(status: String, heard: String, modifier: Modifier) {
 /** A thin "+" like ChatGPT's attach button. */
 @Composable
 private fun ThinPlus(color: Color) {
-    Canvas(Modifier.size(22.dp)) {
+    Canvas(Modifier.size(20.dp)) {
         val w = 1.8.dp.toPx()
         drawLine(color, Offset(size.width / 2, 1.dp.toPx()), Offset(size.width / 2, size.height - 1.dp.toPx()), w, StrokeCap.Round)
         drawLine(color, Offset(1.dp.toPx(), size.height / 2), Offset(size.width - 1.dp.toPx(), size.height / 2), w, StrokeCap.Round)
@@ -167,7 +167,7 @@ private fun ThinPlus(color: Color) {
 /** An outlined microphone drawn with thin strokes. */
 @Composable
 private fun ThinMic(color: Color) {
-    Canvas(Modifier.size(22.dp)) {
+    Canvas(Modifier.size(20.dp)) {
         val w = 1.8.dp.toPx()
         val cx = size.width / 2
         val capW = size.width * 0.34f
@@ -183,8 +183,8 @@ private fun ThinMic(color: Color) {
 /** Short vertical bars: tap the empty send button to speak. */
 @Composable
 private fun SoundWave(color: Color) {
-    Canvas(Modifier.size(20.dp)) {
-        val w = 2.2.dp.toPx()
+    Canvas(Modifier.size(18.dp)) {
+        val w = 2.dp.toPx()
         val heights = listOf(0.35f, 0.75f, 1f, 0.6f)
         val gap = size.width / (heights.size + 1)
         heights.forEachIndexed { i, h ->
