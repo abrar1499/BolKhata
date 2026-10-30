@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Headset
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -49,6 +50,7 @@ fun ChatScreen(
     onMenu: () -> Unit,
     onSend: (String) -> Unit,
     onClear: () -> Unit,
+    onShareDiagnostics: () -> Unit = {},
     onUndo: (List<String>) -> Unit,
     onEditEntry: (Entry) -> Unit,
     onAddSuggestions: (List<Entry>) -> Unit,
@@ -68,6 +70,7 @@ fun ChatScreen(
     onCancelChanges: () -> Unit = {}
 ) {
     var confirmClear by remember { mutableStateOf(false) }
+    var confirmShare by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val byId = remember(entries) { entries.associateBy { it.id } }
     val itemCount = messages.size + (if (messages.isEmpty()) 1 else 0) + (if (loading) 1 else 0) +
@@ -106,7 +109,13 @@ fun ChatScreen(
                             tint = if (voiceOn) MaterialTheme.colorScheme.primary else LocalHeader.current.on
                         )
                     }
-                    Spacer(Modifier.width(8.dp))
+                    IconButton(
+                        onClick = { confirmShare = true },
+                        enabled = messages.isNotEmpty() && !loading
+                    ) {
+                        Icon(Icons.Filled.Share, contentDescription = "Share chat diagnostics", tint = LocalHeader.current.on)
+                    }
+                    Spacer(Modifier.width(4.dp))
                     IconButton(
                         onClick = { confirmClear = true },
                         enabled = messages.isNotEmpty() && !loading,
@@ -276,6 +285,25 @@ fun ChatScreen(
                 }
             }
         }
+    }
+
+    if (confirmShare) {
+        AlertDialog(
+            onDismissRequest = { confirmShare = false },
+            title = { Text("Share chat diagnostics?") },
+            text = {
+                Text("This prepares your recent chat messages and technical debug details for sharing. Messages may contain private financial information. No ledger or contact list is attached. Review the content and choose ChatGPT in Android's share menu if available.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmShare = false
+                    onShareDiagnostics()
+                }) { Text("Review & share") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmShare = false }) { Text("Cancel") }
+            }
+        )
     }
 
     if (confirmClear) {
