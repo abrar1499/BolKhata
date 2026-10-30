@@ -79,7 +79,7 @@ object Query {
     /** Likely duplicate expense pairs, computed only from saved records (never from AI-generated examples). */
     fun likelyDuplicateExpenses(entries: List<Entry>): List<Pair<Entry, Entry>> {
         val dayMs = 86_400_000L
-        fun norm(s: String) = s.trim().lowercase().replace(Regex("""[^\\p{L}\\p{N}]+"""), " ").trim()
+        fun norm(s: String) = s.trim().lowercase().replace(Regex("""[^\p{L}\p{N}]+"""), " ").trim()
         val grouped = entries.filter { it.type == Type.KHARCHA && it.amount > 0.0 }
             .groupBy { Math.round(it.amount * 100.0) }
         val pairs = mutableListOf<Pair<Entry, Entry>>()
