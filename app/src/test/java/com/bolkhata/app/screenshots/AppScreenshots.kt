@@ -131,6 +131,10 @@ class AppScreenshots {
         )
     }
 
+    @Test fun sideMenu() = shot("10-side-menu") {
+        DrawerMenu(Tab.HOME, "Abrar", "SAR", onCurrency = {}, onPick = {})
+    }
+
     @Test fun entryMenu() = shot("08-entry-menu") {
         Box(Modifier.fillMaxSize()) {
             EntryMenu(entries.first(), "SAR", onEdit = {}, onMove = {}, onDelete = {}, onDismiss = {})
