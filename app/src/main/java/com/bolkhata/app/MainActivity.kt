@@ -1601,7 +1601,12 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             } else {
                 Column {
                     FlashStrip(flash) { flash = null }
-                    InputBar(onSend = { homeInput(it) }, onMic = { startVoice() })
+                    InputBar(
+                        onSend = { homeInput(it) },
+                        onMic = { startVoice(forChat = true) },
+                        placeholder = "Speak, type or ask…",
+                        onAttach = { pickFile.launch(arrayOf("image/*", "application/pdf")) }
+                    )
                 }
             }
         },
