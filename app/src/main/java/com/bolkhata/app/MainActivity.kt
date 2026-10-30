@@ -354,8 +354,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
      * an "Other" expense, or no amount at all) and an AI key is set, the sentence goes to Gemini.
      * If the AI fails or there is no internet, the offline result is used as before.
      */
-    /** Applies an AI change straight away; Undo puts everything back. */
-    fun applyPlan(plan: Ai.EditPlan) {
+    /** Applies an AI change only while every target still matches the exact snapshot it was based on. */
+    fun applyPlan(plan: Ai.EditPlan): Boolean {
+        val expected = plan.changed.map { it.first } + plan.deleted
+        if (expected.isEmpty() || !Accounts.snapshotsMatch(entries, expected)) return false
         val beforeEntries = entries
         val beforeTrash = trash
         val map = plan.changed.associate { it.first.id to it.second }
@@ -377,6 +379,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 moveRecord?.let { store.forgetMove(it.id) }
             }
         }
+        return true
     }
 
     /**
@@ -741,14 +744,15 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 null
             }
             "ask" -> {
+                val available = scoped(entries)
                 if (f.what == "balance" && q.persons.size == 1) {
-                    Questions.answer(q.persons.first() + " kitna", entries, currency)?.text ?: "No entries with ${q.persons.first()}."
+                    Questions.answer(q.persons.first() + " kitna", available, currency)?.text ?: "No entries with ${q.persons.first()}."
                 } else {
-                    val main = Query.answer(Query.select(entries, q), f.what.ifBlank { "sum" }, q, currency)
+                    val main = Query.answer(Query.select(available, q), f.what.ifBlank { "sum" }, q, currency)
                     // "kitna kharcha": money that went out as loans or paybacks that day is shown too, so nothing looks missing.
                     if (q.types == setOf(Type.KHARCHA) && f.what.ifBlank { "sum" } == "sum") {
                         val outs = Query.Filter(q.from, q.to, setOf(Type.DIYA, Type.WAPIS_DIYA), q.persons, emptySet(), q.items, q.min, q.max, q.last, false, q.notItems, q.ids)
-                        val other = Query.select(entries, outs)
+                        val other = Query.select(available, outs)
                         if (other.isEmpty()) main else main + "\nAlso out: " + Query.answer(other, "sum", outs, currency)
                     } else main
                 }
@@ -769,7 +773,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 if (hits.isEmpty()) return "Nothing found (${Query.label(q)})."
                 val changed = hits.map { it to Query.change(it, f.set) }.filter { (a, b) -> a != b }
                 if (changed.isEmpty()) return "Already like that."
-                applyPlan(Ai.EditPlan(changed, emptyList(), "Changed ${changed.size} " + (if (changed.size == 1) "entry" else "entries")))
+                if (!applyPlan(Ai.EditPlan(changed, emptyList(), "Changed ${changed.size} " + (if (changed.size == 1) "entry" else "entries")))) {
+                    return "Those entries changed before I could update them. Nothing was changed; please search again."
+                }
                 changed.take(3).joinToString("; ") { (a, b) -> entryTitle(a) + " " + fmt(a.amount) + " → " + entryTitle(b) + " " + fmt(b.amount) } +
                     if (changed.size > 3) " +${changed.size - 3} more" else ""
             }
@@ -969,7 +975,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             chatViaReader(text); return true
         }
         if (Questions.isQuestion(u.text)) {
-            val a = Questions.answer(u.text, entries, currency) ?: return false
+            val a = Questions.answer(u.text, scopeKhataEntries(entries), currency) ?: return false
             lastSpeech = a.text
             postChat(a.text, isUser = false)
             return true
@@ -1055,7 +1061,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 }
                 // Only things outside the app's own work (advice, general talk) go to the full AI.
                 if (activeKey.isBlank()) { chatOffline(text, roman, aiDown = false); return@launch }
-                val res = Ai.assistant(text, history, entries, activeKey, store, currency, store.memory, voice = voiceOn)
+                val res = Ai.assistant(text, history, scopeKhataEntries(entries), activeKey, store, currency, store.memory, voice = voiceOn)
                 lastSpeech = res.speech
                 // Lasting facts from the chat are kept on the phone and sent with every later question.
                 if (res.remember.isNotEmpty() || res.forget.isNotEmpty()) {
@@ -1067,22 +1073,25 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 val list = contextualizeCurrentKhata(res.entries)
                 // Changes are applied straight away (the bar at the bottom has Undo), and listed in the chat
                 // so it's always clear exactly what changed.
-                val changeList = res.plan?.let { plan ->
+                val planApplied = res.plan?.let { applyPlan(it) } ?: true
+                val changeList = if (planApplied) res.plan?.let { plan ->
                     val df = java.text.SimpleDateFormat("d MMM", java.util.Locale.US)
                     fun d(e: Entry) = df.format(java.util.Date(e.date)) + " · " + entryTitle(e) + " · " + fmt(e.amount)
                     (plan.deleted.map { "- Deleted: " + d(it) } +
                         plan.changed.map { (a, b) -> "- Changed: " + d(a) + "  →  " + d(b) +
                             (if (a.category != b.category || a.type != b.type) " (" + b.type.label + ", " + b.category.label + ")" else "") })
                         .joinToString("\n")
-                }
-                res.plan?.let { applyPlan(it) }
+                } else null
                 // If the AI says it did something but sent no change, say so instead of letting it look done.
                 val claims = Regex("""(?i)\b(kar (diya|di|diye|dein)|hata (diya|di|diye)|shift|darj|updated?|deleted?|changed|moved|removed|set kar)\b""")
                 // Only when they asked for a change: a reply that mentions an earlier change ("delete ho chuki hai") is fine.
                 val askedChange = Regex("""(?i)\b(delete|del|hata|hatao|change|badal|badlo|galat|ghalat|minus|edit|update|theek|thek|fix|shift|move|remove)\b""").containsMatchIn(text)
-                val honest = if (askedChange && list.isEmpty() && res.plan == null && claims.containsMatchIn(reply)) {
-                    "$reply\n\n(Nothing was changed yet. Tell me exactly what to change.)"
-                } else reply
+                val honest = when {
+                    !planApplied -> "I couldn't safely apply that change because one or more matching entries changed while I was working. Nothing was changed; please search again."
+                    askedChange && list.isEmpty() && res.plan == null && claims.containsMatchIn(reply) ->
+                        "$reply\n\n(Nothing was changed yet. Tell me exactly what to change.)"
+                    else -> reply
+                }
                 if (list.isNotEmpty()) {
                     save(list + entries)
                     postChat(honest.ifBlank { "Saved" }, isUser = false, entryIds = list.map { it.id }, meta = res.trace)
