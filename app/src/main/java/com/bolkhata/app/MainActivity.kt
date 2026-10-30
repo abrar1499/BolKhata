@@ -742,8 +742,15 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         }
         val q = if (f.filter.isEmpty && onScreen != null && f.kind in setOf("delete", "change", "to_khata", "reread", "ask", "paid_by"))
             Query.Filter(ids = onScreen.second.map { it.id }.toSet()) else f.filter
-        // When chatting inside a khata, destructive commands must never touch another khata.
+        // When chatting inside a khata, actions and searches must never leak into another khata.
         fun scoped(list: List<Entry>): List<Entry> = scopeKhataEntries(list)
+        fun clarifyMultiple(action: String, hits: List<Entry>, allowAll: Boolean = true): String? {
+            if (!Accounts.requiresTargetClarification(hits.size, explicitlyAll, allowAll)) return null
+            val preview = hits.take(4).joinToString("\n") { e ->
+                shortDate(e.date) + " · " + entryTitle(e) + " · " + fmt(e.amount) + " " + currency
+            }
+            return "I found ${hits.size} matching entries for $action:\n$preview\nWhich one do you mean? Give the date or amount, or say 'all entries' when you want a bulk action."
+        }
         return when (f.kind) {
             "entry" -> {
                 if (f.text.none { it.isDigit() }) return f.reply.ifBlank { "How much? e.g. \"${f.text.ifBlank { "petrol" }} 50\"" }
@@ -766,7 +773,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             }
             "delete" -> {
                 if (q.isEmpty) return "Which entries? e.g. \"aaj ki sari entries delete karo\""
-                askDelete(Query.label(q), scoped(Query.select(entries, q)))
+                val hits = scoped(Query.select(entries, q))
+                if (hits.isEmpty()) return "Nothing found (${Query.label(q)})."
+                clarifyMultiple("delete", hits)?.let { return it }
+                askDelete(Query.label(q), hits)
                 null
             }
             "change" -> {
@@ -778,6 +788,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 if (f.set.isEmpty()) return runFixed(Ai.Fixed("", "reread", "", "", q), said, inChat)
                 val hits = scoped(Query.select(entries, q))
                 if (hits.isEmpty()) return "Nothing found (${Query.label(q)})."
+                clarifyMultiple("change", hits)?.let { return it }
                 val changed = hits.map { it to Query.change(it, f.set) }.filter { (a, b) -> a != b }
                 if (changed.isEmpty()) return "Already like that."
                 if (!applyPlan(Ai.EditPlan(changed, emptyList(), "Changed ${changed.size} " + (if (changed.size == 1) "entry" else "entries")))) {
@@ -794,6 +805,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 val hits = scoped(Query.select(entries, q))
                     .filter { !it.person.equals(name, true) }.sortedWith(compareBy<Entry> { it.date }.thenBy { it.createdAt })
                 if (hits.isEmpty()) return "Nothing found (${Query.label(q)})."
+                clarifyMultiple("move to $name khata", hits)?.let { return it }
                 var work = entries
                 val changed = hits.map { e ->
                     val moved = movedTo(e, work, null, false, name).copy(item = e.item.ifBlank { "Loans" })
@@ -818,7 +830,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     q2.cats.isEmpty() && q2.items.isEmpty() && q2.ids.isEmpty()) return "Which one? e.g. \"aaj ka khana\""
                 val hits = scoped(Query.select(entries, q2))
                 // The one that mentions the payer comes first ("Khana with nadeem").
-                val h = hits.firstOrNull { it.note.contains(payer, true) } ?: hits.firstOrNull() ?: return "Nothing found (${Query.label(q2)})."
+                val candidates = hits.filter { it.note.contains(payer, true) }.ifEmpty { hits }
+                clarifyMultiple("mark as paid by $payer", candidates, allowAll = false)?.let { return it }
+                val h = candidates.firstOrNull() ?: return "Nothing found (${Query.label(q2)})."
                 // A bill I split earlier: the others' shares were "to receive" for me; now the payer is owed instead.
                 val siblings = scoped(entries).filter { it.id != h.id && it.createdAt == h.createdAt && it.type == Type.DIYA && it.note.contains("share of", true) }
                 val shared = siblings.isNotEmpty() || h.note.contains(payer, true)
@@ -843,6 +857,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 if (q.isEmpty) return "Which entry? e.g. \"laptop wali entry\""
                 val hits = scoped(Query.select(entries, q))
                 if (hits.isEmpty()) return "Nothing found (${Query.label(q)})."
+                clarifyMultiple("re-read", hits)?.let { return it }
                 val names = contactNames()
                 val swaps = hits.mapNotNull { old ->
                     // The note keeps the words ("Khana ali"); the amount is put back when it isn't in it.
