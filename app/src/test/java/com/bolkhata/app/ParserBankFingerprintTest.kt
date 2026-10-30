@@ -35,6 +35,16 @@ class ParserBankFingerprintTest {
         assertNotEquals(original, otherTime)
     }
 
+    @Test fun deduplicatorSkipsOnlyMatchingStructuredBankAlerts() {
+        val saved = Entry("saved", Type.KHARCHA, 29.0, Cat.OTHER, "Other", "", "AlJidar A", 1L, 1L,
+            sourceFingerprint = "bank:exact")
+        val sameAlert = saved.copy(id = "incoming")
+        val manualEntry = saved.copy(id = "manual", sourceFingerprint = "")
+        val result = BankTransactionDeduplicator.filterNew(listOf(sameAlert, manualEntry), listOf(saved))
+        assertEquals(1, result.skipped)
+        assertEquals(listOf("manual"), result.fresh.map { it.id })
+    }
+
     @Test fun parsedBankEntryCarriesItsFingerprint() {
         val parsed = Parser.parse(fullAlert)
         assertEquals(1, parsed.entries.size)
