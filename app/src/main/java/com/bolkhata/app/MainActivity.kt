@@ -1451,11 +1451,15 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         if (talking.decrementAndGet() <= 0) { talking.set(0); if (voiceOn && !voiceAwaiting) listenNow() }
     }
 
-    /** Reads [text] with the phone's voice: Urdu script with an Urdu voice, otherwise English. */
+    /** Reads [text] with the phone's voice: Urdu script with an Urdu voice, Hindi script with a Hindi one, otherwise English. */
     fun phoneSpeak(text: String) {
         if (!ttsReady.value) { toast("The phone's voice isn't ready; set up ElevenLabs or a text-to-speech voice."); spokenDone(); return }
         val urduScript = text.any { it in '\u0600'..'\u06FF' }
-        val wanted = if (urduScript) java.util.Locale("ur", "PK") else java.util.Locale("en", "IN")
+        val wanted = when {
+            urduScript -> java.util.Locale("ur", "PK")
+            text.any { it in '\u0900'..'\u097F' } -> java.util.Locale("hi", "IN")
+            else -> java.util.Locale("en", "IN")
+        }
         val ok = tts.setLanguage(wanted)
         if (ok == android.speech.tts.TextToSpeech.LANG_MISSING_DATA || ok == android.speech.tts.TextToSpeech.LANG_NOT_SUPPORTED) {
             tts.setLanguage(java.util.Locale.ENGLISH)
@@ -1492,16 +1496,16 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
      * Says one line in the call after any line still playing: ElevenLabs when set up, else the phone's voice.
      * [line] is worked out first (it may ask Groq), and the call listens again once everything is said.
      */
-    fun say(line: suspend () -> String) {
+    fun say(line: suspend () -> Groq.Line) {
         talking.incrementAndGet()
         val before = lastLine[0]
         lastLine[0] = scope.launch {
-            val clean = line()
+            val (shown, clean) = line()
             before?.join()
             while (voiceOn && (player != null || tts.isSpeaking)) kotlinx.coroutines.delay(100)
             if (!voiceOn) return@launch
             if (clean.isBlank()) { spokenDone(); return@launch }
-            voiceReply = clean
+            voiceReply = shown
             voicePartial = ""
             val audio = context.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
             if (audio.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) == 0) toast("Media volume is off: turn it up to hear the answer.")
@@ -1518,7 +1522,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     /** Says the app's answer short and natural: Groq words it like a person would, else its first sentence is read. */
     fun speak(said: String, text: String) {
         val answer = text.replace(Regex("""[✓•*#_]"""), " ").replace(Regex("""(?m)^\s*-\s*"""), "").trim()
-        say { if (answer.isEmpty()) "" else (if (groqKey.isNotBlank()) Groq.spoken(groqKey, said, answer) else null) ?: shortSpoken(answer) }
+        say {
+            if (answer.isEmpty()) Groq.Line("", "")
+            else (if (groqKey.isNotBlank()) Groq.spoken(groqKey, said, answer) else null) ?: shortSpoken(answer).let { Groq.Line(it, it) }
+        }
     }
 
     /**
@@ -1531,18 +1538,19 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         voiceStatus = "Thinking…"
         if (groqKey.isBlank()) { voiceAwaiting = true; chatInput(said); return }
         scope.launch {
-            val turn = Groq.talk(groqKey, said, chatMessages.lastOrNull { !it.isUser }?.text.orEmpty())
+            val recent = chatMessages.takeLast(8).joinToString("\n") { (if (it.isUser) "Person: " else "App: ") + it.text.take(150) }
+            val turn = Groq.talk(groqKey, said, recent)
             if (!voiceOn) return@launch
             when {
                 turn == null -> { voiceAwaiting = true; chatInput(said) }
                 turn.command.isNotBlank() -> {
                     voiceAwaiting = true
-                    if (turn.say.isNotBlank()) say { turn.say }
+                    if (turn.say.text.isNotBlank()) say { turn.say }
                     chatInput(turn.command)
                 }
-                turn.say.isNotBlank() -> {
+                turn.say.text.isNotBlank() -> {
                     postChat(said, isUser = true)
-                    postChat(turn.say, isUser = false)
+                    postChat(turn.say.text, isUser = false)
                     say { turn.say }
                 }
                 else -> listenNow()
