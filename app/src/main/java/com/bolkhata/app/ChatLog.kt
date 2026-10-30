@@ -46,9 +46,8 @@ class ChatLog(context: Context) {
         if (file.exists()) parseChatLog(runCatching { file.readLines(Charsets.UTF_8) }.getOrDefault(emptyList()))
         else emptyList()
 
-    fun clear() {
-        runCatching { file.delete() }
-    }
+    /** True until the first message is recorded. */
+    fun isEmpty(): Boolean = !file.exists() || file.length() == 0L
 
     private fun append(line: JSONObject) {
         runCatching {
@@ -88,15 +87,38 @@ fun parseChatLog(lines: List<String>): List<ChatLogRecord> {
     return records.values.toList()
 }
 
+/** One record as JSON, the same shape in the uploaded log and the shared diagnostics report. */
+fun ChatLogRecord.toJson(): JSONObject = JSONObject()
+    .put("ts", timestamp)
+    .put("role", if (isUser) "user" else "assistant")
+    .put("text", text)
+    .put("meta", meta)
+    .apply { if (flagged) put("markedWrong", true).put("expected", expected) }
+
 /** Writes records as JSON lines, the format of the uploaded daily log files. */
-fun chatLogJsonl(records: List<ChatLogRecord>): String = records.joinToString("") { r ->
-    JSONObject()
-        .put("ts", r.timestamp)
-        .put("role", if (r.isUser) "user" else "assistant")
-        .put("text", r.text)
-        .put("meta", r.meta)
-        .apply { if (r.flagged) put("markedWrong", true).put("expected", r.expected) }
-        .toString() + "\n"
+fun chatLogJsonl(records: List<ChatLogRecord>): String = records.joinToString("") { it.toJson().toString() + "\n" }
+
+/**
+ * The shareable diagnostics report: the chat log plus a "markedWrong" list that pairs every answer marked wrong
+ * with the question before it. Contains chat text and engine traces only, never ledger rows or contacts.
+ */
+fun chatDiagnosticsReport(records: List<ChatLogRecord>, appVersion: String, device: String, androidSdk: Int, now: Long = System.currentTimeMillis()): JSONObject {
+    val flagged = org.json.JSONArray()
+    records.forEachIndexed { i, r ->
+        if (r.flagged) flagged.put(r.toJson().put("question", records.subList(0, i).lastOrNull { it.isUser }?.text ?: ""))
+    }
+    return JSONObject()
+        .put("app", "Smart Expense")
+        .put("reportVersion", 2)
+        .put("createdAt", java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", java.util.Locale.US).format(java.util.Date(now)))
+        .put("appVersion", appVersion)
+        .put("androidSdk", androidSdk)
+        .put("device", device)
+        .put("privacy", "Chat text and engine trace only. No ledger records, contacts, credentials, or attachment files are included.")
+        .put("chatMessageCount", records.size)
+        .put("markedWrongCount", flagged.length())
+        .put("markedWrong", flagged)
+        .put("messages", org.json.JSONArray().apply { records.forEach { put(it.toJson()) } })
 }
 
 /** Groups records by local day ("yyyy-MM-dd"), keeping only days at or after the day of [since]. */

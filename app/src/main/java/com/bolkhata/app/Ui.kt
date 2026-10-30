@@ -4,14 +4,30 @@ import androidx.compose.foundation.BorderStroke
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.outlined.AccountBalance
+import androidx.compose.material.icons.outlined.Bolt
+import androidx.compose.material.icons.outlined.Category
+import androidx.compose.material.icons.outlined.Chair
+import androidx.compose.material.icons.outlined.Handshake
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Inventory2
+import androidx.compose.material.icons.outlined.LocalGasStation
+import androidx.compose.material.icons.outlined.MedicalServices
+import androidx.compose.material.icons.outlined.Payments
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.PhoneAndroid
+import androidx.compose.material.icons.outlined.ReceiptLong
+import androidx.compose.material.icons.outlined.Restaurant
+import androidx.compose.material.icons.outlined.School
+import androidx.compose.material.icons.outlined.Sell
+import androidx.compose.material.icons.outlined.ShoppingBag
+import androidx.compose.material.icons.outlined.VolunteerActivism
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -46,7 +62,6 @@ import kotlin.math.roundToLong
 // ---------- colours & theme ----------
 
 val GreenDeep = Color(0xFF047857)
-val GreenNight = Color(0xFF0B0B0F)
 
 /** Emerald gradient for the mic and other accent buttons. */
 val AccentBrush = Brush.linearGradient(
@@ -64,13 +79,21 @@ data class HeaderTheme(val name: String, val c1: Color, val c2: Color, val c3: C
     val on: Color get() = if (light) Color(0xFF1F2937) else Color.White
 
     /** Background for round buttons on the header. */
-    val chip: Color get() = if (light) Color.White.copy(alpha = 0.7f) else Color.White.copy(alpha = 0.22f)
+    val chip: Color get() = when {
+        flat -> on.copy(alpha = 0.06f)
+        light -> Color.White.copy(alpha = 0.7f)
+        else -> Color.White.copy(alpha = 0.22f)
+    }
+
+    /** The plain "Clean" look: one flat colour, no gradient or circles. */
+    val flat: Boolean get() = c1 == c2 && c2 == c3
 }
 
 private fun h(name: String, a: Long, b: Long, c: Long, light: Boolean) = HeaderTheme(name, Color(a), Color(b), Color(c), light)
 
 /** All themes the person can pick in Settings. The first one is the default. */
 val HEADER_THEMES = listOf(
+    h("Clean", 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, true),
     h("Sand", 0xFFFED7AA, 0xFFFDE7CC, 0xFFFFF5EA, true),
     h("Mint", 0xFFA7F3D0, 0xFFC6F6E0, 0xFFE3FBF1, true),
     h("Sky", 0xFFBAE6FD, 0xFFD6EFFE, 0xFFEEF8FF, true),
@@ -87,7 +110,11 @@ val HEADER_THEMES = listOf(
     h("Black", 0xFF0B0B0F, 0xFF1F2937, 0xFF374151, false)
 )
 
-fun headerTheme(name: String): HeaderTheme = HEADER_THEMES.firstOrNull { it.name == name } ?: HEADER_THEMES.first()
+/** The header theme to show; "Clean" follows dark mode so its text stays readable. */
+fun headerTheme(name: String, dark: Boolean = false): HeaderTheme {
+    val theme = HEADER_THEMES.firstOrNull { it.name == name } ?: HEADER_THEMES.first()
+    return if (theme.name == "Clean" && dark) h("Clean", 0xFF0F0F0F, 0xFF0F0F0F, 0xFF0F0F0F, false) else theme
+}
 
 val LocalHeader = staticCompositionLocalOf { HEADER_THEMES.first() }
 
@@ -126,11 +153,12 @@ fun BolTheme(dark: Boolean, content: @Composable () -> Unit) {
         onPrimaryContainer = Color(0xFFD1FAE5),
         secondaryContainer = Color(0xFF064E3B),
         onSecondaryContainer = Color(0xFFD1FAE5),
-        background = Color(0xFF0E1311),
-        surface = Color(0xFF171E1B),
-        surfaceVariant = Color(0xFF232C28),
-        onSurfaceVariant = Color(0xFFA3B1A9),
-        outline = Color(0xFF3A4540)
+        background = Color(0xFF0F0F0F),
+        surface = Color(0xFF181818),
+        surfaceVariant = Color(0xFF262626),
+        onSurfaceVariant = Color(0xFFA3A3A3),
+        outline = Color(0xFF333333),
+        outlineVariant = Color(0xFF2A2A2A)
     ) else lightColorScheme(
         primary = Color(0xFF059669),
         onPrimary = Color.White,
@@ -138,11 +166,14 @@ fun BolTheme(dark: Boolean, content: @Composable () -> Unit) {
         onPrimaryContainer = Color(0xFF065F46),
         secondaryContainer = Color(0xFFD1FAE5),
         onSecondaryContainer = Color(0xFF065F46),
-        background = Color(0xFFF2F6F3),
+        background = Color.White,
+        onBackground = Color(0xFF0D0D0D),
         surface = Color.White,
-        surfaceVariant = Color(0xFFEDF2EF),
-        onSurfaceVariant = Color(0xFF65736B),
-        outline = Color(0xFFD5DED8)
+        onSurface = Color(0xFF0D0D0D),
+        surfaceVariant = Color(0xFFF2F2F2),
+        onSurfaceVariant = Color(0xFF6B6B6B),
+        outline = Color(0xFFE5E5E5),
+        outlineVariant = Color(0xFFECECEC)
     )
     MaterialTheme(colorScheme = scheme, content = content)
 }
@@ -184,7 +215,6 @@ fun dayLabel(d: Long): String {
 fun timeLabel(ms: Long): String = SimpleDateFormat("h:mm a", Locale.US).format(Date(ms))
 
 fun shortDate(d: Long): String = SimpleDateFormat("d MMM", Locale.US).format(Date(d))
-fun fullDate(d: Long): String = SimpleDateFormat("EEE, d MMM yyyy", Locale.US).format(Date(d))
 
 /** Local date -> UTC midnight (what the date picker uses). */
 fun toUtcMidnight(ms: Long): Long {
@@ -249,7 +279,6 @@ fun stock(entries: List<Entry>): List<StockLine> {
     }
     return map.values.toList()
 }
-
 
 data class ProfitItemBreakdown(
     val item: String,
@@ -324,9 +353,9 @@ fun profitBreakdown(allEntries: List<Entry>, periodEntries: List<Entry>): Profit
 }
 
 fun signColor(t: Type) = when (t) {
-    Type.KHARCHA, Type.WAPIS_DIYA, Type.PURCHASE -> RedSpend
-    Type.AAMDANI, Type.WAPIS_MILA, Type.SALE -> GreenIn
-    Type.DIYA, Type.LIYA, Type.TRANSFER_IN, Type.TRANSFER_OUT -> OrangeOwe
+    Type.KHARCHA, Type.WAPIS_DIYA, Type.PURCHASE, Type.TRANSFER_OUT -> RedSpend
+    Type.AAMDANI, Type.WAPIS_MILA, Type.SALE, Type.TRANSFER_IN -> GreenIn
+    Type.DIYA, Type.LIYA -> OrangeOwe
 }
 
 fun prefix(t: Type) = when (t) {
@@ -393,10 +422,34 @@ fun CatBubble(cat: Cat, size: Dp = 44.dp) {
     Box(
         Modifier
             .size(size)
-            .clip(RoundedCornerShape(14.dp))
-            .background(catColor(cat).copy(alpha = 0.16f)),
+            .clip(CircleShape)
+            .background(catColor(cat).copy(alpha = 0.13f)),
         contentAlignment = Alignment.Center
-    ) { Text(cat.icon, fontSize = (size.value * 0.45f).sp) }
+    ) {
+        Icon(catIcon(cat), contentDescription = cat.label, tint = catColor(cat), modifier = Modifier.size(size * 0.48f))
+    }
+}
+
+/** A simple line icon for each category, used instead of emoji. */
+fun catIcon(c: Cat): ImageVector = when (c) {
+    Cat.KHANA -> Icons.Outlined.Restaurant
+    Cat.TRANSPORT -> Icons.Outlined.LocalGasStation
+    Cat.RENT -> Icons.Outlined.Home
+    Cat.BIJLI -> Icons.Outlined.Bolt
+    Cat.MOBILE -> Icons.Outlined.PhoneAndroid
+    Cat.GHAR -> Icons.Outlined.Chair
+    Cat.SHOPPING -> Icons.Outlined.ShoppingBag
+    Cat.SEHAT -> Icons.Outlined.MedicalServices
+    Cat.PERSONAL -> Icons.Outlined.Person
+    Cat.TANKHWAH -> Icons.Outlined.Payments
+    Cat.UDHAAR -> Icons.Outlined.Handshake
+    Cat.FEES -> Icons.Outlined.AccountBalance
+    Cat.EDU -> Icons.Outlined.School
+    Cat.CHARITY -> Icons.Outlined.VolunteerActivism
+    Cat.ASSETS -> Icons.Outlined.Sell
+    Cat.SALES -> Icons.Outlined.ReceiptLong
+    Cat.STOCK -> Icons.Outlined.Inventory2
+    Cat.OTHER -> Icons.Outlined.Category
 }
 
 @Composable
@@ -407,41 +460,8 @@ fun SmallLabel(s: String) =
     )
 
 @Composable
-fun SectionHeader(title: String, count: Int?, expanded: Boolean, total: String? = null, onToggle: () -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .clickable { onToggle() }
-            .padding(vertical = 8.dp, horizontal = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(title, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-        if (count != null) {
-            Spacer(Modifier.width(8.dp))
-            Box(
-                Modifier
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer)
-                    .padding(horizontal = 8.dp, vertical = 1.dp)
-            ) { Text("$count", fontSize = 12.sp, color = MaterialTheme.colorScheme.onPrimaryContainer) }
-        }
-        Spacer(Modifier.weight(1f))
-        if (total != null) {
-            Text(total, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = RedSpend)
-            Spacer(Modifier.width(6.dp))
-        }
-        Icon(
-            if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-            contentDescription = if (expanded) "Close" else "Open",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
-
-@Composable
 fun TxRow(e: Entry, currency: String, showDate: Boolean = true, onClick: () -> Unit) {
-    // Tap opens the entry's account, long-press edits it.
+    // Long-press opens the Edit / Move / Delete menu; a tap does nothing.
     Panel(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).entryTap(e, onClick), padding = 0.dp) {
         TxRowContent(e, currency, showDate)
     }
@@ -534,6 +554,10 @@ fun ChartGlyph(color: Color, size: Dp = 24.dp) {
 @Composable
 fun HeroBackground(modifier: Modifier = Modifier) {
     val theme = LocalHeader.current
+    if (theme.flat) {
+        Box(modifier.background(theme.c1))
+        return
+    }
     val k = if (theme.light) 5f else 1f
     Canvas(modifier.background(theme.brush)) {
         val w = size.width

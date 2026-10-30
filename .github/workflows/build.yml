@@ -42,3 +42,30 @@ jobs:
         run: |
           cp app/build/outputs/apk/release/app-release.apk BolKhata.apk
           gh release create "v${{ github.run_number }}" BolKhata.apk --repo "${{ github.repository }}" --title "Smart Expense ${{ github.run_number }}" --notes "Verified offline assistant update from commit ${{ github.sha }}. Includes shared chat engine, date/category/type search, chained follow-up search context, correct yearly/all-time reports, safer delete confirmation, contact clarification, date-only entry listing, structured bank-alert fingerprinting to prevent truncated-alert duplicates, and consent-based chat diagnostics sharing. Also includes khata-scoped chat safety, bulk move, move history with guarded restore, merge preview and Undo, Trash confirmation, and offline OCR. Unit tests and release compilation must pass before publication. Please validate financial actions on-device; the diagnostic export does not include ledger rows." --latest
+
+  # Started by hand (Run workflow): renders the real screens with sample data and commits the PNGs to
+  # docs/screenshots on the same branch, so the look can be reviewed without installing the app.
+  screenshots:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+      - name: Render screens
+        run: gradle testDebugUnitTest -Pscreenshots --tests "com.bolkhata.app.screenshots.*" --no-daemon
+      - name: Commit screenshots
+        run: |
+          mkdir -p docs/screenshots
+          cp app/screenshots/*.png docs/screenshots/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/screenshots
+          git diff --cached --quiet || git commit -m "docs: update app screenshots [skip ci]"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

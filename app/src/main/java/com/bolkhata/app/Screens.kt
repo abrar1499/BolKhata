@@ -24,11 +24,8 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.TrendingDown
-import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -41,6 +38,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -105,7 +105,6 @@ fun HomeScreen(
             pay = -bal.values.filter { it < 0 }.sum(),
             cashInHand = entries.filter { it.isCashInFlow() }.sumOf { it.amount } - entries.filter { it.isCashOutFlow() }.sumOf { it.amount },
             todayList = sortedAll.filter { sameDay(it.date, nowMs) },
-            dayGroups = emptyMap(),
             // Every day but today sits inside its year and month: 2026 -> October -> 27 Oct.
             monthGroups = sortedAll.filter { !sameDay(it.date, nowMs) }.groupBy { monthKey(it.date) }
         ).also { h ->
@@ -173,38 +172,14 @@ fun HomeScreen(
                     Spacer(Modifier.height(12.dp))
                     TabSwitcher(Tab.HOME, trading, chatBadge, onTab)
                     Spacer(Modifier.height(14.dp))
-                    Panel(Modifier.fillMaxWidth(), padding = 12.dp) {
-                        Text("In $monthName", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(Modifier.height(8.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            // Money going out points up, money coming in points down.
-                            MainSummaryTile(
-                                "Expense", moneyA(currency, monthSpent), Icons.Filled.ArrowUpward, RedSpend,
-                                Modifier.weight(1f)
-                            ) { openMain?.invoke(MainAcct.EXPENSE) ?: onReports(ReportKind.CASH_OUT) }
-                            MainSummaryTile(
-                                "Income", moneyA(currency, monthIncome), Icons.Filled.ArrowDownward, GreenIn,
-                                Modifier.weight(1f)
-                            ) { openMain?.invoke(MainAcct.INCOME) ?: onReports(ReportKind.CASH_IN) }
-                        }
-                        Spacer(Modifier.height(8.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            MiniTile(
-                                "To pay", moneyA(currency, pay), Icons.Filled.Remove, OrangeOwe, Modifier.weight(1f),
-                                valueSize = 12, compact = true
-                            ) { openMain?.invoke(MainAcct.TO_PAY) ?: onPeople(false) }
-                            MiniTile(
-                                "To receive", moneyA(currency, receive), Icons.Filled.Add, GreenIn, Modifier.weight(1f),
-                                valueSize = 12, compact = true
-                            ) { openMain?.invoke(MainAcct.TO_RECEIVE) ?: onPeople(true) }
-                            MiniTile(
-                                "Cash in hand", moneyA(currency, cashInHand), Icons.Filled.AccountBalanceWallet,
-                                MaterialTheme.colorScheme.onSurfaceVariant, Modifier.weight(1f),
-                                valueSize = 12, valueColor = if (cashInHand >= 0) Color.Unspecified else RedSpend,
-                                compact = true
-                            ) { onReports(ReportKind.CASH_BALANCE) }
-                        }
-                    }
+                    Panel(Modifier.fillMaxWidth(), padding = 14.dp) { OverviewSummary(
+                        monthName, currency, monthSpent, monthIncome, cashInHand, pay, receive,
+                        onExpense = { openMain?.invoke(MainAcct.EXPENSE) ?: onReports(ReportKind.CASH_OUT) },
+                        onIncome = { openMain?.invoke(MainAcct.INCOME) ?: onReports(ReportKind.CASH_IN) },
+                        onCash = { onReports(ReportKind.CASH_BALANCE) },
+                        onPay = { openMain?.invoke(MainAcct.TO_PAY) ?: onPeople(false) },
+                        onReceive = { openMain?.invoke(MainAcct.TO_RECEIVE) ?: onPeople(true) }
+                    ) }
                 }
             }
         }
@@ -253,7 +228,6 @@ fun HomeScreen(
         item { Spacer(Modifier.height(10.dp)) }
 
         val todayList = d.todayList
-        val dayGroups = d.dayGroups
         val monthGroups = d.monthGroups
 
         if (entries.isEmpty()) {
@@ -276,7 +250,6 @@ fun HomeScreen(
                 dayEntries(todayList, currency, onEdit)
             }
         }
-
 
         // Past months sit inside their year: "2026" (year in / out) -> "September" (month in / out) -> days.
         var lastYear = -1
@@ -418,7 +391,6 @@ private class HomeData(
     val pay: Double,
     val cashInHand: Double,
     val todayList: List<Entry>,
-    val dayGroups: Map<String, List<Entry>>,
     val monthGroups: Map<String, List<Entry>>
 ) {
     var monthDays: Map<String, Map<String, List<Entry>>> = emptyMap()
@@ -537,23 +509,12 @@ private fun InOutFigures(income: Double, expense: Double) {
 
 private fun dayKey(ms: Long): String = cal(ms).let { "d" + it.get(Calendar.YEAR) + "-" + it.get(Calendar.DAY_OF_YEAR) }
 private fun monthKey(ms: Long): String = cal(ms).let { "m" + it.get(Calendar.YEAR) + "-" + it.get(Calendar.MONTH) }
-private fun spentLabel(currency: String, list: List<Entry>): String? {
-    val spent = list.filter { it.type == Type.KHARCHA }.sumOf { it.amount }
-    return if (spent > 0) money(currency, spent) else null
-}
 
 private data class DailyCashSummary(
     val cashIn: Double,
     val cashOut: Double,
     val cashInHand: Double
 )
-
-private fun localDayStart(ms: Long): Long = cal(ms).apply {
-    set(Calendar.HOUR_OF_DAY, 0)
-    set(Calendar.MINUTE, 0)
-    set(Calendar.SECOND, 0)
-    set(Calendar.MILLISECOND, 0)
-}.timeInMillis
 
 /** Running cash balance through the selected local calendar day; only recorded cash flows are counted. */
 private fun dailyCashSummary(allEntries: List<Entry>, dayEntries: List<Entry>): DailyCashSummary {
@@ -647,152 +608,6 @@ private fun GroupedTxRow(e: Entry, currency: String, first: Boolean, last: Boole
             )
         }
         TxRowContent(e, currency, showDate = false)
-    }
-}
-
-@Composable
-private fun DailyCashMetric(
-    label: String,
-    amount: Double,
-    currency: String,
-    glyph: ImageVector,
-    color: Color,
-    modifier: Modifier,
-    valueColor: Color = color
-) {
-    Row(
-        modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(color.copy(alpha = 0.075f))
-            .padding(horizontal = 7.dp, vertical = 7.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                label,
-                fontSize = 10.sp,
-                lineHeight = 12.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                moneyA(currency, amount),
-                fontSize = 12.sp,
-                lineHeight = 14.sp,
-                fontWeight = FontWeight.Bold,
-                color = valueColor,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-        Spacer(Modifier.width(3.dp))
-        Box(
-            Modifier.size(23.dp).clip(CircleShape).background(color.copy(alpha = 0.16f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(glyph, contentDescription = null, tint = color, modifier = Modifier.size(15.dp))
-        }
-    }
-}
-
-
-@Composable
-private fun MainSummaryTile(
-    label: String,
-    value: AnnotatedString,
-    glyph: ImageVector,
-    color: Color,
-    modifier: Modifier,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier
-            .clip(RoundedCornerShape(18.dp))
-            .background(color.copy(alpha = 0.09f))
-            .clickable { onClick() }
-            .padding(horizontal = 12.dp, vertical = 16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            Modifier.size(38.dp).clip(CircleShape).background(color.copy(alpha = 0.18f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(glyph, contentDescription = null, tint = color, modifier = Modifier.size(24.dp))
-        }
-        Spacer(Modifier.width(9.dp))
-        Column(Modifier.weight(1f)) {
-            Text(label, fontSize = 14.sp, lineHeight = 17.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(
-                value,
-                fontWeight = FontWeight.ExtraBold,
-                fontSize = 23.sp,
-                lineHeight = 28.sp,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
-}
-
-@Composable
-private fun MiniTile(
-    label: String,
-    value: AnnotatedString,
-    glyph: ImageVector,
-    color: Color,
-    modifier: Modifier,
-    valueSize: Int = 15,
-    valueColor: Color = Color.Unspecified,
-    tinted: Boolean = false,
-    compact: Boolean = false,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier
-            .clip(RoundedCornerShape(if (compact) 13.dp else 14.dp))
-            .background(
-                if (tinted) color.copy(alpha = 0.12f)
-                else color.copy(alpha = if (compact) 0.07f else 0.10f)
-            )
-            .clickable { onClick() }
-            .padding(
-                start = if (compact) 4.dp else 12.dp,
-                end = if (compact) 4.dp else 10.dp,
-                top = if (compact) 8.dp else 8.dp,
-                bottom = if (compact) 8.dp else 8.dp
-            ),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                label,
-                fontSize = if (compact) 9.sp else 11.sp,
-                lineHeight = if (compact) 11.sp else 13.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                value,
-                fontWeight = FontWeight.Bold,
-                fontSize = valueSize.sp,
-                lineHeight = (valueSize + 3).sp,
-                color = valueColor,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-        Spacer(Modifier.width(if (compact) 2.dp else 6.dp))
-        Box(
-            Modifier.size(if (compact) 16.dp else 28.dp)
-                .clip(CircleShape)
-                .background(color.copy(alpha = 0.18f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(glyph, contentDescription = null, tint = color, modifier = Modifier.size(if (compact) 11.dp else 16.dp))
-        }
     }
 }
 
@@ -1097,15 +912,69 @@ private fun ReportGroupCard(
                 val quantity = if (e.qty > 0.0) fmt(e.qty) + if (e.unit.isBlank()) "" else " ${e.unit}" else null
                 val detail = listOf(item, party, e.note.takeIf { it.isNotBlank() }, quantity)
                     .filterNotNull().joinToString(" · ").ifBlank { typeLabel(e.type, e.person) }
-                Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(shortDate(e.date), Modifier.width(56.dp), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(detail, Modifier.weight(1f), fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text(moneyA(currency, e.amount), fontSize = 12.sp)
-                }
+                ReportLine(e, detail, currency)
             }
         } else {
             Text("Tap to see every entry", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+    }
+}
+
+/**
+ * The month at a glance: what was spent (red) in medium-large figures, then income and cash in hand on one line,
+ * and what is owed each way. Every figure opens its account or report.
+ */
+@Composable
+private fun OverviewSummary(
+    monthName: String, currency: String, spent: Double, income: Double, cash: Double, pay: Double, receive: Double,
+    onExpense: () -> Unit, onIncome: () -> Unit, onCash: () -> Unit, onPay: () -> Unit, onReceive: () -> Unit
+) {
+    val faint = MaterialTheme.colorScheme.onSurfaceVariant
+    Column(Modifier.fillMaxWidth()) {
+        Column(Modifier.clip(RoundedCornerShape(14.dp)).clickable(onClick = onExpense).padding(vertical = 4.dp, horizontal = 2.dp)) {
+            Text("$monthName spent", fontSize = 13.sp, color = faint)
+            Text(
+                buildAnnotatedString {
+                    append(fmt(spent))
+                    withStyle(SpanStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium, color = faint)) { append(" $currency") }
+                },
+                fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.Bold, color = RedSpend, maxLines = 1
+            )
+        }
+        Row(Modifier.padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Income " + fmt(income), fontSize = 13.sp, color = GreenIn, fontWeight = FontWeight.Medium,
+                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onIncome).padding(2.dp))
+            Text("  ·  ", fontSize = 13.sp, color = faint)
+            Text("Cash in hand " + fmt(cash), fontSize = 13.sp, color = if (cash < 0) RedSpend else faint,
+                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onCash).padding(2.dp))
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(
+            Modifier.fillMaxWidth().height(IntrinsicSize.Min).clip(RoundedCornerShape(16.dp))
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp))
+        ) {
+            OweCell("To pay", pay, OrangeOwe, Modifier.weight(1f), onPay)
+            Box(Modifier.width(1.dp).fillMaxHeight().background(MaterialTheme.colorScheme.outlineVariant))
+            OweCell("To receive", receive, GreenIn, Modifier.weight(1f), onReceive)
+        }
+    }
+}
+
+@Composable
+private fun OweCell(label: String, amount: Double, color: Color, modifier: Modifier, onClick: () -> Unit) {
+    Column(modifier.clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 10.dp)) {
+        Text(label, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(fmt(amount), fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** One entry under a report row: date, what it was, amount. */
+@Composable
+private fun ReportLine(e: Entry, detail: String, currency: String) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(shortDate(e.date), Modifier.width(56.dp), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(detail, Modifier.weight(1f), fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(moneyA(currency, e.amount), fontSize = 12.sp)
     }
 }
 
@@ -1279,7 +1148,7 @@ fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit, st
                 item {
                     Panel(Modifier.fillMaxWidth(), padding = 14.dp) {
                         Text("Cash Out · $label", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
-                        Text(moneyA(currency, cashOutTotal), fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = RedSpend)
+                        Text(moneyA(currency, cashOutTotal), fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = RedSpend)
                         Text("${cashOutEntries.size} entries, including expenses, paid purchases and money lent", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
@@ -1295,7 +1164,7 @@ fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit, st
                 item {
                     Panel(Modifier.fillMaxWidth(), padding = 14.dp) {
                         Text("Cash In · $label", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
-                        Text(moneyA(currency, cashInTotal), fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = GreenIn)
+                        Text(moneyA(currency, cashInTotal), fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = GreenIn)
                         Text("${cashInEntries.size} entries, including other income, paid sales and money received back", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
@@ -1311,7 +1180,7 @@ fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit, st
                 item {
                     Panel(Modifier.fillMaxWidth(), padding = 14.dp) {
                         Text("Sales · $label", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
-                        Text(moneyA(currency, totalSales), fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = GreenIn)
+                        Text(moneyA(currency, totalSales), fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = GreenIn)
                         Text("${sales.size} sales entries · ${fmt(sales.sumOf { it.qty })} units sold", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
@@ -1327,7 +1196,7 @@ fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit, st
                 item {
                     Panel(Modifier.fillMaxWidth(), padding = 14.dp) {
                         Text("Purchases · $label", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
-                        Text(moneyA(currency, totalPurchases), fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = catColor(Cat.STOCK))
+                        Text(moneyA(currency, totalPurchases), fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = catColor(Cat.STOCK))
                         Text("${purchases.size} purchase entries · ${fmt(purchases.sumOf { it.qty })} units bought", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
@@ -1390,11 +1259,7 @@ fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit, st
                                 val party = e.person.takeIf { it.isNotBlank() }?.let { if (e.type == Type.PURCHASE || e.type == Type.LIYA) "from $it" else "to $it" }
                                 val quantity = fmt(e.qty) + if (e.unit.isBlank()) "" else " ${e.unit}"
                                 val detail = listOf(direction, party, quantity, e.note.takeIf { it.isNotBlank() }).filterNotNull().joinToString(" · ")
-                                Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Text(shortDate(e.date), Modifier.width(56.dp), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Text(detail, Modifier.weight(1f), fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                    Text(moneyA(currency, e.amount), fontSize = 12.sp)
-                                }
+                                ReportLine(e, detail, currency)
                             }
                         } else Text("Tap to see stock movements", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -1404,7 +1269,7 @@ fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit, st
                 item {
                     Panel(Modifier.fillMaxWidth(), padding = 16.dp) {
                         Text("Estimated net profit · $label", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(moneyA(currency, profit.netProfit), fontSize = 30.sp, fontWeight = FontWeight.ExtraBold,
+                        Text(moneyA(currency, profit.netProfit), fontSize = 22.sp, fontWeight = FontWeight.ExtraBold,
                             color = if (profit.netProfit >= 0) GreenIn else RedSpend)
                         Text("Costed sales margin − Cash Out expenses (Cash In excluded)", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -1471,7 +1336,7 @@ fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit, st
                 item {
                     Panel(Modifier.fillMaxWidth(), padding = 16.dp) {
                         Text("Current cash balance · all recorded entries", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(moneyA(currency, cashBalance), fontSize = 30.sp, fontWeight = FontWeight.ExtraBold,
+                        Text(moneyA(currency, cashBalance), fontSize = 22.sp, fontWeight = FontWeight.ExtraBold,
                             color = if (cashBalance >= 0) GreenIn else RedSpend)
                         HorizontalDivider(Modifier.padding(vertical = 10.dp))
                         ProfitSummaryRow("Cash In (all time)", allCashIn, currency, GreenIn)
@@ -1523,11 +1388,7 @@ fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit, st
                             history.forEach { e ->
                                 val detail = listOf(typeLabel(e.type, e.person), e.item.takeIf { it.isNotBlank() && it != "Loans" },
                                     e.note.takeIf { it.isNotBlank() }).filterNotNull().joinToString(" · ")
-                                Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Text(shortDate(e.date), Modifier.width(56.dp), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Text(detail, Modifier.weight(1f), fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                    Text(moneyA(currency, e.amount), fontSize = 12.sp)
-                                }
+                                ReportLine(e, detail, currency)
                             }
                         } else Text("Tap to see outstanding transactions", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -1567,7 +1428,7 @@ fun PeopleScreen(entries: List<Entry>, currency: String, receive: Boolean, onBac
         item {
             Panel(Modifier.fillMaxWidth(), padding = 16.dp) {
                 Text(if (receive) "People owe you" else "You owe people", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
-                Text(moneyA(currency, total), fontSize = 30.sp, fontWeight = FontWeight.ExtraBold, color = color)
+                Text(moneyA(currency, total), fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = color)
                 Text("${bal.size} " + if (bal.size == 1) "person" else "people", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
@@ -1928,7 +1789,7 @@ fun ResultsScreen(
                     )
                     Text(
                         moneyA(currency, kotlin.math.abs(bal)),
-                        fontSize = 30.sp, fontWeight = FontWeight.ExtraBold,
+                        fontSize = 22.sp, fontWeight = FontWeight.ExtraBold,
                         color = if (bal > 0.005) GreenIn else if (bal < -0.005) OrangeOwe else MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(Modifier.height(10.dp))

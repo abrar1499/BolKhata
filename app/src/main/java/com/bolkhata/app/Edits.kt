@@ -1,7 +1,5 @@
 package com.bolkhata.app
 
-import java.util.Calendar
-
 /**
  * Changes an existing entry without AI. Understands, in any mix:
  *  - date:     "nashta wali entry 2 din pehle ki hai", "petrol kal ka tha", "cheeni 14 date ki thi", "last entry 13 oct ki"
@@ -14,6 +12,18 @@ import java.util.Calendar
  * Returns null when the sentence is not clearly about an old entry, so it is read as a new one.
  */
 object Edits {
+
+    /** "hamza wali 500 ko 400 kar do", "last entry food mein daal do", "kal ka petrol 60 tha 50 nahi". */
+    fun looksLikeEdit(text: String): Boolean {
+        val t = " " + text.lowercase() + " "
+        val strong = listOf(
+            "change", "badal", "badlo", "update", "correct", "galat", "ghalat", "ki jagah", "ke bajaye", "instead",
+            "should be", "make it", "nahi tha", "nahi thi", "nahin tha", "fix", "theek kar", "thik kar", "sahi kar", " edit "
+        )
+        val soft = listOf("kar do", "kardo", "kr do", "krdo", "daal do", "dal do", "daldo", "kar dein", "kardein")
+        val refers = listOf("entry", "wali", "wala", "wale", "last", "pichli", "pichhli", "akhri", "aakhri", "category", "previous")
+        return t.contains(" entry ") || strong.any { t.contains(it) } || (soft.any { t.contains(it) } && refers.any { t.contains(it) })
+    }
 
     private val refers = setOf("entry", "wali", "wala", "wale", "walay", "waly", "last", "pichli", "pichhli", "akhri", "aakhri", "previous", "ye", "yeh", "isko", "usko")
     private val lastWords = setOf("last", "pichli", "pichhli", "akhri", "aakhri", "previous", "ye", "yeh", "isko", "usko")
@@ -240,10 +250,4 @@ object Edits {
     }
 
     private fun cap(s: String) = s.lowercase().replaceFirstChar { it.uppercase() }
-
-    private fun sameDay(a: Long, b: Long): Boolean {
-        val x = Calendar.getInstance().apply { timeInMillis = a }
-        val y = Calendar.getInstance().apply { timeInMillis = b }
-        return x.get(Calendar.YEAR) == y.get(Calendar.YEAR) && x.get(Calendar.DAY_OF_YEAR) == y.get(Calendar.DAY_OF_YEAR)
-    }
 }

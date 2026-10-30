@@ -66,3 +66,21 @@ class ChatLogUploadTest {
         assertTrue(lines[1].contains("\"expected\":\"60\""))
     }
 }
+
+class ChatDiagnosticsReportTest {
+    @Test
+    fun wrongAnswersArePairedWithTheQuestionBeforeThem() {
+        val records = listOf(
+            ChatLogRecord("1", 1, true, "petrol kitna", ""),
+            ChatLogRecord("2", 2, false, "0", "q=fuel", flagged = true, expected = "60"),
+            ChatLogRecord("3", 3, true, "thanks", "")
+        )
+        val report = chatDiagnosticsReport(records, "1.280", "Test phone", 34, now = 0L)
+        assertEquals(3, report.getInt("chatMessageCount"))
+        assertEquals(1, report.getInt("markedWrongCount"))
+        val wrong = report.getJSONArray("markedWrong").getJSONObject(0)
+        assertEquals("petrol kitna", wrong.getString("question"))
+        assertEquals("60", wrong.getString("expected"))
+        assertEquals(3, report.getJSONArray("messages").length())
+    }
+}

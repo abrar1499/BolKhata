@@ -574,7 +574,6 @@ private fun PickCard(
     }
 }
 
-
 /** A sent photo or PDF page, shown like a picture in a messaging app. Tap to see it full screen. */
 @Composable
 private fun AttachmentBubble(path: String, name: String) {

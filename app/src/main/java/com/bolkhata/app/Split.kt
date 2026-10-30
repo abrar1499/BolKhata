@@ -104,7 +104,6 @@ object Split {
         val foodWithName = !said && ws.none { it in loanMarkers } && ws.count { isNum(it) } == 1
         if (!said && !foodWithName && payer == null && ws.count { isNum(it) } < 3) return null
 
-
         // Names: contacts / common names; an unknown word joined to a name by "aur"/","; a name with a number is its share.
         val names = mutableListOf<String>()
         val shares = mutableMapOf<String, Double>()
