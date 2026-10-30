@@ -25,6 +25,13 @@ class ParserBankFingerprintTest {
         val second = Parser.bankFingerprint(shortenedAlert, 29.0)
         assertTrue(first.isNotBlank())
         assertEquals(first, second)
+
+        val normalizedFull = Normalizer.normalize(fullAlert).text
+        val normalizedShort = Normalizer.normalize(shortenedAlert).text
+        assertEquals(
+            Parser.bankFingerprint(normalizedFull, 29.0),
+            Parser.bankFingerprint(normalizedShort, 29.0)
+        )
     }
 
     @Test fun differentAmountOrTimestampDoesNotShareTheFingerprint() {
