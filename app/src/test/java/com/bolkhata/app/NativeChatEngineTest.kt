@@ -92,7 +92,7 @@ class NativeChatEngineTest {
         assertEquals(setOf(Type.KHARCHA), result.filter.types)
         assertTrue(result.filter.items.isEmpty())
         assertEquals(Query.day("2026-10-28"), result.filter.from)
-        assertEquals(result.filter.from, result.filter.to?.let { Query.day("2026-10-28") })
+        assertEquals(86_399_999L, result.filter.to!! - result.filter.from!!)
     }
 
     @Test fun dateOnlyFollowUpInheritsThePreviousExpenseSearch() {
