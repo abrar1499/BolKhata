@@ -32,7 +32,10 @@ object Questions {
         "mahinay", "total?", "ab", "tak", "es", "iss", "us", "is"
     )
 
-    private enum class Period(val label: String) { TODAY("today"), YESTERDAY("yesterday"), MONTH("this month"), LAST_MONTH("last month"), YEAR("this year"), ALL("so far") }
+    private enum class Period(val label: String) {
+        TODAY("today"), YESTERDAY("yesterday"), MONTH("this month"), LAST_MONTH("last month"),
+        YEAR("this year"), LAST_YEAR("last year"), ALL("all time")
+    }
 
     fun isQuestion(text: String): Boolean {
         val t = " " + text.lowercase() + " "
@@ -49,7 +52,10 @@ object Questions {
             (words.contains("pichle") || words.contains("pichhle") || words.contains("last")) &&
                 (words.contains("mahine") || words.contains("month")) -> Period.LAST_MONTH
             words.any { it in setOf("mahine", "mahina", "mahiny", "mahinay", "month") } -> Period.MONTH
-            words.contains("saal") || words.contains("year") -> Period.YEAR
+            (words.any { it in setOf("last", "previous", "pichle", "pichhle") } &&
+                words.any { it in setOf("saal", "year", "years", "yearly", "annual", "annually") }) -> Period.LAST_YEAR
+            words.any { it in setOf("saal", "year", "years", "yearly", "annual", "annually") } -> Period.YEAR
+            words.any { it in setOf("all", "time", "overall", "lifetime", "ever", "alltime") } -> Period.ALL
             else -> null
         }
 
@@ -202,6 +208,10 @@ object Questions {
                 c.get(Calendar.YEAR) == last.get(Calendar.YEAR) && c.get(Calendar.MONTH) == last.get(Calendar.MONTH)
             }
             Period.YEAR -> c.get(Calendar.YEAR) == now.get(Calendar.YEAR)
+            Period.LAST_YEAR -> {
+                val last = Calendar.getInstance().apply { add(Calendar.YEAR, -1) }
+                c.get(Calendar.YEAR) == last.get(Calendar.YEAR)
+            }
             Period.ALL -> true
         }
     }
