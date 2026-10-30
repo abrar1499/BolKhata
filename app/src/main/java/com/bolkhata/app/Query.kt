@@ -76,6 +76,40 @@ object Query {
         return if (f.last > 0) list.take(f.last) else list
     }
 
+    /** Likely duplicate expense pairs, computed only from saved records (never from AI-generated examples). */
+    fun likelyDuplicateExpenses(entries: List<Entry>): List<Pair<Entry, Entry>> {
+        val dayMs = 86_400_000L
+        fun norm(s: String) = s.trim().lowercase().replace(Regex("""[^\\p{L}\\p{N}]+"""), " ").trim()
+        val grouped = entries.filter { it.type == Type.KHARCHA && it.amount > 0.0 }
+            .groupBy { Math.round(it.amount * 100.0) }
+        val pairs = mutableListOf<Pair<Entry, Entry>>()
+        grouped.values.forEach { group ->
+            val ordered = group.sortedBy { it.date }
+            for (i in ordered.indices) for (j in i + 1 until ordered.size) {
+                val a = ordered[i]
+                val b = ordered[j]
+                val closeDate = kotlin.math.abs(a.date - b.date) <= 3 * dayMs
+                val ca = Calendar.getInstance().apply { timeInMillis = a.date }
+                val cb = Calendar.getInstance().apply { timeInMillis = b.date }
+                val sameDayOtherYear = ca.get(Calendar.MONTH) == cb.get(Calendar.MONTH) &&
+                    ca.get(Calendar.DAY_OF_MONTH) == cb.get(Calendar.DAY_OF_MONTH) &&
+                    ca.get(Calendar.YEAR) != cb.get(Calendar.YEAR)
+                val itemA = norm(a.item)
+                val itemB = norm(b.item)
+                val noteA = norm(a.note)
+                val noteB = norm(b.note)
+                val sameDescription = (itemA.isNotBlank() && itemA == itemB) ||
+                    (noteA.isNotBlank() && noteA == noteB) ||
+                    (itemA.length >= 4 && itemB.length >= 4 && Normalizer.similarity(itemA, itemB) >= 0.92)
+                if ((closeDate || sameDayOtherYear) && sameDescription) {
+                    pairs += a to b
+                    if (pairs.size >= 100) return pairs
+                }
+            }
+        }
+        return pairs.sortedByDescending { maxOf(it.first.date, it.second.date) }
+    }
+
     /** "28 Oct", "25–28 Oct", "October 2026"… for answers. */
     fun label(f: Filter): String {
         val fmt = java.text.SimpleDateFormat("d MMM", java.util.Locale.US)
