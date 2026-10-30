@@ -1390,14 +1390,6 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         if (granted) { voiceOn = true; voiceMisses = 0; listenNow() } else micPermission.launch(android.Manifest.permission.RECORD_AUDIO)
     }
 
-    /** One tap from the chat chips: the same entry again, dated now. */
-    fun quickAdd(e: Entry) {
-        val now = System.currentTimeMillis()
-        val copy = e.copy(id = "e" + System.nanoTime(), date = now, createdAt = now, person = if (withPerson(e)) e.person else "")
-        save(listOf(copy) + entries)
-        postChat("✓ 1 entry saved", isUser = false, entryIds = listOf(copy.id))
-    }
-
     /** Rank alternatives by how well they fit khata commands, not just their list position. */
     fun voiceGuessScore(text: String, confidence: Float?): Int {
         var score = confidence?.takeIf { it >= 0f }?.let { (it * 20f).toInt() } ?: 0
@@ -1625,13 +1617,6 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     }.timeInMillis
                     val monthSpent = entries.filter { it.date >= monthStart && it.type == Type.KHARCHA }.sumOf { it.amount }
                     val monthName = java.text.SimpleDateFormat("MMM", java.util.Locale.US).format(java.util.Date())
-                    val quick = remember(entries) {
-                        entries
-                            .filter { it.type == Type.KHARCHA && it.amount > 0 && it.date >= System.currentTimeMillis() - 60L * 86_400_000L }
-                            .groupBy { quickLabel(it).lowercase() + "|" + it.amount }
-                            .entries.sortedByDescending { it.value.size }
-                            .take(4).map { g -> g.value.maxBy { it.date } }
-                    }
                     ChatScreen(
                         messages = chatMessages,
                         loading = chatLoading,
@@ -1640,7 +1625,6 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         currency = currency,
                         subtitle = "$monthName · ${fmt(monthSpent)} $currency spent",
                         suggestions = suggestions,
-                        quick = quick,
                         showStock = entries.any { isTrade(it.type) },
                         onTab = { tab = it },
                         onMenu = { openMenu() },
@@ -1671,7 +1655,6 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                             )
                         },
                         onIgnoreSuggestions = { ids -> dropSuggestions(ids) },
-                        onQuick = { quickAdd(it) },
                         voiceOn = voiceOn,
                         imports = imports,
                         importDupes = importDupes,
