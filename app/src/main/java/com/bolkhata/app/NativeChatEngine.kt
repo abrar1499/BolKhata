@@ -242,7 +242,7 @@ object NativeChatEngine {
                 "mahina", "mahine", "saal", "all", "time", "overall", "lifetime", "ever", "alltime")
             val simpleLookup = (words.any { token -> categories.values.any { token in it } } || has(words, expense + income)) &&
                 !has(words, setOf("how", "much", "many", "kitna", "kitne", "kitni", "total", "sum", "count")) &&
-                !has(words, periodWords)
+                !has(words, periodWords - setOf("all"))
             val what = when {
                 has(words, setOf("highest", "largest", "biggest", "maximum", "max", "most")) -> "highest"
                 has(words, setOf("count", "howmany", "kitne", "kitni", "number")) -> "count"
@@ -292,7 +292,7 @@ object NativeChatEngine {
         val simpleLedgerLookup = (categoryMentioned || broadTypeMentioned) &&
             !has(w, setOf("how", "much", "many", "kitna", "kitne", "kitni", "total", "sum", "count")) &&
             !has(w, setOf("today", "yesterday", "aaj", "aj", "kal", "this", "last", "month", "week", "year",
-                "mahina", "mahine", "saal", "all", "time", "overall", "lifetime", "ever", "alltime"))
+                "mahina", "mahine", "saal", "time", "overall", "lifetime", "ever", "alltime"))
         return text.endsWith("?") || has(w, setOf("report", "summary", "overview")) ||
             has(w, setOf("show", "find", "search", "list", "total", "sum", "count", "highest", "largest", "biggest")) ||
             (has(w, expense + income) && has(w, periods)) ||
