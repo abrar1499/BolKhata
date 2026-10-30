@@ -342,7 +342,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             if (freshEntries.isNotEmpty()) {
                 save(freshEntries + entries)
                 lastAdded = freshEntries.map { it.id }
-                chatSkippedDuplicates = skippedDuplicates
+                chatSkippedDuplicates = if (chatWatch != null) skippedDuplicates else 0
                 val ids = lastAdded.toSet()
                 scope.launch {
                     snackbar.currentSnackbarData?.dismiss()
