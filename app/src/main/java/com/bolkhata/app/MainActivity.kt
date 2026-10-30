@@ -114,6 +114,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var groqVoice by remember { mutableStateOf(store.groqVoice) }
     var elevenKey by remember { mutableStateOf(store.elevenKey) }
     var elevenVoice by remember { mutableStateOf(store.elevenVoice) }
+    var elevenAgent by remember { mutableStateOf(store.elevenAgent) }
     var logRepo by remember { mutableStateOf(store.logRepo) }
     var logStatus by remember { mutableStateOf("") }
     var logSending by remember { mutableStateOf(false) }
@@ -1399,6 +1400,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         player = null
     }
 
+    // The live call with the owner's ElevenLabs agent, and where the app's answer to its command goes.
+    val agentCall = remember { arrayOf<ElevenAgent?>(null) }
+    val toolAnswer = remember { arrayOf<((String) -> Unit)?>(null) }
+
     fun stopVoice(message: String? = null) {
         voiceOn = false
         voiceAwaiting = false
@@ -1406,6 +1411,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         voicePartial = ""
         voiceReply = ""
         talking.set(0)
+        agentCall[0]?.stop(); agentCall[0] = null
+        toolAnswer[0] = null
         finishRecording(send = false)
         runCatching { recognizer?.cancel() }
         runCatching { tts.stop() }
@@ -1661,8 +1668,42 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         onDispose { }
     }
 
+    /** Calls the owner's ElevenLabs agent: it talks by itself and sends app commands here through its tool. */
+    fun startAgentCall() {
+        voiceStatus = "Connecting…"
+        agentCall[0] = ElevenAgent(
+            elevenKey, elevenAgent,
+            onCommand = { command, answer ->
+                voiceStatus = "Thinking…"
+                toolAnswer[0] = answer
+                chatInput(command)
+            },
+            onHeard = { voicePartial = it },
+            onReply = { voiceReply = it; voicePartial = "" },
+            onLevel = { voiceLevel = it },
+            onSpeaking = { voiceStatus = if (it) "Speaking…" else if (toolAnswer[0] != null) "Thinking…" else "Listening…" },
+            onEnd = { error -> stopVoice(error) },
+        ).also { it.start() }
+    }
+
+    fun beginCall() {
+        voiceOn = true
+        voiceMisses = 0
+        if (elevenKey.isNotBlank() && elevenAgent.isNotBlank()) startAgentCall() else listenNow()
+    }
+
     // When the assistant has answered a spoken message, read the answer aloud, then listen again.
     LaunchedEffect(chatLoading, chatMessages.size) {
+        toolAnswer[0]?.let { answer ->
+            if (chatLoading) return@LaunchedEffect
+            val lastUser = chatMessages.indexOfLast { it.isUser }
+            val answers = chatMessages.drop(lastUser + 1).filter { !it.isUser }
+            if (answers.isEmpty()) return@LaunchedEffect
+            kotlinx.coroutines.delay(250) // let any follow-up line arrive
+            toolAnswer[0] = null
+            answer(chatMessages.drop(lastUser + 1).filter { !it.isUser }.joinToString("\n") { it.text }.take(1500))
+            return@LaunchedEffect
+        }
         if (!voiceOn || !voiceAwaiting || chatLoading) return@LaunchedEffect
         val lastUser = chatMessages.indexOfLast { it.isUser }
         val answers = chatMessages.drop(lastUser + 1).filter { !it.isUser }
@@ -1675,16 +1716,17 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     }
 
     val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
-        if (ok) { voiceOn = true; voiceMisses = 0; listenNow() }
+        if (ok) beginCall()
         else toast("Microphone permission is needed to talk to the assistant.")
     }
 
     fun toggleVoice() {
         if (voiceOn) { stopVoice(); return }
-        if (recognizer == null && !(groqKey.isNotBlank() && groqVoice)) { toast("Speech recognition is not available on this phone."); return }
+        val agent = elevenKey.isNotBlank() && elevenAgent.isNotBlank()
+        if (!agent && recognizer == null && !(groqKey.isNotBlank() && groqVoice)) { toast("Speech recognition is not available on this phone."); return }
         val granted = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) ==
             android.content.pm.PackageManager.PERMISSION_GRANTED
-        if (granted) { voiceOn = true; voiceMisses = 0; listenNow() } else micPermission.launch(android.Manifest.permission.RECORD_AUDIO)
+        if (granted) beginCall() else micPermission.launch(android.Manifest.permission.RECORD_AUDIO)
     }
 
     val voice = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
@@ -2037,10 +2079,12 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     onGroqVoice = { on -> store.groqVoice = on; groqVoice = on },
                     onGroqOff = { store.groqKey = ""; groqKey = ""; toast("Groq turned off. The app is fully offline again.") },
                     elevenVoice = elevenVoice,
-                    elevenOn = elevenKey.isNotBlank() && elevenVoice.isNotBlank(),
-                    onElevenSave = { key, voiceId ->
+                    elevenAgent = elevenAgent,
+                    elevenOn = elevenKey.isNotBlank() && (elevenVoice.isNotBlank() || elevenAgent.isNotBlank()),
+                    onElevenSave = { key, voiceId, agentId ->
                         if (key.isNotBlank()) { store.elevenKey = key; elevenKey = store.elevenKey }
                         store.elevenVoice = voiceId; elevenVoice = store.elevenVoice
+                        store.elevenAgent = agentId; elevenAgent = store.elevenAgent
                         toast("✓ ElevenLabs voice on for calls")
                     },
                     onElevenOff = { store.elevenKey = ""; elevenKey = ""; toast("Calls use the phone's voice again.") },
