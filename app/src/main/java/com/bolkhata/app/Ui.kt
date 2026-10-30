@@ -119,9 +119,6 @@ fun headerTheme(name: String, dark: Boolean = false): HeaderTheme {
 val LocalHeader = staticCompositionLocalOf { HEADER_THEMES.first() }
 
 val Green = Color(0xFF10B981)
-
-/** Amounts that leave the wallet use the normal text colour (light or dark) instead of red. Text only. */
-val Ink = Color.Unspecified
 val RedSpend = Color(0xFFE5484D)
 val GreenIn = Color(0xFF1FA463)
 val OrangeOwe = Color(0xFFE8892B)
@@ -356,7 +353,7 @@ fun profitBreakdown(allEntries: List<Entry>, periodEntries: List<Entry>): Profit
 }
 
 fun signColor(t: Type) = when (t) {
-    Type.KHARCHA, Type.WAPIS_DIYA, Type.PURCHASE, Type.TRANSFER_OUT -> Ink
+    Type.KHARCHA, Type.WAPIS_DIYA, Type.PURCHASE, Type.TRANSFER_OUT -> RedSpend
     Type.AAMDANI, Type.WAPIS_MILA, Type.SALE, Type.TRANSFER_IN -> GreenIn
     Type.DIYA, Type.LIYA -> OrangeOwe
 }
@@ -426,10 +423,10 @@ fun CatBubble(cat: Cat, size: Dp = 44.dp) {
         Modifier
             .size(size)
             .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.surfaceVariant),
+            .background(catColor(cat).copy(alpha = 0.13f)),
         contentAlignment = Alignment.Center
     ) {
-        Icon(catIcon(cat), contentDescription = cat.label, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(size * 0.48f))
+        Icon(catIcon(cat), contentDescription = cat.label, tint = catColor(cat), modifier = Modifier.size(size * 0.48f))
     }
 }
 

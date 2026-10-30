@@ -38,6 +38,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -169,38 +172,14 @@ fun HomeScreen(
                     Spacer(Modifier.height(12.dp))
                     TabSwitcher(Tab.HOME, trading, chatBadge, onTab)
                     Spacer(Modifier.height(14.dp))
-                    Panel(Modifier.fillMaxWidth(), padding = 12.dp) {
-                        Text("In $monthName", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(Modifier.height(8.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            // Money going out points up, money coming in points down.
-                            MainSummaryTile(
-                                "Expense", moneyA(currency, monthSpent), Icons.Filled.ArrowUpward, RedSpend,
-                                Modifier.weight(1f)
-                            ) { openMain?.invoke(MainAcct.EXPENSE) ?: onReports(ReportKind.CASH_OUT) }
-                            MainSummaryTile(
-                                "Income", moneyA(currency, monthIncome), Icons.Filled.ArrowDownward, GreenIn,
-                                Modifier.weight(1f)
-                            ) { openMain?.invoke(MainAcct.INCOME) ?: onReports(ReportKind.CASH_IN) }
-                        }
-                        Spacer(Modifier.height(8.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            MiniTile(
-                                "To pay", moneyA(currency, pay), Icons.Filled.Remove, OrangeOwe, Modifier.weight(1f),
-                                valueSize = 12, compact = true
-                            ) { openMain?.invoke(MainAcct.TO_PAY) ?: onPeople(false) }
-                            MiniTile(
-                                "To receive", moneyA(currency, receive), Icons.Filled.Add, GreenIn, Modifier.weight(1f),
-                                valueSize = 12, compact = true
-                            ) { openMain?.invoke(MainAcct.TO_RECEIVE) ?: onPeople(true) }
-                            MiniTile(
-                                "Cash in hand", moneyA(currency, cashInHand), Icons.Filled.AccountBalanceWallet,
-                                MaterialTheme.colorScheme.onSurfaceVariant, Modifier.weight(1f),
-                                valueSize = 12, valueColor = if (cashInHand >= 0) Color.Unspecified else RedSpend,
-                                compact = true
-                            ) { onReports(ReportKind.CASH_BALANCE) }
-                        }
-                    }
+                    Panel(Modifier.fillMaxWidth(), padding = 14.dp) { OverviewSummary(
+                        monthName, currency, monthSpent, monthIncome, cashInHand, pay, receive,
+                        onExpense = { openMain?.invoke(MainAcct.EXPENSE) ?: onReports(ReportKind.CASH_OUT) },
+                        onIncome = { openMain?.invoke(MainAcct.INCOME) ?: onReports(ReportKind.CASH_IN) },
+                        onCash = { onReports(ReportKind.CASH_BALANCE) },
+                        onPay = { openMain?.invoke(MainAcct.TO_PAY) ?: onPeople(false) },
+                        onReceive = { openMain?.invoke(MainAcct.TO_RECEIVE) ?: onPeople(true) }
+                    ) }
                 }
             }
         }
@@ -633,105 +612,6 @@ private fun GroupedTxRow(e: Entry, currency: String, first: Boolean, last: Boole
 }
 
 @Composable
-private fun MainSummaryTile(
-    label: String,
-    value: AnnotatedString,
-    glyph: ImageVector,
-    color: Color,
-    modifier: Modifier,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier
-            .clip(RoundedCornerShape(18.dp))
-            .background(color.copy(alpha = 0.09f))
-            .clickable { onClick() }
-            .padding(horizontal = 12.dp, vertical = 16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            Modifier.size(38.dp).clip(CircleShape).background(color.copy(alpha = 0.18f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(glyph, contentDescription = null, tint = color, modifier = Modifier.size(24.dp))
-        }
-        Spacer(Modifier.width(9.dp))
-        Column(Modifier.weight(1f)) {
-            Text(label, fontSize = 14.sp, lineHeight = 17.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(
-                value,
-                fontWeight = FontWeight.ExtraBold,
-                fontSize = 23.sp,
-                lineHeight = 28.sp,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
-}
-
-@Composable
-private fun MiniTile(
-    label: String,
-    value: AnnotatedString,
-    glyph: ImageVector,
-    color: Color,
-    modifier: Modifier,
-    valueSize: Int = 15,
-    valueColor: Color = Color.Unspecified,
-    tinted: Boolean = false,
-    compact: Boolean = false,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier
-            .clip(RoundedCornerShape(if (compact) 13.dp else 14.dp))
-            .background(
-                if (tinted) color.copy(alpha = 0.12f)
-                else color.copy(alpha = if (compact) 0.07f else 0.10f)
-            )
-            .clickable { onClick() }
-            .padding(
-                start = if (compact) 4.dp else 12.dp,
-                end = if (compact) 4.dp else 10.dp,
-                top = if (compact) 8.dp else 8.dp,
-                bottom = if (compact) 8.dp else 8.dp
-            ),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                label,
-                fontSize = if (compact) 9.sp else 11.sp,
-                lineHeight = if (compact) 11.sp else 13.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                value,
-                fontWeight = FontWeight.Bold,
-                fontSize = valueSize.sp,
-                lineHeight = (valueSize + 3).sp,
-                color = valueColor,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-        Spacer(Modifier.width(if (compact) 2.dp else 6.dp))
-        Box(
-            Modifier.size(if (compact) 16.dp else 28.dp)
-                .clip(CircleShape)
-                .background(color.copy(alpha = 0.18f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(glyph, contentDescription = null, tint = color, modifier = Modifier.size(if (compact) 11.dp else 16.dp))
-        }
-    }
-}
-
-@Composable
 fun Avatar(name: String) {
     Box(
         Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
@@ -1037,6 +917,54 @@ private fun ReportGroupCard(
         } else {
             Text("Tap to see every entry", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+    }
+}
+
+/**
+ * The month at a glance: what was spent (red) in medium-large figures, then income and cash in hand on one line,
+ * and what is owed each way. Every figure opens its account or report.
+ */
+@Composable
+private fun OverviewSummary(
+    monthName: String, currency: String, spent: Double, income: Double, cash: Double, pay: Double, receive: Double,
+    onExpense: () -> Unit, onIncome: () -> Unit, onCash: () -> Unit, onPay: () -> Unit, onReceive: () -> Unit
+) {
+    val faint = MaterialTheme.colorScheme.onSurfaceVariant
+    Column(Modifier.fillMaxWidth()) {
+        Column(Modifier.clip(RoundedCornerShape(14.dp)).clickable(onClick = onExpense).padding(vertical = 4.dp, horizontal = 2.dp)) {
+            Text("$monthName spent", fontSize = 13.sp, color = faint)
+            Text(
+                buildAnnotatedString {
+                    append(fmt(spent))
+                    withStyle(SpanStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium, color = faint)) { append(" $currency") }
+                },
+                fontSize = 28.sp, lineHeight = 34.sp, fontWeight = FontWeight.Bold, color = RedSpend, maxLines = 1
+            )
+        }
+        Row(Modifier.padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Income " + fmt(income), fontSize = 13.sp, color = GreenIn, fontWeight = FontWeight.Medium,
+                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onIncome).padding(2.dp))
+            Text("  ·  ", fontSize = 13.sp, color = faint)
+            Text("Cash in hand " + fmt(cash), fontSize = 13.sp, color = if (cash < 0) RedSpend else faint,
+                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onCash).padding(2.dp))
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(
+            Modifier.fillMaxWidth().height(IntrinsicSize.Min).clip(RoundedCornerShape(16.dp))
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp))
+        ) {
+            OweCell("To pay", pay, OrangeOwe, Modifier.weight(1f), onPay)
+            Box(Modifier.width(1.dp).fillMaxHeight().background(MaterialTheme.colorScheme.outlineVariant))
+            OweCell("To receive", receive, GreenIn, Modifier.weight(1f), onReceive)
+        }
+    }
+}
+
+@Composable
+private fun OweCell(label: String, amount: Double, color: Color, modifier: Modifier, onClick: () -> Unit) {
+    Column(modifier.clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 10.dp)) {
+        Text(label, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(fmt(amount), fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
