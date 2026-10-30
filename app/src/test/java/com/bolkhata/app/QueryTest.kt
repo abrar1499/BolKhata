@@ -36,6 +36,31 @@ class QueryTest {
         assertEquals(40.0, x.amount, 0.001); assertEquals(Cat.TRANSPORT, x.category)
     }
 
+    @Test fun exactAmountDateAndCategoryFiltersCompose() {
+        val f = Query.Filter(
+            from = Query.day(ymd(3)),
+            to = Query.day(ymd(3), end = true),
+            types = setOf(Type.KHARCHA),
+            cats = setOf(Cat.TRANSPORT),
+            min = 70.0,
+            max = 70.0
+        )
+        assertEquals(listOf("2"), Query.select(all, f).map { it.id })
+    }
+
+    @Test fun listResultsIncludeTheComputedTotal() {
+        val f = Query.Filter(types = setOf(Type.KHARCHA))
+        val result = Query.answer(Query.select(all, f), "list", f, "SAR")
+        assertTrue(result.contains("Total: Spent 120 SAR"))
+    }
+
+    @Test fun highestExpensesAreRankedByAmount() {
+        val f = Query.Filter(types = setOf(Type.KHARCHA))
+        val result = Query.answer(Query.select(all, f), "highest", f, "SAR")
+        assertTrue(result.indexOf("Petrol") < result.indexOf("Meals"))
+        assertTrue(result.contains("Matching expense total: 120 SAR"))
+    }
+
     @Test fun emptyFilterIsRefused() { assertTrue(Query.Filter().isEmpty) }
 
     @Test fun withoutPeople() {
