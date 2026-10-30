@@ -110,6 +110,7 @@ class ElevenAgent(
                 "conversation_initiation_metadata" -> {
                     val meta = m.optJSONObject("conversation_initiation_metadata_event")
                     startAudio(rate(meta?.optString("user_input_audio_format")), rate(meta?.optString("agent_output_audio_format")))
+                    webSocket.send(JSONObject().put("type", "contextual_update").put("text", RULES).toString())
                 }
                 "audio" -> m.optJSONObject("audio_event")?.optString("audio_base_64")?.let { play(Base64.decode(it, Base64.DEFAULT)) }
                 "interruption" -> runCatching { track?.pause(); track?.flush(); track?.play(); speakingUntil = 0L }
@@ -138,6 +139,15 @@ class ElevenAgent(
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
             main.post { end("ElevenLabs agent: " + (t.message ?: "connection lost")) }
         }
+    }
+
+    private companion object {
+        // Sent at the start of every call, so the call stays short and on topic whatever the agent's own prompt says.
+        const val RULES = "Rules for this call: answer in ONE short line (at most 8 words), either an answer or one " +
+            "question, never both. Talk only about what the person said or the BolKhata app (khata, expenses, udhaar, " +
+            "totals). Never start talking by yourself; if the person is quiet, stay quiet. Ignore noise and half words. " +
+            "For anything the app should do, call app_command and say only \"ek minute\", then say its answer in one line. " +
+            "Never make up amounts."
     }
 
     private fun answer(webSocket: WebSocket, id: String, result: String, isError: Boolean) {
