@@ -7,7 +7,7 @@ import com.tom_roush.pdfbox.text.PDFTextStripper
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-/** Reads the text inside a PDF on the phone (no internet), and turns a statement into entries without AI. */
+/** Reads the text inside a PDF on the phone (no internet), and turns a statement into entries using on-device text extraction and OCR. */
 object PdfText {
 
     /** The PDF's text, line by line in reading order; null when it has none (a scan) or can't be opened. */
