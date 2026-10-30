@@ -17,9 +17,6 @@ android {
         targetSdk = 34
         versionCode = buildNumber
         versionName = "1.$buildNumber"
-        // Built-in Gemini key from the GitHub secret GEMINI_KEY. Never written in the code.
-        val geminiKey = (System.getenv("GEMINI_KEY") ?: "").replace("\"", "").trim()
-        buildConfigField("String", "GEMINI_KEY", "\"$geminiKey\"")
     }
 
     signingConfigs {
