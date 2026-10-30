@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  group: unit-tests-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
