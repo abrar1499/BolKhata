@@ -1076,7 +1076,13 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             try {
                 // The AI only fixes the sentence; if the app can then read it, that's the answer (a few tokens).
                 val asked = roman.trim().endsWith("?") || runCatching { Questions.isQuestion(roman) }.getOrDefault(false)
-                val f = runCatching { Ai.fix(roman, store.fastKey, activeKey, store, contactNames(), lastTalk, screenList()?.first.orEmpty()) }.getOrNull()
+                val recentContext = history.takeLast(8).joinToString("\n") { m ->
+                    (if (m.isUser) "User: " else "Assistant: ") + m.text.take(160)
+                }
+                val previousContext = listOf(lastTalk.take(200), recentContext).filter { it.isNotBlank() }.joinToString("\n").take(900)
+                val f = runCatching {
+                    Ai.fix(roman, store.fastKey, activeKey, store, contactNames(), previousContext, screenList()?.first.orEmpty())
+                }.getOrNull()
                 if (f != null && f.kind != "unsupported" && !(f.kind == "chat" && activeKey.isNotBlank())) {
                     if (f.kind == "entry" && f.text.isNotBlank()) learnWordFixes(roman, f.text)
                     val msg = runCatching { runFixed(f, roman, inChat = true) }.getOrNull()
