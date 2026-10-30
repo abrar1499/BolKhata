@@ -29,7 +29,8 @@ object Questions {
         "kul", "sum", "abhi", "tak", "ab", "mujhe", "maine", "mene", "men", "my", "mera", "meri", "mere", "wapis", "wapas",
         "lena", "dena", "hai?", "so", "far", "all", "time", "sab", "poora", "pura", "income", "aamdani", "kamaya", "kamai",
         "aayi", "aaya", "aaye", "ayi", "aya", "laga", "lagi", "lage", "huwa", "hui", "lagaya", "kharchi", "kharcha?", "mahiny",
-        "mahinay", "total?", "ab", "tak", "es", "iss", "us", "is"
+        "mahinay", "total?", "ab", "tak", "es", "iss", "us", "is",
+        "yearly", "annual", "annually", "overall", "lifetime", "ever", "alltime", "report", "summary", "overview"
     )
 
     private enum class Period(val label: String) {
