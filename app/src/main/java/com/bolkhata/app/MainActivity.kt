@@ -1084,12 +1084,21 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 val intent = NativeChatEngine.interpret(
                     roman, scopeKhataEntries(entries), contactNames(), wordFixes, history, currency = currency
                 )
+                if (intent.kind in setOf("delete", "clear_all", "change", "to_khata", "paid_by", "reread", "undo")) {
+                    val actionSnapshot = entries
+                    chatWatch = actionSnapshot
+                    scope.launch {
+                        kotlinx.coroutines.delay(60_000)
+                        if (chatWatch === actionSnapshot) chatWatch = null
+                    }
+                }
                 var executionStatus = "returned"
                 val reply = runCatching { runFixed(intent, text, inChat = true) }
                     .onFailure { executionStatus = "exception:" + it.javaClass.simpleName }
                     .getOrElse {
                         "I couldn't safely complete that action. Nothing was changed. Please add the date, amount, item, or person's name."
                     }
+                if (reply == null && executionStatus == "returned") executionStatus = "awaiting_confirmation"
                 val matchCount = if (intent.kind in setOf("ask", "open", "delete", "change", "to_khata", "paid_by", "reread")) {
                     runCatching { Query.select(scopeKhataEntries(entries), intent.filter).size }.getOrNull()
                 } else null
