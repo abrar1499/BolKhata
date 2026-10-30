@@ -1144,7 +1144,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 // Only when they asked for a change: a reply that mentions an earlier change ("delete ho chuki hai") is fine.
                 val askedChange = Regex("""(?i)\b(delete|del|hata|hatao|change|badal|badlo|galat|ghalat|minus|edit|update|theek|thek|fix|shift|move|remove)\b""").containsMatchIn(text)
                 val honest = when {
-                    !planApplied -> "I couldn't safely apply that change because one or more matching entries changed while I was working. Nothing was changed; please search again."
+                    !planApplied -> "I couldn't safely identify or apply that change. Nothing was changed; please clarify the transaction and try again."
                     askedChange && list.isEmpty() && res.plan == null && claims.containsMatchIn(reply) ->
                         "$reply\n\n(Nothing was changed yet. Tell me exactly what to change.)"
                     else -> reply
