@@ -113,7 +113,7 @@ object Attachments {
                     val bitmap = BitmapFactory.decodeByteArray(page, 0, page.size) ?: return@forEachIndexed
                     val pageText = recognize(bitmap)
                     if (pageText.isNotBlank()) {
-                        if (text.isNotEmpty()) text.append("\\n")
+                        if (text.isNotEmpty()) text.append("\n")
                         text.append(pageText)
                     }
                 }
