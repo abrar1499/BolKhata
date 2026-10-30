@@ -51,6 +51,26 @@ object Accounts {
     fun requiresTargetClarification(matchCount: Int, explicitlyAll: Boolean, allowAll: Boolean = true): Boolean =
         matchCount > 1 && !(explicitlyAll && allowAll)
 
+    /** Suppress an accidental immediate repeat only after the prior identical request actually changed data. */
+    fun isRecentDuplicateMutationRequest(
+        previousUserText: String,
+        previousUserAt: Long,
+        latestAssistantText: String,
+        latestAssistantAt: Long,
+        previousCreatedEntries: Boolean,
+        newText: String,
+        now: Long,
+        windowMs: Long = 30_000L
+    ): Boolean {
+        fun normalize(s: String) = s.trim().lowercase().replace(Regex("""\\s+"""), " ")
+        val sameRequest = normalize(previousUserText).isNotBlank() && normalize(previousUserText) == normalize(newText)
+        val mutationConfirmed = previousCreatedEntries ||
+            Regex("""(?i)\\b(changed|updated|deleted|removed|moved|converted|marked paid|marked unpaid)\\b""")
+                .containsMatchIn(latestAssistantText)
+        return sameRequest && mutationConfirmed && latestAssistantAt >= previousUserAt &&
+            now >= previousUserAt && now - previousUserAt <= windowMs
+    }
+
     /** True only if every target still exactly matches the live record snapshot used to plan the action. */
     fun snapshotsMatch(entries: List<Entry>, expected: List<Entry>): Boolean {
         val ids = expected.map { it.id }
