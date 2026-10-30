@@ -53,7 +53,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             var dark by remember { mutableStateOf(store.dark) }
             var themeName by remember { mutableStateOf(store.theme) }
-            val header = headerTheme(themeName)
+            val header = headerTheme(themeName, dark)
             LaunchedEffect(header) {
                 @Suppress("DEPRECATION")
                 window.statusBarColor = header.c1.toArgb()

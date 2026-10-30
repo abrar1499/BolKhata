@@ -6,6 +6,26 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.outlined.AccountBalance
+import androidx.compose.material.icons.outlined.Bolt
+import androidx.compose.material.icons.outlined.Category
+import androidx.compose.material.icons.outlined.Chair
+import androidx.compose.material.icons.outlined.Handshake
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Inventory2
+import androidx.compose.material.icons.outlined.LocalGasStation
+import androidx.compose.material.icons.outlined.MedicalServices
+import androidx.compose.material.icons.outlined.Payments
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.PhoneAndroid
+import androidx.compose.material.icons.outlined.ReceiptLong
+import androidx.compose.material.icons.outlined.Restaurant
+import androidx.compose.material.icons.outlined.School
+import androidx.compose.material.icons.outlined.Sell
+import androidx.compose.material.icons.outlined.ShoppingBag
+import androidx.compose.material.icons.outlined.VolunteerActivism
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Menu
@@ -59,13 +79,21 @@ data class HeaderTheme(val name: String, val c1: Color, val c2: Color, val c3: C
     val on: Color get() = if (light) Color(0xFF1F2937) else Color.White
 
     /** Background for round buttons on the header. */
-    val chip: Color get() = if (light) Color.White.copy(alpha = 0.7f) else Color.White.copy(alpha = 0.22f)
+    val chip: Color get() = when {
+        flat -> on.copy(alpha = 0.06f)
+        light -> Color.White.copy(alpha = 0.7f)
+        else -> Color.White.copy(alpha = 0.22f)
+    }
+
+    /** The plain "Clean" look: one flat colour, no gradient or circles. */
+    val flat: Boolean get() = c1 == c2 && c2 == c3
 }
 
 private fun h(name: String, a: Long, b: Long, c: Long, light: Boolean) = HeaderTheme(name, Color(a), Color(b), Color(c), light)
 
 /** All themes the person can pick in Settings. The first one is the default. */
 val HEADER_THEMES = listOf(
+    h("Clean", 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, true),
     h("Sand", 0xFFFED7AA, 0xFFFDE7CC, 0xFFFFF5EA, true),
     h("Mint", 0xFFA7F3D0, 0xFFC6F6E0, 0xFFE3FBF1, true),
     h("Sky", 0xFFBAE6FD, 0xFFD6EFFE, 0xFFEEF8FF, true),
@@ -82,11 +110,18 @@ val HEADER_THEMES = listOf(
     h("Black", 0xFF0B0B0F, 0xFF1F2937, 0xFF374151, false)
 )
 
-fun headerTheme(name: String): HeaderTheme = HEADER_THEMES.firstOrNull { it.name == name } ?: HEADER_THEMES.first()
+/** The header theme to show; "Clean" follows dark mode so its text stays readable. */
+fun headerTheme(name: String, dark: Boolean = false): HeaderTheme {
+    val theme = HEADER_THEMES.firstOrNull { it.name == name } ?: HEADER_THEMES.first()
+    return if (theme.name == "Clean" && dark) h("Clean", 0xFF0F0F0F, 0xFF0F0F0F, 0xFF0F0F0F, false) else theme
+}
 
 val LocalHeader = staticCompositionLocalOf { HEADER_THEMES.first() }
 
 val Green = Color(0xFF10B981)
+
+/** Amounts that leave the wallet use the normal text colour (light or dark) instead of red. Text only. */
+val Ink = Color.Unspecified
 val RedSpend = Color(0xFFE5484D)
 val GreenIn = Color(0xFF1FA463)
 val OrangeOwe = Color(0xFFE8892B)
@@ -121,11 +156,12 @@ fun BolTheme(dark: Boolean, content: @Composable () -> Unit) {
         onPrimaryContainer = Color(0xFFD1FAE5),
         secondaryContainer = Color(0xFF064E3B),
         onSecondaryContainer = Color(0xFFD1FAE5),
-        background = Color(0xFF0E1311),
-        surface = Color(0xFF171E1B),
-        surfaceVariant = Color(0xFF232C28),
-        onSurfaceVariant = Color(0xFFA3B1A9),
-        outline = Color(0xFF3A4540)
+        background = Color(0xFF0F0F0F),
+        surface = Color(0xFF181818),
+        surfaceVariant = Color(0xFF262626),
+        onSurfaceVariant = Color(0xFFA3A3A3),
+        outline = Color(0xFF333333),
+        outlineVariant = Color(0xFF2A2A2A)
     ) else lightColorScheme(
         primary = Color(0xFF059669),
         onPrimary = Color.White,
@@ -133,11 +169,14 @@ fun BolTheme(dark: Boolean, content: @Composable () -> Unit) {
         onPrimaryContainer = Color(0xFF065F46),
         secondaryContainer = Color(0xFFD1FAE5),
         onSecondaryContainer = Color(0xFF065F46),
-        background = Color(0xFFF2F6F3),
+        background = Color.White,
+        onBackground = Color(0xFF0D0D0D),
         surface = Color.White,
-        surfaceVariant = Color(0xFFEDF2EF),
-        onSurfaceVariant = Color(0xFF65736B),
-        outline = Color(0xFFD5DED8)
+        onSurface = Color(0xFF0D0D0D),
+        surfaceVariant = Color(0xFFF2F2F2),
+        onSurfaceVariant = Color(0xFF6B6B6B),
+        outline = Color(0xFFE5E5E5),
+        outlineVariant = Color(0xFFECECEC)
     )
     MaterialTheme(colorScheme = scheme, content = content)
 }
@@ -317,9 +356,9 @@ fun profitBreakdown(allEntries: List<Entry>, periodEntries: List<Entry>): Profit
 }
 
 fun signColor(t: Type) = when (t) {
-    Type.KHARCHA, Type.WAPIS_DIYA, Type.PURCHASE -> RedSpend
-    Type.AAMDANI, Type.WAPIS_MILA, Type.SALE -> GreenIn
-    Type.DIYA, Type.LIYA, Type.TRANSFER_IN, Type.TRANSFER_OUT -> OrangeOwe
+    Type.KHARCHA, Type.WAPIS_DIYA, Type.PURCHASE, Type.TRANSFER_OUT -> Ink
+    Type.AAMDANI, Type.WAPIS_MILA, Type.SALE, Type.TRANSFER_IN -> GreenIn
+    Type.DIYA, Type.LIYA -> OrangeOwe
 }
 
 fun prefix(t: Type) = when (t) {
@@ -386,10 +425,34 @@ fun CatBubble(cat: Cat, size: Dp = 44.dp) {
     Box(
         Modifier
             .size(size)
-            .clip(RoundedCornerShape(14.dp))
-            .background(catColor(cat).copy(alpha = 0.16f)),
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceVariant),
         contentAlignment = Alignment.Center
-    ) { Text(cat.icon, fontSize = (size.value * 0.45f).sp) }
+    ) {
+        Icon(catIcon(cat), contentDescription = cat.label, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(size * 0.48f))
+    }
+}
+
+/** A simple line icon for each category, used instead of emoji. */
+fun catIcon(c: Cat): ImageVector = when (c) {
+    Cat.KHANA -> Icons.Outlined.Restaurant
+    Cat.TRANSPORT -> Icons.Outlined.LocalGasStation
+    Cat.RENT -> Icons.Outlined.Home
+    Cat.BIJLI -> Icons.Outlined.Bolt
+    Cat.MOBILE -> Icons.Outlined.PhoneAndroid
+    Cat.GHAR -> Icons.Outlined.Chair
+    Cat.SHOPPING -> Icons.Outlined.ShoppingBag
+    Cat.SEHAT -> Icons.Outlined.MedicalServices
+    Cat.PERSONAL -> Icons.Outlined.Person
+    Cat.TANKHWAH -> Icons.Outlined.Payments
+    Cat.UDHAAR -> Icons.Outlined.Handshake
+    Cat.FEES -> Icons.Outlined.AccountBalance
+    Cat.EDU -> Icons.Outlined.School
+    Cat.CHARITY -> Icons.Outlined.VolunteerActivism
+    Cat.ASSETS -> Icons.Outlined.Sell
+    Cat.SALES -> Icons.Outlined.ReceiptLong
+    Cat.STOCK -> Icons.Outlined.Inventory2
+    Cat.OTHER -> Icons.Outlined.Category
 }
 
 @Composable
@@ -494,6 +557,10 @@ fun ChartGlyph(color: Color, size: Dp = 24.dp) {
 @Composable
 fun HeroBackground(modifier: Modifier = Modifier) {
     val theme = LocalHeader.current
+    if (theme.flat) {
+        Box(modifier.background(theme.c1))
+        return
+    }
     val k = if (theme.light) 5f else 1f
     Canvas(modifier.background(theme.brush)) {
         val w = size.width
