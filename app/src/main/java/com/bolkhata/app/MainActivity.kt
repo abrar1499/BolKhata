@@ -1403,6 +1403,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     // The live call with the owner's ElevenLabs agent, and where the app's answer to its command goes.
     val agentCall = remember { arrayOf<ElevenAgent?>(null) }
     val toolAnswer = remember { arrayOf<((String) -> Unit)?>(null) }
+    var toolAsked by remember { mutableIntStateOf(0) }
 
     /** Phone-call audio mode during the agent call, so the phone's echo cancelling works, on the loudspeaker. */
     fun callAudio(on: Boolean) {
@@ -1688,6 +1689,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             onCommand = { command, answer ->
                 voiceStatus = "Thinking…"
                 toolAnswer[0] = answer
+                toolAsked++
                 chatInput(command)
             },
             // Only the wave shows in the agent call: text coming and going made the panel jump.
@@ -1699,6 +1701,14 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         ).also { it.start() }
     }
 
+    /** A chat answer as words for the agent; saved entries are spelled out, since their card has no text. */
+    fun agentText(m: ChatMessage): String {
+        val saved = entries.filter { it.id in m.entryIds }
+        if (saved.isEmpty()) return m.text
+        return "Saved: " + saved.joinToString(", ") { "${it.item.ifBlank { it.category.name }} ${money(currency, it.amount)}" } +
+            m.text.takeIf { it.isNotBlank() }?.let { ". $it" }.orEmpty()
+    }
+
     fun beginCall() {
         voiceOn = true
         voiceMisses = 0
@@ -1706,15 +1716,15 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     }
 
     // When the assistant has answered a spoken message, read the answer aloud, then listen again.
-    LaunchedEffect(chatLoading, chatMessages.size) {
+    LaunchedEffect(chatLoading, chatMessages.size, toolAsked) {
         toolAnswer[0]?.let { answer ->
             if (chatLoading) return@LaunchedEffect
             val lastUser = chatMessages.indexOfLast { it.isUser }
-            val answers = chatMessages.drop(lastUser + 1).filter { !it.isUser }
-            if (answers.isEmpty()) return@LaunchedEffect
-            kotlinx.coroutines.delay(250) // let any follow-up line arrive
+            // A command that only opens a screen writes nothing in the chat; it is done once nothing more comes.
+            kotlinx.coroutines.delay(if (chatMessages.drop(lastUser + 1).any { !it.isUser }) 250 else 1500)
             toolAnswer[0] = null
-            answer(chatMessages.drop(lastUser + 1).filter { !it.isUser }.joinToString("\n") { it.text }.take(1500))
+            val answers = chatMessages.drop(lastUser + 1).filter { !it.isUser }
+            answer(answers.joinToString("\n") { agentText(it) }.ifBlank { "Done, it is open on the screen." }.take(1500))
             return@LaunchedEffect
         }
         if (!voiceOn || !voiceAwaiting || chatLoading) return@LaunchedEffect
