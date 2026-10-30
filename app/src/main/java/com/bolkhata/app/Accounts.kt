@@ -47,6 +47,16 @@ object Accounts {
     fun byStableId(entries: List<Entry>, id: String): Entry? =
         id.takeIf { it.isNotBlank() }?.let { stable -> entries.firstOrNull { it.id == stable } }
 
+    /** Recognize an explicit bulk move request while the user is inside a khata. */
+    fun isExplicitBulkKhataMoveRequest(text: String): Boolean {
+        val value = text.lowercase(Locale.ROOT)
+        val all = Regex("""\b(all|every|sab|sari|saari|tamam|entire|poori|poora|these|in sab)\b""").containsMatchIn(value)
+        val records = Regex("""\b(entries|entry|records?|transactions?)\b""").containsMatchIn(value)
+        val move = Regex("""\b(move|shift|transfer|bhej(?:o|na)?|send|daal|dal)\b""").containsMatchIn(value)
+        val khata = Regex("""\b(khata|account)\b""").containsMatchIn(value)
+        return all && records && move && khata
+    }
+
     /** Match a destination khata by its full saved name in a natural-language request. */
     fun khataNameMentionedIn(text: String, currentName: String, knownNames: List<String>): String? {
         fun normalize(value: String): String = value.lowercase(Locale.ROOT)
