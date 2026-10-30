@@ -1047,7 +1047,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         scope.launch {
             try {
                 val intent = NativeChatEngine.interpret(
-                    roman, scopeKhataEntries(entries), contactNames(), wordFixes, history
+                    roman, scopeKhataEntries(entries), contactNames(), wordFixes, history, currency = currency
                 )
                 val reply = runCatching { runFixed(intent, text, inChat = true) }.getOrElse {
                     "I couldn't safely complete that action. Nothing was changed. Please add the date, amount, item, or person's name."
