@@ -197,9 +197,12 @@ object NativeChatEngine {
     private fun smallTalk(text: String): String {
         val w = tokens(text)
         return when {
-            has(w, setOf("hi", "hello", "hey", "salam", "assalam", "assalamualaikum", "aoa")) ->
+            has(w, setOf("hi", "hello", "hey", "good", "morning", "evening", "salam", "assalam", "assalamualaikum", "aoa")) ->
                 "Wa alaikum assalam! I'm your offline khata assistant. Add expenses, ask about your money, or manage saved entries."
+            has(w, setOf("how", "are", "you")) -> "I'm ready to help with your khata. I work locally on this phone."
+            has(w, setOf("what", "can", "you", "do")) -> "I can record money, search transactions, calculate balances, correct entries, move khatas, read receipts, and remember facts you explicitly save."
             has(w, setOf("thanks", "thank", "shukriya", "shukria", "jazakallah")) -> "You're welcome. Your khata stays on this device."
+            has(w, setOf("bye", "goodbye", "allahhafiz", "khuda")) -> "Take care. Your saved khata will be here when you return."
             has(w, setOf("help", "commands", "examples", "madad")) ->
                 "Try: 'chai 5', 'Ali ko 100 diye', 'food this month kitna', 'last 5 transactions', or 'petrol 50 nahi 40 tha'."
             else -> "I can help with your saved khata, transactions, balances, searches and edits. I don't invent answers or use an online AI service."
@@ -208,8 +211,12 @@ object NativeChatEngine {
 
     private fun isQuestion(text: String): Boolean {
         val w = tokens(text)
+        val periods = setOf("today", "yesterday", "aaj", "kal", "this", "last", "month", "week", "year", "mahine", "saal",
+            "jan", "january", "feb", "february", "mar", "march", "apr", "april", "may", "jun", "june", "jul", "july",
+            "aug", "august", "sep", "sept", "september", "oct", "october", "nov", "november", "dec", "december")
         return text.endsWith("?") || has(w, setOf("show", "find", "search", "list", "total", "sum", "count", "highest", "largest", "biggest")) ||
-            (has(w, expense + income) && has(w, setOf("today", "yesterday", "aaj", "kal", "this", "last", "month", "week", "year", "mahine", "saal"))) ||
+            (has(w, expense + income) && has(w, periods)) ||
+            (w.any { token -> categories.values.any { token in it } } && has(w, periods)) ||
             Regex("""\b(last|latest|recent)\s+\d+\s+(entry|entries|record|records|transaction|transactions)\b""").containsMatchIn(text) ||
             (has(w, questionWords) && (has(w, expense + income + setOf("balance", "khata", "petrol", "food", "salary", "udhar", "udhaar")) ||
                 w.any { token -> categories.values.any { token in it } }))
