@@ -8,6 +8,12 @@ import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
 import java.io.File
 import java.io.FileOutputStream
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.suspendCancellableCoroutine
 
 /** Saves a small picture of an attached photo or PDF (its first page) so it can be shown in the chat. */
 object Attachments {
@@ -90,6 +96,50 @@ object Attachments {
             emptyList()
         } finally {
             tmp.delete()
+        }
+    }
+
+
+    /**
+     * Extracts text entirely on-device. The Latin OCR model is bundled in the APK, so it is available offline.
+     * PDF pages are rasterized and processed one at a time to keep memory use bounded.
+     */
+    suspend fun extractText(context: Context, bytes: ByteArray, mime: String, maxPages: Int = 20): String =
+        withContext(Dispatchers.IO) {
+            if (mime == "application/pdf") {
+                val pages = pdfPages(context, bytes, maxPages)
+                val text = StringBuilder()
+                pages.forEachIndexed { index, page ->
+                    val bitmap = BitmapFactory.decodeByteArray(page, 0, page.size) ?: return@forEachIndexed
+                    val pageText = recognize(bitmap)
+                    if (pageText.isNotBlank()) {
+                        if (text.isNotEmpty()) text.append("\\n")
+                        text.append(pageText)
+                    }
+                }
+                text.toString()
+            } else {
+                val bitmap = photo(bytes) ?: return@withContext ""
+                recognize(bitmap)
+            }
+        }
+
+    private suspend fun recognize(bitmap: Bitmap): String = suspendCancellableCoroutine { continuation ->
+        val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+        recognizer.process(InputImage.fromBitmap(bitmap, 0))
+            .addOnSuccessListener { result ->
+                if (continuation.isActive) continuation.resumeWith(Result.success(result.text))
+            }
+            .addOnFailureListener { error ->
+                if (continuation.isActive) continuation.resumeWith(Result.failure(error))
+            }
+            .addOnCompleteListener {
+                runCatching { recognizer.close() }
+                if (!bitmap.isRecycled) bitmap.recycle()
+            }
+        continuation.invokeOnCancellation {
+            runCatching { recognizer.close() }
+            if (!bitmap.isRecycled) bitmap.recycle()
         }
     }
 
