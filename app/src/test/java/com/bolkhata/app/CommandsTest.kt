@@ -61,19 +61,17 @@ class CommandsTest {
         assertEquals(Commands.Action.CLEAR_ALL, Commands.read("delete all")?.action)
     }
 
-    @Test fun importingMultiYearStatementNeverChangesOriginalYears() {
-        val rows = listOf(
-            entry(2025, 10, 9),
-            entry(2025, 12, 30),
-            entry(2026, 1, 2),
-            entry(2026, 8, 18)
-        )
-        val now = Calendar.getInstance().apply {
-            clear()
-            set(2026, 9, 27, 12, 0, 0)
-        }.timeInMillis
-        val corrected = Ai.fixDates(rows, now)
-        assertEquals(rows.map { it.date }, corrected.map { it.date })
-        assertEquals(rows.map { it.createdAt }, corrected.map { it.createdAt })
+    @Test fun localStatementReaderPreservesExplicitYearsAcrossMultipleYears() {
+        val statement = """
+            Total withdrawals 40.00
+            Number of withdrawals 4
+            2025-10-09 Grocery 10.00
+            2025-12-30 Petrol 10.00
+            2026-01-02 Grocery 10.00
+            2026-08-18 Grocery 10.00
+        """.trimIndent()
+        val parsed = StatementParser.parse(statement)
+        assertEquals(true, parsed.ok)
+        assertEquals(listOf("2025-10-09", "2025-12-30", "2026-01-02", "2026-08-18"), parsed.rows.map { it.date })
     }
 }
