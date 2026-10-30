@@ -1628,21 +1628,9 @@ fun SettingsScreen(
     onTheme: (String) -> Unit,
     bankOn: Boolean = false,
     onBank: () -> Unit = {},
-    aiKey: String = "",
-    aiBuiltIn: Boolean = false,
-    onAiKey: (String) -> Unit = {},
-    fastKey: String = "",
-    onFastKey: (String) -> Unit = {},
     onExport: () -> Unit = {},
     onImport: () -> Unit = {},
-    fileKey: String = "",
-    fileModel: String = "",
-    onFileSettings: (String, String) -> Unit = { _, _ -> }
 ) {
-    var fileKeyText by remember(fileKey) { mutableStateOf(fileKey) }
-    var fileModelText by remember(fileModel) { mutableStateOf(fileModel) }
-    var aiText by remember(aiKey) { mutableStateOf(aiKey) }
-    var fastText by remember(fastKey) { mutableStateOf(fastKey) }
     var nameText by remember(name) { mutableStateOf(name) }
     var currencyMenu by remember { mutableStateOf(false) }
 
@@ -1687,129 +1675,25 @@ fun SettingsScreen(
         item {
             Panel(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    SmallLabel("✨ AI help (Gemini)")
+                    SmallLabel("🧠 On-device intelligence")
                     Spacer(Modifier.weight(1f))
-                    val aiOn = aiKey.isNotBlank() || aiBuiltIn
-                    Text(
-                        if (aiOn) "On" else "Off",
-                        fontWeight = FontWeight.Bold,
-                        color = if (aiOn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Text("Always on", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                 }
+                Spacer(Modifier.height(6.dp))
                 Text(
-                    "Simple entries are understood offline. Only sentences the app is unsure about are sent to Gemini. " +
-                        "Without internet the app works as before.",
+                    "BolKhata understands entries, Roman Urdu, Urdu/Hindi transliteration, searches, balances, edits and khata commands using its own local engine.",
                     fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(8.dp))
-                if (aiBuiltIn && aiKey.isBlank()) {
-                    Text(
-                        "✓ AI is built in. You don't need a key. Add your own only if you want to use it instead.",
-                        fontSize = 12.sp, color = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(Modifier.height(6.dp))
-                }
-                OutlinedTextField(
-                    value = aiText, onValueChange = { aiText = it.trim() },
-                    singleLine = true, placeholder = { Text(if (aiBuiltIn) "Your own key (optional)" else "Paste your Gemini API key") },
-                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (aiKey.isNotBlank()) {
-                        OutlinedButton(onClick = { aiText = ""; onAiKey("") }) { Text("Remove") }
-                    }
-                    Button(
-                        onClick = { onAiKey(aiText) },
-                        enabled = aiText.isNotBlank() && aiText != aiKey,
-                        modifier = Modifier.weight(1f)
-                    ) { Text("Save key") }
-                }
                 Text(
-                    "Get a free key at aistudio.google.com → Get API key. Keep it private.",
-                    fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 6.dp)
-                )
-            }
-        }
-        item {
-            Panel(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    SmallLabel("⚡ AI key (Groq, OpenRouter, Claude or Gemini)")
-                    Spacer(Modifier.weight(1f))
-                    Text(
-                        if (fastKey.isNotBlank()) "On" else "Off",
-                        fontWeight = FontWeight.Bold,
-                        color = if (fastKey.isNotBlank()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Text(
-                    "Answers in the chat in a second or two. Gemini still reads photos and PDFs, and takes over if this key hits its limit.",
+                    "Your financial records and chat are processed on this phone. No Gemini, Groq, OpenRouter, Claude or other hosted AI key is needed, and chat messages are not sent to an AI provider.",
                     fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = fastText, onValueChange = { fastText = it.trim() },
-                    singleLine = true, placeholder = { Text("Paste any AI key") },
-                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (fastKey.isNotBlank()) {
-                        OutlinedButton(onClick = { fastText = ""; onFastKey("") }) { Text("Remove") }
-                    }
-                    Button(
-                        onClick = { onFastKey(fastText) },
-                        enabled = fastText.isNotBlank() && fastText != fastKey,
-                        modifier = Modifier.weight(1f)
-                    ) { Text("Save key") }
-                }
                 Text(
-                    "The app knows the key from how it starts. Groq (free): console.groq.com → API Keys. OpenRouter: openrouter.ai → Keys. Claude (paid): console.anthropic.com → API Keys. Gemini (free): aistudio.google.com → Get API key.",
-                    fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 6.dp)
-                )
-            }
-        }
-        item {
-            Panel(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp)) {
-                SmallLabel("📎 Reading photos and PDFs (OpenRouter)")
-                Text(
-                    "Statements, receipts and bills are read by this model. Without a key, or if it fails, Gemini reads them.",
+                    "The assistant answers from saved records only. Unclear or risky changes are sent for review instead of being guessed.",
                     fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = fileKeyText, onValueChange = { fileKeyText = it.trim() },
-                    singleLine = true, label = { Text("OpenRouter key (sk-or-…)") },
-                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                    shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = fileModelText, onValueChange = { fileModelText = it.trim() },
-                    singleLine = true, label = { Text("Model") },
-                    shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()
-                )
-                Text(
-                    "Default: nvidia/nemotron-3-ultra-550b-a55b:free (NVIDIA Ultra, free; reads PDFs as text, photos go to Gemini). Any model name from openrouter.ai/models works.",
-                    fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp)
-                )
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (fileKey.isNotBlank()) {
-                        OutlinedButton(onClick = { fileKeyText = ""; onFileSettings("", fileModelText) }) { Text("Remove") }
-                    }
-                    Button(
-                        onClick = { onFileSettings(fileKeyText, fileModelText) },
-                        enabled = fileKeyText != fileKey || fileModelText != fileModel,
-                        modifier = Modifier.weight(1f)
-                    ) { Text("Save") }
-                }
             }
         }
         item {

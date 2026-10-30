@@ -2,32 +2,26 @@
 
 Bolo aur hisaab khud apni jagah chala jaye. 🎤 dabao, bolo "Ahmed ko 200 riyal udhaar diye", entry ban jayegi.
 
-## APK banane ka asaan tareeqa (bina Android Studio, sirf phone/computer browser)
-1. github.com par free account banayein.
-2. "New repository" banayein, naam `BolKhata`.
-3. "uploading an existing file" par click karein aur is folder ki saari files (andar ke folders samet) drag karein. Commit karein.
-   - Note: `.github` folder bhi upload hona chahiye. Agar drag se na jaye to computer se upload karein.
-4. Sirf approved `[build-apk]` commit ya manual workflow dispatch se **Build APK** workflow chalta hai.
-5. Green ✓ ke baad run ke **Artifacts** mein `BolKhata-apk` ZIP download karein; latest GitHub Release bhi check karein.
-6. ZIP se `app-release.apk` phone par bhejein aur install karein ("Unknown sources" allow karna ho sakta hai).
+## Native offline intelligence
+- Chat interpretation runs in `NativeChatEngine.kt`; it has no Gemini, Groq, OpenRouter, Claude, or hosted LLM calls.
+- English, Roman Urdu, Hindi/Urdu transliteration, saved contact names, number words, dates, categories, and follow-up context are interpreted on-device.
+- Queries and totals are computed from the local ledger by `Query.kt` and `Questions.kt`; changes and deletes go through the existing guarded action/Undo flow.
+- Photos and scanned PDFs use the bundled ML Kit Latin OCR model. Bank statements are accepted only when the local parser reconciles them; receipts are accepted only when a printed total is detected. Arabic-only OCR text may require manual review.
+- Chat, entries, contacts, and learned word fixes remain in local app storage. Legacy hosted-AI keys are cleared during upgrade. Manual update checks and Android's speech-recognition service are separate system features.
 
-Note: APK builds are triggered only after explicit user approval, not after ordinary changes.
+## APK build
+1. Pull requests run unit tests and build an APK artifact for review.
+2. A release is published only by an explicitly approved `[build-apk]` commit pushed to `main`.
+3. Download `BolKhata-apk` from the successful workflow run, or use the latest GitHub Release.
 
-## Android Studio se
-Folder ko Android Studio mein "Open" karein, sync hone dein, phone USB se lagayein aur ▶ Run dabayein.
-
-## Kaise kaam karta hai
-- Awaaz: Google ki speech recognition (phone mein Google app hona chahiye). Upar "Roman / اردو" button se zabaan badlein.
-- Samajhna: `Parser.kt` offline keywords se type, category, shakhs aur raqam nikalta hai.
-- Data: sirf phone par save hota hai.
-- Kisi entry par tap karein to raqam, shakhs, qism, category badal sakte hain ya mita sakte hain.
+## Android Studio
+Open the folder in Android Studio, sync Gradle, connect a phone, and press ▶ Run.
 
 ## Account safety and recovery
-- Khata history mein **Select all** se multiple entries choose karke ek destination mein move kar sakte hain.
-- Move dialog mein search aur new khata destination hai; move ke pehle confirmation hoti hai.
-- Entry actions ya khata screen se **Move history & restore** khol sakte hain. Restore sirf tab hota hai jab entries baad mein kisi doosre khate mein move/edit nahi hui hon.
-- Rename aur merge alag actions hain; existing khata ke saath merge karne se pehle affected entry count dikhaya jata hai.
-- Chat/voice commands open khata ke context mein records filter karte hain; ambiguous multi-entry delete/move par clarification mangi jati hai.
-- App interface English mein rehta hai. Voice recognition ki language alag setting hai; naye devices par language preference ka sensible default use hota hai.
+- Khata history supports Select all, search, and guarded bulk moves.
+- Move history and restore refuse stale restores after later edits or moves.
+- Rename and merge are separate actions; merge previews affected entry counts.
+- Chat/voice commands stay scoped to the open khata. Ambiguous multi-entry delete/move requests require clarification.
+- App interface language and speech-recognition language are independent.
 
 Release workflow runs unit tests and builds a signed release APK. Install and test on your own phone before relying on it for important financial records.

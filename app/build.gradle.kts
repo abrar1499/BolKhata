@@ -17,9 +17,6 @@ android {
         targetSdk = 34
         versionCode = buildNumber
         versionName = "1.$buildNumber"
-        // Built-in Gemini key from the GitHub secret GEMINI_KEY. Never written in the code.
-        val geminiKey = (System.getenv("GEMINI_KEY") ?: "").replace("\"", "").trim()
-        buildConfigField("String", "GEMINI_KEY", "\"$geminiKey\"")
     }
 
     signingConfigs {
@@ -64,6 +61,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     // Reads the text inside PDF statements on the phone, so most statements need no AI.
     implementation("com.tom-roush:pdfbox-android:2.0.27.0")
+    // Bundled Latin OCR model: text recognition works without a network request at runtime.
+    implementation("com.google.mlkit:text-recognition:16.0.1")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-core")

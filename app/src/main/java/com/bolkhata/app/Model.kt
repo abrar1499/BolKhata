@@ -69,7 +69,7 @@ data class ChatMessage(
     val entryIds: List<String> = emptyList(),
     /** Preview picture of an attached photo or PDF (first page), saved in the app's own storage. */
     val attachment: String = "",
-    /** Small grey line under an answer: which AI model answered and how long it took. */
+    /** Optional small diagnostic line under a local-engine answer. */
     val meta: String = ""
 )
 
@@ -107,6 +107,17 @@ fun restoreMoveBatch(entries: List<Entry>, batch: MoveBatch): List<Entry>? {
 /** Saves entries on the phone itself (no internet needed). */
 class Store(context: Context) {
     private val prefs = context.getSharedPreferences("bolkhata", Context.MODE_PRIVATE)
+
+    init {
+        // Remove obsolete provider credentials from earlier AI-enabled builds. Ledger/chat data is untouched.
+        prefs.edit()
+            .remove("aiKey")
+            .remove("fastKey")
+            .remove("fileKey")
+            .remove("fileModel")
+            .remove("aiModel")
+            .apply()
+    }
 
     fun load(): List<Entry> = read("entries")
 
@@ -462,28 +473,6 @@ class Store(context: Context) {
             emptyList()
         }
         set(v) = prefs.edit().putString("memory", JSONArray(v.takeLast(80)).toString()).apply()
-
-    var aiKey: String
-        get() = prefs.getString("aiKey", "") ?: ""
-        set(v) = prefs.edit().putString("aiKey", v).apply()
-
-    /** Optional Groq or OpenRouter key for fast chat answers. */
-    var fastKey: String
-        get() = prefs.getString("fastKey", "") ?: ""
-        set(v) = prefs.edit().putString("fastKey", v).apply()
-
-    /** OpenRouter key and model used to read photos and PDFs (statements, receipts, bills). */
-    var fileKey: String
-        get() = prefs.getString("fileKey", "") ?: ""
-        set(v) = prefs.edit().putString("fileKey", v).apply()
-
-    var fileModel: String
-        get() = prefs.getString("fileModel", "")?.ifBlank { null } ?: Ai.DEFAULT_FILE_MODEL
-        set(v) = prefs.edit().putString("fileModel", v).apply()
-
-    var aiModel: String
-        get() = prefs.getString("aiModel", "") ?: ""
-        set(v) = prefs.edit().putString("aiModel", v).apply()
 
     var theme: String
         get() = prefs.getString("theme", "Sand") ?: "Sand"

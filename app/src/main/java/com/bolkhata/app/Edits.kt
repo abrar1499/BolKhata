@@ -69,7 +69,7 @@ object Edits {
     )
     private val loanWords = setOf("udhaar", "udhar", "qarz", "karz", "qarza", "loan")
 
-    fun plan(text: String, entries: List<Entry>, now: Long = System.currentTimeMillis()): Ai.EditPlan? {
+    fun plan(text: String, entries: List<Entry>, now: Long = System.currentTimeMillis()): EditPlan? {
         if (entries.isEmpty()) return null
         val words = text.lowercase().split(Regex("""[^\p{L}\p{N}]+""")).filter { it.isNotEmpty() }
         val (date, rest) = Parser.extractDate(text, now)
@@ -204,7 +204,7 @@ object Edits {
         }
 
         if (changed == target) return null
-        return Ai.EditPlan(listOf(target to changed), emptyList(), entryTitle(target) + " → " + what.joinToString(", "))
+        return EditPlan(listOf(target to changed), emptyList(), entryTitle(target) + " → " + what.joinToString(", "))
     }
 
     /** The category the sentence moves the entry to: "grocery mein", "category food", "transport wali hai". */

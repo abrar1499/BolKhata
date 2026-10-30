@@ -116,7 +116,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var menuFor by remember { mutableStateOf<Entry?>(null) }
     var ledgerPerson by remember { mutableStateOf<String?>(null) }
     var activeLedgerPerson by remember { mutableStateOf<String?>(null) }
-    // Smart understanding: entries the AI read (shown before saving), a name to pick, what was just added (Undo),
+    // Smart understanding: entries the local engine read (shown before saving), a name to pick, what was just added (Undo),
     // the entry being edited from the card (to learn from), and words the person corrected before.
     var confirmNew by remember { mutableStateOf<Pair<List<Entry>, String>?>(null) }
     var askWho by remember { mutableStateOf<Understand.Result?>(null) }
@@ -144,8 +144,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var importDupes by remember { mutableStateOf(setOf<String>()) }
     // For each imported row that matches a saved entry: the saved entry's id.
     var importMatch by remember { mutableStateOf(mapOf<String, String>()) }
-    // Changes the chat AI wants to make to saved entries, shown for the person to Apply or Cancel.
-    var pendingPlan by remember { mutableStateOf<Ai.EditPlan?>(null) }
+    // Changes the local engine proposes, shown for the person to Apply or Cancel.
+    var pendingPlan by remember { mutableStateOf<EditPlan?>(null) }
 
     DisposableEffect(Unit) {
         val stop = store.watchSuggestions { suggestions = store.loadSuggestions() }
@@ -288,19 +288,6 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         return true
     }
 
-    var aiKey by remember { mutableStateOf(store.aiKey) }
-    var fastKey by remember { mutableStateOf(store.fastKey) }
-    var fileKey by remember { mutableStateOf(store.fileKey) }
-    var fileModel by remember { mutableStateOf(store.fileModel) }
-    // The person's own key wins; otherwise the key built into the app is used.
-    val activeKey = aiKey.ifBlank { BuildConfig.GEMINI_KEY }
-    // Open the connection to the AI as soon as the chat is on screen, so the first message is quicker.
-    LaunchedEffect(tab == Tab.CHAT, activeKey) {
-        if (tab == Tab.CHAT && activeKey.isNotBlank()) {
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Ai.warmUp(activeKey) }
-        }
-    }
-
     // Keep the offline reader up to date with what the person taught it and who is in the khata.
     LaunchedEffect(Unit) { Parser.learned = store.loadLearned() }
     LaunchedEffect(entries) {
@@ -350,12 +337,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     }
 
     /**
-     * Offline first. Only when the offline reader is unsure (something it could not place,
-     * an "Other" expense, or no amount at all) and an AI key is set, the sentence goes to Gemini.
-     * If the AI fails or there is no internet, the offline result is used as before.
+     * Reads entries locally. Unclear amounts or categories are shown for review; no remote model is called.
      */
-    /** Applies an AI change only while every target still matches the exact snapshot it was based on. */
-    fun applyPlan(plan: Ai.EditPlan): Boolean {
+    /** Applies a local change only while every target still matches the exact snapshot it was based on. */
+    fun applyPlan(plan: EditPlan): Boolean {
         val expected = plan.changed.map { it.first } + plan.deleted
         if (expected.isEmpty() || !Accounts.snapshotsMatch(entries, expected)) return false
         val beforeEntries = entries
@@ -456,7 +441,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         if (updated == target && undone.isEmpty()) {
             toast(if (target.type == Type.SALE && !st.paid && who.isBlank()) label + " is already unpaid. Add the customer's name to track the payment." else msg)
         } else {
-            if (!applyPlan(Ai.EditPlan(listOf(target to updated), undone, msg))) {
+            if (!applyPlan(EditPlan(listOf(target to updated), undone, msg))) {
                 toast("This transaction changed before the update could be applied. Nothing was changed.")
             }
         }
@@ -479,7 +464,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
      * The AI rewrites a sentence the app could not read into the app's own simple words; the app then reads it
      * again (no second AI call). Word fixes are remembered, so next time no AI is needed at all.
      */
-    /** Words the AI fixed ("ptrl" -> "petrol") are remembered, so the app reads them itself next time. */
+    /** Words the local engine fixed ("ptrl" -> "petrol") are remembered, so the app reads them itself next time. */
     fun learnWordFixes(said: String, fixed: String) {
         val a = said.lowercase().split(Regex("[^\\p{L}]+")).filter { it.length >= 3 }
         val b = fixed.lowercase().split(Regex("[^\\p{L}]+")).filter { it.length >= 3 }
@@ -493,44 +478,26 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
 
     /**
      * The "Sort Other" list. Shops the app knows get their category straight away; for names it doesn't know
-     * ("Atheer Meed Taiba", "Kholoud Rajeh") only the names go to the AI once, and the person checks the list.
+     * ("Atheer Meed Taiba", "Kholoud Rajeh") only the names go to the local engine once, and the person checks the list.
      */
+    /** Sorts with the app's local merchant/category rules; unknown shops stay available for manual review. */
     fun openRecat() {
-        val groups = Recat.plan(entries)
-        recat = groups
-        val unknown = groups.filter { it.guess == Cat.OTHER }
-        val fast = store.fastKey.trim()
-        if (unknown.isEmpty() || (fast.isBlank() && activeKey.isBlank())) return
-        flash = Flash("Finding ${unknown.size} shops…", Flash.Kind.WORKING)
-        scope.launch {
-            val got = runCatching {
-                Ai.categorize(unknown.take(80).map { it.name to it.total / it.ids.size }, fast, activeKey, store)
-            }.getOrNull().orEmpty()
-            flash = if (got.isEmpty()) Flash("Couldn't sort the rest; pick them in the list.", Flash.Kind.ANSWER)
-                else Flash("Sorted ${got.size} more. Check and tap Apply.", Flash.Kind.ANSWER)
-            if (recat != null && got.isNotEmpty()) recat = recat!!.map { g -> got[g.name]?.let { Recat.Group(g.name, g.ids, g.total, it) } ?: g }
-        }
+        recat = Recat.plan(entries)
+        val unknown = recat.orEmpty().count { it.guess == Cat.OTHER }
+        flash = Flash(
+            if (unknown == 0) "All recognized shops are categorized. Review and tap Apply."
+            else "$unknown shops need your category choice. Nothing was changed yet.",
+            Flash.Kind.ANSWER
+        )
     }
 
-    // handleText is written further down; this lets the AI-fix step hand the fixed sentence back to it.
+    // handleText is written further down; this lets the local engine-fix step hand the fixed sentence back to it.
     var readAgain: (String, String) -> Unit = { _, _ -> }
     // chatViaReader is written further down too.
     var chatRead: (String) -> Unit = { }
 
-    fun askAiToFix(text: String, question: Boolean, orElse: () -> Unit) {
-        val fast = store.fastKey.trim()
-        if (fast.isBlank() && activeKey.isBlank()) { orElse(); return }
-        toast("✨ Understanding…")
-        scope.launch {
-            val fixed = runCatching { Ai.fix(text, fast, activeKey, store, contactNames()) }.getOrNull()?.text.orEmpty()
-            if (fixed.isBlank() || fixed.equals(text.trim(), true)) { orElse(); return@launch }
-            learnWordFixes(text, fixed)
-            readAgain(fixed, text)
-        }
-    }
-
     fun handleTextSafely(text: String, clock: Understand.Clock? = null, original: String? = null) {
-        // "Other wali entries theek karo": the app sorts them itself (the AI only fixed the wording).
+        // "Other wali entries theek karo": the app sorts them itself (the local engine only fixed the wording).
         if (Recat.isCommand(text)) { openRecat(); return }
         // A vague "change an entry" is not enough information to edit safely; ask what to change.
         val normalizedWords = text.lowercase().split(Regex("""[^\p{L}\p{N}]+""")).filter { it.isNotEmpty() }
@@ -568,12 +535,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 }
                 return
             }
-            // A question the app couldn't read: the AI only rewrites it, the app still works out the answer.
-            if (original == null) {
-                askAiToFix(text, question = true) { flash = Flash("Couldn't understand. Try \"ali ka khata\" or \"is mahine kitna kharcha\".", Flash.Kind.ANSWER) }
-                return
-            }
-            flash = Flash("Couldn't find that. Try \"ali ka khata\" or \"is mahine kitna kharcha\".", Flash.Kind.ANSWER)
+            flash = Flash("I couldn't match that question to saved records. Try 'food this month', 'last 5 transactions', or 'Ali ka balance'.", Flash.Kind.ANSWER)
             return
         }
         // Simple changes (date, amount) are done offline straight away, with Undo.
@@ -589,22 +551,18 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         val r = Parser.parse(text).let { p ->
             if (clock == null) p else Parser.Result(p.entries.map { Understand.at(it, clock) }, p.unclear.map { Understand.at(it, clock) })
         }
-        // Goods said without a price are asked about here (the rate), not sent to the AI.
+        // Goods said without a price are asked about here (the rate), not sent to the local engine.
         val askRate = r.unclear.isNotEmpty() && r.unclear.all { it.qty > 0 }
         val unsure = !askRate && (r.unclear.isNotEmpty() || r.entries.isEmpty()) ||
             r.entries.any { it.type == Type.KHARCHA && it.category == Cat.OTHER }
-        val fast = store.fastKey.trim()
-        if (!unsure || (activeKey.isBlank() && fast.isBlank())) {
-            addOffline(r)
+        // No network fallback: the local parser either saves a clear entry or asks the person to review it.
+        if (!unsure || r.entries.isNotEmpty() || r.unclear.isNotEmpty()) {
+            if (r.entries.isNotEmpty() && (r.unclear.isNotEmpty() || r.entries.any { it.type == Type.KHARCHA && it.category == Cat.OTHER })) {
+                confirmNew = (r.entries + r.unclear) to (original ?: text)
+            } else addOffline(r)
             return
         }
-        if (original != null) {
-            // Already fixed by the AI once and still not sure: show it on a card to check, never ask the AI again.
-            if (r.entries.isNotEmpty()) confirmNew = (r.entries + r.unclear) to original else addOffline(r)
-            return
-        }
-        // Not sure: the AI only fixes the sentence; the app reads the fixed sentence itself.
-        askAiToFix(text, question = false) { addOffline(r) }
+        addOffline(r)
     }
 
     /** A shared bill: your share is the expense, the others' shares go in their khata. Saved with Undo. */
@@ -715,7 +673,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         val sourceEntries = entries.filter { it.person.equals(source, ignoreCase = true) }
         if (sourceEntries.isEmpty()) return "No entries found in $source's khata. Nothing was moved."
         val changes = sourceEntries.map { old -> old to old.copy(person = destination) }
-        if (!applyPlan(Ai.EditPlan(changes, emptyList(), "Moved ${changes.size} entries from $source to $destination"))) {
+        if (!applyPlan(EditPlan(changes, emptyList(), "Moved ${changes.size} entries from $source to $destination"))) {
             return "The khata entries changed before I could move them. Nothing was moved; please try again."
         }
         return "Moved ${changes.size} entries from $source to $destination. Amounts, dates, notes and entry types are unchanged. You can Undo or restore this move from Move history."
@@ -738,17 +696,17 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         val changed = convertPersonTransfersToLedgerEntries(entries, person)
         if (changed.isEmpty()) return "No transfer entries found to convert in " + person + "'s khata."
         val message = "Converted " + changed.size + " transfer entries in " + person + "'s khata to gave/received entries"
-        if (!applyPlan(Ai.EditPlan(changed, emptyList(), message))) {
+        if (!applyPlan(EditPlan(changed, emptyList(), message))) {
             return "The khata changed before I could apply the conversion. Nothing was changed; please try again."
         }
         return "Done. Converted " + changed.size + " transfer entries in " + person + "'s khata. The khata stays open."
     }
 
     /**
-     * Carries out what the AI understood. The AI only translated; every record is picked, counted, added up,
+     * Carries out what the local engine understood. The AI only translated; every record is picked, counted, added up,
      * deleted or changed here by the app. Returns a line to show, or null when the action shows itself.
      */
-    fun runFixed(f: Ai.Fixed, said: String, inChat: Boolean): String? {
+    fun runFixed(f: NativeChatEngine.Fixed, said: String, inChat: Boolean): String? {
         // "Inko / ye sari": nothing narrowed down, so it means the records on screen.
         val onScreen = screenList()
         // A vague singular instruction must never silently edit or delete an entire khata.
@@ -774,6 +732,19 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 if (f.text.none { it.isDigit() }) return f.reply.ifBlank { "How much? e.g. \"${f.text.ifBlank { "petrol" }} 50\"" }
                 if (inChat) chatRead(f.text) else handleText(f.text, original = said)
                 null
+            }
+            "plan" -> {
+                val plan = f.plan ?: return "I couldn't build a safe change plan. Nothing was changed."
+                pendingPlan = plan
+                "I prepared a change for review. Check the proposed entry details and tap Apply or Cancel. Nothing has changed yet."
+            }
+            "clear_all" -> {
+                val targets = scoped(entries)
+                if (targets.isEmpty()) "There are no entries in this view."
+                else {
+                    askDelete("all " + targets.size + " entries in this view", targets)
+                    "Found " + targets.size + " entries. Confirm the delete dialog to move them to Trash. Nothing is deleted yet."
+                }
             }
             "ask" -> {
                 val available = scoped(entries)
@@ -803,13 +774,13 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     openRecat(); return null
                 }
                 if (q.isEmpty) return "Which entry? e.g. \"laptop wali entry\""
-                if (f.set.isEmpty()) return runFixed(Ai.Fixed("", "reread", "", "", q), said, inChat)
+                if (f.set.isEmpty()) return runFixed(NativeChatEngine.Fixed("", "reread", "", "", q), said, inChat)
                 val hits = scoped(Query.select(entries, q))
                 if (hits.isEmpty()) return "Nothing found (${Query.label(q)})."
                 clarifyMultiple("change", hits)?.let { return it }
                 val changed = hits.map { it to Query.change(it, f.set) }.filter { (a, b) -> a != b }
                 if (changed.isEmpty()) return "Already like that."
-                if (!applyPlan(Ai.EditPlan(changed, emptyList(), "Changed ${changed.size} " + (if (changed.size == 1) "entry" else "entries")))) {
+                if (!applyPlan(EditPlan(changed, emptyList(), "Changed ${changed.size} " + (if (changed.size == 1) "entry" else "entries")))) {
                     return "Those entries changed before I could update them. Nothing was changed; please search again."
                 }
                 changed.take(3).joinToString("; ") { (a, b) -> entryTitle(a) + " " + fmt(a.amount) + " → " + entryTitle(b) + " " + fmt(b.amount) } +
@@ -830,7 +801,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     work = work.map { if (it.id == e.id) moved else it }
                     e to moved
                 }
-                if (!applyPlan(Ai.EditPlan(changed, emptyList(), "Moved ${changed.size} to $name"))) {
+                if (!applyPlan(EditPlan(changed, emptyList(), "Moved ${changed.size} to $name"))) {
                     return "Those entries changed before I could move them. Nothing was moved; please search again."
                 }
                 val bal = personAccounts(work).firstOrNull { it.name.equals(name, true) }?.balance ?: 0.0
@@ -996,58 +967,6 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     chatRead = { chatViaReader(it) }
 
     /** Without AI (no key, or no internet): save clear entries, answer simple questions, never stay silent. */
-    fun chatOffline(text: String, roman: String, aiDown: Boolean, why: String? = null) {
-        val question = roman.endsWith("?") || runCatching { Questions.isQuestion(roman) }.getOrDefault(false)
-        val parsed = runCatching { Parser.parse(roman) }.getOrNull()
-        if (!question && parsed != null && (parsed.entries.isNotEmpty() || parsed.unclear.isNotEmpty())) {
-            chatViaReader(text)
-            return
-        }
-        val answer = if (question) runCatching { Questions.answer(roman, entries, currency) }.getOrNull() else null
-        postChat(
-            answer?.text ?: if (aiDown) {
-                "AI didn't answer" + (if (!why.isNullOrBlank()) " ($why)" else "") +
-                    ". I can still save entries like \"petrol 60\", and answer simple questions like \"how much this month?\"."
-            } else {
-                "Hi! Tell me an expense like \"petrol 60\", or ask \"how much did I spend this month?\". Turn on AI in Settings for full answers."
-            },
-            isUser = false
-        )
-    }
-
-    /**
-     * The app's own reading of a chat message: entries it can read, questions it can answer from its own numbers,
-     * commands and edits it understands. True when handled, so no AI is needed.
-     */
-    fun localChat(text: String, roman: String): Boolean {
-        if (Recat.isCommand(roman)) {
-            val g = Recat.plan(entries)
-            openRecat()
-            postChat(if (g.isEmpty()) "No expenses in Other." else "Found ${g.sumOf { it.ids.size }} expenses in Other (${g.size} shops). Check the list and tap Apply.", isUser = false)
-            return true
-        }
-        val u = Understand.read(roman, contactNames(), wordFixes)
-        if (u.kind != Understand.Kind.ENTRY || u.choices.size > 1) { chatViaReader(text); return true }
-        if (Commands.read(roman) != null || Parser.payStatus(roman) != null || Edits.plan(roman, entries) != null) {
-            chatViaReader(text); return true
-        }
-        if (Questions.isQuestion(u.text)) {
-            val a = Questions.answer(u.text, scopeKhataEntries(entries), currency) ?: return false
-            lastSpeech = a.text
-            postChat(a.text, isUser = false)
-            return true
-        }
-        if (Split.detect(u.text, contactNames()) != null) { chatViaReader(text); return true }
-        val r = Parser.parse(u.text)
-        val sure = r.entries.isNotEmpty() && r.unclear.isEmpty() && r.entries.none { it.type == Type.KHARCHA && it.category == Cat.OTHER }
-        if (sure) { chatViaReader(text); return true }
-        return false
-    }
-
-    /**
-     * The single assistant request pipeline used by both the Home input and the full Chat screen.
-     * It resolves language, context, deterministic app actions, AI interpretation, and persistence in one place.
-     */
     fun chatInput(raw: String) {
         val text = raw.trim()
         if (text.isEmpty() || chatLoading) return
@@ -1063,123 +982,38 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             postChat("That exact request was just completed, so I didn't run it twice. If you meant another identical transaction, say 'add another'.", isUser = false)
             return
         }
-        // "speed test": measures each AI model with a tiny question, to see where time goes.
-        if (activeKey.isNotBlank() && Regex("""(?i)^\s*(speed ?test|ai ?test|test ?speed)\s*$""").matches(text)) {
-            postChat(text, isUser = true)
-            chatLoading = true
-            loadingLabel = "Testing each model…"
-            scope.launch {
-                val report = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Ai.speedTest(activeKey, store.fastKey) }
-                postChat(report, isUser = false)
-                chatLoading = false
-                loadingLabel = "Thinking…"
-            }
-            return
-        }
         val roman = runCatching { Translit.toRoman(text) }.getOrDefault(text)
         val history = chatMessages.takeLast(20)
         postChat(text, isUser = true)
+
+        NativeMemory.handle(text, store.memory)?.let { memory ->
+            store.memory = memory.facts
+            lastSpeech = memory.reply
+            postChat(memory.reply, isUser = false)
+            return
+        }
+
         handleCurrentKhataMoveCommand(text)?.let { lastSpeech = it; postChat(it, isUser = false); return }
         handleCurrentKhataBulkCommand(text)?.let { lastSpeech = it; postChat(it, isUser = false); return }
-        // Always handle date-based bulk deletion locally, even if AI is enabled.
-        // Never let an AI response delete a broad date range without the user's confirmation.
-        val periodCommand = Commands.read(roman)?.takeIf { it.action == Commands.Action.DELETE_PERIOD }
-        if (periodCommand != null) {
-            val period = periodCommand.period!!
-            val matched = matchEntriesByPeriod(entries, period)
-            val reply = if (matched.isEmpty()) {
-                "No saved entries found for ${period.label()}. Nothing deleted."
-            } else {
-                askDelete(period.label(), matched)
-                "Found ${matched.size} entries for ${period.label()}. Confirm the delete dialog to move them to Trash, or Cancel. Nothing deleted yet."
-            }
-            lastSpeech = reply
-            postChat(reply, isUser = false)
-            return
-        }
-        // With AI on, corrections go to the AI too: it understands "23 oct, a bit before Shahbaz's 315" and can
-        // pick the right entry from the conversation. The offline edit reader is only the fallback without AI.
-        // With AI on, everything in the chat (searches, edits, deletes) goes to the AI, which can see the
-        // conversation; the app's own command and edit readers are the fallback without AI.
-        // The app first: whatever it can read or answer itself costs no AI at all.
-        if (runCatching { localChat(text, roman) }.getOrDefault(false)) return
-        val changesExisting = activeKey.isBlank() && store.fastKey.isBlank() && runCatching {
-            Commands.read(roman) != null || Parser.payStatus(roman) != null ||
-                Edits.plan(roman, entries) != null ||
-                (looksLikeEdit(roman) && entries.isNotEmpty() && roman.any { it.isDigit() })
-        }.getOrDefault(false)
-        if (changesExisting) {
-            chatViaReader(text)
-            return
-        }
-        if (activeKey.isBlank() && store.fastKey.isBlank()) {
-            chatOffline(text, roman, aiDown = false)
-            return
-        }
+
         chatLoading = true
         scope.launch {
             try {
-                // The AI only fixes the sentence; if the app can then read it, that's the answer (a few tokens).
-                val asked = roman.trim().endsWith("?") || runCatching { Questions.isQuestion(roman) }.getOrDefault(false)
-                val recentContext = history.takeLast(8).joinToString("\n") { m ->
-                    (if (m.isUser) "User: " else "Assistant: ") + m.text.take(160)
+                val intent = NativeChatEngine.interpret(
+                    roman, scopeKhataEntries(entries), contactNames(), wordFixes, history, currency = currency
+                )
+                val reply = runCatching { runFixed(intent, text, inChat = true) }.getOrElse {
+                    "I couldn't safely complete that action. Nothing was changed. Please add the date, amount, item, or person's name."
                 }
-                val previousContext = listOf(lastTalk.take(200), recentContext).filter { it.isNotBlank() }.joinToString("\n").take(900)
-                val f = runCatching {
-                    Ai.fix(roman, store.fastKey, activeKey, store, contactNames(), previousContext, screenList()?.first.orEmpty())
-                }.getOrNull()
-                if (f != null && f.kind != "unsupported" && !(f.kind == "chat" && activeKey.isNotBlank())) {
-                    if (f.kind == "entry" && f.text.isNotBlank()) learnWordFixes(roman, f.text)
-                    val msg = runCatching { runFixed(f, roman, inChat = true) }.getOrNull()
-                    lastTalk = roman + (if (msg != null) " → app: " + msg.take(80) else "")
-                    if (msg != null) { lastSpeech = msg; postChat(msg, isUser = false) }
-                    return@launch
-                }
-                // Only things outside the app's own work (advice, general talk) go to the full AI.
-                if (activeKey.isBlank()) { chatOffline(text, roman, aiDown = false); return@launch }
-                val res = Ai.assistant(text, history, scopeKhataEntries(entries), activeKey, store, currency, store.memory, voice = voiceOn)
-                lastSpeech = res.speech
-                // Lasting facts from the chat are kept on the phone and sent with every later question.
-                if (res.remember.isNotEmpty() || res.forget.isNotEmpty()) {
-                    val gone = res.forget.map { it.lowercase() }.toSet()
-                    val kept = store.memory.filter { it.lowercase() !in gone }
-                    store.memory = (kept + res.remember.filter { r -> kept.none { it.equals(r, ignoreCase = true) } }).takeLast(80)
-                }
-                val reply = res.reply
-                val list = contextualizeCurrentKhata(res.entries)
-                // Changes are applied straight away (the bar at the bottom has Undo), and listed in the chat
-                // so it's always clear exactly what changed.
-                val planApplied = res.plan?.let { applyPlan(it) } ?: true
-                val changeList = if (planApplied) res.plan?.let { plan ->
-                    val df = java.text.SimpleDateFormat("d MMM", java.util.Locale.US)
-                    fun d(e: Entry) = df.format(java.util.Date(e.date)) + " · " + entryTitle(e) + " · " + fmt(e.amount)
-                    (plan.deleted.map { "- Deleted: " + d(it) } +
-                        plan.changed.map { (a, b) -> "- Changed: " + d(a) + "  →  " + d(b) +
-                            (if (a.category != b.category || a.type != b.type) " (" + b.type.label + ", " + b.category.label + ")" else "") })
-                        .joinToString("\n")
-                } else null
-                // If the AI says it did something but sent no change, say so instead of letting it look done.
-                val claims = Regex("""(?i)\b(kar (diya|di|diye|dein)|hata (diya|di|diye)|shift|darj|updated?|deleted?|changed|moved|removed|set kar)\b""")
-                // Only when they asked for a change: a reply that mentions an earlier change ("delete ho chuki hai") is fine.
-                val askedChange = Regex("""(?i)\b(delete|del|hata|hatao|change|badal|badlo|galat|ghalat|minus|edit|update|theek|thek|fix|shift|move|remove)\b""").containsMatchIn(text)
-                val honest = when {
-                    !planApplied -> "I couldn't safely identify or apply that change. Nothing was changed; please clarify the transaction and try again."
-                    askedChange && list.isEmpty() && res.plan == null && claims.containsMatchIn(reply) ->
-                        "$reply\n\n(Nothing was changed yet. Tell me exactly what to change.)"
-                    else -> reply
-                }
-                if (list.isNotEmpty()) {
-                    save(list + entries)
-                    postChat(honest.ifBlank { "Saved" }, isUser = false, entryIds = list.map { it.id }, meta = res.trace)
-                } else {
-                    postChat(honest.ifBlank { "Done." }, isUser = false, meta = res.trace)
-                }
-                if (!changeList.isNullOrBlank()) postChat(changeList, isUser = false)
-                if (res.remember.isNotEmpty()) {
-                    postChat("Remembered: " + res.remember.joinToString("; "), isUser = false)
+                lastTalk = roman + (if (!reply.isNullOrBlank()) " → app: " + reply.take(100) else "")
+                if (!reply.isNullOrBlank()) {
+                    lastSpeech = reply
+                    postChat(reply, isUser = false)
                 }
             } catch (e: Exception) {
-                chatOffline(text, roman, aiDown = true, why = e.message?.take(160))
+                val safe = "I couldn't safely understand that. Nothing was changed. Try 'chai 5', 'food this month', or 'last 5 transactions'."
+                lastSpeech = safe
+                postChat(safe, isUser = false)
             } finally {
                 chatLoading = false
             }
@@ -1192,7 +1026,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         if (text.isEmpty() || chatLoading) return
         homeChatFlash = true
         chatInput(text)
-        // Synchronous local answers have already reached postChat; clear any unused presentation flag.
+        // Clear the home-chat presentation flag when no asynchronous work was started.
         if (!chatLoading && chatMessages.lastOrNull()?.isUser == false) homeChatFlash = false
     }
 
@@ -1231,7 +1065,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         return out
     }
 
-    /** Reads an attached photo or PDF with AI and shows what it found in the chat to tick and add. */
+    /** Reads text-based PDF statements locally and shows candidate entries for review. */
     fun readAttachment(uri: android.net.Uri) {
         if (chatLoading) return
         val resolver = context.contentResolver
@@ -1250,38 +1084,45 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             try {
                 val bytes = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                     resolver.openInputStream(uri)?.use { it.readBytes() }
-                } ?: throw Ai.Failure("Could not open this file.")
+                } ?: throw IllegalStateException("Could not open this file.")
                 // Show the photo (or the PDF's first page) in the chat, like a messaging app.
                 val preview = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                     runCatching { Attachments.savePreview(context, bytes, mime) }.getOrNull().orEmpty()
                 }
                 postChat(name, isUser = true, attachment = preview)
-                if (bytes.size > 15 * 1024 * 1024) throw Ai.Failure("This file is too big (over 15 MB). Send a smaller PDF or a photo of one page.")
-                // Statement reading as in version 59: the whole file in one request.
-                loadingLabel = "Reading…"
-                // First the phone reads the PDF itself (no AI): exact, instant and free, and it checks itself against the
-                // running balance and the statement's totals. Only when that doesn't check out does the AI read it.
-                val offline = if (mime == "application/pdf") kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    PdfText.extract(context, bytes)?.let { runCatching { StatementParser.parse(it) }.getOrNull() }
+                if (bytes.size > 15 * 1024 * 1024) throw IllegalStateException("This file is too big (over 15 MB). Send a smaller PDF or a photo of one page.")
+                loadingLabel = "Reading on this phone…"
+                val textLayer = if (mime == "application/pdf") kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    PdfText.extract(context, bytes)
                 } else null
-                val found = if (offline != null && offline.ok) {
-                    postChat(offline.check, isUser = false)
-                    PdfText.toEntries(offline).sortedByDescending { it.date }
-                } else {
-                    if (offline != null && offline.rows.isNotEmpty()) {
-                        postChat("Couldn't check this statement on the phone (" + offline.why + "), so the AI is reading it.", isUser = false)
+                var recognizedText = textLayer
+                if (recognizedText.isNullOrBlank()) {
+                    recognizedText = Attachments.extractText(context, bytes, mime)
+                }
+                var statement = recognizedText?.takeIf { it.isNotBlank() }?.let {
+                    runCatching { StatementParser.parse(it) }.getOrNull()
+                }
+                if (statement?.ok != true && mime == "application/pdf" && textLayer != null) {
+                    // A selectable text layer can still be badly ordered; retry the rendered pages with bundled OCR.
+                    recognizedText = Attachments.extractText(context, bytes, mime)
+                    statement = recognizedText.takeIf { it.isNotBlank() }?.let {
+                        runCatching { StatementParser.parse(it) }.getOrNull()
                     }
-                    if (activeKey.isBlank()) throw Ai.Failure("Reading this file needs AI. Turn it on in Settings.")
-                    Ai.lastFileError = ""
-                    val viaAi = Ai.readWholeFile(bytes, mime, "", activeKey, store, currency)
-                        .sortedByDescending { it.date }
-                    if (store.fileKey.isNotBlank() && Ai.lastFileError.isNotBlank()) {
-                        postChat("OpenRouter couldn't read it (" + Ai.lastFileError.take(80) + "), so Gemini read it.", isUser = false)
+                }
+                val found = when {
+                    statement?.ok == true -> {
+                        postChat(statement.check, isUser = false)
+                        PdfText.toEntries(statement).sortedByDescending { it.date }
                     }
-                    viaAi
+                    !recognizedText.isNullOrBlank() -> ReceiptParser.parse(recognizedText).sortedByDescending { it.date }
+                    else -> emptyList()
                 }
                 if (found.isEmpty()) {
-                    postChat("I couldn't find any transactions in this file.", isUser = false)
+                    postChat(
+                        "I couldn't safely extract a dated statement or a printed receipt total. Nothing was imported. " +
+                            "The bundled offline OCR reads Latin text and digits; Arabic-only text may need manual review.",
+                        isUser = false
+                    )
                 } else {
                     imports = found
                     importMatch = matchSaved(found)
@@ -1380,6 +1221,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         val i = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, lang)
+            putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
             // Give the person time to finish a long story before it stops listening.
@@ -1857,59 +1699,11 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     onTheme = onTheme,
                     bankOn = bankOn,
                     onBank = { bankHelp = true },
-                    aiKey = aiKey,
-                    aiBuiltIn = BuildConfig.GEMINI_KEY.isNotBlank(),
                     onExport = {
                         val day = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
                         exportFile.launch("SmartExpense-backup-$day.json")
                     },
                     onImport = { importFile.launch(arrayOf("application/json", "text/plain", "application/octet-stream", "*/*")) },
-                    onAiKey = { k ->
-                        aiKey = k
-                        store.aiKey = k
-                        if (k.isBlank()) {
-                            toast(if (BuildConfig.GEMINI_KEY.isNotBlank()) "Using the built-in AI" else "AI turned off")
-                        } else {
-                            toast("Checking key…")
-                            scope.launch {
-                                val err = Ai.test(k, store)
-                                toast(if (err == null) "✓ AI is ready" else err)
-                            }
-                        }
-                    },
-                    fileKey = fileKey, fileModel = fileModel,
-                    onFileSettings = { k, model ->
-                        val v = k.trim()
-                        if (v.isNotBlank() && !v.startsWith("sk-or-")) {
-                            toast("That doesn't look like an OpenRouter key (sk-or-…)")
-                        } else {
-                            fileKey = v
-                            store.fileKey = v
-                            fileModel = model.trim().ifBlank { Ai.DEFAULT_FILE_MODEL }
-                            store.fileModel = fileModel
-                            toast(if (v.isBlank()) "Photos and PDFs: Gemini" else "✓ Photos and PDFs: $fileModel")
-                        }
-                    },
-                    fastKey = fastKey,
-                    onFastKey = { k ->
-                        val v = k.trim()
-                        if (v.startsWith("AIza")) {
-                            // A Gemini key pasted here becomes the app's own Gemini key (photos, PDFs and the backup chat).
-                            aiKey = v
-                            store.aiKey = v
-                            toast("Checking Gemini key…")
-                            scope.launch {
-                                val err = Ai.test(v, store)
-                                toast(if (err == null) "✓ Gemini key saved" else err)
-                            }
-                        } else if (v.isNotBlank() && !Ai.isFastKey(v)) {
-                            toast("That doesn't look like a Groq (gsk_…), OpenRouter (sk-or-…), Claude (sk-ant-…) or Gemini (AIza…) key")
-                        } else {
-                            fastKey = v
-                            store.fastKey = v
-                            toast(if (v.isBlank()) "Fast chat off" else "✓ Fast chat on. Ask something in the chat to try it.")
-                        }
-                    }
                 )
             }
             }
@@ -2033,7 +1827,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         confirmNew = null
                         save(list + entries)
                         lastAdded = list.map { it.id }
-                        // What the AI understood is learned, so next time the app knows it without AI (no tokens).
+                        // What the local engine understood is learned, so next time the app knows it without AI (no tokens).
                         list.singleOrNull { it.type == Type.KHARCHA && it.category != Cat.OTHER }?.let { e ->
                             val words = Parser.learnWords(said).filter { w -> Parser.parse("$w 1").entries.firstOrNull()?.category == Cat.OTHER }.take(3)
                             if (words.isNotEmpty()) { store.learn(words, e.category, e.item); Parser.learned = store.loadLearned() }

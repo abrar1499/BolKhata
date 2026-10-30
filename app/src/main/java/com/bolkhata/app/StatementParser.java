@@ -8,7 +8,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Reads a bank statement's text without AI, for any bank whose statement lists each transaction with a date and
+ * Reads a bank statement's text without a network service, for any bank whose statement lists each transaction with a date and
  * amounts. It works from the statement's own structure and checks itself:
  *
  * - every line that starts with a date begins a transaction; the lines under it (and a "type" line just above it,
@@ -17,7 +17,7 @@ import java.util.regex.Pattern;
  *   moved, so a debit is never read as a credit and no line goes missing without it showing;
  * - printed totals (opening / closing balance, totals and counts of deposits and withdrawals) are compared too.
  *
- * {@link Result#ok} is true only when the reading checks out; otherwise the app asks the AI instead.
+ * {@link Result#ok} is true only when the reading checks out; otherwise the app requires manual review instead.
  */
 public final class StatementParser {
 
@@ -321,7 +321,7 @@ public final class StatementParser {
 
         res.rows.addAll(rows);
         StringBuilder msg = new StringBuilder();
-        msg.append(String.format(Locale.US, "Read on the phone (no AI): %d transactions, money in %s (%d), money out %s (%d).",
+        msg.append(String.format(Locale.US, "Verified locally: %d transactions, money in %s (%d), money out %s (%d).",
                 rows.size(), money(inSum), inN, money(outSum), outN));
         if (chainOk) msg.append("\n✓ Every line matches the running balance.");
         else if (hasBalance) msg.append(String.format(Locale.US, "\n⚠ %d of %d lines match the running balance.", checkedCount, checkable));
