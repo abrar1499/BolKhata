@@ -50,8 +50,8 @@ object Accounts {
     /** Match a destination khata by its full saved name in a natural-language request. */
     fun khataNameMentionedIn(text: String, currentName: String, knownNames: List<String>): String? {
         fun normalize(value: String): String = value.lowercase(Locale.ROOT)
-            .replace(Regex("""[^\\p{L}\\p{N}]+"""), " ")
-            .trim().replace(Regex("""\\s+"""), " ")
+            .replace(Regex("""[^\p{L}\p{N}]+"""), " ")
+            .trim().replace(Regex("""\s+"""), " ")
         val haystack = " " + normalize(text) + " "
         val current = normalize(currentName)
         val matches = knownNames.map { it.trim() }.filter { it.isNotBlank() }
