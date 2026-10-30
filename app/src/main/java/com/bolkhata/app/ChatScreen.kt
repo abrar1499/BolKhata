@@ -162,7 +162,7 @@ fun ChatScreen(
                 } else {
                     Column(Modifier.fillMaxWidth()) {
                         if (message.entryIds.isNotEmpty()) SavedCard(message, byId, currency, onUndo, onEditEntry)
-                        else AssistantBubble(message.text, message.meta)
+                        else AssistantBubble(message.text)
                         WrongAnswerMark(message.id in flaggedIds) { flagging = message }
                     }
                 }
@@ -354,13 +354,13 @@ private fun UserBubble(text: String, attachment: String = "") {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
         Text(
             text,
-            color = MaterialTheme.colorScheme.onPrimary,
+            color = MaterialTheme.colorScheme.onSurface,
             lineHeight = 21.sp,
             modifier = Modifier
                 .widthIn(max = 300.dp)
-                .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 6.dp))
+                .clip(RoundedCornerShape(20.dp))
                 .copyable(text)
-                .background(MaterialTheme.colorScheme.primary)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
                 .padding(horizontal = 14.dp, vertical = 10.dp)
         )
     }
@@ -383,29 +383,17 @@ private fun WrongAnswerMark(flagged: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun AssistantBubble(text: String, meta: String = "") {
-    Column(Modifier.fillMaxWidth()) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
-        Text(
-            text,
-            color = MaterialTheme.colorScheme.onSurface,
-            lineHeight = 21.sp,
-            modifier = Modifier
-                .widthIn(max = 320.dp)
-                .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 6.dp, bottomEnd = 18.dp))
-                .copyable(text)
-                .background(MaterialTheme.colorScheme.surface)
-                .padding(horizontal = 14.dp, vertical = 10.dp)
-        )
-    }
-    if (meta.isNotBlank()) {
-        Text(
-            meta, fontSize = 11.sp, lineHeight = 14.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-            modifier = Modifier.padding(start = 10.dp, top = 3.dp).widthIn(max = 320.dp)
-        )
-    }
-    }
+private fun AssistantBubble(text: String) {
+    // Plain text like ChatGPT; the engine trace is kept in the chat log for review, not shown here.
+    Text(
+        text,
+        color = MaterialTheme.colorScheme.onSurface,
+        lineHeight = 21.sp,
+        modifier = Modifier
+            .widthIn(max = 340.dp)
+            .copyable(text)
+            .padding(horizontal = 14.dp, vertical = 8.dp)
+    )
 }
 
 @Composable
