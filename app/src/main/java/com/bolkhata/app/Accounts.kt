@@ -62,10 +62,10 @@ object Accounts {
         now: Long,
         windowMs: Long = 30_000L
     ): Boolean {
-        fun normalize(s: String) = s.trim().lowercase().replace(Regex("""\\s+"""), " ")
+        fun normalize(s: String) = s.trim().lowercase().replace(Regex("""\s+"""), " ")
         val sameRequest = normalize(previousUserText).isNotBlank() && normalize(previousUserText) == normalize(newText)
         val mutationConfirmed = previousCreatedEntries ||
-            Regex("""(?i)\\b(changed|updated|deleted|removed|moved|converted|marked paid|marked unpaid)\\b""")
+            Regex("""(?i)\b(changed|updated|deleted|removed|moved|converted|marked paid|marked unpaid)\b""")
                 .containsMatchIn(latestAssistantText)
         return sameRequest && mutationConfirmed && latestAssistantAt >= previousUserAt &&
             now >= previousUserAt && now - previousUserAt <= windowMs
