@@ -938,7 +938,7 @@ private fun OverviewSummary(
                     append(fmt(spent))
                     withStyle(SpanStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium, color = faint)) { append(" $currency") }
                 },
-                fontSize = 28.sp, lineHeight = 34.sp, fontWeight = FontWeight.Bold, color = RedSpend, maxLines = 1
+                fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.Bold, color = RedSpend, maxLines = 1
             )
         }
         Row(Modifier.padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1148,7 +1148,7 @@ fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit, st
                 item {
                     Panel(Modifier.fillMaxWidth(), padding = 14.dp) {
                         Text("Cash Out · $label", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
-                        Text(moneyA(currency, cashOutTotal), fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = RedSpend)
+                        Text(moneyA(currency, cashOutTotal), fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = RedSpend)
                         Text("${cashOutEntries.size} entries, including expenses, paid purchases and money lent", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
@@ -1164,7 +1164,7 @@ fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit, st
                 item {
                     Panel(Modifier.fillMaxWidth(), padding = 14.dp) {
                         Text("Cash In · $label", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
-                        Text(moneyA(currency, cashInTotal), fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = GreenIn)
+                        Text(moneyA(currency, cashInTotal), fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = GreenIn)
                         Text("${cashInEntries.size} entries, including other income, paid sales and money received back", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
@@ -1180,7 +1180,7 @@ fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit, st
                 item {
                     Panel(Modifier.fillMaxWidth(), padding = 14.dp) {
                         Text("Sales · $label", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
-                        Text(moneyA(currency, totalSales), fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = GreenIn)
+                        Text(moneyA(currency, totalSales), fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = GreenIn)
                         Text("${sales.size} sales entries · ${fmt(sales.sumOf { it.qty })} units sold", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
@@ -1196,7 +1196,7 @@ fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit, st
                 item {
                     Panel(Modifier.fillMaxWidth(), padding = 14.dp) {
                         Text("Purchases · $label", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
-                        Text(moneyA(currency, totalPurchases), fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = catColor(Cat.STOCK))
+                        Text(moneyA(currency, totalPurchases), fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = catColor(Cat.STOCK))
                         Text("${purchases.size} purchase entries · ${fmt(purchases.sumOf { it.qty })} units bought", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
@@ -1269,7 +1269,7 @@ fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit, st
                 item {
                     Panel(Modifier.fillMaxWidth(), padding = 16.dp) {
                         Text("Estimated net profit · $label", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(moneyA(currency, profit.netProfit), fontSize = 30.sp, fontWeight = FontWeight.ExtraBold,
+                        Text(moneyA(currency, profit.netProfit), fontSize = 22.sp, fontWeight = FontWeight.ExtraBold,
                             color = if (profit.netProfit >= 0) GreenIn else RedSpend)
                         Text("Costed sales margin − Cash Out expenses (Cash In excluded)", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -1336,7 +1336,7 @@ fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit, st
                 item {
                     Panel(Modifier.fillMaxWidth(), padding = 16.dp) {
                         Text("Current cash balance · all recorded entries", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(moneyA(currency, cashBalance), fontSize = 30.sp, fontWeight = FontWeight.ExtraBold,
+                        Text(moneyA(currency, cashBalance), fontSize = 22.sp, fontWeight = FontWeight.ExtraBold,
                             color = if (cashBalance >= 0) GreenIn else RedSpend)
                         HorizontalDivider(Modifier.padding(vertical = 10.dp))
                         ProfitSummaryRow("Cash In (all time)", allCashIn, currency, GreenIn)
@@ -1428,7 +1428,7 @@ fun PeopleScreen(entries: List<Entry>, currency: String, receive: Boolean, onBac
         item {
             Panel(Modifier.fillMaxWidth(), padding = 16.dp) {
                 Text(if (receive) "People owe you" else "You owe people", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
-                Text(moneyA(currency, total), fontSize = 30.sp, fontWeight = FontWeight.ExtraBold, color = color)
+                Text(moneyA(currency, total), fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = color)
                 Text("${bal.size} " + if (bal.size == 1) "person" else "people", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
@@ -1789,7 +1789,7 @@ fun ResultsScreen(
                     )
                     Text(
                         moneyA(currency, kotlin.math.abs(bal)),
-                        fontSize = 30.sp, fontWeight = FontWeight.ExtraBold,
+                        fontSize = 22.sp, fontWeight = FontWeight.ExtraBold,
                         color = if (bal > 0.005) GreenIn else if (bal < -0.005) OrangeOwe else MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(Modifier.height(10.dp))
