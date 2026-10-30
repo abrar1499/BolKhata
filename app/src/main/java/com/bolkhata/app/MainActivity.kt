@@ -1138,27 +1138,38 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 }
                 postChat(name, isUser = true, attachment = preview)
                 if (bytes.size > 15 * 1024 * 1024) throw IllegalStateException("This file is too big (over 15 MB). Send a smaller PDF or a photo of one page.")
-                // Statement reading as in version 59: the whole file in one request.
-                loadingLabel = "Reading…"
-                // First the phone reads the PDF itself (no AI): exact, instant and free, and it checks itself against the
-                // running balance and the statement's totals. Only when that doesn't check out does the local engine read it.
-                if (mime.startsWith("image/")) {
-                    throw IllegalStateException("Photo OCR is not available in this build yet. You can import a text PDF or type the transaction.")
-                }
-                val offline = if (mime == "application/pdf") kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    PdfText.extract(context, bytes)?.let { runCatching { StatementParser.parse(it) }.getOrNull() }
+                loadingLabel = "Reading on this phone…"
+                val textLayer = if (mime == "application/pdf") kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    PdfText.extract(context, bytes)
                 } else null
-                val found = if (offline != null && offline.ok) {
-                    postChat(offline.check, isUser = false)
-                    PdfText.toEntries(offline).sortedByDescending { it.date }
-                } else {
-                    throw IllegalStateException(
-                        if (offline == null) "This PDF has no selectable text. Scanned-PDF OCR will be handled by the on-device reader."
-                        else "The statement totals did not reconcile (" + offline.why + "). Nothing was imported; review the PDF and try a text-based statement."
-                    )
+                var recognizedText = textLayer
+                if (recognizedText.isNullOrBlank()) {
+                    recognizedText = Attachments.extractText(context, bytes, mime)
+                }
+                var statement = recognizedText?.takeIf { it.isNotBlank() }?.let {
+                    runCatching { StatementParser.parse(it) }.getOrNull()
+                }
+                if (statement?.ok != true && mime == "application/pdf" && textLayer != null) {
+                    // A selectable text layer can still be badly ordered; retry the rendered pages with bundled OCR.
+                    recognizedText = Attachments.extractText(context, bytes, mime)
+                    statement = recognizedText.takeIf { it.isNotBlank() }?.let {
+                        runCatching { StatementParser.parse(it) }.getOrNull()
+                    }
+                }
+                val found = when {
+                    statement?.ok == true -> {
+                        postChat(statement.check, isUser = false)
+                        PdfText.toEntries(statement).sortedByDescending { it.date }
+                    }
+                    !recognizedText.isNullOrBlank() -> ReceiptParser.parse(recognizedText).sortedByDescending { it.date }
+                    else -> emptyList()
                 }
                 if (found.isEmpty()) {
-                    postChat("I couldn't find any transactions in this file.", isUser = false)
+                    postChat(
+                        "I couldn't safely extract a dated statement or a printed receipt total. Nothing was imported. " +
+                            "The bundled offline OCR reads Latin text and digits; Arabic-only text may need manual review.",
+                        isUser = false
+                    )
                 } else {
                     imports = found
                     importMatch = matchSaved(found)
