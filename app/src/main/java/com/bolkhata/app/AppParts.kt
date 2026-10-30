@@ -72,9 +72,9 @@ internal fun InputBar(
     val talking = voice?.on == true
     val hint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
     // Like ChatGPT: the page darkens slightly towards the bottom, so the white bar stands out without an outline.
-    val shade = lerp(bg, if (bg.luminance() > 0.5f) Color.Black else Color.White, 0.06f)
-    Column(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(bg.copy(alpha = 0f), bg, shade)))) {
-        Spacer(Modifier.height(28.dp))
+    val shade = lerp(bg, if (bg.luminance() > 0.5f) Color.Black else Color.White, 0.09f)
+    Column(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(bg.copy(alpha = 0f), shade)))) {
+        Spacer(Modifier.height(40.dp))
         if (talking) VoiceCaption(voice!!.status, voice.heard, Modifier.padding(top = 6.dp))
         Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 10.dp)) {
             // Like ChatGPT's bar: a white pill with a soft shadow and no outline, on the off-white page.
