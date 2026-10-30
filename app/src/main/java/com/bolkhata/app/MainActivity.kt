@@ -1532,7 +1532,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 InputBar(
                     onSend = { chatInput(it) }, onMic = { startVoice(forChat = true) }, placeholder = "Speak, type or ask…",
                     onAttach = { pickFile.launch(arrayOf("image/*", "application/pdf")) },
-                    busy = chatLoading
+                    busy = chatLoading,
+                    voice = VoiceState(voiceOn, voiceStatus, voicePartial) { toggleVoice() }
                 )
             } else {
                 Column {
@@ -1542,7 +1543,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         onMic = { startVoice(forChat = true) },
                         placeholder = "Speak, type or ask…",
                         onAttach = { pickFile.launch(arrayOf("image/*", "application/pdf")) },
-                        busy = chatLoading
+                        busy = chatLoading,
+                        // Voice chat answers in the chat, so starting it from Home opens the Chat tab.
+                        voice = VoiceState(voiceOn, voiceStatus, voicePartial) { tab = Tab.CHAT; toggleVoice() }
                     )
                 }
             }
@@ -1668,9 +1671,6 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         onIgnoreSuggestions = { ids -> dropSuggestions(ids) },
                         onQuick = { quickAdd(it) },
                         voiceOn = voiceOn,
-                        voiceStatus = voiceStatus,
-                        voicePartial = voicePartial,
-                        onVoiceToggle = { toggleVoice() },
                         imports = imports,
                         importDupes = importDupes,
                         onAddImports = { list ->
@@ -2074,7 +2074,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     ) { Text("⬆", fontSize = 28.sp, color = MaterialTheme.colorScheme.primary) }
                     Text("Update available", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                     Text(
-                        "Version ${info.version} is ready. Your entries stay safe.",
+                        "Version 1.${info.version} is ready. Your entries stay safe.",
                         fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )

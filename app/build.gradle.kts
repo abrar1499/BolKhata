@@ -4,8 +4,9 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-// Every GitHub build gets a higher number, so the app knows when an update exists.
-val buildNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
+// The release number: CI sets APP_VERSION to the last published release + 1, so releases go 295, 296, ...
+// and the app shows the same "1.N" as the release page and the update pop-up.
+val buildNumber = (System.getenv("APP_VERSION") ?: System.getenv("GITHUB_RUN_NUMBER"))?.toIntOrNull() ?: 1
 
 android {
     namespace = "com.bolkhata.app"
@@ -17,6 +18,10 @@ android {
         targetSdk = 34
         versionCode = buildNumber
         versionName = "1.$buildNumber"
+        ndk {
+            // Real phones only: the x86 copies of the OCR library are for PC emulators and added ~23 MB.
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+        }
     }
 
     signingConfigs {
@@ -46,6 +51,12 @@ android {
     }
     kotlinOptions {
         jvmTarget = "17"
+    }
+    packaging {
+        resources {
+            // Post-quantum crypto tables pulled in with BouncyCastle (via pdfbox); PDF reading never uses them.
+            excludes += "org/bouncycastle/pqc/**"
+        }
     }
     buildFeatures {
         compose = true
