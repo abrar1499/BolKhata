@@ -1273,9 +1273,12 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         if (uri != null) readAttachment(uri)
     }
 
-    // ---------- Voice conversation: talk to the assistant hands-free ----------
+    // ---------- Voice connect: a long hisab, heard through pauses and sent as one message ----------
     var voiceStatus by remember { mutableStateOf("") }
     var voicePartial by remember { mutableStateOf("") }
+    // Everything heard so far, and whether ■ was tapped (the last words are still being recognised).
+    var voiceHeard by remember { mutableStateOf("") }
+    var voiceEnding by remember { mutableStateOf(false) }
     var voiceAwaiting by remember { mutableStateOf(false) }
     var voiceMisses by remember { mutableIntStateOf(0) }
     // Set when the phone has no recognizer for the chosen language; voice chat then uses the phone's default.
@@ -1316,42 +1319,35 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     fun stopVoice(message: String? = null) {
         voiceOn = false
         voiceAwaiting = false
+        voiceEnding = false
         voiceStatus = ""
         voicePartial = ""
+        voiceHeard = ""
         runCatching { recognizer?.cancel() }
         runCatching { tts.stop() }
         if (message != null) toast(message)
     }
 
-    /** Reads [text] aloud: Urdu script with an Urdu voice, otherwise English. Listens again when done. */
+    /** Sends the whole hisab heard so far as one chat message; the answer is read aloud once. */
+    fun sendVoice(message: String? = null) {
+        val text = voiceHeard.trim()
+        stopVoice(message)
+        if (text.isEmpty()) { if (message == null) toast("Couldn't catch anything. Tap the green button and speak again."); return }
+        voiceAwaiting = true
+        chatInput(text)
+    }
+
+    /** Reads [text] aloud: Urdu script with an Urdu voice, otherwise English. */
     fun speak(text: String) {
         val clean = text.replace(Regex("""[✓•*#_]"""), " ").replace(Regex("""(?m)^\s*-\s*"""), "").trim()
-        if (clean.isEmpty() || !ttsReady.value) {
-            listenNow()
-            return
-        }
+        if (clean.isEmpty() || !ttsReady.value) return
         val urduScript = clean.any { it in '\u0600'..'\u06FF' }
         val wanted = if (urduScript) java.util.Locale("ur", "PK") else java.util.Locale("en", "IN")
         val ok = tts.setLanguage(wanted)
         if (ok == android.speech.tts.TextToSpeech.LANG_MISSING_DATA || ok == android.speech.tts.TextToSpeech.LANG_NOT_SUPPORTED) {
             tts.setLanguage(java.util.Locale.ENGLISH)
         }
-        voiceStatus = "Speaking…"
         tts.speak(clean.take(3500), android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "reply-" + System.nanoTime())
-    }
-
-    DisposableEffect(tts) {
-        tts.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
-            override fun onStart(utteranceId: String?) {}
-            override fun onDone(utteranceId: String?) {
-                android.os.Handler(android.os.Looper.getMainLooper()).post { if (voiceOn) listenNow() }
-            }
-            @Deprecated("Deprecated in Java")
-            override fun onError(utteranceId: String?) {
-                android.os.Handler(android.os.Looper.getMainLooper()).post { if (voiceOn) listenNow() }
-            }
-        })
-        onDispose { }
     }
 
     /** Rank alternatives by how well they fit khata commands, not just their list position. */
@@ -1410,35 +1406,33 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     results?.getStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION).orEmpty(),
                     results?.getFloatArray(android.speech.SpeechRecognizer.CONFIDENCE_SCORES)
                 )
-                if (said.isBlank()) { listenNow(); return }
                 voiceMisses = 0
-                voicePartial = said
-                voiceStatus = "Thinking…"
-                voiceAwaiting = true
-                chatInput(said)
+                if (said.isNotBlank()) voiceHeard = listOf(voiceHeard, said).filter { it.isNotBlank() }.joinToString(", ")
+                if (voiceEnding) sendVoice() else listenNow()
             }
             override fun onError(error: Int) {
                 if (!voiceOn) return
+                if (voiceEnding) { sendVoice(); return }
                 val retryLater = { android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ if (voiceOn) listenNow() }, 400) }
                 when (error) {
                     android.speech.SpeechRecognizer.ERROR_NO_MATCH, android.speech.SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> {
                         voiceMisses++
-                        // Quiet for a while: stop instead of listening forever.
-                        if (voiceMisses >= 3) stopVoice("Voice chat paused. Tap the green button to talk again.") else listenNow()
+                        // Pauses while thinking are fine; a long silence sends what was said.
+                        if (voiceMisses >= 6) sendVoice() else listenNow()
                     }
                     android.speech.SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> stopVoice("Allow the microphone for Smart Expense to talk.")
                     android.speech.SpeechRecognizer.ERROR_NETWORK, android.speech.SpeechRecognizer.ERROR_NETWORK_TIMEOUT ->
-                        stopVoice("No internet for voice. Try again when online.")
+                        sendVoice("No internet for voice. Try again when online.")
                     // 12 / 13: this phone has no recognizer for the chosen language. Use the phone's default once.
                     12, 13 -> if (!voiceDefaultLanguage) {
                         voiceDefaultLanguage = true
                         toast("Voice for this language isn't installed; using the phone's default language.")
                         retryLater()
-                    } else stopVoice("Speech recognition isn't available. Check Google voice typing in phone settings.")
+                    } else sendVoice("Speech recognition isn't available. Check Google voice typing in phone settings.")
                     else -> {
                         // Busy or client errors repeat instantly; wait a moment, and stop after a few in a row.
                         voiceMisses++
-                        if (voiceMisses >= 4) stopVoice("Voice chat stopped (error $error). Tap the green button to try again.") else retryLater()
+                        if (voiceMisses >= 4) sendVoice("Voice stopped (error $error). Tap the green button to try again.") else retryLater()
                     }
                 }
             }
@@ -1446,9 +1440,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         onDispose { }
     }
 
-    // When the assistant has answered a spoken message, read the answer aloud, then listen again.
+    // When the assistant has answered a spoken hisab, read the answer aloud.
     LaunchedEffect(chatLoading, chatMessages.size) {
-        if (!voiceOn || !voiceAwaiting || chatLoading) return@LaunchedEffect
+        if (!voiceAwaiting || chatLoading) return@LaunchedEffect
         val lastUser = chatMessages.indexOfLast { it.isUser }
         val answers = chatMessages.drop(lastUser + 1).filter { !it.isUser }
         if (answers.isEmpty()) return@LaunchedEffect
@@ -1465,7 +1459,15 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     }
 
     fun toggleVoice() {
-        if (voiceOn) { stopVoice(); return }
+        if (voiceOn) {
+            // ■: let the recognizer finish the last words, then send everything; send anyway if it stays quiet.
+            voiceEnding = true
+            voiceStatus = "Sending…"
+            runCatching { recognizer?.stopListening() }
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ if (voiceOn && voiceEnding) sendVoice() }, 2500)
+            return
+        }
+        runCatching { tts.stop() }
         if (recognizer == null) { toast("Speech recognition is not available on this phone."); return }
         val granted = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) ==
             android.content.pm.PackageManager.PERMISSION_GRANTED
@@ -1484,8 +1486,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         }
     }
 
-    // Mic button with Groq Whisper: tap to record, tap again (or the ■) to send. Audio goes to Groq only.
+    // Recording for Groq Whisper; audio goes to Groq only. The mic stops by itself at a pause, voice connect at ■.
     var recorder by remember { mutableStateOf<android.media.MediaRecorder?>(null) }
+    var recordLong by remember { mutableStateOf(false) }
     var recordFile by remember { mutableStateOf<File?>(null) }
     val recordPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         if (!ok) toast("Microphone permission is needed to record.")
@@ -1513,7 +1516,20 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         }
     }
 
-    fun toggleRecording() {
+    /** Mic recording: sends once the person stops talking (or never starts). */
+    fun stopAtPause(r: android.media.MediaRecorder) = scope.launch {
+        val start = System.currentTimeMillis()
+        var spoke = false
+        var lastSound = start
+        while (recorder === r) {
+            kotlinx.coroutines.delay(150)
+            val now = System.currentTimeMillis()
+            if (runCatching { r.maxAmplitude }.getOrDefault(0) > 2500) { spoke = true; lastSound = now }
+            if ((spoke && now - lastSound > 1500) || (!spoke && now - start > 8000)) { finishRecording(); break }
+        }
+    }
+
+    fun toggleRecording(long: Boolean = false) {
         if (recorder != null) { finishRecording(); return }
         val granted = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) ==
             android.content.pm.PackageManager.PERMISSION_GRANTED
@@ -1526,23 +1542,31 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             r.setAudioEncoder(android.media.MediaRecorder.AudioEncoder.AAC)
             r.setAudioSamplingRate(16_000)
             r.setAudioEncodingBitRate(32_000)
-            r.setMaxDuration(60_000)
+            r.setMaxDuration(if (long) 600_000 else 30_000)
             r.setOutputFile(file.absolutePath)
             r.setOnInfoListener { _, what, _ -> if (what == android.media.MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED) finishRecording() }
             r.prepare()
             r.start()
         }.onSuccess {
             recordFile = file
+            recordLong = long
             recorder = r
+            if (!long) stopAtPause(r)
         }.onFailure {
             runCatching { r.release() }
             toast("Couldn't start recording.")
         }
     }
 
+    /** The green button: a long hisab, recorded for Groq when it is on, otherwise heard by the phone. */
+    fun toggleLongVoice() {
+        if (groqKey.isNotBlank() && groqVoice) { voiceForChat = true; toggleRecording(long = true) } else toggleVoice()
+    }
+
+    /** The mic: one short thing, sent as soon as the person stops talking. */
     fun startVoice(forChat: Boolean = false) {
         voiceForChat = forChat
-        if (groqKey.isNotBlank() && groqVoice) { toggleRecording(); return }
+        if (groqKey.isNotBlank() && groqVoice) { toggleRecording(long = false); return }
         val hints = buildList {
             addAll(entries.take(30).flatMap { listOf(it.item, it.person) })
             addAll(listOf(
@@ -1588,6 +1612,17 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             } else {
                 updateMsg = "Download failed. Check your internet and tap Update now again."
             }
+        }
+    }
+
+    /** What the message bar shows while recording or listening; [start] is the green button when idle. */
+    fun voiceState(start: () -> Unit) = when {
+        recorder != null && recordLong -> VoiceState(true, "Recording your hisab…", "tap ■ when done") { toggleRecording() }
+        recorder != null -> VoiceState(true, "Listening…", "sends when you stop") { toggleRecording() }
+        // The caption shows the latest words of a long hisab, not its start.
+        else -> VoiceState(voiceOn, voiceStatus, listOf(voiceHeard, voicePartial).filter { it.isNotBlank() }.joinToString(", ")
+            .let { if (it.length > 90) "…" + it.takeLast(90) else it }) {
+            if (voiceOn) toggleVoice() else start()
         }
     }
 
@@ -1638,8 +1673,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     onSend = { chatInput(it) }, onMic = { startVoice(forChat = true) }, placeholder = "Speak, type or ask…",
                     onAttach = { pickFile.launch(arrayOf("image/*", "application/pdf")) },
                     busy = chatLoading,
-                    voice = if (recorder != null) VoiceState(true, "Recording…", "tap ■ to send") { toggleRecording() }
-                        else VoiceState(voiceOn, voiceStatus, voicePartial) { toggleVoice() }
+                    voice = voiceState { toggleLongVoice() }
                 )
             } else {
                 Column {
@@ -1650,9 +1684,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         placeholder = "Speak, type or ask…",
                         onAttach = { pickFile.launch(arrayOf("image/*", "application/pdf")) },
                         busy = chatLoading,
-                        // Voice chat answers in the chat, so starting it from Home opens the Chat tab.
-                        voice = if (recorder != null) VoiceState(true, "Recording…", "tap ■ to send") { toggleRecording() }
-                            else VoiceState(voiceOn, voiceStatus, voicePartial) { tab = Tab.CHAT; toggleVoice() }
+                        // Voice connect sends the hisab to the chat, so starting it from Home opens the Chat tab.
+                        voice = voiceState { tab = Tab.CHAT; toggleLongVoice() }
                     )
                 }
             }
