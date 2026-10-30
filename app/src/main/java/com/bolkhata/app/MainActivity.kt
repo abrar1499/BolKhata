@@ -987,11 +987,11 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         )
                     }
                 })
-            val file = File(dir, "smart-expense-chat-diagnostics.json")
+            val file = File(dir, "smart-expense-chat-diagnostics.txt")
             file.writeText(report.toString(2), Charsets.UTF_8)
             val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", file)
             val send = Intent(Intent.ACTION_SEND).apply {
-                type = "application/json"
+                type = "text/plain"
                 putExtra(Intent.EXTRA_SUBJECT, "Smart Expense chat diagnostics")
                 putExtra(Intent.EXTRA_STREAM, uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
