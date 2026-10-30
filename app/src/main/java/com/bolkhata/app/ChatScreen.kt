@@ -164,6 +164,11 @@ fun ChatScreen(
                     Column(Modifier.fillMaxWidth()) {
                         if (message.entryIds.isNotEmpty()) SavedCard(message, byId, currency, onUndo, onEditEntry)
                         else AssistantBubble(message.text)
+                        // "Which A or B do you mean?": one tap on a name opens that khata.
+                        if (message == messages.lastOrNull()) {
+                            val names = NativeChatEngine.nameChoices(message.text)
+                            if (names.isNotEmpty()) NameChoices(names) { name -> onSend("$name ka khata") }
+                        }
                         AnswerActions(ratings[message.id]) { good -> onRate(message.id, good) }
                     }
                 }
@@ -334,6 +339,28 @@ private fun AnswerActions(rating: Boolean?, onRate: (good: Boolean) -> Unit) {
                 if (rating == false) Icons.Filled.ThumbDownFilled else Icons.Outlined.ThumbDown,
                 contentDescription = if (rating == false) "Marked wrong" else "Wrong answer",
                 tint = if (rating == false) MaterialTheme.colorScheme.error else tint, modifier = Modifier.size(17.dp)
+            )
+        }
+    }
+}
+
+/** Tappable names under a "which one?" question, so the person picks instead of typing. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun NameChoices(names: List<String>, onPick: (String) -> Unit) {
+    FlowRow(
+        Modifier.padding(start = 10.dp, end = 10.dp, top = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        names.forEach { name ->
+            Text(
+                name, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = GreenDeep,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(GreenDeep.copy(alpha = 0.08f))
+                    .clickable { onPick(name) }
+                    .padding(horizontal = 14.dp, vertical = 9.dp)
             )
         }
     }
