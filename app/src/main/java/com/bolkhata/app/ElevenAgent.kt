@@ -44,6 +44,8 @@ class ElevenAgent(
     private var track: AudioTrack? = null
     // Plays the agent's audio pieces one after another, in the order they came.
     private val speaker = java.util.concurrent.Executors.newSingleThreadExecutor()
+    // When the mic last heard something louder than background noise.
+    private var lastLoud = 0L
     private val effects = mutableListOf<android.media.audiofx.AudioEffect>()
     @Volatile private var running = false
     // Until this time the agent's audio is still playing (the mic level is then the agent, not the owner).
@@ -142,6 +144,8 @@ class ElevenAgent(
     }
 
     private companion object {
+        // Mic loudness (RMS of 16-bit samples) below which sound counts as background noise.
+        const val GATE = 450f
         // Sent at the start of every call, so the call stays short and on topic whatever the agent's own prompt says.
         const val RULES = "Rules for this call: answer in ONE short line (at most 8 words), either an answer or one " +
             "question, never both. Talk only about what the person said or the BolKhata app (khata, expenses, udhaar, " +
@@ -195,8 +199,12 @@ class ElevenAgent(
             while (running) {
                 val n = rec.read(chunk, 0, chunk.size)
                 if (n <= 0) continue
+                val loud = rms(chunk, n)
+                // Noise gate: quiet background sound goes out as silence; speech (and a short tail after it) as heard.
+                if (loud >= GATE) lastLoud = System.currentTimeMillis()
+                if (System.currentTimeMillis() - lastLoud > 700) chunk.fill(0, 0, n)
                 socket?.send(JSONObject().put("user_audio_chunk", Base64.encodeToString(chunk, 0, n, Base64.NO_WRAP)).toString())
-                val level = (rms(chunk, n) / 3000f).coerceIn(0f, 1f)
+                val level = (loud / 3000f).coerceIn(0f, 1f)
                 val speaking = System.currentTimeMillis() < speakingUntil
                 main.post { onSpeaking(speaking); if (!speaking) onLevel(level) }
             }
