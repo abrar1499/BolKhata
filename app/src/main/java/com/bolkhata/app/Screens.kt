@@ -1685,7 +1685,7 @@ fun SettingsScreen(
                         Text("Get a free key at console.groq.com → API Keys.", fontSize = 12.sp, color = faint)
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
-                                Text("Groq voice", fontSize = 15.sp)
+                                Text("Groq voice for the mic", fontSize = 15.sp)
                                 Text("Whisper hears Urdu and mixed speech better", fontSize = 12.sp, color = faint)
                             }
                             Switch(checked = groqVoice, onCheckedChange = onGroqVoice, enabled = groqOn)
