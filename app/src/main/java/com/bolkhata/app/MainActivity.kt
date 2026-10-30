@@ -1010,43 +1010,14 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         try {
             val dir = File(context.cacheDir, "diagnostics").apply { mkdirs() }
             dir.listFiles()?.forEach { runCatching { it.delete() } }
-            val report = org.json.JSONObject()
-                .put("app", "Smart Expense")
-                .put("reportVersion", 1)
-                .put("createdAt", java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", java.util.Locale.US).format(java.util.Date()))
-                .put("appVersion", runCatching {
-                    val info = context.packageManager.getPackageInfo(context.packageName, 0)
-                    info.versionName ?: "unknown"
-                }.getOrDefault("unknown"))
-                .put("androidSdk", Build.VERSION.SDK_INT)
-                .put("device", Build.MANUFACTURER + " " + Build.MODEL)
-                .put("privacy", "Chat text and engine trace only. No ledger records, contacts, credentials, or attachment files are included.")
             // The full chat log survives "Clear chat"; it is the record used to find and fix wrong answers.
-            val log = chatLog.load()
-            val records = log.ifEmpty {
+            val records = chatLog.load().ifEmpty {
                 chatMessages.map { ChatLogRecord(it.id, it.timestamp, it.isUser, it.text, it.meta) }
             }
-            val asJson = { r: ChatLogRecord, question: String? ->
-                org.json.JSONObject()
-                    .put("timestamp", r.timestamp)
-                    .put("role", if (r.isUser) "user" else "assistant")
-                    .apply { if (question != null) put("question", question) }
-                    .put("text", r.text)
-                    .put("engineTrace", r.meta)
-                    .apply { if (r.flagged) put("markedWrong", true).put("expected", r.expected) }
-            }
-            val flagged = org.json.JSONArray()
-            records.forEachIndexed { i, r ->
-                if (r.flagged) {
-                    val question = records.subList(0, i).lastOrNull { it.isUser }?.text ?: ""
-                    flagged.put(asJson(r, question))
-                }
-            }
-            report
-                .put("chatMessageCount", records.size)
-                .put("markedWrongCount", flagged.length())
-                .put("markedWrong", flagged)
-                .put("messages", org.json.JSONArray().apply { records.forEach { put(asJson(it, null)) } })
+            val appVersion = runCatching {
+                context.packageManager.getPackageInfo(context.packageName, 0).versionName
+            }.getOrNull() ?: "unknown"
+            val report = chatDiagnosticsReport(records, appVersion, Build.MANUFACTURER + " " + Build.MODEL, Build.VERSION.SDK_INT)
             val file = File(dir, "smart-expense-chat-diagnostics.txt")
             file.writeText(report.toString(2), Charsets.UTF_8)
             val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", file)
@@ -1158,36 +1129,6 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         if (!chatLoading && chatMessages.lastOrNull()?.isUser == false) homeChatFlash = false
     }
 
-    /** Auto-match only when minute, amount, direction and identity agree. */
-    fun matchSaved(found: List<Entry>): Map<String, String> {
-        val used = mutableSetOf<String>()
-        val out = linkedMapOf<String, String>()
-        fun normal(s: String) = s.trim().lowercase().replace(Regex("""\\s+"""), " ")
-        found.forEach { imported ->
-            val hit = entries.firstOrNull { saved ->
-                if (saved.id in used || saved.type != imported.type ||
-                    kotlin.math.abs(saved.amount - imported.amount) >= 0.01 ||
-                    saved.date / 60_000L != imported.date / 60_000L
-                ) {
-                    false
-                } else {
-                    val note = normal(saved.note)
-                    val sameNote = note.isNotBlank() && note.length >= 6 && note == normal(imported.note)
-                    val person = normal(saved.person)
-                    val samePerson = person.isNotBlank() && person == normal(imported.person)
-                    val item = normal(saved.item)
-                    val sameItem = item.isNotBlank() && item == normal(imported.item)
-                    sameNote || (samePerson && sameItem)
-                }
-            }
-            if (hit != null) {
-                used += hit.id
-                out[imported.id] = hit.id
-            }
-        }
-        return out
-    }
-
     /** Reads text-based PDF statements locally and shows candidate entries for review. */
     fun readAttachment(uri: android.net.Uri) {
         if (chatLoading) return
@@ -1248,7 +1189,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     )
                 } else {
                     imports = found
-                    importMatch = matchSaved(found)
+                    importMatch = BankTransactionDeduplicator.matchSaved(found, entries)
                     importDupes = importMatch.keys
                     val dupes = importDupes.size
                     postChat(
