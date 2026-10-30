@@ -1,8 +1,9 @@
 name: Build APK
 
 on:
-  # Normal commits never build. Only an explicitly approved [build-apk] commit triggers this workflow.
   push:
+    branches: [main]
+  pull_request:
     branches: [main]
   workflow_dispatch:
 
@@ -11,7 +12,7 @@ permissions:
 
 jobs:
   build:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[build-apk]')
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[build-apk]'))
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -23,8 +24,6 @@ jobs:
         with:
           gradle-version: "8.9"
       - name: Build
-        env:
-          GEMINI_KEY: ${{ secrets.GEMINI_KEY }}
         run: |
           set -o pipefail
           gradle testDebugUnitTest assembleRelease --no-daemon 2>&1 | tee build.log || {
@@ -36,6 +35,7 @@ jobs:
           name: BolKhata-apk
           path: app/build/outputs/apk/release/app-release.apk
       - name: Publish update
+        if: github.event_name == 'push' && contains(github.event.head_commit.message, '[build-apk]')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
