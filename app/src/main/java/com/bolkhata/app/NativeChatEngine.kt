@@ -109,20 +109,14 @@ object NativeChatEngine {
             if (previousIntent.kind in setOf("delete", "change", "to_khata")) return previousIntent
         }
 
-        // Date-only follow-ups and "search again" inherit the last actual database search.
+        // Date-only follow-ups and "search again" replay the conversation's search chain.
+        // Reinterpreting only the last date message would lose the original type/category filters.
         val dateOnlyFollowUp = isDateFollowUp(lower)
         val repeatSearch = isRepeatSearch(lower)
         if (history.isNotEmpty() && (dateOnlyFollowUp || repeatSearch)) {
-            val priorSearch = history.asReversed()
-                .filter { it.isUser }
-                .asSequence()
-                .map { it.text to interpret(it.text, entries, contacts, wordFixes, emptyList(), currency, now) }
-                .firstOrNull { it.second.kind == "ask" }
-            if (priorSearch != null) {
-                val priorDateOnly = history.lastOrNull { it.isUser }?.text?.takeIf { isDateFollowUp(it.lowercase(Locale.ROOT)) }
-                val dateText = if (dateOnlyFollowUp) lower else priorDateOnly?.lowercase(Locale.ROOT)
-                val date = dateText?.let { dateBounds(it, now) }
-                val base = priorSearch.second
+            val base = lastSearchFromHistory(history, entries, contacts, wordFixes, currency, now)
+            if (base != null) {
+                val date = if (dateOnlyFollowUp) dateBounds(lower, now) else null
                 return if (date != null) Fixed("", "ask", "", base.what, copyFilter(base.filter, date))
                 else if (repeatSearch) base
                 else chat("Which date should I use for that search?")
@@ -495,6 +489,35 @@ object NativeChatEngine {
         val hasCalendarDate = w.any { it in relative || it in monthWords } &&
             w.all { it in allowed || it.toIntOrNull()?.let { n -> n in 1..2200 } == true }
         return w.isNotEmpty() && hasCalendarDate
+    }
+
+    private fun lastSearchFromHistory(
+        history: List<ChatMessage>, entries: List<Entry>, contacts: List<String>,
+        wordFixes: Map<String, String>, currency: String, now: Long
+    ): Fixed? {
+        var lastSearch: Fixed? = null
+        history.filter { it.isUser }.forEach { message ->
+            val priorText = message.text.trim()
+            val priorLower = priorText.lowercase(Locale.ROOT)
+            when {
+                isRepeatSearch(priorLower) -> Unit
+                isDateFollowUp(priorLower) -> {
+                    val date = dateBounds(priorLower, now)
+                    if (date != null && lastSearch?.kind == "ask") {
+                        val previous = lastSearch!!
+                        lastSearch = Fixed("", "ask", "", previous.what, copyFilter(previous.filter, date))
+                    } else {
+                        val candidate = interpret(priorText, entries, contacts, wordFixes, emptyList(), currency, now)
+                        if (candidate.kind == "ask") lastSearch = candidate
+                    }
+                }
+                else -> {
+                    val candidate = interpret(priorText, entries, contacts, wordFixes, emptyList(), currency, now)
+                    if (candidate.kind == "ask") lastSearch = candidate
+                }
+            }
+        }
+        return lastSearch
     }
 
     private fun isRepeatSearch(text: String): Boolean {
