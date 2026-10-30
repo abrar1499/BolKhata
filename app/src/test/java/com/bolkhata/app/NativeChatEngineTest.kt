@@ -102,6 +102,44 @@ class NativeChatEngineTest {
         assertTrue(result.reply.contains("which", ignoreCase = true))
     }
 
+    @Test fun recognizesSavedKhataDestinationForExplicitBulkMove() {
+        val result = NativeChatEngine.interpret(
+            "move all entries to Haji Ashiq khata", entries, contacts = listOf("Haji Ashiq"), now = now
+        )
+        assertEquals("to_khata", result.kind)
+        assertEquals("Haji Ashiq", result.set["person"])
+        assertTrue(result.filter.isEmpty)
+    }
+
+    @Test fun attributesAnExistingExpenseToTheNamedPayer() {
+        val result = NativeChatEngine.interpret(
+            "lunch was paid by Ali yesterday", entries, contacts = listOf("Ali"), now = now
+        )
+        assertEquals("paid_by", result.kind)
+        assertEquals("Ali", result.payer)
+        assertTrue(result.filter.from != null)
+    }
+
+    @Test fun routesWrongEntryRequestsToTheLocalRereader() {
+        val result = read("laptop wali entry galat hai theek karo")
+        assertEquals("reread", result.kind)
+        assertTrue(!result.filter.isEmpty)
+    }
+
+    @Test fun recognizesMonthNamesAndLastNDays() {
+        val month = read("show expenses in September 2026")
+        assertEquals(Query.day("2026-09-01"), month.filter.from)
+        val recent = read("show expenses in last 7 days")
+        assertEquals(7L * 86_400_000L, now - recent.filter.from!!)
+        assertEquals(now, recent.filter.to)
+    }
+
+    @Test fun amountRangeIsAppliedToAListQuery() {
+        val result = read("show expenses between 10 and 50")
+        assertEquals(10.0, result.filter.min!!, 0.001)
+        assertEquals(50.0, result.filter.max!!, 0.001)
+    }
+
     @Test fun asksClarificationInsteadOfGuessingForUnknownMoneyQuestion() {
         val result = read("what is my crypto portfolio worth?")
         assertEquals("chat", result.kind)
