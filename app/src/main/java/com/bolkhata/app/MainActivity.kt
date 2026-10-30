@@ -758,7 +758,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     val main = Query.answer(Query.select(available, q), f.what.ifBlank { "sum" }, q, currency)
                     // "kitna kharcha": money that went out as loans or paybacks that day is shown too, so nothing looks missing.
                     if (q.types == setOf(Type.KHARCHA) && f.what.ifBlank { "sum" } == "sum") {
-                        val outs = Query.Filter(q.from, q.to, setOf(Type.DIYA, Type.WAPIS_DIYA), q.persons, emptySet(), q.items, q.min, q.max, q.last, false, q.notItems, q.ids)
+                        val outs = Query.Filter(q.from, q.to, setOf(Type.DIYA, Type.WAPIS_DIYA), q.persons, emptySet(), q.items, q.min, q.max, q.last, false, q.notItems, q.ids, q.createdFrom, q.createdTo)
                         val other = Query.select(available, outs)
                         if (other.isEmpty()) main else main + "\nAlso out: " + Query.answer(other, "sum", outs, currency)
                     } else main
@@ -813,8 +813,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             "paid_by" -> {
                 // "Aaj jo khana khaya us ke paise Nadeem ne diye": find that meal and make it "Nadeem paid".
                 val payer = f.payer.ifBlank { return "Who paid? e.g. \"nadeem ne pay kiya\"" }
-                val q2 = Query.Filter(q.from, q.to, setOf(Type.KHARCHA), emptyList(), q.cats, q.items, q.min, q.max, q.last, q.noPeople, q.notItems, q.ids)
-                if (q2.from == null && q2.cats.isEmpty() && q2.items.isEmpty() && q2.ids.isEmpty()) return "Which one? e.g. \"aaj ka khana\""
+                val q2 = Query.Filter(q.from, q.to, setOf(Type.KHARCHA), emptyList(), q.cats, q.items, q.min, q.max, q.last, q.noPeople, q.notItems, q.ids, q.createdFrom, q.createdTo)
+                if (q2.from == null && q2.to == null && q2.createdFrom == null && q2.createdTo == null &&
+                    q2.cats.isEmpty() && q2.items.isEmpty() && q2.ids.isEmpty()) return "Which one? e.g. \"aaj ka khana\""
                 val hits = scoped(Query.select(entries, q2))
                 // The one that mentions the payer comes first ("Khana with nadeem").
                 val h = hits.firstOrNull { it.note.contains(payer, true) } ?: hits.firstOrNull() ?: return "Nothing found (${Query.label(q2)})."
