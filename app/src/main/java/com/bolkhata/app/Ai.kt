@@ -1241,7 +1241,7 @@ kind=entry: new money record(s); text = in the app's forms, amounts as digits, s
  | "<name> ne pay kiya <thing> <amount>" (only mine, he paid) | time: aaj, kal, subah 7 baje
 kind=ask: a question about records; what = sum | count | list | highest | balance (what a person owes or is owed); f = which records.
 For "highest / largest expenses", use what=highest. For an exact amount, set min and max to the same amount. f.item searches item, merchant, description and note words.
-kind=delete: remove records; f = which. kind=change: edit records when the user SAYS the new value; f = which, set = only the new values {"amount","category","date","person","type","item"}.
+kind=delete: remove records; f = which. kind=change: edit records when the user SAYS the new value; f = which, set = only the new values {"amount","category","date","person","type","item","note"} (note is the description).
 kind=paid_by: someone else paid for a record ALREADY saved ("aaj jo khana khaya us ke paise nadeem ne diye"); f = which record (date, item, category; no amount needed), payer = the name.
 kind=to_khata: put records into a person's / account's khata (lene dene ka khata), "ye sari Abrar D360 ka khata bana do"; f = which records, set = {"person":"<khata name>"}.
 kind=reread: a record is wrong but no new value is said ("laptop wali entry galat hai theek karo"); f = which; the app reads its note again.
