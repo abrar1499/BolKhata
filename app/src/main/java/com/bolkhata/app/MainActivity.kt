@@ -93,6 +93,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var tab by remember { mutableStateOf(Tab.HOME) }
     var chatMessages by remember { mutableStateOf(store.loadChatMessages()) }
     var chatLoading by remember { mutableStateOf(false) }
+    var homeChatFlash by remember { mutableStateOf(false) }
     var loadingLabel by remember { mutableStateOf("Thinking…") }
     var voiceOn by remember { mutableStateOf(false) }
     var people by remember { mutableStateOf<Boolean?>(null) }   // true = to receive, false = to pay
@@ -297,47 +298,6 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     LaunchedEffect(tab == Tab.CHAT, activeKey) {
         if (tab == Tab.CHAT && activeKey.isNotBlank()) {
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Ai.warmUp(activeKey) }
-        }
-    }
-
-    /** Sends a question to the read-only AI chat, with recent conversation context. */
-    fun sendChat(text: String, addUser: Boolean = true) {
-        val question = text.trim()
-        if (question.isEmpty() || chatLoading) return
-        val history = chatMessages.takeLast(12)
-        if (addUser) {
-            val userMessage = ChatMessage(
-                id = "chat-" + System.currentTimeMillis() + "-" + System.nanoTime(),
-                isUser = true,
-                text = question
-            )
-            val next = chatMessages + userMessage
-            chatMessages = next
-            store.saveChatMessages(next)
-        }
-        chatLoading = true
-        scope.launch {
-            try {
-                val reply = Ai.chat(question, history, entries, activeKey, store, currency)
-                val updated = chatMessages + ChatMessage(
-                    id = "chat-" + System.currentTimeMillis() + "-" + System.nanoTime(),
-                    isUser = false,
-                    text = reply
-                )
-                chatMessages = updated
-                store.saveChatMessages(updated)
-            } catch (e: Exception) {
-                val message = e.message?.takeIf { it.isNotBlank() } ?: "Sorry, I couldn't answer right now."
-                val updated = chatMessages + ChatMessage(
-                    id = "chat-" + System.currentTimeMillis() + "-" + System.nanoTime(),
-                    isUser = false,
-                    text = message
-                )
-                chatMessages = updated
-                store.saveChatMessages(updated)
-            } finally {
-                chatLoading = false
-            }
         }
     }
 
@@ -917,35 +877,6 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         }
     }
 
-    /**
-     * Home input: the AI first fixes the sentence into the app's words (shown in the strip above the input),
-     * then the app reads it and does everything itself. Hello / small talk gets the AI's short reply in the strip.
-     * No key or no internet: the app reads it on its own.
-     */
-    fun homeInput(raw: String) {
-        val text = raw.trim()
-        if (text.isEmpty()) return
-        if (splitAsk != null) { answerSplit(text); return }
-        handleCurrentKhataBulkCommand(text)?.let { flash = Flash(it, Flash.Kind.ANSWER); return }
-        val fast = store.fastKey.trim()
-        if (fast.isBlank() && activeKey.isBlank()) { handleText(text); return }
-        flash = Flash("…", Flash.Kind.WORKING)
-        scope.launch {
-            val f = runCatching {
-                kotlinx.coroutines.withTimeout(6_000) { Ai.fix(Translit.toRoman(text), fast, activeKey, store, contactNames(), lastTalk, screenList()?.first.orEmpty()) }
-            }.getOrNull()
-            if (f == null) { flash = null; handleText(text, original = text); return@launch }
-            if (f.kind == "entry" && f.text.isNotBlank() && !f.text.equals(text, true)) learnWordFixes(Translit.toRoman(text), f.text)
-            val msg = runFixed(f, text, inChat = false)
-            lastTalk = text + (if (msg != null) " → app: " + msg.take(80) else "")
-            flash = when {
-                msg != null -> Flash(msg, Flash.Kind.ANSWER)
-                f.kind == "entry" -> Flash(f.text, Flash.Kind.FIXED)
-                else -> null
-            }
-        }
-    }
-
     /** Adds a message to the chat and keeps it on the phone. */
     fun postChat(text: String, isUser: Boolean, entryIds: List<String> = emptyList(), attachment: String = "", meta: String = "") {
         val updated = chatMessages + ChatMessage(
@@ -958,6 +889,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         )
         chatMessages = updated
         store.saveChatMessages(updated)
+        if (!isUser && homeChatFlash) {
+            flash = Flash(text, Flash.Kind.ANSWER)
+            homeChatFlash = false
+        }
     }
 
     chatSink[0] = { m ->
@@ -1047,9 +982,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     }
 
     /**
-     * Chat input. AI comes first: one call either saves the money the person mentioned or answers them
-     * (questions, reports, searches, advice). Changes to existing entries use the app's own reader.
-     * Without AI, the offline reader and offline answers take over.
+     * The single assistant request pipeline used by both the Home input and the full Chat screen.
+     * It resolves language, context, deterministic app actions, AI interpretation, and persistence in one place.
      */
     fun chatInput(raw: String) {
         val text = raw.trim()
@@ -1165,6 +1099,16 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 chatLoading = false
             }
         }
+    }
+
+    /** Home is a second entry point to the same assistant and persisted conversation as the Chat screen. */
+    fun homeInput(raw: String) {
+        val text = raw.trim()
+        if (text.isEmpty() || chatLoading) return
+        homeChatFlash = true
+        chatInput(text)
+        // Synchronous local answers have already reached postChat; clear any unused presentation flag.
+        if (!chatLoading && chatMessages.lastOrNull()?.isUser == false) homeChatFlash = false
     }
 
     /** An entry already in the khata on the same day with the same amount and kind is probably the same one. */
