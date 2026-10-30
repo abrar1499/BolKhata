@@ -1041,6 +1041,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 latestAssistant.entryIds.isNotEmpty(), text, System.currentTimeMillis()
             )
         ) {
+            postChat(text, isUser = true)
             postChat("That exact request was just completed, so I didn't run it twice. If you meant another identical transaction, say 'add another'.", isUser = false)
             return
         }
