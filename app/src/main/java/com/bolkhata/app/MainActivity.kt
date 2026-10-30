@@ -898,6 +898,20 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     null
                 }
             }
+            "duplicates" -> {
+                val source = if (q.isEmpty) scoped(entries) else scoped(Query.select(entries, q))
+                val pairs = Query.likelyDuplicateExpenses(source)
+                if (pairs.isEmpty()) {
+                    "I couldn't find likely duplicate expenses in the saved records."
+                } else {
+                    val df = java.text.SimpleDateFormat("d MMM yyyy", java.util.Locale.US)
+                    "Likely duplicate expenses (nothing deleted):\\n" +
+                        pairs.take(8).joinToString("\\n") { (a, b) ->
+                            "${df.format(java.util.Date(a.date))} · ${entryTitle(a)} · ${fmt(a.amount)} " + currency +
+                                "  ↔  ${df.format(java.util.Date(b.date))} · ${entryTitle(b)} · ${fmt(b.amount)} " + currency
+                        } + if (pairs.size > 8) "\\n+${pairs.size - 8} more pairs" else ""
+                }
+            }
             "sort_other" -> { openRecat(); null }
             "undo" -> {
                 val ids = lastAdded.filter { id -> entries.any { it.id == id } }
