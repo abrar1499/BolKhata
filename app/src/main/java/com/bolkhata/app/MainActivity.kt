@@ -772,7 +772,11 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     if (q.types == setOf(Type.KHARCHA) && f.what.ifBlank { "sum" } == "sum") {
                         val outs = Query.Filter(q.from, q.to, setOf(Type.DIYA, Type.WAPIS_DIYA), q.persons, emptySet(), q.items, q.min, q.max, q.last, false, q.notItems, q.ids, q.createdFrom, q.createdTo)
                         val other = Query.select(available, outs)
-                        if (other.isEmpty()) main else main + "\nAlso out: " + Query.answer(other, "sum", outs, currency)
+                        if (other.isEmpty()) main
+                        else if (Query.select(available, q).isEmpty()) {
+                            "No cash-expense entries found (" + Query.label(q) + "). Other money out: " +
+                                Query.answer(other, "sum", outs, currency)
+                        } else main + "\nOther money out: " + Query.answer(other, "sum", outs, currency)
                     } else main
                 }
             }
@@ -897,7 +901,14 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     if (inChat) tab = Tab.HOME
                     null
                 } else {
-                    val term = (q.items + q.cats.map { it.label }).firstOrNull() ?: return "What should I show?"
+                    val term = (q.items + q.cats.map { it.label }).firstOrNull()
+                    if (term == null) {
+                        // Date/type-only list requests have no item term; answer from the exact database filter.
+                        if (!q.isEmpty) return runFixed(
+                            NativeChatEngine.Fixed("", "ask", "", "list", q), said, inChat
+                        )
+                        return "What should I show? Add a category, person, date, or amount range."
+                    }
                     results = term to false; people = null
                     if (inChat) tab = Tab.HOME
                     null
