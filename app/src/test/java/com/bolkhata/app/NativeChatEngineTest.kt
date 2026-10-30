@@ -118,6 +118,96 @@ class NativeChatEngineTest {
         assertEquals(setOf(Type.KHARCHA), result.filter.types)
     }
 
+    @Test fun bareDateAndSearchDateAreReadOnlyListQueries() {
+        val bare = read("28 oct")
+        assertEquals("ask", bare.kind)
+        assertEquals("list", bare.what)
+        assertEquals(Query.day("2026-10-28"), bare.filter.from)
+
+        val search = read("search 28 oct")
+        assertEquals("ask", search.kind)
+        assertEquals("list", search.what)
+        assertEquals(Query.day("2026-10-28"), search.filter.from)
+    }
+
+    @Test fun showAllEntriesThisMonthReturnsAListQuery() {
+        val result = read("show all entry this month")
+        assertEquals("ask", result.kind)
+        assertEquals("list", result.what)
+        assertEquals(Query.day("2026-10-01"), result.filter.from)
+        assertTrue(result.filter.items.isEmpty())
+    }
+
+    @Test fun allTimeAndBareCategoryQueriesAreSupported() {
+        val food = read("food")
+        assertEquals("ask", food.kind)
+        assertEquals("list", food.what)
+        assertEquals(setOf(Cat.KHANA), food.filter.cats)
+
+        val allTime = read("food all time")
+        assertEquals("ask", allTime.kind)
+        assertEquals("sum", allTime.what)
+        assertEquals(setOf(Cat.KHANA), allTime.filter.cats)
+        assertEquals(null, allTime.filter.from)
+
+        val expenses = read("all expense")
+        assertEquals("ask", expenses.kind)
+        assertEquals("list", expenses.what)
+        assertEquals(setOf(Type.KHARCHA), expenses.filter.types)
+    }
+
+    @Test fun totalExpenseThisYearDoesNotTreatTotalAsAnItemName() {
+        val result = read("total expense this year")
+        assertEquals("ask", result.kind)
+        assertEquals("sum", result.what)
+        assertEquals(setOf(Type.KHARCHA), result.filter.types)
+        assertTrue(result.filter.items.isEmpty())
+        assertEquals(Query.day("2026-01-01"), result.filter.from)
+    }
+
+    @Test fun lastDayExpenseMeansYesterday() {
+        val result = read("last day expense")
+        assertEquals("ask", result.kind)
+        assertEquals(setOf(Type.KHARCHA), result.filter.types)
+        assertEquals(Query.day("2026-10-29"), result.filter.from)
+    }
+
+    @Test fun yearlyAndAllTimeReportsUseTheRequestedPeriod() {
+        val yearly = read("yearly report")
+        assertEquals("chat", yearly.kind)
+        assertTrue(yearly.reply.contains("this year", ignoreCase = true))
+
+        val allTime = read("all time report")
+        assertEquals("chat", allTime.kind)
+        assertTrue(allTime.reply.contains("all time", ignoreCase = true))
+    }
+
+    @Test fun allFollowUpConfirmsThePreviouslyClarifiedBulkDeleteTarget() {
+        val history = listOf(
+            ChatMessage("u1", true, "delet 28 oct entries"),
+            ChatMessage("a1", false, "I found 3 matching entries for delete:\n28 Oct · Petrol · 50 SAR\nWhich one do you mean? Say 'all entries' for a bulk action.")
+        )
+        val result = read("all", history)
+        assertEquals("delete", result.kind)
+        assertEquals(Query.day("2026-10-28"), result.filter.from)
+        assertEquals(86_399_999L, result.filter.to!! - result.filter.from!!)
+    }
+
+    @Test fun contactClarificationAcceptsTheDistinctiveSurname() {
+        val contacts = listOf("Andleeb Shahzad Mazhar", "Andleeb Shahzad Iqbal")
+        val history = listOf(
+            ChatMessage("u1", true, "andleeb"),
+            ChatMessage("a1", false, "Which Andleeb Shahzad Mazhar or Andleeb Shahzad Iqbal do you mean?")
+        )
+        val selected = NativeChatEngine.interpret("mazhar", entries, contacts = contacts, history = history, now = now)
+        assertEquals("open", selected.kind)
+        assertEquals(listOf("Andleeb Shahzad Mazhar"), selected.filter.persons)
+
+        val yes = NativeChatEngine.interpret("yes", entries, contacts = contacts, history = history, now = now)
+        assertEquals("chat", yes.kind)
+        assertTrue(yes.reply.contains("choose one", ignoreCase = true))
+    }
+
     @Test fun pronounDeleteUsesOnlyTheExactEntryIdsFromTheLastAssistantResult() {
         val history = listOf(
             ChatMessage("u1", true, "show petrol yesterday"),
