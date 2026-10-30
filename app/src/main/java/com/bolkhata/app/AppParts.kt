@@ -1,5 +1,13 @@
 package com.bolkhata.app
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -11,7 +19,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Home
@@ -32,8 +39,9 @@ import androidx.compose.ui.unit.sp
 // Parts of the main screen kept out of MainActivity: the chat input bar, the side menu and the "what kind of entry?" dialog.
 
 /**
- * The message bar at the bottom of Home and Chat: one floating pill with attach (+), the text, the mic, and a round
- * send button that turns green once something is typed and shows a spinner while the app is answering.
+ * The message bar at the bottom of Home and Chat, in the style of ChatGPT: a floating white pill with a thin +,
+ * the text, a thin mic, and a round green button that sends what is typed (or starts speaking when empty) and
+ * shows a spinner while the app is answering. A soft fade above it keeps the list from being cut off sharply.
  */
 @Composable
 internal fun InputBar(
@@ -51,56 +59,101 @@ internal fun InputBar(
             onSend(t)
         }
     }
-    val ready = text.isNotBlank() && !busy
-    Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 12.dp)) {
-        Surface(
-            shape = RoundedCornerShape(30.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 8.dp,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(Modifier.heightIn(min = 60.dp).padding(start = 4.dp, end = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (onAttach != null) {
-                    IconButton(onClick = onAttach) {
-                        Icon(Icons.Filled.Add, contentDescription = "Attach a photo or PDF", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(28.dp))
+    val bg = MaterialTheme.colorScheme.background
+    val ink = MaterialTheme.colorScheme.onSurface
+    Column(Modifier.fillMaxWidth()) {
+        Box(Modifier.fillMaxWidth().height(18.dp).background(Brush.verticalGradient(listOf(bg.copy(alpha = 0f), bg))))
+        Box(Modifier.fillMaxWidth().background(bg).navigationBarsPadding().padding(start = 12.dp, end = 12.dp, bottom = 10.dp)) {
+            Surface(
+                shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 6.dp,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(Modifier.heightIn(min = 56.dp).padding(start = 6.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (onAttach != null) {
+                        Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onAttach), contentAlignment = Alignment.Center) {
+                            ThinPlus(ink)
+                        }
+                    } else Spacer(Modifier.width(12.dp))
+                    TextField(
+                        value = text,
+                        onValueChange = { text = it },
+                        placeholder = { Text(placeholder, fontSize = 17.sp, maxLines = 1) },
+                        modifier = Modifier.weight(1f),
+                        maxLines = 4,
+                        textStyle = LocalTextStyle.current.copy(fontSize = 17.sp),
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent,
+                            disabledContainerColor = Color.Transparent,
+                            focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
+                            disabledIndicatorColor = Color.Transparent,
+                            unfocusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            focusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        ),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                        keyboardActions = KeyboardActions(onSend = { send() })
+                    )
+                    Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onMic), contentAlignment = Alignment.Center) {
+                        ThinMic(ink)
                     }
-                } else Spacer(Modifier.width(12.dp))
-                TextField(
-                    value = text,
-                    onValueChange = { text = it },
-                    placeholder = { Text(placeholder, fontSize = 16.sp, maxLines = 1) },
-                    modifier = Modifier.weight(1f),
-                    maxLines = 4,
-                    textStyle = LocalTextStyle.current.copy(fontSize = 16.sp),
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent,
-                        disabledContainerColor = Color.Transparent,
-                        focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
-                        disabledIndicatorColor = Color.Transparent,
-                        unfocusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
-                        focusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
-                    ),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                    keyboardActions = KeyboardActions(onSend = { send() })
-                )
-                IconButton(onClick = onMic) { MicGlyph(MaterialTheme.colorScheme.onSurface, 24.dp) }
-                Box(
-                    Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(if (ready || busy) GreenDeep else MaterialTheme.colorScheme.surfaceVariant)
-                        .clickable(enabled = ready) { send() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (busy) {
-                        CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
-                    } else {
-                        Icon(
-                            Icons.Filled.ArrowUpward, contentDescription = "Send",
-                            tint = if (ready) Color.White else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                            modifier = Modifier.size(22.dp)
-                        )
+                    Spacer(Modifier.width(4.dp))
+                    Box(
+                        Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(GreenDeep)
+                            .clickable(enabled = !busy) { if (text.isNotBlank()) send() else onMic() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        when {
+                            busy -> CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
+                            text.isNotBlank() -> Icon(Icons.Filled.ArrowUpward, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(22.dp))
+                            else -> SoundWave(Color.White)
+                        }
                     }
                 }
             }
+        }
+    }
+}
+
+/** A thin "+" like ChatGPT's attach button. */
+@Composable
+private fun ThinPlus(color: Color) {
+    Canvas(Modifier.size(22.dp)) {
+        val w = 1.8.dp.toPx()
+        drawLine(color, Offset(size.width / 2, 1.dp.toPx()), Offset(size.width / 2, size.height - 1.dp.toPx()), w, StrokeCap.Round)
+        drawLine(color, Offset(1.dp.toPx(), size.height / 2), Offset(size.width - 1.dp.toPx(), size.height / 2), w, StrokeCap.Round)
+    }
+}
+
+/** An outlined microphone drawn with thin strokes. */
+@Composable
+private fun ThinMic(color: Color) {
+    Canvas(Modifier.size(22.dp)) {
+        val w = 1.8.dp.toPx()
+        val cx = size.width / 2
+        val capW = size.width * 0.34f
+        val top = 1.dp.toPx()
+        val capH = size.height * 0.56f
+        drawRoundRect(color, Offset(cx - capW / 2, top), Size(capW, capH), CornerRadius(capW / 2), style = Stroke(w))
+        val arcW = size.width * 0.66f
+        drawArc(color, 0f, 180f, false, Offset(cx - arcW / 2, top + capH * 0.35f), Size(arcW, capH * 0.95f), style = Stroke(w, cap = StrokeCap.Round))
+        drawLine(color, Offset(cx, top + capH * 0.35f + capH * 0.95f), Offset(cx, size.height - 1.dp.toPx()), w, StrokeCap.Round)
+    }
+}
+
+/** Short vertical bars: tap the empty send button to speak. */
+@Composable
+private fun SoundWave(color: Color) {
+    Canvas(Modifier.size(20.dp)) {
+        val w = 2.2.dp.toPx()
+        val heights = listOf(0.35f, 0.75f, 1f, 0.6f)
+        val gap = size.width / (heights.size + 1)
+        heights.forEachIndexed { i, h ->
+            val x = gap * (i + 1)
+            val half = size.height * h / 2
+            drawLine(color, Offset(x, size.height / 2 - half), Offset(x, size.height / 2 + half), w, StrokeCap.Round)
         }
     }
 }
