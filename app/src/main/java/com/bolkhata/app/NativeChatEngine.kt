@@ -100,8 +100,9 @@ object NativeChatEngine {
         val allAnswerWords = setOf("all", "every", "entries", "entry", "sab", "sari", "saari", "tamam", "everything", "please", "haan", "han", "yes")
         val isAllFollowUp = words.isNotEmpty() && words.all { it in allAnswerWords }
         if (isAllFollowUp && previousUser != null &&
-            previousAssistant.contains("matching entries for", ignoreCase = true) &&
-            previousAssistant.contains("Which one do you mean?", ignoreCase = true)) {
+            (previousAssistant.contains("matching entries for", ignoreCase = true) &&
+                previousAssistant.contains("Which one do you mean?", ignoreCase = true) ||
+                previousAssistant.contains("Which entry in", ignoreCase = true))) {
             val previousIntent = interpret(previousUser, entries, contacts, wordFixes, emptyList(), currency, now)
             if (previousIntent.kind in setOf("delete", "change", "to_khata")) return previousIntent
         }
