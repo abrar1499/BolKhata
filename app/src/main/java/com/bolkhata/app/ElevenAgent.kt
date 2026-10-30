@@ -44,6 +44,7 @@ class ElevenAgent(
     private var track: AudioTrack? = null
     // Plays the agent's audio pieces one after another, in the order they came.
     private val speaker = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private val effects = mutableListOf<android.media.audiofx.AudioEffect>()
     @Volatile private var running = false
     // Until this time the agent's audio is still playing (the mic level is then the agent, not the owner).
     @Volatile private var speakingUntil = 0L
@@ -64,6 +65,7 @@ class ElevenAgent(
         if (!running) return
         running = false
         runCatching { socket?.close(1000, null) }
+        effects.forEach { runCatching { it.release() } }; effects.clear()
         runCatching { recorder?.stop() }; runCatching { recorder?.release() }
         runCatching { track?.stop() }; runCatching { track?.release() }
         recorder = null; track = null; socket = null
@@ -169,6 +171,12 @@ class ElevenAgent(
         val rec = AudioRecord(MediaRecorder.AudioSource.VOICE_COMMUNICATION, inRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, inSize)
         if (rec.state != AudioRecord.STATE_INITIALIZED) { main.post { end("Microphone is busy.") }; return }
         recorder = rec
+        // Cleaner input: less of the agent's own voice and less background noise reach the agent.
+        if (android.media.audiofx.AcousticEchoCanceler.isAvailable())
+            effects += listOfNotNull(android.media.audiofx.AcousticEchoCanceler.create(rec.audioSessionId))
+        if (android.media.audiofx.NoiseSuppressor.isAvailable())
+            effects += listOfNotNull(android.media.audiofx.NoiseSuppressor.create(rec.audioSessionId))
+        effects.forEach { runCatching { it.enabled = true } }
         rec.startRecording()
         thread(name = "agent-mic") {
             val chunk = ByteArray(inRate / 10 * 2) // 100 ms
