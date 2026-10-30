@@ -158,6 +158,7 @@ object Query {
             x = x.copy(type = t, category = if (isLoan(t)) Cat.UDHAAR else if (x.category == Cat.UDHAAR) Cat.OTHER else x.category)
         }
         set["item"]?.trim()?.takeIf { it.isNotEmpty() }?.let { x = x.copy(item = it) }
+        set["note"]?.trim()?.takeIf { it.isNotEmpty() }?.let { x = x.copy(note = it.take(500)) }
         return x
     }
 }
