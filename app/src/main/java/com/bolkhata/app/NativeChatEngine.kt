@@ -33,6 +33,7 @@ object NativeChatEngine {
         "nov", "november", "dec", "december", "exactly", "equal", "between", "above", "over", "more", "than", "below", "under",
         "less", "except", "excluding", "siwa", "ilawa", "alawa", "people", "log", "logon", "cash", "out", "into",
         "it", "that", "this", "those", "these", "isko", "usko", "ye", "yeh", "inko",
+        "total", "report", "summary", "overview", "yearly", "annual", "annually", "alltime", "overall", "lifetime", "ever", "time", "day", "days",
         "delete", "delet", "del", "dlt", "remove", "hatao", "hata", "mitao", "clear", "wipe",
         "change", "edit", "update", "badlo", "correct", "fix", "move", "shift", "transfer", "send", "bhejo",
         "khata", "account", "paid", "pay", "by", "kiya", "kya", "khaya", "pese", "paise", "paisa", "diye", "diya", "us"
@@ -72,8 +73,40 @@ object NativeChatEngine {
         val text = understood?.text ?: prepared
         val lower = text.lowercase(Locale.ROOT)
         val words = tokens(lower)
+        val previousAssistant = history.lastOrNull { !it.isUser }?.text.orEmpty()
+        val previousUser = history.lastOrNull { it.isUser }?.text
 
-        // Date-only follow-ups and "search again" inherit the last real search, not just the last chat message.
+        // Resolve short answers to a contact clarification ("Mazhar", "Shahzad Iqbal").
+        if (previousAssistant.startsWith("Which ", ignoreCase = true) &&
+            previousAssistant.contains(" do you mean?", ignoreCase = true)) {
+            val candidates = contacts.filter { it.isNotBlank() && previousAssistant.contains(it, ignoreCase = true) }
+                .distinctBy { it.lowercase(Locale.ROOT) }
+            val answerWords = words.filter { it !in setOf("yes", "yeah", "yep", "haan", "han", "ji", "please", "plz") }
+            val chosen = candidates.filter { candidate ->
+                val nameWords = tokens(candidate)
+                answerWords.isNotEmpty() && answerWords.all { answer ->
+                    nameWords.any { name -> name == answer || (answer.length >= 3 && name.startsWith(answer)) }
+                }
+            }
+            if (chosen.size == 1 && previousUser != null) {
+                return Fixed("", "open", "", filter = Query.Filter(persons = listOf(chosen.single())))
+            }
+            if (candidates.size > 1 && (answerWords.isEmpty() || chosen.size != 1)) {
+                return chat("Please choose one saved name: " + candidates.joinToString(" or ") + ".")
+            }
+        }
+
+        // "All" is a valid answer only after the assistant explicitly asked about a multi-entry action.
+        val allAnswerWords = setOf("all", "every", "entries", "entry", "sab", "sari", "saari", "tamam", "everything", "please", "haan", "han", "yes")
+        val isAllFollowUp = words.isNotEmpty() && words.all { it in allAnswerWords }
+        if (isAllFollowUp && previousUser != null &&
+            previousAssistant.contains("matching entries for", ignoreCase = true) &&
+            previousAssistant.contains("Which one do you mean?", ignoreCase = true)) {
+            val previousIntent = interpret(previousUser, entries, contacts, wordFixes, emptyList(), currency, now)
+            if (previousIntent.kind in setOf("delete", "change", "to_khata")) return previousIntent
+        }
+
+        // Date-only follow-ups and "search again" inherit the last actual database search.
         val dateOnlyFollowUp = isDateFollowUp(lower)
         val repeatSearch = isRepeatSearch(lower)
         if (history.isNotEmpty() && (dateOnlyFollowUp || repeatSearch)) {
@@ -92,6 +125,11 @@ object NativeChatEngine {
                 else chat("Which date should I use for that search?")
             }
         }
+        if (dateOnlyFollowUp) {
+            val date = dateBounds(lower, now)
+            if (date != null) return Fixed("", "ask", "", "list", Query.Filter(from = date.from, to = date.to))
+        }
+        if (repeatSearch) return chat("I don't have a previous search in this conversation. What should I search for?")
 
         // Pronouns can only refer to stable IDs explicitly attached to the last assistant result.
         val ids = history.lastOrNull { !it.isUser && it.entryIds.isNotEmpty() }?.entryIds.orEmpty().toSet()
@@ -159,7 +197,7 @@ object NativeChatEngine {
         }
         if (command?.action == Commands.Action.CLEAR_ALL) return Fixed("", "clear_all", "")
         if (command?.action == Commands.Action.SEARCH)
-            return Fixed("", "open", "", filter = buildFilter(command.query, contacts, now, false))
+            return Fixed("", "ask", "", "list", buildFilter(command.query, contacts, now, false))
         if (command?.action == Commands.Action.EDIT)
             return Fixed("", "change", "", filter = buildFilter(command.query, contacts, now, false))
         if ((delete || clear) && !has(words, setOf("nahi", "nahin", "nhi", "not", "mat"))) {
@@ -174,6 +212,19 @@ object NativeChatEngine {
             return chat(smallTalk(lower))
         }
 
+        // Reports use the requested period instead of silently defaulting yearly reports to this month.
+        if (has(words, setOf("report", "summary", "overview"))) {
+            val periodQuery = when {
+                has(words, setOf("last", "previous", "pichle", "pichhle")) && has(words, setOf("year", "yearly", "annual", "annually", "saal")) -> "last year spent"
+                has(words, setOf("year", "yearly", "annual", "annually", "saal")) -> "this year spent"
+                has(words, setOf("all", "time", "overall", "lifetime", "ever", "alltime")) -> "all time spent"
+                has(words, setOf("last", "previous", "pichle", "pichhle")) && has(words, setOf("month", "mahina", "mahine")) -> "last month spent"
+                has(words, setOf("today", "aaj", "aj")) -> "today spent"
+                else -> "this month spent"
+            }
+            return Fixed("", "chat", Questions.answer(periodQuery, entries, currency)?.text ?: "No saved transactions for that period.")
+        }
+
         if (isQuestion(lower)) {
             val financial = has(words, setOf("profit", "nafa", "munafa", "loss", "stock", "balance", "owe", "owed", "qarz", "udhar"))
             val special = if (financial && !text.any(Char::isDigit)) runCatching { Questions.answer(text, entries, currency) }.getOrNull() else null
@@ -182,15 +233,20 @@ object NativeChatEngine {
             val filter = buildFilter(text, contacts, now, defaultMonth)
             val knownDomain = has(words, expense + income + lent + borrowed + setOf(
                 "entries", "entry", "transactions", "transaction", "records", "record", "balance", "profit", "stock",
-                "khata", "qarz", "udhar", "udhaar"
-            )) || words.any { token -> categories.values.any { token in it } }
+                "khata", "qarz", "udhar", "udhaar", "report", "summary", "overview"
+            )) || words.any { token -> categories.values.any { token in it } } || dateBounds(lower, now) != null
             if (!knownDomain)
                 return chat("I can answer from your saved transactions. Try 'food this month', 'last 5 entries', or 'Ali ka balance'.")
+            val periodWords = setOf("today", "yesterday", "aaj", "aj", "kal", "this", "last", "month", "week", "year",
+                "mahina", "mahine", "saal", "all", "time", "overall", "lifetime", "ever", "alltime")
+            val simpleLookup = (words.any { token -> categories.values.any { token in it } } || has(words, expense + income)) &&
+                !has(words, setOf("how", "much", "many", "kitna", "kitne", "kitni", "total", "sum", "count")) &&
+                !has(words, periodWords)
             val what = when {
                 has(words, setOf("highest", "largest", "biggest", "maximum", "max", "most")) -> "highest"
                 has(words, setOf("count", "howmany", "kitne", "kitni", "number")) -> "count"
                 has(words, setOf("show", "find", "search", "list", "which", "kahan", "kab")) ||
-                    Regex("""\blast\s+\d+\b""").containsMatchIn(lower) -> "list"
+                    Regex("""\blast\s+\d+\b""").containsMatchIn(lower) || simpleLookup -> "list"
                 else -> "sum"
             }
             return Fixed("", "ask", "", what, filter)
@@ -227,14 +283,22 @@ object NativeChatEngine {
     private fun isQuestion(text: String): Boolean {
         val w = tokens(text)
         val periods = setOf("today", "yesterday", "aaj", "kal", "this", "last", "month", "week", "year", "mahine", "saal",
+            "all", "time", "overall", "lifetime", "ever", "alltime", "yearly", "annual", "annually",
             "jan", "january", "feb", "february", "mar", "march", "apr", "april", "may", "jun", "june", "jul", "july",
             "aug", "august", "sep", "sept", "september", "oct", "october", "nov", "november", "dec", "december")
-        return text.endsWith("?") || has(w, setOf("show", "find", "search", "list", "total", "sum", "count", "highest", "largest", "biggest")) ||
+        val categoryMentioned = w.any { token -> categories.values.any { token in it } }
+        val broadTypeMentioned = has(w, expense + income)
+        val simpleLedgerLookup = (categoryMentioned || broadTypeMentioned) &&
+            !has(w, setOf("how", "much", "many", "kitna", "kitne", "kitni", "total", "sum", "count")) &&
+            !has(w, setOf("today", "yesterday", "aaj", "aj", "kal", "this", "last", "month", "week", "year",
+                "mahina", "mahine", "saal", "all", "time", "overall", "lifetime", "ever", "alltime"))
+        return text.endsWith("?") || has(w, setOf("report", "summary", "overview")) ||
+            has(w, setOf("show", "find", "search", "list", "total", "sum", "count", "highest", "largest", "biggest")) ||
             (has(w, expense + income) && has(w, periods)) ||
-            (w.any { token -> categories.values.any { token in it } } && has(w, periods)) ||
+            (categoryMentioned && has(w, periods)) || simpleLedgerLookup ||
             Regex("""\b(last|latest|recent)\s+\d+\s+(entry|entries|record|records|transaction|transactions)\b""").containsMatchIn(text) ||
             (has(w, questionWords) && (has(w, expense + income + setOf("balance", "khata", "petrol", "food", "salary", "udhar", "udhaar")) ||
-                w.any { token -> categories.values.any { token in it } }))
+                categoryMentioned))
     }
 
     private fun buildFilter(input: String, contacts: List<String>, now: Long, defaultMonth: Boolean): Query.Filter {
@@ -314,6 +378,8 @@ object NativeChatEngine {
         }
         val lastDays = Regex("""\b(?:last|past)\s+(\d{1,3})\s+days?\b""").find(text)?.groupValues?.get(1)?.toIntOrNull()
         if (lastDays != null) return Bounds(now - lastDays.coerceAtMost(365) * 86_400_000L, now)
+        if (Regex("""\b(last|past|previous)\s+day\b""").containsMatchIn(text)) return day(-1)
+        if (Regex("""\blast\s+24\s+hours?\b""").containsMatchIn(text)) return Bounds(now - 86_400_000L, now)
 
         // Explicit day + month (e.g. "28 Oct", "Oct 28", "28 October 2026").
         val monthNumbers = mapOf(
