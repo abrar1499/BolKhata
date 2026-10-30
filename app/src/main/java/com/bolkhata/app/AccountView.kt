@@ -259,11 +259,3 @@ private fun BalanceChip(bal: Double, currency: String, people: Boolean) {
         modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(color.copy(alpha = 0.10f)).padding(horizontal = 8.dp, vertical = 4.dp)
     )
 }
-
-private fun template(type: Type, person: String): Entry {
-    val now = System.currentTimeMillis()
-    return Entry(
-        id = "e" + System.nanoTime(), type = type, amount = 0.0, category = Cat.UDHAAR, item = "Loans",
-        person = person, note = "", date = now, createdAt = now
-    )
-}

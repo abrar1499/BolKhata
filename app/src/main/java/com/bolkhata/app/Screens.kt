@@ -1032,15 +1032,21 @@ private fun ReportGroupCard(
                 val quantity = if (e.qty > 0.0) fmt(e.qty) + if (e.unit.isBlank()) "" else " ${e.unit}" else null
                 val detail = listOf(item, party, e.note.takeIf { it.isNotBlank() }, quantity)
                     .filterNotNull().joinToString(" · ").ifBlank { typeLabel(e.type, e.person) }
-                Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(shortDate(e.date), Modifier.width(56.dp), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(detail, Modifier.weight(1f), fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text(moneyA(currency, e.amount), fontSize = 12.sp)
-                }
+                ReportLine(e, detail, currency)
             }
         } else {
             Text("Tap to see every entry", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+    }
+}
+
+/** One entry under a report row: date, what it was, amount. */
+@Composable
+private fun ReportLine(e: Entry, detail: String, currency: String) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(shortDate(e.date), Modifier.width(56.dp), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(detail, Modifier.weight(1f), fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(moneyA(currency, e.amount), fontSize = 12.sp)
     }
 }
 
@@ -1325,11 +1331,7 @@ fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit, st
                                 val party = e.person.takeIf { it.isNotBlank() }?.let { if (e.type == Type.PURCHASE || e.type == Type.LIYA) "from $it" else "to $it" }
                                 val quantity = fmt(e.qty) + if (e.unit.isBlank()) "" else " ${e.unit}"
                                 val detail = listOf(direction, party, quantity, e.note.takeIf { it.isNotBlank() }).filterNotNull().joinToString(" · ")
-                                Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Text(shortDate(e.date), Modifier.width(56.dp), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Text(detail, Modifier.weight(1f), fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                    Text(moneyA(currency, e.amount), fontSize = 12.sp)
-                                }
+                                ReportLine(e, detail, currency)
                             }
                         } else Text("Tap to see stock movements", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -1458,11 +1460,7 @@ fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit, st
                             history.forEach { e ->
                                 val detail = listOf(typeLabel(e.type, e.person), e.item.takeIf { it.isNotBlank() && it != "Loans" },
                                     e.note.takeIf { it.isNotBlank() }).filterNotNull().joinToString(" · ")
-                                Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Text(shortDate(e.date), Modifier.width(56.dp), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Text(detail, Modifier.weight(1f), fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                    Text(moneyA(currency, e.amount), fontSize = 12.sp)
-                                }
+                                ReportLine(e, detail, currency)
                             }
                         } else Text("Tap to see outstanding transactions", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }

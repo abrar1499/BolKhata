@@ -948,7 +948,8 @@ fun MoveHistoryDialog(
     )
 }
 
-private fun template(type: Type, person: String): Entry {
+/** A blank loan entry with [person], used to open the form from a khata. */
+internal fun template(type: Type, person: String): Entry {
     val now = System.currentTimeMillis()
     return Entry(
         id = "e" + System.nanoTime(), type = type, amount = 0.0, category = Cat.UDHAAR, item = "Loans",
