@@ -79,7 +79,8 @@ class ElevenAgent(
 
     private fun signedUrl(): String {
         val id = URLEncoder.encode(agentId.trim(), "UTF-8")
-        if (key.isBlank()) return "wss://api.elevenlabs.io/v1/convai/conversation?agent_id=$id"
+        val open = "wss://api.elevenlabs.io/v1/convai/conversation?agent_id=$id"
+        if (key.isBlank()) return open
         val conn = URL("https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=$id")
             .openConnection() as HttpURLConnection
         conn.connectTimeout = 10_000
@@ -87,7 +88,9 @@ class ElevenAgent(
         conn.setRequestProperty("xi-api-key", key)
         try {
             val code = conn.responseCode
-            if (code !in 200..299) error(if (code == 401) "key is wrong" else if (code == 404) "Agent ID not found" else "error $code")
+            // A key made only for speech may not reach agents; a public agent still works without the signed link.
+            if (code == 401 || code == 403) return open
+            if (code !in 200..299) error(if (code == 404) "Agent ID not found" else "error $code")
             return JSONObject(conn.inputStream.bufferedReader().use { it.readText() }).getString("signed_url")
         } finally {
             conn.disconnect()
