@@ -112,6 +112,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var logToken by remember { mutableStateOf(store.logToken) }
     var groqKey by remember { mutableStateOf(store.groqKey) }
     var groqVoice by remember { mutableStateOf(store.groqVoice) }
+    var elevenKey by remember { mutableStateOf(store.elevenKey) }
+    var elevenVoice by remember { mutableStateOf(store.elevenVoice) }
     var logRepo by remember { mutableStateOf(store.logRepo) }
     var logStatus by remember { mutableStateOf("") }
     var logSending by remember { mutableStateOf(false) }
@@ -1385,6 +1387,13 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         }
     }
 
+    // The ElevenLabs answer playing in the call.
+    var player by remember { mutableStateOf<android.media.MediaPlayer?>(null) }
+    fun stopReply() {
+        player?.let { runCatching { it.stop() }; runCatching { it.release() } }
+        player = null
+    }
+
     fun stopVoice(message: String? = null) {
         voiceOn = false
         voiceAwaiting = false
@@ -1395,6 +1404,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         finishRecording(send = false)
         runCatching { recognizer?.cancel() }
         runCatching { tts.stop() }
+        stopReply()
         if (message != null) toast(message)
     }
 
@@ -1434,14 +1444,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         runCatching { r.cancel(); r.startListening(i) }
     }
 
-    /** Reads [text] aloud: Urdu script with an Urdu voice, otherwise English. Listens again when done. */
-    fun speak(text: String) {
-        val clean = text.replace(Regex("""[✓•*#_]"""), " ").replace(Regex("""(?m)^\s*-\s*"""), "").trim()
-        if (clean.isEmpty() || !ttsReady.value) {
-            listenNow()
-            return
-        }
-        val urduScript = clean.any { it in '\u0600'..'\u06FF' }
+    /** Reads [text] with the phone's voice: Urdu script with an Urdu voice, otherwise English. */
+    fun phoneSpeak(text: String) {
+        if (!ttsReady.value) { listenNow(); return }
+        val urduScript = text.any { it in '\u0600'..'\u06FF' }
         val wanted = if (urduScript) java.util.Locale("ur", "PK") else java.util.Locale("en", "IN")
         val ok = tts.setLanguage(wanted)
         if (ok == android.speech.tts.TextToSpeech.LANG_MISSING_DATA || ok == android.speech.tts.TextToSpeech.LANG_NOT_SUPPORTED) {
@@ -1454,9 +1460,42 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 .maxByOrNull { it.quality }?.let { tts.voice = it }
         }
         voiceStatus = "Speaking…"
+        tts.speak(text, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "reply-" + System.nanoTime())
+    }
+
+    /** Plays an ElevenLabs answer, then listens again; falls back to the phone's voice if it can't play. */
+    fun playReply(file: File, text: String) {
+        stopReply()
+        val p = android.media.MediaPlayer()
+        runCatching {
+            p.setDataSource(file.absolutePath)
+            p.setOnCompletionListener { stopReply(); if (voiceOn) listenNow() }
+            p.prepare()
+            p.start()
+        }.onSuccess {
+            player = p
+            voiceStatus = "Speaking…"
+        }.onFailure {
+            runCatching { p.release() }
+            phoneSpeak(text)
+        }
+    }
+
+    /** Says the short form of an answer in the call: ElevenLabs when set up, else the phone's voice. Listens again after. */
+    fun speak(text: String) {
+        val clean = shortSpoken(text.replace(Regex("""[✓•*#_]"""), " ").replace(Regex("""(?m)^\s*-\s*"""), ""))
+        if (clean.isEmpty()) { listenNow(); return }
         voiceReply = clean
         voiceLevel = 0f
-        tts.speak(clean.take(3500), android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "reply-" + System.nanoTime())
+        if (elevenKey.isBlank() || elevenVoice.isBlank()) { phoneSpeak(clean); return }
+        scope.launch {
+            val reply = Eleven.speech(elevenKey, elevenVoice, clean, File(context.cacheDir, "reply.mp3"))
+            if (!voiceOn) return@launch
+            reply.fold(
+                onSuccess = { playReply(it, clean) },
+                onFailure = { toast((it.message ?: "ElevenLabs failed") + "; using the phone's voice."); phoneSpeak(clean) }
+            )
+        }
     }
 
     DisposableEffect(tts) {
@@ -1940,6 +1979,14 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     onGroqSave = { key -> store.groqKey = key; groqKey = store.groqKey; toast("✓ Groq turned on") },
                     onGroqVoice = { on -> store.groqVoice = on; groqVoice = on },
                     onGroqOff = { store.groqKey = ""; groqKey = ""; toast("Groq turned off. The app is fully offline again.") },
+                    elevenVoice = elevenVoice,
+                    elevenOn = elevenKey.isNotBlank() && elevenVoice.isNotBlank(),
+                    onElevenSave = { key, voiceId ->
+                        if (key.isNotBlank()) { store.elevenKey = key; elevenKey = store.elevenKey }
+                        store.elevenVoice = voiceId; elevenVoice = store.elevenVoice
+                        toast("✓ ElevenLabs voice on for calls")
+                    },
+                    onElevenOff = { store.elevenKey = ""; elevenKey = ""; toast("Calls use the phone's voice again.") },
                     onLogOff = {
                         store.logToken = ""; logToken = ""
                         logStatus = "Chat log sending is off"
@@ -2200,7 +2247,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
 
     if (voiceOn) VoiceCall(
         status = voiceStatus, heard = voicePartial, reply = voiceReply, level = voiceLevel,
-        onInterrupt = { runCatching { tts.stop() }; listenNow() },
+        onInterrupt = { runCatching { tts.stop() }; stopReply(); listenNow() },
         onEnd = { stopVoice() }
     )
 

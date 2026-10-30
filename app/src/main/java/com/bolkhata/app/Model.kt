@@ -126,7 +126,7 @@ class Store(context: Context) {
     // ---------- Backup: everything the app keeps, in one file ----------
 
     /** Keys left out of a backup: AI keys are private and stay on this phone. */
-    private val notBackedUp = setOf("aiKey", "fastKey", "aiModel", "fileKey", "groqKey", "logToken")
+    private val notBackedUp = setOf("aiKey", "fastKey", "aiModel", "fileKey", "groqKey", "elevenKey", "logToken")
 
     /** All saved data (entries, trash, chat, memory, settings) as one JSON text. */
     fun exportJson(): String {
@@ -452,7 +452,17 @@ class Store(context: Context) {
         get() = prefs.getString("groqKey", "") ?: ""
         set(v) = prefs.edit().putString("groqKey", v.trim()).apply()
 
-    /** Use Groq Whisper for the mic button instead of the phone's speech recognition. */
+    /** The owner's own ElevenLabs key; the voice call then answers in [elevenVoice]. Never backed up or uploaded. */
+    var elevenKey: String
+        get() = prefs.getString("elevenKey", "") ?: ""
+        set(v) = prefs.edit().putString("elevenKey", v.trim()).apply()
+
+    /** Voice ID from the ElevenLabs voice library. */
+    var elevenVoice: String
+        get() = prefs.getString("elevenVoice", "") ?: ""
+        set(v) = prefs.edit().putString("elevenVoice", v.trim()).apply()
+
+    /** Use Groq Whisper for the mic and the voice call instead of the phone's speech recognition. */
     var groqVoice: Boolean
         get() = prefs.getBoolean("groqVoice", true)
         set(v) = prefs.edit().putBoolean("groqVoice", v).apply()
