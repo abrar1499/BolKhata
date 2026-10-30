@@ -288,7 +288,52 @@ object Parser {
         return "bank:" + digest.joinToString("") { "%02x".format(it) }
     }
 
+    /**
+     * Structured card/bank alert: use the explicit "Amount:" field, not card digits such as
+     * "By:9954". This also gives shortened fragments the same idempotency fingerprint.
+     */
+    private fun parseStructuredBankAlert(input: String, now: Long): Entry? {
+        val amount = Regex(
+            """(?i)\\b(?:amount|amt)\\s*:\\s*(?:SAR|AED|PKR|QAR|KWD|OMR|BHD|INR|USD|EUR|GBP)?\\s*(\\d[\\d,]*(?:\\.\\d{1,2})?)"""
+        ).find(input)?.groupValues?.get(1)?.replace(",", "")?.toDoubleOrNull() ?: return null
+        if (amount <= 0.0) return null
+        val fingerprint = bankFingerprint(input, amount)
+        if (fingerprint.isBlank()) return null
+        val merchant = Regex(
+            """(?i)\\b(?:at|merchant|store)\\s*:\\s*(.+?)(?=\\s+\\d{1,2}[/-]\\d{1,2}[/-]\\d{2,4}\\b|\\s*$)"""
+        ).find(input)?.groupValues?.get(1)?.trim().orEmpty()
+        if (merchant.isBlank()) return null
+        val date = extractDate(input, now).first ?: return null
+        val time = Regex("""\\b\\d{1,2}[/-]\\d{1,2}[/-]\\d{2,4}\\s+(\\d{1,2}):(\\d{2})\\b""")
+            .find(input)
+        val stamped = Calendar.getInstance().apply {
+            timeInMillis = date
+            if (time != null) {
+                set(Calendar.HOUR_OF_DAY, time.groupValues[1].toInt())
+                set(Calendar.MINUTE, time.groupValues[2].toInt())
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+        }.timeInMillis
+        val incoming = Regex("""(?i)\\b(credited|credit|received|refund|reversal|deposit|cashback)\\b""")
+            .containsMatchIn(input)
+        val guess = guessCategory(merchant)
+        return Entry(
+            id = "bank-" + fingerprint.removePrefix("bank:").take(24),
+            type = if (incoming) Type.AAMDANI else Type.KHARCHA,
+            amount = amount,
+            category = if (incoming) Cat.TANKHWAH else guess?.first ?: Cat.OTHER,
+            item = if (incoming) merchant else guess?.second?.ifBlank { merchant } ?: merchant,
+            person = "",
+            note = merchant,
+            date = stamped,
+            createdAt = now,
+            sourceFingerprint = fingerprint
+        )
+    }
+
     fun parse(input: String, now: Long = System.currentTimeMillis()): Result {
+        parseStructuredBankAlert(input, now)?.let { return Result(listOf(it), emptyList()) }
         // "2 hazar" -> "2000" before the number words are read, so it is not seen as "2" and "1000".
         val joined = digitMult.replace(normalizeDigits(input)) { m ->
             val n = m.groupValues[1].replace(",", "").toDoubleOrNull() ?: return@replace m.value
