@@ -735,6 +735,19 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 if (inChat) chatRead(f.text) else handleText(f.text, original = said)
                 null
             }
+            "plan" -> {
+                val plan = f.plan ?: return "I couldn't build a safe change plan. Nothing was changed."
+                if (!applyPlan(plan)) return "That entry changed before the update could be applied. Nothing was changed."
+                plan.message
+            }
+            "clear_all" -> {
+                val targets = scoped(entries)
+                if (targets.isEmpty()) "There are no entries in this view."
+                else {
+                    askDelete("all " + targets.size + " entries in this view", targets)
+                    "Found " + targets.size + " entries. Confirm the delete dialog to move them to Trash. Nothing is deleted yet."
+                }
+            }
             "ask" -> {
                 val available = scoped(entries)
                 if (f.what == "balance" && q.persons.size == 1) {
@@ -1060,7 +1073,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         if (text.isEmpty() || chatLoading) return
         homeChatFlash = true
         chatInput(text)
-        // Synchronous local answers have already reached postChat; clear any unused presentation flag.
+        // Clear the home-chat presentation flag when no asynchronous work was started.
         if (!chatLoading && chatMessages.lastOrNull()?.isUser == false) homeChatFlash = false
     }
 
@@ -1099,7 +1112,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         return out
     }
 
-    /** Reads an attached photo or PDF with AI and shows what it found in the chat to tick and add. */
+    /** Reads text-based PDF statements locally and shows candidate entries for review. */
     fun readAttachment(uri: android.net.Uri) {
         if (chatLoading) return
         val resolver = context.contentResolver
@@ -1139,14 +1152,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     postChat(offline.check, isUser = false)
                     PdfText.toEntries(offline).sortedByDescending { it.date }
                 } else {
-                    if (activeKey.isBlank()) throw IllegalStateException("Reading this file needs AI. Turn it on in Settings.")
-                    Ai.lastFileError = ""
-                    val viaAi = Ai.readWholeFile(bytes, mime, "", activeKey, store, currency)
-                        .sortedByDescending { it.date }
-                    if (store.fileKey.isNotBlank() && Ai.lastFileError.isNotBlank()) {
-                        postChat("OpenRouter couldn't read it (" + Ai.lastFileError.take(80) + "), so Gemini read it.", isUser = false)
-                    }
-                    viaAi
+                    throw IllegalStateException(
+                        if (offline == null) "This PDF has no selectable text. Scanned-PDF OCR will be handled by the on-device reader."
+                        else "The statement totals did not reconcile (" + offline.why + "). Nothing was imported; review the PDF and try a text-based statement."
+                    )
                 }
                 if (found.isEmpty()) {
                     postChat("I couldn't find any transactions in this file.", isUser = false)
@@ -1725,59 +1734,11 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     onTheme = onTheme,
                     bankOn = bankOn,
                     onBank = { bankHelp = true },
-                    aiKey = aiKey,
-                    aiBuiltIn = BuildConfig.GEMINI_KEY.isNotBlank(),
                     onExport = {
                         val day = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
                         exportFile.launch("SmartExpense-backup-$day.json")
                     },
                     onImport = { importFile.launch(arrayOf("application/json", "text/plain", "application/octet-stream", "*/*")) },
-                    onAiKey = { k ->
-                        aiKey = k
-                        store.aiKey = k
-                        if (k.isBlank()) {
-                            toast(if (BuildConfig.GEMINI_KEY.isNotBlank()) "Using the built-in AI" else "AI turned off")
-                        } else {
-                            toast("Checking key…")
-                            scope.launch {
-                                val err = Ai.test(k, store)
-                                toast(if (err == null) "✓ AI is ready" else err)
-                            }
-                        }
-                    },
-                    fileKey = fileKey, fileModel = fileModel,
-                    onFileSettings = { k, model ->
-                        val v = k.trim()
-                        if (v.isNotBlank() && !v.startsWith("sk-or-")) {
-                            toast("That doesn't look like an OpenRouter key (sk-or-…)")
-                        } else {
-                            fileKey = v
-                            store.fileKey = v
-                            fileModel = model.trim().ifBlank { Ai.DEFAULT_FILE_MODEL }
-                            store.fileModel = fileModel
-                            toast(if (v.isBlank()) "Photos and PDFs: Gemini" else "✓ Photos and PDFs: $fileModel")
-                        }
-                    },
-                    fastKey = fastKey,
-                    onFastKey = { k ->
-                        val v = k.trim()
-                        if (v.startsWith("AIza")) {
-                            // A Gemini key pasted here becomes the app's own Gemini key (photos, PDFs and the backup chat).
-                            aiKey = v
-                            store.aiKey = v
-                            toast("Checking Gemini key…")
-                            scope.launch {
-                                val err = Ai.test(v, store)
-                                toast(if (err == null) "✓ Gemini key saved" else err)
-                            }
-                        } else if (v.isNotBlank() && !Ai.isFastKey(v)) {
-                            toast("That doesn't look like a Groq (gsk_…), OpenRouter (sk-or-…), Claude (sk-ant-…) or Gemini (AIza…) key")
-                        } else {
-                            fastKey = v
-                            store.fastKey = v
-                            toast(if (v.isBlank()) "Fast chat off" else "✓ Fast chat on. Ask something in the chat to try it.")
-                        }
-                    }
                 )
             }
             }
