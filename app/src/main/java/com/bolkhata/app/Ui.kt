@@ -560,19 +560,6 @@ fun MicGlyph(color: Color, size: Dp = 26.dp) {
     }
 }
 
-@Composable
-fun ChartGlyph(color: Color, size: Dp = 24.dp) {
-    Canvas(Modifier.size(size)) {
-        val w = this.size.width
-        val h = this.size.height
-        val bw = w * 0.2f
-        listOf(0.5f, 0.85f, 0.35f).forEachIndexed { i, f ->
-            val bh = h * f * 0.8f
-            drawRoundRect(color, topLeft = Offset(w * (0.12f + i * 0.28f), h * 0.9f - bh), size = Size(bw, bh), cornerRadius = CornerRadius(bw / 3))
-        }
-    }
-}
-
 /** Gradient header with soft light circles, for a premium feel. */
 @Composable
 fun HeroBackground(modifier: Modifier = Modifier) {

@@ -9,8 +9,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -18,11 +16,15 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Payments
+import androidx.compose.material.icons.outlined.ReceiptLong
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -199,90 +201,68 @@ private fun SoundWave(color: Color) {
     }
 }
 
+/** The side menu in the same plain style as Settings: who you are, then simple rows with line icons. */
 @Composable
 internal fun DrawerMenu(tab: Tab, name: String, currency: String, onCurrency: (String) -> Unit, onPick: (Tab) -> Unit) {
     var currencyOpen by remember { mutableStateOf(false) }
     ModalDrawerSheet(
-        modifier = Modifier.width(250.dp),
-        drawerContainerColor = MaterialTheme.colorScheme.surface
+        modifier = Modifier.width(280.dp),
+        drawerContainerColor = MaterialTheme.colorScheme.background,
+        drawerShape = RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp)
     ) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .background(LocalHeader.current.brush)
-                .padding(20.dp)
-        ) {
-            Text("Smart Expense", color = LocalHeader.current.on, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
-            Text(
-                if (name.isBlank()) "Speak it. Track it." else "Hello, ${name.trim()}",
-                color = LocalHeader.current.on.copy(alpha = 0.8f)
-            )
-        }
-        Spacer(Modifier.height(8.dp))
-        val itemPad = Modifier.padding(horizontal = 12.dp)
-        NavigationDrawerItem(
-            label = { Text("Home") }, selected = tab == Tab.HOME, onClick = { onPick(Tab.HOME) },
-            icon = { Icon(Icons.Filled.Home, contentDescription = null) }, modifier = itemPad
-        )
-        NavigationDrawerItem(
-            label = { Text("Chat") }, selected = tab == Tab.CHAT, onClick = { onPick(Tab.CHAT) },
-            icon = { Text("💬", fontSize = 20.sp) }, modifier = itemPad
-        )
-        NavigationDrawerItem(
-            label = { Text("Entries") }, selected = tab == Tab.ENTRIES, onClick = { onPick(Tab.ENTRIES) },
-            icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) }, modifier = itemPad
-        )
-        NavigationDrawerItem(
-            label = { Text("Reports") }, selected = tab == Tab.REPORTS, onClick = { onPick(Tab.REPORTS) },
-            icon = { ChartGlyph(LocalContentColor.current) }, modifier = itemPad
-        )
-        NavigationDrawerItem(
-            label = { Text("Trash") }, selected = tab == Tab.TRASH, onClick = { onPick(Tab.TRASH) },
-            icon = { Icon(Icons.Filled.Delete, contentDescription = null) }, modifier = itemPad
-        )
-        NavigationDrawerItem(
-            label = { Text("Settings") }, selected = tab == Tab.SETTINGS, onClick = { onPick(Tab.SETTINGS) },
-            icon = { Icon(Icons.Filled.Settings, contentDescription = null) }, modifier = itemPad
-        )
-        HorizontalDivider(Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
-        NavigationDrawerItem(
-            label = { Text("Currency") },
-            badge = {
+        Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) { Text(name.trim().take(1).uppercase().ifEmpty { "B" }, fontWeight = FontWeight.SemiBold, fontSize = 17.sp) }
+            Spacer(Modifier.width(12.dp))
+            Column {
+                Text("BolKhata", fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
                 Text(
-                    "$currency ▾", fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
+                    if (name.isBlank()) "Speak it. Track it." else "Hello, ${name.trim()}",
+                    fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-            },
-            selected = false,
-            onClick = { currencyOpen = !currencyOpen },
-            icon = { Text("💱", fontSize = 20.sp) },
-            modifier = itemPad
-        )
-        if (currencyOpen) {
-            Column(
-                Modifier
-                    .padding(horizontal = 24.dp)
-                    .heightIn(max = 260.dp)
-                    .verticalScroll(rememberScrollState())
-            ) {
+            }
+        }
+        DrawerRow("Home", Icons.Outlined.Home, tab == Tab.HOME) { onPick(Tab.HOME) }
+        DrawerRow("Chat", Icons.Outlined.ChatBubbleOutline, tab == Tab.CHAT) { onPick(Tab.CHAT) }
+        DrawerRow("Entries", Icons.Outlined.ReceiptLong, tab == Tab.ENTRIES) { onPick(Tab.ENTRIES) }
+        DrawerRow("Reports", Icons.Outlined.BarChart, tab == Tab.REPORTS) { onPick(Tab.REPORTS) }
+        DrawerRow("Trash", Icons.Outlined.Delete, tab == Tab.TRASH) { onPick(Tab.TRASH) }
+        DrawerRow("Settings", Icons.Outlined.Settings, tab == Tab.SETTINGS) { onPick(Tab.SETTINGS) }
+        HorizontalDivider(Modifier.padding(horizontal = 20.dp, vertical = 10.dp), color = MaterialTheme.colorScheme.outlineVariant)
+        Box {
+            DrawerRow("Currency", Icons.Outlined.Payments, false, value = "$currency ▾") { currencyOpen = true }
+            DropdownMenu(expanded = currencyOpen, onDismissRequest = { currencyOpen = false }) {
                 CURRENCIES.forEach { c ->
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .clickable {
-                                onCurrency(c)
-                                currencyOpen = false
-                            }
-                            .padding(horizontal = 12.dp, vertical = 9.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(c, Modifier.weight(1f), fontWeight = if (c == currency) FontWeight.Bold else FontWeight.Normal)
-                        if (c == currency) Text("✓", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                    }
+                    DropdownMenuItem(
+                        text = { Text(c, fontWeight = if (c == currency) FontWeight.SemiBold else FontWeight.Normal) },
+                        onClick = { onCurrency(c); currencyOpen = false }
+                    )
                 }
             }
         }
+    }
+}
+
+/** One side-menu row: line icon and label; the open screen sits on a white rounded highlight. */
+@Composable
+private fun DrawerRow(label: String, icon: ImageVector, selected: Boolean, value: String? = null, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 2.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (selected) MaterialTheme.colorScheme.surface else Color.Transparent)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(21.dp),
+            tint = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.width(14.dp))
+        Text(label, fontSize = 15.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.weight(1f))
+        if (value != null) Text(value, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

@@ -3,6 +3,7 @@ package com.bolkhata.app
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -1561,175 +1562,132 @@ fun SettingsScreen(
     onLogSendNow: () -> Unit = {},
     onLogOff: () -> Unit = {},
 ) {
-    var nameText by remember(name) { mutableStateOf(name) }
-    var currencyMenu by remember { mutableStateOf(false) }
+    var dialog by remember { mutableStateOf<String?>(null) }   // "name", "theme" or "review"
+    val faint = MaterialTheme.colorScheme.onSurfaceVariant
+    val langLabel = when {
+        lang == "ur-PK" -> "Urdu"
+        lang.startsWith("en") -> "English"
+        else -> "Roman Urdu"
+    }
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
         item {
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp))
-                    .background(LocalHeader.current.brush)
-                    .padding(20.dp)
+            Row(Modifier.fillMaxWidth().padding(start = 4.dp, top = 14.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onMenu) { Icon(Icons.Filled.Menu, contentDescription = "Menu") }
+                Text("Settings", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+            }
+        }
+        item {
+            Surface(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp), shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surface
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onMenu) { Icon(Icons.Filled.Menu, contentDescription = "Menu", tint = LocalHeader.current.on) }
-                    Text("Settings", color = LocalHeader.current.on, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                }
-                Spacer(Modifier.height(10.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        Modifier.size(58.dp).clip(CircleShape).background(Color.White),
-                        contentAlignment = Alignment.Center
-                    ) { Text(name.trim().take(1).uppercase().ifEmpty { "🙂" }, color = GreenDeep, fontWeight = FontWeight.Bold, fontSize = 24.sp) }
-                    Spacer(Modifier.width(14.dp))
-                    Column {
-                        Text(name.ifBlank { "Your name" }, color = LocalHeader.current.on, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                        Text("Smart Expense $version", color = LocalHeader.current.on.copy(alpha = 0.8f), fontSize = 13.sp)
-                    }
-                }
-            }
-        }
-        item {
-            Panel(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp)) {
-                SmallLabel("Theme")
-                Spacer(Modifier.height(4.dp))
-                Text(themeName, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(10.dp))
-                ThemeGroup("Light", HEADER_THEMES.filter { it.light }, themeName, onTheme)
-                Spacer(Modifier.height(8.dp))
-                ThemeGroup("Bold & dark", HEADER_THEMES.filter { !it.light }, themeName, onTheme)
-            }
-        }
-        item {
-            Panel(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    SmallLabel("🧠 On-device intelligence")
-                    Spacer(Modifier.weight(1f))
-                    Text("Always on", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                }
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    "BolKhata understands entries, Roman Urdu, Urdu/Hindi transliteration, searches, balances, edits and khata commands using its own local engine.",
-                    fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "Your financial records and chat are processed on this phone. No Gemini, Groq, OpenRouter, Claude or other hosted AI key is needed. Chat messages leave the phone only if you turn on Chat review below.",
-                    fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "The assistant answers from saved records only. Unclear or risky changes are sent for review instead of being guessed.",
-                    fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-        item { ChatReviewPanel(logRepo, logTokenSet, logStatus, onLogSave, onLogSendNow, onLogOff) }
-        item {
-            Panel(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp)) {
-                SmallLabel("Backup")
-                Text(
-                    "Save all your entries, trash, chat and settings to one file (Drive, WhatsApp, phone storage), " +
-                        "or bring them back from a file. AI keys are not included.",
-                    fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = onExport, modifier = Modifier.weight(1f)) { Text("Export data") }
-                    OutlinedButton(onClick = onImport, modifier = Modifier.weight(1f)) { Text("Import data") }
-                }
-            }
-        }
-        item {
-            Panel(Modifier.fillMaxWidth().padding(16.dp)) {
-                SmallLabel("Your name")
-                Spacer(Modifier.height(6.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(
-                        value = nameText, onValueChange = { nameText = it },
-                        singleLine = true, placeholder = { Text("Your name") },
-                        modifier = Modifier.weight(1f)
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Button(onClick = { onName(nameText.trim()) }, enabled = nameText.trim() != name) { Text("Save") }
-                }
-            }
-        }
-        item {
-            Panel(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-                SettingRow("Currency", "All amounts use this, whatever you say") {
+                Column {
+                    ListRow("Name", name.ifBlank { "Add" }) { dialog = "name" }
+                    ListDivider()
                     Box {
-                        OutlinedButton(onClick = { currencyMenu = true }) { Text("$currency ▾") }
-                        DropdownMenu(expanded = currencyMenu, onDismissRequest = { currencyMenu = false }) {
-                            CURRENCIES.forEach { c ->
-                                DropdownMenuItem(text = { Text(c) }, onClick = { onCurrency(c); currencyMenu = false })
+                        var open by remember { mutableStateOf(false) }
+                        ListRow("Currency", "$currency ▾") { open = true }
+                        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                            CURRENCIES.forEach { c -> DropdownMenuItem(text = { Text(c) }, onClick = { onCurrency(c); open = false }) }
+                        }
+                    }
+                    ListDivider()
+                    Box {
+                        var open by remember { mutableStateOf(false) }
+                        ListRow("Language", "$langLabel ▾") { open = true }
+                        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                            listOf("Roman Urdu" to "hi-IN", "English" to "en-US", "Urdu" to "ur-PK").forEach { (label, code) ->
+                                DropdownMenuItem(text = { Text(label) }, onClick = { onLang(code); open = false })
                             }
                         }
                     }
-                }
-                HorizontalDivider(Modifier.padding(vertical = 6.dp))
-                SettingRow(
-                    "Voice language",
-                    when {
-                        lang == "ur-PK" -> "Urdu speech recognition · menus remain in English"
-                        lang.startsWith("en") -> "English speech recognition · menus remain in English"
-                        else -> "Hindi / Roman Urdu speech · menus remain in English"
+                    ListDivider()
+                    ListRow("Dark mode", null, trailing = { Switch(checked = dark, onCheckedChange = onDark) }) { onDark(!dark) }
+                    ListDivider()
+                    ListRow("Theme", themeName) { dialog = "theme" }
+                    ListDivider()
+                    ListRow("Bank alerts", null, trailing = { Switch(checked = bankOn, onCheckedChange = { onBank() }) }, onClick = onBank)
+                    ListDivider()
+                    ListRow("Chat review", if (logTokenSet) "On" else "Off", valueColor = if (logTokenSet) GreenIn else faint) { dialog = "review" }
+                    ListDivider()
+                    Box {
+                        var open by remember { mutableStateOf(false) }
+                        ListRow("Backup", "Export · Import") { open = true }
+                        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                            DropdownMenuItem(text = { Text("Export data") }, onClick = { open = false; onExport() })
+                            DropdownMenuItem(text = { Text("Import data") }, onClick = { open = false; onImport() })
+                        }
                     }
-                ) {
-                    Row {
-                        FilterChip(selected = lang != "ur-PK" && !lang.startsWith("en"), onClick = { onLang("hi-IN") }, label = { Text("Roman") })
-                        Spacer(Modifier.width(4.dp))
-                        FilterChip(selected = lang.startsWith("en"), onClick = { onLang("en-US") }, label = { Text("English") })
-                        Spacer(Modifier.width(4.dp))
-                        FilterChip(selected = lang == "ur-PK", onClick = { onLang("ur-PK") }, label = { Text("Urdu") })
-                    }
-                }
-                HorizontalDivider(Modifier.padding(vertical = 6.dp))
-                SettingRow("Dark mode", null) {
-                    Switch(checked = dark, onCheckedChange = onDark)
-                }
-                HorizontalDivider(Modifier.padding(vertical = 6.dp))
-                SettingRow(
-                    "Bank alerts",
-                    if (bankOn) "On: payments from bank notifications are suggested" else "Off: turn on to catch card payments"
-                ) {
-                    if (bankOn) {
-                        Text("On ✓", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                    } else {
-                        Button(onClick = onBank) { Text("Turn on") }
-                    }
-                }
-                HorizontalDivider(Modifier.padding(vertical = 6.dp))
-                SettingRow("Updates", "Version $version") {
-                    OutlinedButton(onClick = onCheckUpdate, enabled = !checking) { Text(if (checking) "Checking…" else "Check now") }
+                    ListDivider()
+                    ListRow("Version", if (checking) "Checking…" else version) { if (!checking) onCheckUpdate() }
                 }
             }
         }
         item {
             Text(
-                "Your entries are saved only on this phone.",
-                fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(20.dp)
+                "Tap Version to check for updates. Your entries stay on this phone and the assistant works offline; " +
+                    "chat leaves the phone only when Chat review is on.",
+                fontSize = 12.sp, color = faint, modifier = Modifier.padding(horizontal = 24.dp, vertical = 14.dp)
             )
         }
+    }
+
+    when (dialog) {
+        "name" -> {
+            var text by remember { mutableStateOf(name) }
+            AlertDialog(
+                onDismissRequest = { dialog = null },
+                title = { Text("Your name") },
+                text = { OutlinedTextField(text, { text = it }, singleLine = true, modifier = Modifier.fillMaxWidth()) },
+                confirmButton = { TextButton(onClick = { onName(text.trim()); dialog = null }, enabled = text.trim() != name) { Text("Save") } },
+                dismissButton = { TextButton(onClick = { dialog = null }) { Text("Cancel") } }
+            )
+        }
+        "theme" -> AlertDialog(
+            onDismissRequest = { dialog = null },
+            title = { Text("Theme") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    ThemeGroup("Light", HEADER_THEMES.filter { it.light }, themeName) { onTheme(it); dialog = null }
+                    Spacer(Modifier.height(8.dp))
+                    ThemeGroup("Bold & dark", HEADER_THEMES.filter { !it.light }, themeName) { onTheme(it); dialog = null }
+                }
+            },
+            confirmButton = { TextButton(onClick = { dialog = null }) { Text("Close") } }
+        )
+        "review" -> AlertDialog(
+            onDismissRequest = { dialog = null },
+            text = { Column(Modifier.verticalScroll(rememberScrollState())) { ChatReviewPanel(logRepo, logTokenSet, logStatus, onLogSave, onLogSendNow, onLogOff) } },
+            confirmButton = { TextButton(onClick = { dialog = null }) { Text("Close") } }
+        )
+    }
+}
+
+/** One line of the Settings list: name on the left, current value (or a switch) on the right. */
+@Composable
+private fun ListRow(
+    label: String, value: String?, valueColor: Color = Color.Unspecified,
+    trailing: (@Composable () -> Unit)? = null, onClick: () -> Unit
+) {
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 54.dp).padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, fontSize = 16.sp, modifier = Modifier.weight(1f))
+        if (value != null) Text(
+            value, fontSize = 14.sp, maxLines = 1,
+            color = if (valueColor == Color.Unspecified) MaterialTheme.colorScheme.onSurfaceVariant else valueColor
+        )
+        trailing?.invoke()
     }
 }
 
 @Composable
-private fun SettingRow(title: String, sub: String?, trailing: @Composable () -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(title, fontWeight = FontWeight.SemiBold)
-            if (sub != null) Text(sub, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        trailing()
-    }
-}
+private fun ListDivider() = HorizontalDivider(Modifier.padding(start = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
 
-// ======================= SEARCH / EDIT RESULTS =======================
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ResultsScreen(
     query: String,
