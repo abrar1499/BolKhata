@@ -44,6 +44,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
+import kotlin.reflect.KProperty
 import androidx.core.view.WindowCompat
 
 class MainActivity : ComponentActivity() {
@@ -75,6 +76,19 @@ class MainActivity : ComponentActivity() {
 
 enum class Tab { HOME, STOCK, CHAT, ENTRIES, REPORTS, TRASH, SETTINGS }
 
+/** The open tab and the tabs it was reached from, so Back returns the same way. Home starts over. */
+class TabNav {
+    private val now = mutableStateOf(Tab.HOME)
+    private val past = mutableStateListOf<Tab>()
+    operator fun getValue(thisRef: Any?, property: KProperty<*>): Tab = now.value
+    operator fun setValue(thisRef: Any?, property: KProperty<*>, t: Tab) {
+        if (t == now.value) return
+        if (t == Tab.HOME) past.clear() else { past.remove(t); past.add(now.value) }
+        now.value = t
+    }
+    fun back() { now.value = past.removeLastOrNull() ?: Tab.HOME }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: String, onTheme: (String) -> Unit) {
@@ -86,7 +100,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var currency by remember { mutableStateOf(store.currency) }
     var name by remember { mutableStateOf(store.name) }
     var lang by remember { mutableStateOf(store.language) }
-    var tab by remember { mutableStateOf(Tab.HOME) }
+    val tabNav = remember { TabNav() }
+    var tab by tabNav
     var chatMessages by remember { mutableStateOf(store.loadChatMessages()) }
     // Chats from before the log existed are copied in once, so they can be reviewed too.
     val chatLog = remember { ChatLog(context).also { log -> if (log.isEmpty()) chatMessages.forEach(log::record) } }
@@ -896,7 +911,6 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     val p = personAccounts(entries).firstOrNull { it.name.equals(name, true) }
                     ledgerPerson = p?.name ?: name
                     ledger = if (p == null || p.toReceive) MainAcct.TO_RECEIVE else MainAcct.TO_PAY
-                    if (inChat) tab = Tab.HOME
                     null
                 } else {
                     val term = (q.items + q.cats.map { it.label }).firstOrNull()
@@ -908,7 +922,6 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         return "What should I show? Add a category, person, date, or amount range."
                     }
                     results = term to false; people = null
-                    if (inChat) tab = Tab.HOME
                     null
                 }
             }
@@ -1583,19 +1596,20 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         scope.launch { drawer.open() }
     }
 
+    // Back closes whatever is on top first (an account opens over a khata), then walks back through the tabs.
     BackHandler(enabled = ledger != null || account != null || results != null || people != null || tab != Tab.HOME) {
-        if (ledger != null) {
+        if (account != null) {
+            account = null
+        } else if (ledger != null) {
             ledger = null
             ledgerPerson = null
-        } else if (account != null) {
-            account = null
         } else if (results != null) {
             results = null
             answerText = null
         } else if (people != null) {
             people = null
         } else {
-            tab = Tab.HOME
+            tabNav.back()
         }
     }
 
@@ -2058,6 +2072,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
                         .pointerInput(Unit) { detectTapGestures { } }
                 ) {
+                    // Comes before the khata's own Back, which would otherwise step the khata underneath.
+                    BackHandler { account = null }
                     CompositionLocalProvider(LocalAccountOpener provides null) {
                         AccountScreen(
                             key = acct, entries = entries, currency = currency,
