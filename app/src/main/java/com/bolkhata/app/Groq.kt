@@ -23,9 +23,7 @@ import java.net.URL
 object Groq {
     private const val CHAT_URL = "https://api.groq.com/openai/v1/chat/completions"
     private const val VOICE_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
-    private const val CHAT_MODEL = "openai/gpt-oss-20b"
-    // The call needs a model that tells small talk from requests reliably and keeps up a conversation.
-    private const val CALL_MODEL = "openai/gpt-oss-120b"
+    private const val CHAT_MODEL = "openai/gpt-oss-120b"
     private const val VOICE_MODEL = "whisper-large-v3"
 
     private val instructions = """
@@ -52,7 +50,7 @@ object Groq {
             fun body(lowEffort: Boolean) = JSONObject()
                 .put("model", CHAT_MODEL)
                 .put("temperature", 0)
-                .put("max_tokens", 300)
+                .put("max_tokens", 500)
                 .apply { if (lowEffort) put("reasoning_effort", "low") }
                 .put("messages", JSONArray()
                     .put(JSONObject().put("role", "system").put("content", instructions))
@@ -90,7 +88,7 @@ object Groq {
     suspend fun spoken(key: String, said: String, answer: String): Line? = withContext(Dispatchers.IO) {
         runCatching {
             val body = JSONObject()
-                .put("model", CALL_MODEL)
+                .put("model", CHAT_MODEL)
                 .put("temperature", 0.3)
                 .put("max_tokens", 600)
                 .put("reasoning_effort", "low")
@@ -140,7 +138,7 @@ object Groq {
                 append("Person said: ").append(said.take(300))
             }
             val body = JSONObject()
-                .put("model", CALL_MODEL)
+                .put("model", CHAT_MODEL)
                 .put("temperature", 0.3)
                 .put("max_tokens", 600)
                 .put("reasoning_effort", "low")
