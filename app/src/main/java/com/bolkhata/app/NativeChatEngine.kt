@@ -1,0 +1,303 @@
+package com.bolkhata.app
+
+import java.util.Calendar
+import java.util.Locale
+
+class EditPlan(val changed: List<Pair<Entry, Entry>>, val deleted: List<Entry>, val message: String)
+
+/** Fully local finance-domain NLU. It produces intents; the app executes them against its saved ledger. */
+object NativeChatEngine {
+    class Fixed(
+        val text: String, val kind: String, val reply: String, val what: String = "",
+        val filter: Query.Filter = Query.Filter(), val set: Map<String, String> = emptyMap(),
+        val payer: String = "", val plan: EditPlan? = null
+    )
+
+    private val expense = setOf("expense", "expenses", "spent", "spend", "spending", "kharcha", "kharch", "cashout")
+    private val income = setOf("income", "aamdani", "salary", "tankhwah", "earning", "earned", "cashin")
+    private val lent = setOf("lent", "gave", "given", "diya", "diye", "udhar", "udhaar")
+    private val borrowed = setOf("borrowed", "borrow", "took", "liya", "liye", "lia")
+    private val questionWords = setOf("how", "much", "many", "what", "which", "when", "where", "show", "find", "search", "list", "total", "sum", "count", "highest", "largest", "biggest", "last", "latest", "recent", "kitna", "kitne", "kitni", "kitnay", "kitny", "kul", "hisab", "hisaab", "kharcha", "kharch", "dikhao", "batao", "kahan", "kab")
+    private val stop = setOf(
+        "a", "an", "the", "i", "me", "my", "we", "our", "you", "your", "did", "do", "does", "is", "are", "was", "were",
+        "have", "has", "had", "what", "which", "when", "where", "who", "how", "much", "many", "show", "find", "search",
+        "list", "tell", "please", "plz", "about", "of", "for", "on", "in", "at", "to", "from", "with", "and", "or",
+        "all", "every", "entries", "entry", "records", "record", "transactions", "transaction", "spent", "spend",
+        "spending", "expense", "expenses", "kharcha", "kharch", "ka", "ki", "ke", "ko", "se", "ne", "mein", "men",
+        "par", "pe", "per", "kitna", "kitne", "kitni", "kitnay", "kitny", "hua", "huwa", "hue", "huay", "hai", "hain",
+        "tha", "thi", "the", "batao", "btao", "dikhao", "karo", "kar", "do", "dein", "mujhe", "mera", "meri", "mere",
+        "today", "yesterday", "aaj", "aj", "kal", "parso", "parson", "this", "last", "month", "months", "week", "weeks",
+        "year", "years", "mahina", "mahine", "mahiny", "saal", "pichle", "pichhle", "previous", "ago", "day", "days",
+        "date", "tareekh", "tarikh", "exactly", "equal", "between", "above", "over", "more", "than", "below", "under",
+        "less", "except", "excluding", "siwa", "ilawa", "alawa", "people", "log", "logon", "cash", "out", "into"
+    )
+    private val categories = mapOf(
+        Cat.KHANA to setOf("food", "khana", "khaana", "grocery", "groceries", "meal", "meals", "ration", "sabzi"),
+        Cat.TRANSPORT to setOf("transport", "petrol", "diesel", "fuel", "taxi", "uber", "careem", "car", "bus", "travel", "safar"),
+        Cat.RENT to setOf("rent", "kiraya", "rental"),
+        Cat.BIJLI to setOf("bill", "bills", "bijli", "electricity", "utility", "utilities"),
+        Cat.MOBILE to setOf("mobile", "phone", "internet", "recharge", "data", "wifi"),
+        Cat.GHAR to setOf("home", "ghar", "family", "senthome"),
+        Cat.SHOPPING to setOf("shopping", "clothes", "kapre", "kapray"),
+        Cat.SEHAT to setOf("health", "medical", "medicine", "dawai", "doctor", "hospital"),
+        Cat.PERSONAL to setOf("personal", "haircut", "salon"),
+        Cat.TANKHWAH to setOf("salary", "income", "tankhwah", "aamdani"),
+        Cat.UDHAAR to setOf("loan", "loans", "udhar", "udhaar", "qarz", "debt"),
+        Cat.FEES to setOf("fees", "fee", "visa", "permit", "fine"),
+        Cat.EDU to setOf("education", "school", "books", "tuition"),
+        Cat.CHARITY to setOf("charity", "gift", "zakat", "sadqa", "donation"),
+        Cat.ASSETS to setOf("asset", "assets", "gold", "laptop"),
+        Cat.SALES to setOf("sale", "sales", "bikri"),
+        Cat.STOCK to setOf("purchase", "purchases", "stock", "maal"),
+        Cat.OTHER to setOf("other", "misc", "miscellaneous")
+    )
+    private data class Bounds(val from: Long, val to: Long)
+
+    fun interpret(
+        input: String, entries: List<Entry>, contacts: List<String> = emptyList(),
+        wordFixes: Map<String, String> = emptyMap(), history: List<ChatMessage> = emptyList(),
+        now: Long = System.currentTimeMillis()
+    ): Fixed {
+        val raw = input.trim()
+        if (raw.isBlank()) return chat("Please type a message and I'll help with your khata.")
+        val roman = runCatching { Translit.toRoman(raw) }.getOrDefault(raw)
+        val prepared = NumberWords.convert(roman)
+        val understood = runCatching { Understand.read(prepared, contacts, wordFixes) }.getOrNull()
+        val text = understood?.text ?: prepared
+        val lower = text.lowercase(Locale.ROOT)
+        val words = tokens(lower)
+
+        // Date-only follow-ups inherit the previous question's category, item and transaction type.
+        if (history.isNotEmpty() && isDateFollowUp(lower)) {
+            val previous = history.lastOrNull { it.isUser }?.text
+            if (!previous.isNullOrBlank()) {
+                val base = interpret(previous, entries, contacts, wordFixes, emptyList(), now)
+                val date = dateBounds(lower, now)
+                if (base.kind == "ask" && date != null) return Fixed("", "ask", "", base.what, copyFilter(base.filter, date))
+            }
+        }
+
+        // Pronouns can only refer to stable IDs explicitly attached to the last assistant result.
+        val ids = history.lastOrNull { !it.isUser && it.entryIds.isNotEmpty() }?.entryIds.orEmpty().toSet()
+        if (ids.isNotEmpty() && Regex("""\b(it|that|this|those|these|isko|usko|ye|yeh|inko)\b""").containsMatchIn(lower)) {
+            if (has(words, setOf("delete", "remove", "hatao", "mitao", "del", "dlt")))
+                return Fixed("", "delete", "", filter = Query.Filter(ids = ids))
+            val n = Regex("""(?<!\d)(\d[\d,]*(?:\.\d{1,2})?)(?!\d)""").find(lower)?.groupValues?.get(1)
+            if (n != null && has(words, setOf("change", "update", "edit", "badlo", "make")))
+                return Fixed("", "change", "", filter = Query.Filter(ids = ids), set = mapOf("amount" to n.replace(",", "")))
+        }
+
+        if (Recat.isCommand(lower) || (words.contains("other") && has(words, setOf("sort", "fix", "categorize", "category", "theek"))))
+            return Fixed("", "sort_other", "I'll group uncategorized expenses for you to review.")
+        if (has(words, setOf("duplicate", "duplicates", "dupes", "dupe"))) return Fixed("", "duplicates", "")
+        if (has(words, setOf("undo", "undoe", "undoo"))) return Fixed("", "undo", "")
+        if (understood?.choices?.isNotEmpty() == true)
+            return chat("Which " + understood.choices.joinToString(" or ") + " do you mean?")
+        if (understood?.kind == Understand.Kind.OPEN_KHATA && !understood.contact.isNullOrBlank())
+            return Fixed("", "open", "", filter = Query.Filter(persons = listOf(understood.contact)))
+
+        val planned = runCatching { Edits.plan(text, entries, now) }.getOrNull()
+        if (planned != null) return Fixed("", "plan", "", plan = EditPlan(planned.changed, planned.deleted, planned.message))
+
+        val delete = has(words, setOf("delete", "delet", "del", "dlt", "remove", "hatao", "hata", "mitao", "مٹاؤ"))
+        val clear = has(words, setOf("clear", "wipe"))
+        val all = has(words, setOf("all", "every", "sab", "sari", "saari", "tamam", "everything"))
+        val command = runCatching { Commands.read(text) }.getOrNull()
+        if ((delete || clear) && !has(words, setOf("nahi", "nahin", "nhi", "not", "mat"))) {
+            if ((all || clear) && words.none { it.all(Char::isDigit) }) return Fixed("", "clear_all", "")
+            val f = buildFilter(text, contacts, now, false)
+            return if (f.isEmpty) chat("Which entries should I delete? Give an item, person, date, or say 'delete all' to review everything.")
+            else Fixed("", "delete", "", filter = f)
+        }
+        if (command?.action == Commands.Action.DELETE_PERIOD && command.period != null) {
+            val b = periodBounds(command.period, now)
+            return Fixed("", "delete", "", filter = Query.Filter(from = b.from, to = b.to))
+        }
+        if (command?.action == Commands.Action.CLEAR_ALL) return Fixed("", "clear_all", "")
+        if (command?.action == Commands.Action.SEARCH)
+            return Fixed("", "open", "", filter = buildFilter(command.query, contacts, now, false))
+        if (command?.action == Commands.Action.EDIT)
+            return Fixed("", "change", "", filter = buildFilter(command.query, contacts, now, false))
+
+        if (isQuestion(lower)) {
+            val financial = has(words, setOf("profit", "nafa", "munafa", "loss", "stock", "balance", "owe", "owed", "qarz", "udhar"))
+            val special = if (financial && !text.any(Char::isDigit)) runCatching { Questions.answer(text, entries, "SAR") }.getOrNull() else null
+            if (special != null && special.text.isNotBlank()) return Fixed("", "chat", special.text)
+            val filter = buildFilter(text, contacts, now, has(words, expense))
+            if (filter.isEmpty && !has(words, questionWords + expense + income + setOf("entries", "transactions", "records", "balance", "profit")))
+                return chat("I can answer from your saved transactions. Try 'food this month', 'last 5 entries', or 'Ali ka balance'.")
+            val what = when {
+                has(words, setOf("highest", "largest", "biggest", "maximum", "max", "most")) -> "highest"
+                has(words, setOf("count", "howmany", "kitne", "kitni", "number")) -> "count"
+                has(words, setOf("show", "find", "search", "list", "which", "kahan", "kab")) ||
+                    Regex("""\blast\s+\d+\b""").containsMatchIn(lower) -> "list"
+                else -> "sum"
+            }
+            return Fixed("", "ask", "", what, filter)
+        }
+
+        if (understood?.kind == Understand.Kind.DELETE_LAST) return Fixed("", "delete", "", filter = Query.Filter(last = 1))
+        if (understood?.kind == Understand.Kind.SUMMARY)
+            return Fixed("", "chat", Questions.answer("this month spent", entries, "SAR")?.text ?: "No saved transactions yet.")
+        if (runCatching { Parser.payStatus(text) }.getOrNull() != null) return Fixed(text, "entry", "")
+        val split = runCatching { Split.detect(text, contacts) }.getOrNull()
+        val parsed = if (split == null) runCatching { Parser.parse(text, now) }.getOrNull() else null
+        if (split != null || (parsed != null && (parsed.entries.isNotEmpty() || parsed.unclear.isNotEmpty())))
+            return Fixed(text, "entry", "")
+        return chat(smallTalk(lower))
+    }
+
+    private fun chat(reply: String) = Fixed("", "chat", reply)
+
+    private fun smallTalk(text: String): String {
+        val w = tokens(text)
+        return when {
+            has(w, setOf("hi", "hello", "hey", "salam", "assalam", "assalamualaikum", "aoa")) ->
+                "Wa alaikum assalam! I'm your offline khata assistant. Add expenses, ask about your money, or manage saved entries."
+            has(w, setOf("thanks", "thank", "shukriya", "shukria", "jazakallah")) -> "You're welcome. Your khata stays on this device."
+            has(w, setOf("help", "commands", "examples", "madad")) ->
+                "Try: 'chai 5', 'Ali ko 100 diye', 'food this month kitna', 'last 5 transactions', or 'petrol 50 nahi 40 tha'."
+            else -> "I can help with your saved khata, transactions, balances, searches and edits. I don't invent answers or use an online AI service."
+        }
+    }
+
+    private fun isQuestion(text: String): Boolean {
+        val w = tokens(text)
+        return text.endsWith("?") || has(w, setOf("show", "find", "search", "list", "total", "sum", "count", "highest", "largest", "biggest")) ||
+            Regex("""\b(last|latest|recent)\s+\d+\s+(entry|entries|record|records|transaction|transactions)\b""").containsMatchIn(text) ||
+            (has(w, questionWords) && (has(w, expense + income + setOf("balance", "khata", "petrol", "food", "salary", "udhar", "udhaar")) ||
+                w.any { token -> categories.values.any { token in it } }))
+    }
+
+    private fun buildFilter(input: String, contacts: List<String>, now: Long, defaultMonth: Boolean): Query.Filter {
+        val lower = input.lowercase(Locale.ROOT)
+        val w = tokens(lower)
+        val bounds = dateBounds(lower, now) ?: if (defaultMonth) monthBounds(now, 0) else null
+        val types = when {
+            has(w, expense) -> setOf(Type.KHARCHA)
+            has(w, income) -> setOf(Type.AAMDANI)
+            has(w, lent) -> setOf(Type.DIYA, Type.WAPIS_MILA)
+            has(w, borrowed) -> setOf(Type.LIYA, Type.WAPIS_DIYA)
+            has(w, setOf("sale", "sales", "bikri")) -> setOf(Type.SALE)
+            has(w, setOf("purchase", "purchases", "bought", "kharida", "khareed")) -> setOf(Type.PURCHASE)
+            else -> emptySet()
+        }
+        val cats = categories.filterValues { aliases -> w.any { it in aliases } }.keys
+            .filter { it !in setOf(Cat.TANKHWAH, Cat.UDHAAR, Cat.SALES, Cat.STOCK) || types.isEmpty() }.toSet()
+        val people = contacts.filter { it.isNotBlank() && lower.contains(it.lowercase()) }.distinctBy { it.lowercase() }
+            .ifEmpty { Understand.matchContact(w, contacts).first?.let { listOf(it) }.orEmpty() }
+        val last = Regex("""\b(?:last|latest|recent)\s+(\d+)\b""").find(lower)?.groupValues?.get(1)?.toIntOrNull()
+            ?: if (Regex("""\b(last|latest|recent)\s+(entry|record|transaction)\b""").containsMatchIn(lower)) 1 else 0
+        val exact = amountAfter(lower, "exactly|equal\\s+to|amount\\s+is|for")
+        val min = exact ?: amountAfter(lower, "above|over|more\\s+than|greater\\s+than")
+        val max = exact ?: amountAfter(lower, "below|under|less\\s+than")
+        val exclude = Regex("""\b(?:except|excluding|without|siwa|ilawa|alawa)\s+([\p{L}]+)""").find(lower)?.groupValues?.get(1)
+            ?.let { listOf(it) }.orEmpty()
+        val personWords = people.flatMap { tokens(it.lowercase()) }.toSet()
+        val knownCats = categories.values.flatten().toSet()
+        val knownTypes = expense + income + lent + borrowed
+        val itemWords = w.filter { it.length >= 2 && it !in stop && it !in knownCats && it !in knownTypes &&
+            it !in personWords && it !in exclude && it.none(Char::isDigit) }.distinct().take(6)
+        val noPeople = lower.contains("people ke ilawa") || lower.contains("people kay ilawa") ||
+            lower.contains("without transfers") || lower.contains("excluding people")
+        return Query.Filter(
+            from = bounds?.from, to = bounds?.to, types = types, persons = people, cats = cats, items = itemWords,
+            min = min, max = max, last = last, noPeople = noPeople, notItems = exclude
+        )
+    }
+
+    private fun amountAfter(text: String, words: String): Double? =
+        Regex("""\b(?:$words)\s+(\d[\d,]*(?:\.\d{1,2})?)\b""").find(text)?.groupValues?.get(1)
+            ?.replace(",", "")?.toDoubleOrNull()
+
+    private fun copyFilter(f: Query.Filter, b: Bounds) = Query.Filter(
+        from = b.from, to = b.to, types = f.types, persons = f.persons, cats = f.cats, items = f.items,
+        min = f.min, max = f.max, last = f.last, noPeople = f.noPeople, notItems = f.notItems,
+        ids = f.ids, createdFrom = f.createdFrom, createdTo = f.createdTo
+    )
+
+    private fun dateBounds(text: String, now: Long): Bounds? {
+        val w = tokens(text)
+        fun day(offset: Int): Bounds {
+            val c = Calendar.getInstance().apply { timeInMillis = now; add(Calendar.DAY_OF_YEAR, offset) }
+            val start = (c.clone() as Calendar).apply {
+                set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
+            val end = (c.clone() as Calendar).apply {
+                set(Calendar.HOUR_OF_DAY, 23); set(Calendar.MINUTE, 59); set(Calendar.SECOND, 59); set(Calendar.MILLISECOND, 999)
+            }.timeInMillis
+            return Bounds(start, end)
+        }
+        when {
+            w.any { it in setOf("parso", "parson") } || text.contains("day before yesterday") -> return day(-2)
+            w.any { it in setOf("yesterday", "kal", "kl") } -> return day(-1)
+            w.any { it in setOf("today", "aaj", "aj") } -> return day(0)
+            "tomorrow" in w -> return day(1)
+            "last" in w && "week" in w -> return weekBounds(now, -1)
+            "this" in w && "week" in w -> return weekBounds(now, 0)
+            "last" in w && w.any { it in setOf("month", "mahina", "mahine") } -> return monthBounds(now, -1)
+            w.any { it in setOf("this", "is", "iss") } && w.any { it in setOf("month", "mahina", "mahine") } -> return monthBounds(now, 0)
+            "last" in w && w.any { it in setOf("year", "saal") } -> return yearBounds(now, -1)
+            w.any { it in setOf("this", "is", "iss") } && w.any { it in setOf("year", "saal") } -> return yearBounds(now, 0)
+        }
+        val explicit = runCatching { Parser.extractDate(text, now).first }.getOrNull()
+        if (explicit != null) {
+            val start = Calendar.getInstance().apply { timeInMillis = explicit; set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }.timeInMillis
+            val end = Calendar.getInstance().apply { timeInMillis = explicit; set(Calendar.HOUR_OF_DAY, 23); set(Calendar.MINUTE, 59); set(Calendar.SECOND, 59); set(Calendar.MILLISECOND, 999) }.timeInMillis
+            return Bounds(start, end)
+        }
+        return null
+    }
+
+    private fun weekBounds(now: Long, offset: Int): Bounds {
+        val c = Calendar.getInstance().apply {
+            timeInMillis = now; firstDayOfWeek = Calendar.MONDAY; set(Calendar.DAY_OF_WEEK, Calendar.MONDAY); add(Calendar.WEEK_OF_YEAR, offset)
+            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+        }
+        val from = c.timeInMillis
+        c.add(Calendar.DAY_OF_YEAR, 7); c.add(Calendar.MILLISECOND, -1)
+        return Bounds(from, c.timeInMillis)
+    }
+
+    private fun monthBounds(now: Long, offset: Int): Bounds {
+        val c = Calendar.getInstance().apply {
+            timeInMillis = now; set(Calendar.DAY_OF_MONTH, 1); add(Calendar.MONTH, offset)
+            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+        }
+        val from = c.timeInMillis
+        c.add(Calendar.MONTH, 1); c.add(Calendar.MILLISECOND, -1)
+        return Bounds(from, c.timeInMillis)
+    }
+
+    private fun yearBounds(now: Long, offset: Int): Bounds {
+        val c = Calendar.getInstance().apply {
+            timeInMillis = now; set(Calendar.DAY_OF_YEAR, 1); add(Calendar.YEAR, offset)
+            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+        }
+        val from = c.timeInMillis
+        c.add(Calendar.YEAR, 1); c.add(Calendar.MILLISECOND, -1)
+        return Bounds(from, c.timeInMillis)
+    }
+
+    private fun periodBounds(p: Commands.DatePeriod, now: Long): Bounds {
+        val c = Calendar.getInstance().apply {
+            timeInMillis = now; set(Calendar.YEAR, p.year)
+            if (p.month != null) set(Calendar.MONTH, p.month - 1) else set(Calendar.MONTH, Calendar.JANUARY)
+            if (p.day != null) set(Calendar.DAY_OF_MONTH, p.day) else set(Calendar.DAY_OF_MONTH, 1)
+            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+        }
+        val from = c.timeInMillis
+        when { p.day != null -> c.add(Calendar.DAY_OF_YEAR, 1); p.month != null -> c.add(Calendar.MONTH, 1); else -> c.add(Calendar.YEAR, 1) }
+        c.add(Calendar.MILLISECOND, -1)
+        return Bounds(from, c.timeInMillis)
+    }
+
+    private fun isDateFollowUp(text: String): Boolean {
+        val w = tokens(text)
+        val allowed = setOf("what", "about", "and", "how", "much", "yesterday", "today", "aaj", "aj", "kal", "parso", "parson", "this", "last", "month", "week", "year", "mahina", "mahine", "saal", "day", "then", "phir")
+        return w.isNotEmpty() && w.any { it in setOf("yesterday", "today", "aaj", "aj", "kal", "parso", "parson", "month", "week", "year", "mahina", "mahine", "saal") } && w.all { it in allowed }
+    }
+
+    private fun has(words: List<String>, set: Set<String>) = words.any { it in set }
+    private fun tokens(text: String) = text.lowercase(Locale.ROOT).split(Regex("""[^\p{L}\p{N}]+""")).filter { it.isNotBlank() }
+}
