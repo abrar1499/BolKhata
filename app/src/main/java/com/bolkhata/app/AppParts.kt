@@ -17,9 +17,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.animation.core.*
-import androidx.compose.ui.draw.scale
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Delete
@@ -142,60 +139,6 @@ internal fun InputBar(
 
 /** The voice call as the message bar shows it: on/off, what it is doing, what it heard so far; [toggle] connects or stops. */
 class VoiceState(val on: Boolean, val status: String, val heard: String, val toggle: () -> Unit)
-
-/**
- * The voice call, in place of the message bar so the chat stays in front: a green circle that grows while the person
- * talks, breathes while the app thinks and pulses while it answers aloud, the words heard or said, and End.
- * Tapping the circle while it speaks cuts it short and listens again.
- */
-@Composable
-internal fun CallBar(status: String, heard: String, reply: String, level: Float, onInterrupt: () -> Unit, onEnd: () -> Unit) {
-    val speaking = status == "Speaking…"
-    val listening = status.isBlank() || status == "Listening…"
-    val pulse by rememberInfiniteTransition(label = "call").animateFloat(
-        initialValue = 0.88f, targetValue = 1.08f,
-        animationSpec = infiniteRepeatable(tween(if (speaking) 450 else 1100), RepeatMode.Reverse), label = "pulse"
-    )
-    // The level is about -2…10 dB; quiet stays at full size, a loud voice makes the circle about a third bigger.
-    val voice by animateFloatAsState(1f + (level.coerceIn(0f, 10f) / 10f) * 0.35f, tween(120), label = "voice")
-    val bg = MaterialTheme.colorScheme.background
-    val shade = lerp(bg, if (bg.luminance() > 0.5f) Color.Black else Color.White, 0.09f)
-    Column(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(bg.copy(alpha = 0f), shade)))) {
-        Spacer(Modifier.height(40.dp))
-        Surface(
-            shape = RoundedCornerShape(26.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 3.dp,
-            modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 10.dp)
-        ) {
-            Row(Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(48.dp).clickable(enabled = speaking, onClick = onInterrupt), contentAlignment = Alignment.Center) {
-                    Box(
-                        Modifier.size(34.dp).scale(if (listening) voice else pulse).clip(CircleShape)
-                            .background(Brush.radialGradient(listOf(GreenDeep.copy(alpha = 0.55f), GreenDeep)))
-                    )
-                }
-                Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        if (speaking) "Speaking… tap the circle to talk" else status.ifBlank { "Listening…" },
-                        fontSize = 13.sp, fontWeight = FontWeight.Medium, color = GreenDeep, maxLines = 1
-                    )
-                    val words = if (speaking) reply else heard
-                    if (words.isNotBlank()) Text(
-                        words, fontSize = 14.sp, lineHeight = 18.sp, color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 2, overflow = TextOverflow.Ellipsis
-                    )
-                }
-                Spacer(Modifier.width(8.dp))
-                Box(
-                    Modifier.size(44.dp).clip(CircleShape).background(RedSpend).clickable(onClick = onEnd),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Filled.Close, contentDescription = "End call", tint = Color.White, modifier = Modifier.size(22.dp))
-                }
-            }
-        }
-    }
-}
 
 /** One or two small lines above the bar while voice chat is on: a green dot, the status, and the words heard. */
 @Composable

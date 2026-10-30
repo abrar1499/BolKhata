@@ -1280,9 +1280,6 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var voicePartial by remember { mutableStateOf("") }
     var voiceAwaiting by remember { mutableStateOf(false) }
     var voiceMisses by remember { mutableIntStateOf(0) }
-    // Call screen: how loud the person is (the circle grows with it) and the answer being spoken.
-    var voiceLevel by remember { mutableFloatStateOf(0f) }
-    var voiceReply by remember { mutableStateOf("") }
     // Set when the phone has no recognizer for the chosen language; voice chat then uses the phone's default.
     var voiceDefaultLanguage by remember { mutableStateOf(false) }
     val ttsReady = remember { mutableStateOf(false) }
@@ -1349,7 +1346,6 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             kotlinx.coroutines.delay(150)
             val now = System.currentTimeMillis()
             val amp = runCatching { r.maxAmplitude }.getOrDefault(0)
-            if (voiceOn) voiceLevel = amp / 3000f
             if (amp > 2500) { spoke = true; lastSound = now }
             if (spoke && now - lastSound > 1500) { finishRecording(); break }
             if (!spoke && now - start > 8000) { finishRecording(send = false); recordMissed(); break }
@@ -1399,8 +1395,6 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         voiceAwaiting = false
         voiceStatus = ""
         voicePartial = ""
-        voiceReply = ""
-        voiceLevel = 0f
         finishRecording(send = false)
         runCatching { recognizer?.cancel() }
         runCatching { tts.stop() }
@@ -1485,8 +1479,6 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     fun speak(text: String) {
         val clean = shortSpoken(text.replace(Regex("""[✓•*#_]"""), " ").replace(Regex("""(?m)^\s*-\s*"""), ""))
         if (clean.isEmpty()) { listenNow(); return }
-        voiceReply = clean
-        voiceLevel = 0f
         if (elevenKey.isBlank() || elevenVoice.isBlank()) { phoneSpeak(clean); return }
         scope.launch {
             val reply = Eleven.speech(elevenKey, elevenVoice, clean, File(context.cacheDir, "reply.mp3"))
@@ -1554,7 +1546,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         recognizer?.setRecognitionListener(object : android.speech.RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) { voiceStatus = "Listening…" }
             override fun onBeginningOfSpeech() {}
-            override fun onRmsChanged(rmsdB: Float) { voiceLevel = rmsdB }
+            override fun onRmsChanged(rmsdB: Float) {}
             override fun onBufferReceived(buffer: ByteArray?) {}
             override fun onEndOfSpeech() { voiceStatus = "Thinking…" }
             override fun onEvent(eventType: Int, params: Bundle?) {}
@@ -1741,15 +1733,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
             val main = results == null && people == null && account == null && ledger == null
-            if (voiceOn) {
-                // The call sits where the message bar was, so the chat stays in front; Back ends it.
-                BackHandler { stopVoice() }
-                CallBar(
-                    status = voiceStatus, heard = voicePartial, reply = voiceReply, level = voiceLevel,
-                    onInterrupt = { runCatching { tts.stop() }; stopReply(); listenNow() },
-                    onEnd = { stopVoice() }
-                )
-            } else if (main && tab == Tab.CHAT) {
+            if (main && tab == Tab.CHAT) {
                 InputBar(
                     onSend = { chatInput(it) }, onMic = { startVoice(forChat = true) }, placeholder = "Speak, type or ask…",
                     onAttach = { pickFile.launch(arrayOf("image/*", "application/pdf")) },
