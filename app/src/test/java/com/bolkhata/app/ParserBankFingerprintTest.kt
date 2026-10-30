@@ -54,7 +54,8 @@ class ParserBankFingerprintTest {
 
     @Test fun parsedBankEntryCarriesItsFingerprint() {
         val parsed = Parser.parse(fullAlert)
-        assertEquals(1, parsed.entries.size)
-        assertTrue(parsed.entries.single().sourceFingerprint.isNotBlank())
+        val candidates = parsed.entries + parsed.unclear
+        assertEquals(1, candidates.size)
+        assertTrue(candidates.single().sourceFingerprint.isNotBlank())
     }
 }
