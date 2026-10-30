@@ -92,7 +92,7 @@ object Groq {
             val body = JSONObject()
                 .put("model", CALL_MODEL)
                 .put("temperature", 0.3)
-                .put("max_tokens", 400)
+                .put("max_tokens", 600)
                 .put("reasoning_effort", "low")
                 .put("response_format", JSONObject().put("type", "json_object"))
                 .put("messages", JSONArray()
