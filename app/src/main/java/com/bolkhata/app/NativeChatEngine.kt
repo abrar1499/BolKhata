@@ -32,7 +32,8 @@ object NativeChatEngine {
         "less", "except", "excluding", "siwa", "ilawa", "alawa", "people", "log", "logon", "cash", "out", "into",
         "it", "that", "this", "those", "these", "isko", "usko", "ye", "yeh", "inko",
         "delete", "delet", "del", "dlt", "remove", "hatao", "hata", "mitao", "clear", "wipe",
-        "change", "edit", "update", "badlo", "correct", "fix"
+        "change", "edit", "update", "badlo", "correct", "fix", "move", "shift", "transfer", "send", "bhejo",
+        "khata", "account", "paid", "pay", "by", "kiya", "kya", "khaya", "pese", "paise", "paisa", "diye", "diya", "us"
     )
     private val categories = mapOf(
         Cat.KHANA to setOf("food", "khana", "khaana", "grocery", "groceries", "meal", "meals", "ration", "sabzi"),
@@ -98,6 +99,40 @@ object NativeChatEngine {
             return chat("Which " + understood.choices.joinToString(" or ") + " do you mean?")
         if (understood?.kind == Understand.Kind.OPEN_KHATA && !understood.contact.isNullOrBlank())
             return Fixed("", "open", "", filter = Query.Filter(persons = listOf(understood.contact)))
+
+        val moveWords = setOf("move", "shift", "transfer", "send", "bhejo", "dal", "daal")
+        if (has(words, moveWords) && has(words, setOf("khata", "account"))) {
+            val destination = Accounts.khataNameMentionedIn(text, "", contacts)
+            if (destination == null) return chat("Which saved khata should receive these entries? Please use its full name.")
+            val selectionText = text.replace(destination, " ", ignoreCase = true)
+            val selectionWords = tokens(selectionText)
+            val screenSelection = has(selectionWords, setOf("all", "every", "sab", "sari", "saari", "these", "this", "inko", "ye", "yeh"))
+            val filter = if (screenSelection) Query.Filter() else buildFilter(selectionText, contacts, now, false)
+            return Fixed("", "to_khata", "", filter = filter, set = mapOf("person" to destination))
+        }
+
+        val paidByPhrase = lower.contains("paid by") || lower.contains("pay kiya") ||
+            (has(words, setOf("paise", "pese", "paisa")) && has(words, setOf("diye", "diya", "paid", "pay")))
+        if (paidByPhrase) {
+            val payer = contacts.firstOrNull { it.isNotBlank() && lower.contains(it.lowercase()) }
+                ?: Understand.matchContact(words, contacts).first
+                ?: Regex("""\\b([\\p{L}]{3,})\\s+(?:ne|has)\\s+(?:paid|pay)\\b""").find(lower)?.groupValues?.get(1)
+                    ?.replaceFirstChar { it.uppercase() }
+            if (payer == null) return chat("Who paid for that entry? Please give the person's saved name.")
+            val selectionText = text.replace(payer, " ", ignoreCase = true)
+            val filter = buildFilter(selectionText, contacts.filterNot { it.equals(payer, true) }, now, false)
+            return if (filter.from == null && filter.to == null && filter.cats.isEmpty() && filter.items.isEmpty() && filter.ids.isEmpty())
+                chat("Which expense did " + payer + " pay for? Add its date or item.")
+            else Fixed("", "paid_by", "", filter = filter, payer = payer)
+        }
+
+        val wantsReread = has(words, setOf("wrong", "galat", "ghalat", "reread", "re-read")) &&
+            has(words, setOf("entry", "entries", "wali", "wala", "last", "laptop", "petrol", "bill"))
+        if (wantsReread) {
+            val filter = buildFilter(text, contacts, now, false)
+            return if (filter.isEmpty) chat("Which saved entry should I re-read? Give its item, person, or date.")
+            else Fixed("", "reread", "", filter = filter)
+        }
 
         val planned = runCatching { Edits.plan(text, entries, now) }.getOrNull()
         if (planned != null) return Fixed("", "plan", "", plan = EditPlan(planned.changed, planned.deleted, planned.message))
@@ -172,6 +207,7 @@ object NativeChatEngine {
     private fun isQuestion(text: String): Boolean {
         val w = tokens(text)
         return text.endsWith("?") || has(w, setOf("show", "find", "search", "list", "total", "sum", "count", "highest", "largest", "biggest")) ||
+            (has(w, expense + income) && has(w, setOf("today", "yesterday", "aaj", "kal", "this", "last", "month", "week", "year", "mahine", "saal"))) ||
             Regex("""\b(last|latest|recent)\s+\d+\s+(entry|entries|record|records|transaction|transactions)\b""").containsMatchIn(text) ||
             (has(w, questionWords) && (has(w, expense + income + setOf("balance", "khata", "petrol", "food", "salary", "udhar", "udhaar")) ||
                 w.any { token -> categories.values.any { token in it } }))
@@ -196,9 +232,12 @@ object NativeChatEngine {
             .ifEmpty { Understand.matchContact(w, contacts).first?.let { listOf(it) }.orEmpty() }
         val last = Regex("""\b(?:last|latest|recent)\s+(\d+)\b""").find(lower)?.groupValues?.get(1)?.toIntOrNull()
             ?: if (Regex("""\b(last|latest|recent)\s+(entry|record|transaction)\b""").containsMatchIn(lower)) 1 else 0
+        val range = Regex("""\\bbetween\\s+(\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+and\\s+(\\d[\\d,]*(?:\\.\\d{1,2})?)\\b""").find(lower)
         val exact = amountAfter(lower, "exactly|equal\\s+to|amount\\s+is|for")
         val min = exact ?: amountAfter(lower, "above|over|more\\s+than|greater\\s+than")
+            ?: range?.groupValues?.get(1)?.replace(",", "")?.toDoubleOrNull()
         val max = exact ?: amountAfter(lower, "below|under|less\\s+than")
+            ?: range?.groupValues?.get(2)?.replace(",", "")?.toDoubleOrNull()
         val exclude = Regex("""\b(?:except|excluding|without|siwa|ilawa|alawa)\s+([\p{L}]+)""").find(lower)?.groupValues?.get(1)
             ?.let { listOf(it) }.orEmpty()
         val personWords = people.flatMap { tokens(it.lowercase()) }.toSet()
@@ -249,11 +288,29 @@ object NativeChatEngine {
             "last" in w && w.any { it in setOf("year", "saal") } -> return yearBounds(now, -1)
             w.any { it in setOf("this", "is", "iss") } && w.any { it in setOf("year", "saal") } -> return yearBounds(now, 0)
         }
+        val lastDays = Regex("""\\b(?:last|past)\\s+(\\d{1,3})\\s+days?\\b""").find(text)?.groupValues?.get(1)?.toIntOrNull()
+        if (lastDays != null) return Bounds(now - lastDays.coerceAtMost(365) * 86_400_000L, now)
+
         val explicit = runCatching { Parser.extractDate(text, now).first }.getOrNull()
         if (explicit != null) {
             val start = Calendar.getInstance().apply { timeInMillis = explicit; set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }.timeInMillis
             val end = Calendar.getInstance().apply { timeInMillis = explicit; set(Calendar.HOUR_OF_DAY, 23); set(Calendar.MINUTE, 59); set(Calendar.SECOND, 59); set(Calendar.MILLISECOND, 999) }.timeInMillis
             return Bounds(start, end)
+        }
+        val monthMap = mapOf(
+            "jan" to 0, "january" to 0, "feb" to 1, "february" to 1, "mar" to 2, "march" to 2,
+            "apr" to 3, "april" to 3, "may" to 4, "jun" to 5, "june" to 5, "jul" to 6, "july" to 6,
+            "aug" to 7, "august" to 7, "sep" to 8, "sept" to 8, "september" to 8, "oct" to 9, "october" to 9,
+            "nov" to 10, "november" to 10, "dec" to 11, "december" to 11
+        )
+        val month = w.firstNotNullOfOrNull { monthMap[it] }
+        if (month != null) {
+            val currentYear = Calendar.getInstance().apply { timeInMillis = now }.get(Calendar.YEAR)
+            val year = w.firstNotNullOfOrNull { it.toIntOrNull()?.takeIf { y -> y in 1900..2200 } } ?: currentYear
+            val c = Calendar.getInstance().apply { set(year, month, 1, 0, 0, 0); set(Calendar.MILLISECOND, 0) }
+            val from = c.timeInMillis
+            c.add(Calendar.MONTH, 1); c.add(Calendar.MILLISECOND, -1)
+            return Bounds(from, c.timeInMillis)
         }
         return null
     }
