@@ -456,7 +456,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         if (updated == target && undone.isEmpty()) {
             toast(if (target.type == Type.SALE && !st.paid && who.isBlank()) label + " is already unpaid. Add the customer's name to track the payment." else msg)
         } else {
-            applyPlan(Ai.EditPlan(listOf(target to updated), undone, msg))
+            if (!applyPlan(Ai.EditPlan(listOf(target to updated), undone, msg))) {
+                toast("This transaction changed before the update could be applied. Nothing was changed.")
+            }
         }
         return true
     }
@@ -575,7 +577,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             return
         }
         // Simple changes (date, amount) are done offline straight away, with Undo.
-        Edits.plan(text, entries)?.let { applyPlan(it); return }
+        Edits.plan(text, entries)?.let {
+            if (!applyPlan(it)) flash = Flash("The matching entry changed before the update could be applied. Nothing was changed.", Flash.Kind.ANSWER)
+            return
+        }
         if (looksLikeEdit(text) && entries.isNotEmpty()) {
             // The AI never changes entries itself: if the app's own reader couldn't place it, say so.
             flash = Flash("Which entry? e.g. \"last entry 400 karo\" or \"aaj ki sari entries delete karo\"", Flash.Kind.ANSWER)
@@ -715,7 +720,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         val changed = convertPersonTransfersToLedgerEntries(entries, person)
         if (changed.isEmpty()) return "No transfer entries found to convert in " + person + "'s khata."
         val message = "Converted " + changed.size + " transfer entries in " + person + "'s khata to gave/received entries"
-        applyPlan(Ai.EditPlan(changed, emptyList(), message))
+        if (!applyPlan(Ai.EditPlan(changed, emptyList(), message))) {
+            return "The khata changed before I could apply the conversion. Nothing was changed; please try again."
+        }
         return "Done. Converted " + changed.size + " transfer entries in " + person + "'s khata. The khata stays open."
     }
 
@@ -793,7 +800,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     work = work.map { if (it.id == e.id) moved else it }
                     e to moved
                 }
-                applyPlan(Ai.EditPlan(changed, emptyList(), "Moved ${changed.size} to $name"))
+                if (!applyPlan(Ai.EditPlan(changed, emptyList(), "Moved ${changed.size} to $name"))) {
+                    return "Those entries changed before I could move them. Nothing was moved; please search again."
+                }
                 val bal = personAccounts(work).firstOrNull { it.name.equals(name, true) }?.balance ?: 0.0
                 "${changed.size} entries → $name khata · " + when {
                     bal > 0.005 -> "$name will give you ${fmt(bal)}"
@@ -1713,9 +1722,13 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                                 }
                         } ?: emptyList(),
                         onApplyChanges = {
-                            pendingPlan?.let { applyPlan(it) }
+                            val applied = pendingPlan?.let { applyPlan(it) } ?: false
                             pendingPlan = null
-                            postChat("✓ Changes applied. Use Undo at the bottom if something is wrong.", isUser = false)
+                            postChat(
+                                if (applied) "✓ Changes applied. Use Undo at the bottom if something is wrong."
+                                else "Nothing was changed. One or more entries changed while this review was open; please search again.",
+                                isUser = false
+                            )
                         },
                         onCancelChanges = {
                             pendingPlan = null
