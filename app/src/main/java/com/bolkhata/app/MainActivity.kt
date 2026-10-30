@@ -1328,7 +1328,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             chatLoading = false
             loadingLabel = "Thinking…"
             said.fold(
-                onSuccess = { text -> if (text.isBlank()) missed() else heard(text.trim()) },
+                onSuccess = { text -> if (Groq.isNoise(text)) missed() else heard(text.trim()) },
                 onFailure = { toast((it.message ?: "Groq voice failed") + ". You can turn off Groq voice in Settings."); missed() }
             )
         }
@@ -1386,6 +1386,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
 
     // The ElevenLabs answer playing in the call.
     var player by remember { mutableStateOf<android.media.MediaPlayer?>(null) }
+    // Lines the call still has to say; it listens again only when none are left and no answer is awaited.
+    val talking = remember { java.util.concurrent.atomic.AtomicInteger() }
+    // The line before, so lines are said in the order they were asked for.
+    val lastLine = remember { arrayOf<kotlinx.coroutines.Job?>(null) }
     fun stopReply() {
         player?.let { runCatching { it.stop() }; runCatching { it.release() } }
         player = null
@@ -1396,12 +1400,16 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         voiceAwaiting = false
         voiceStatus = ""
         voicePartial = ""
+        talking.set(0)
         finishRecording(send = false)
         runCatching { recognizer?.cancel() }
         runCatching { tts.stop() }
         stopReply()
         if (message != null) toast(message)
     }
+
+    // Set below, once the call can talk back (it needs the speaking helpers that come after listening).
+    var heardInCall: (String) -> Unit = {}
 
     /** The call listens with Groq Whisper when Groq voice is on (it hears Urdu far better), else with the phone. */
     fun listenNow() {
@@ -1410,13 +1418,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         voiceStatus = "Listening…"
         if (groqKey.isNotBlank() && groqVoice) {
             startRecording(
-                heard = heard@{ said ->
-                    if (!voiceOn) return@heard
-                    voiceMisses = 0
-                    voicePartial = said
-                    voiceAwaiting = true
-                    chatInput(said)
-                },
+                heard = { said -> if (voiceOn) heardInCall(said) },
                 missed = {
                     voiceMisses++
                     if (voiceMisses >= 3) stopVoice("Call ended: nothing heard for a while.") else listenNow()
@@ -1439,9 +1441,14 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         runCatching { r.cancel(); r.startListening(i) }
     }
 
+    /** One line of the call is finished; listen again when nothing else is waiting to be said. */
+    fun spokenDone() {
+        if (talking.decrementAndGet() <= 0) { talking.set(0); if (voiceOn && !voiceAwaiting) listenNow() }
+    }
+
     /** Reads [text] with the phone's voice: Urdu script with an Urdu voice, otherwise English. */
     fun phoneSpeak(text: String) {
-        if (!ttsReady.value) { listenNow(); return }
+        if (!ttsReady.value) { spokenDone(); return }
         val urduScript = text.any { it in '\u0600'..'\u06FF' }
         val wanted = if (urduScript) java.util.Locale("ur", "PK") else java.util.Locale("en", "IN")
         val ok = tts.setLanguage(wanted)
@@ -1464,7 +1471,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         val p = android.media.MediaPlayer()
         runCatching {
             p.setDataSource(file.absolutePath)
-            p.setOnCompletionListener { stopReply(); if (voiceOn) listenNow() }
+            p.setOnCompletionListener { stopReply(); spokenDone() }
             p.prepare()
             p.start()
         }.onSuccess {
@@ -1476,14 +1483,19 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         }
     }
 
-    /** Says an answer in the call, short and natural: ElevenLabs when set up, else the phone's voice. Listens again after. */
-    fun speak(said: String, text: String) {
-        val answer = text.replace(Regex("""[✓•*#_]"""), " ").replace(Regex("""(?m)^\s*-\s*"""), "").trim()
-        if (answer.isEmpty()) { listenNow(); return }
-        scope.launch {
-            // Groq says the answer like a person would; without it, the answer's first sentence is read.
-            val clean = (if (groqKey.isNotBlank()) Groq.spoken(groqKey, said, answer) else null) ?: shortSpoken(answer)
+    /**
+     * Says one line in the call after any line still playing: ElevenLabs when set up, else the phone's voice.
+     * [line] is worked out first (it may ask Groq), and the call listens again once everything is said.
+     */
+    fun say(line: suspend () -> String) {
+        talking.incrementAndGet()
+        val before = lastLine[0]
+        lastLine[0] = scope.launch {
+            val clean = line()
+            before?.join()
+            while (voiceOn && (player != null || tts.isSpeaking)) kotlinx.coroutines.delay(100)
             if (!voiceOn) return@launch
+            if (clean.isBlank()) { spokenDone(); return@launch }
             if (elevenKey.isBlank() || elevenVoice.isBlank()) { phoneSpeak(clean); return@launch }
             val reply = Eleven.speech(elevenKey, elevenVoice, clean, File(context.cacheDir, "reply.mp3"))
             if (!voiceOn) return@launch
@@ -1494,15 +1506,51 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         }
     }
 
+    /** Says the app's answer short and natural: Groq words it like a person would, else its first sentence is read. */
+    fun speak(said: String, text: String) {
+        val answer = text.replace(Regex("""[✓•*#_]"""), " ").replace(Regex("""(?m)^\s*-\s*"""), "").trim()
+        say { if (answer.isEmpty()) "" else (if (groqKey.isNotBlank()) Groq.spoken(groqKey, said, answer) else null) ?: shortSpoken(answer) }
+    }
+
+    /**
+     * What the person said in the call. With Groq the assistant talks back itself, and for a request says
+     * "one moment", sends it to the app, and then says the app's answer. Without Groq it goes straight to the app.
+     */
+    fun callHeard(said: String) {
+        voiceMisses = 0
+        voicePartial = said
+        voiceStatus = "Thinking…"
+        if (groqKey.isBlank()) { voiceAwaiting = true; chatInput(said); return }
+        scope.launch {
+            val turn = Groq.talk(groqKey, said, chatMessages.lastOrNull { !it.isUser }?.text.orEmpty())
+            if (!voiceOn) return@launch
+            when {
+                turn == null -> { voiceAwaiting = true; chatInput(said) }
+                turn.command.isNotBlank() -> {
+                    voiceAwaiting = true
+                    if (turn.say.isNotBlank()) say { turn.say }
+                    chatInput(turn.command)
+                }
+                turn.say.isNotBlank() -> {
+                    postChat(said, isUser = true)
+                    postChat(turn.say, isUser = false)
+                    say { turn.say }
+                }
+                else -> listenNow()
+            }
+        }
+    }
+    heardInCall = { callHeard(it) }
+
     DisposableEffect(tts) {
         tts.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) {}
             override fun onDone(utteranceId: String?) {
-                android.os.Handler(android.os.Looper.getMainLooper()).post { if (voiceOn) listenNow() }
+                android.os.Handler(android.os.Looper.getMainLooper()).post { spokenDone() }
             }
             @Deprecated("Deprecated in Java")
             override fun onError(utteranceId: String?) {
-                android.os.Handler(android.os.Looper.getMainLooper()).post { if (voiceOn) listenNow() }
+                android.os.Handler(android.os.Looper.getMainLooper()).post { spokenDone() }
             }
         })
         onDispose { }
@@ -1565,11 +1613,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     results?.getFloatArray(android.speech.SpeechRecognizer.CONFIDENCE_SCORES)
                 )
                 if (said.isBlank()) { listenNow(); return }
-                voiceMisses = 0
-                voicePartial = said
-                voiceStatus = "Thinking…"
-                voiceAwaiting = true
-                chatInput(said)
+                callHeard(said)
             }
             override fun onError(error: Int) {
                 if (!voiceOn) return
