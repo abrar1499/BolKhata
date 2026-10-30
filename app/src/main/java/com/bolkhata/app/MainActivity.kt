@@ -1040,6 +1040,13 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         val history = chatMessages.takeLast(20)
         postChat(text, isUser = true)
 
+        NativeMemory.handle(text, store.memory)?.let { memory ->
+            store.memory = memory.facts
+            lastSpeech = memory.reply
+            postChat(memory.reply, isUser = false)
+            return
+        }
+
         handleCurrentKhataMoveCommand(text)?.let { lastSpeech = it; postChat(it, isUser = false); return }
         handleCurrentKhataBulkCommand(text)?.let { lastSpeech = it; postChat(it, isUser = false); return }
 
