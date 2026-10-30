@@ -159,6 +159,11 @@ object NativeChatEngine {
             else Fixed("", "delete", "", filter = f)
         }
 
+        if (lower.contains("how are you") || lower.contains("what can you do") ||
+            has(words, setOf("hello", "hi", "hey", "salam", "assalam", "thanks", "thank", "bye", "goodbye"))) {
+            return chat(smallTalk(lower))
+        }
+
         if (isQuestion(lower)) {
             val financial = has(words, setOf("profit", "nafa", "munafa", "loss", "stock", "balance", "owe", "owed", "qarz", "udhar"))
             val special = if (financial && !text.any(Char::isDigit)) runCatching { Questions.answer(text, entries, currency) }.getOrNull() else null
