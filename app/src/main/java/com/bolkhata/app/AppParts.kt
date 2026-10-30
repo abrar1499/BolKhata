@@ -1,6 +1,5 @@
 package com.bolkhata.app
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -72,10 +71,9 @@ internal fun InputBar(
     Column(Modifier.fillMaxWidth().background(bg)) {
         if (talking) VoiceCaption(voice!!.status, voice.heard, Modifier.padding(top = 6.dp))
         Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 10.dp)) {
-            // No shadow: one hairline border keeps the edge sharp, like ChatGPT's bar.
+            // Like ChatGPT's bar: a white pill with a soft shadow and no outline, on the off-white page.
             Surface(
-                shape = RoundedCornerShape(26.dp), color = MaterialTheme.colorScheme.surface,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                shape = RoundedCornerShape(26.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 3.dp,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(Modifier.heightIn(min = 48.dp).padding(start = 4.dp, end = 5.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -106,7 +104,7 @@ internal fun InputBar(
                     Spacer(Modifier.width(2.dp))
                     Box(
                         Modifier
-                            .size(38.dp)
+                            .size(36.dp)
                             .clip(CircleShape)
                             .background(GreenDeep)
                             .clickable(enabled = talking || !busy) {
@@ -183,9 +181,9 @@ private fun ThinMic(color: Color) {
 /** Short vertical bars: tap the empty send button to speak. */
 @Composable
 private fun SoundWave(color: Color) {
-    Canvas(Modifier.size(18.dp)) {
-        val w = 2.dp.toPx()
-        val heights = listOf(0.35f, 0.75f, 1f, 0.6f)
+    Canvas(Modifier.size(16.dp)) {
+        val w = 1.7.dp.toPx()
+        val heights = listOf(0.35f, 0.75f, 1f, 0.55f)
         val gap = size.width / (heights.size + 1)
         heights.forEachIndexed { i, h ->
             val x = gap * (i + 1)

@@ -13,9 +13,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ThumbDown as ThumbDownFilled
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.ThumbDown
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -163,7 +166,7 @@ fun ChatScreen(
                     Column(Modifier.fillMaxWidth()) {
                         if (message.entryIds.isNotEmpty()) SavedCard(message, byId, currency, onUndo, onEditEntry)
                         else AssistantBubble(message.text)
-                        WrongAnswerMark(message.id in flaggedIds) { flagging = message }
+                        AnswerActions(message.text, message.id in flaggedIds) { flagging = message }
                     }
                 }
             }
@@ -366,20 +369,27 @@ private fun UserBubble(text: String, attachment: String = "") {
     }
 }
 
-/** Small link under each answer so the person can mark it wrong; the mark is kept in the chat log. */
+/** Small grey actions under each answer, like ChatGPT's: copy the answer, and thumbs-down to mark it wrong. */
 @Composable
-private fun WrongAnswerMark(flagged: Boolean, onClick: () -> Unit) {
-    Text(
-        if (flagged) "✗ Marked wrong" else "Wrong answer?",
-        fontSize = 11.sp,
-        color = if (flagged) MaterialTheme.colorScheme.error
-        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-        modifier = Modifier
-            .padding(start = 6.dp, top = 2.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .clickable(enabled = !flagged, onClick = onClick)
-            .padding(horizontal = 4.dp, vertical = 2.dp)
-    )
+private fun AnswerActions(text: String, flagged: Boolean, onWrong: () -> Unit) {
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+    Row(Modifier.padding(start = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        IconButton(onClick = {
+            clipboard.setText(androidx.compose.ui.text.AnnotatedString(text))
+            android.widget.Toast.makeText(context, "Copied", android.widget.Toast.LENGTH_SHORT).show()
+        }, modifier = Modifier.size(34.dp)) {
+            Icon(Icons.Outlined.ContentCopy, contentDescription = "Copy answer", tint = tint, modifier = Modifier.size(17.dp))
+        }
+        IconButton(onClick = onWrong, enabled = !flagged, modifier = Modifier.size(34.dp)) {
+            Icon(
+                if (flagged) Icons.Filled.ThumbDownFilled else Icons.Outlined.ThumbDown,
+                contentDescription = if (flagged) "Marked wrong" else "Wrong answer",
+                tint = if (flagged) MaterialTheme.colorScheme.error else tint, modifier = Modifier.size(17.dp)
+            )
+        }
+    }
 }
 
 @Composable
