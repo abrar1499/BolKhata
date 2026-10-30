@@ -97,11 +97,25 @@ object Query {
         return when (what) {
             "count" -> "${list.size} " + (if (list.size == 1) "entry" else "entries") + " ($head)."
             "list" -> {
-                val fmt = java.text.SimpleDateFormat("d MMM", java.util.Locale.US)
-                list.take(5).joinToString("\n") { e ->
-                    fmt.format(java.util.Date(e.date)) + " · " + (e.item.ifBlank { e.category.label }) +
-                        (if (e.person.isNotBlank()) " · " + e.person else "") + " · " + fmt(e.amount)
+                val dateFmt = java.text.SimpleDateFormat("d MMM", java.util.Locale.US)
+                val rows = list.take(5).joinToString("\n") { e ->
+                    dateFmt.format(java.util.Date(e.date)) + " · " + (e.item.ifBlank { e.category.label }) +
+                        (if (e.person.isNotBlank()) " · " + e.person else "") + " · " + fmt(e.amount) + " " + currency
                 } + if (list.size > 5) "\n+${list.size - 5} more" else ""
+                rows + "\nTotal: " + answer(list, "sum", f, currency)
+            }
+            "highest" -> {
+                val expenses = list.filter { it.type == Type.KHARCHA }
+                val top = expenses.sortedWith(compareByDescending<Entry> { it.amount }.thenByDescending { it.date }).take(5)
+                if (top.isEmpty()) "No expenses found ($head)." else {
+                    val dateFmt = java.text.SimpleDateFormat("d MMM", java.util.Locale.US)
+                    "Highest expenses ($head):\n" +
+                        top.joinToString("\n") { e ->
+                            dateFmt.format(java.util.Date(e.date)) + " · " + (e.item.ifBlank { e.category.label }) +
+                                " · " + fmt(e.amount) + " " + currency
+                        } + "\nMatching expense total: " + fmt(expenses.sumOf { it.amount }) + " " + currency +
+                        " (${expenses.size} entries)"
+                }
             }
             else -> {
                 // Totals by kind: "Spent 120 SAR · Lent 50 SAR (4 entries, 25 Oct)".
