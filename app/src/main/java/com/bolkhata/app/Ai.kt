@@ -1250,7 +1250,7 @@ kind=chat: greeting / small talk, reply = short friendly answer (max 12 words). 
 f (all optional): "from","to" (YYYY-MM-DD, inclusive), "type" [expense,income,lent,borrowed,got_back,paid_back,sale,purchase],
 "person" [names], "category" [food,transport,rent,bills,mobile,home,shopping,health,personal,fees,education,charity,assets,other],
 "item" [words], "not_item" [words to leave out], "no_people" (true = leave out transfers and money to/from people, "people ke ilawa"),
-"min", "max", "last" (newest N; "last entry" = 1). Use min=max for an exact amount. A follow-up like "people ke ilawa" / "sirf petrol" repeats the previous request with the extra condition. Days: aaj = today, kal (past) = yesterday, "3 din pehle" = that day.${if (near.isEmpty()) "" else "\nSaved names: " + near.joinToString(", ")}
+"min", "max", "last" (newest N; "last entry" = 1). Use min=max for an exact amount. "added_from" and "added_to" filter when a transaction was entered into the app; "from" and "to" filter the transaction's own date. A follow-up like "people ke ilawa" / "sirf petrol" repeats the previous request with the extra condition. Days: aaj = today, kal (past) = yesterday, "3 din pehle" = that day.${if (near.isEmpty()) "" else "\nSaved names: " + near.joinToString(", ")}
 ${if (screen.isBlank()) "" else "On screen now: $screen. \"ye / inko / these / sab / in sab\" = the records on screen: leave f empty.\nIf this is a person's khata, use that person as the default for a new give/borrow/repay/receive entry only when the user does not name someone; never assign ordinary expenses/income to them just because their khata is open.\n"}${if (previous.isBlank()) "" else "Previous message (resolve wo / unko / sab / same from it): \"" + previous.replace("\"", "'").take(200) + "\"\n"}Text: "$said"
 """.trim()
             val raw = if (fastKey.isNotBlank()) {
@@ -1282,7 +1282,9 @@ ${if (screen.isBlank()) "" else "On screen now: $screen. \"ye / inko / these / s
                 max = f.optDouble("max").takeIf { !it.isNaN() && it > 0 },
                 last = f.optInt("last", 0).coerceAtLeast(0),
                 noPeople = f.optBoolean("no_people", false),
-                notItems = list(f, "not_item")
+                notItems = list(f, "not_item"),
+                createdFrom = Query.day(f.optString("added_from")),
+                createdTo = Query.day(f.optString("added_to"), end = true)
             )
             val s = o.optJSONObject("set")
             val set = s?.keys()?.asSequence()?.associateWith { s.optString(it).trim() }?.filterValues { it.isNotEmpty() && it != "0" }.orEmpty()
