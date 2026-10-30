@@ -30,7 +30,9 @@ object NativeChatEngine {
         "year", "years", "mahina", "mahine", "mahiny", "saal", "pichle", "pichhle", "previous", "ago", "day", "days",
         "date", "tareekh", "tarikh", "exactly", "equal", "between", "above", "over", "more", "than", "below", "under",
         "less", "except", "excluding", "siwa", "ilawa", "alawa", "people", "log", "logon", "cash", "out", "into",
-        "it", "that", "this", "those", "these", "isko", "usko", "ye", "yeh", "inko"
+        "it", "that", "this", "those", "these", "isko", "usko", "ye", "yeh", "inko",
+        "delete", "delet", "del", "dlt", "remove", "hatao", "hata", "mitao", "clear", "wipe",
+        "change", "edit", "update", "badlo", "correct", "fix"
     )
     private val categories = mapOf(
         Cat.KHANA to setOf("food", "khana", "khaana", "grocery", "groceries", "meal", "meals", "ration", "sabzi"),
@@ -144,7 +146,7 @@ object NativeChatEngine {
 
         if (understood?.kind == Understand.Kind.DELETE_LAST) return Fixed("", "delete", "", filter = Query.Filter(last = 1))
         if (understood?.kind == Understand.Kind.SUMMARY)
-            return Fixed("", "chat", Questions.answer("this month spent", entries, "SAR")?.text ?: "No saved transactions yet.")
+            return Fixed("", "chat", Questions.answer("this month spent", entries, currency)?.text ?: "No saved transactions yet.")
         if (runCatching { Parser.payStatus(text) }.getOrNull() != null) return Fixed(text, "entry", "")
         val split = runCatching { Split.detect(text, contacts) }.getOrNull()
         val parsed = if (split == null) runCatching { Parser.parse(text, now) }.getOrNull() else null
