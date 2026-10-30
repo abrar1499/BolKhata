@@ -118,6 +118,21 @@ class NativeChatEngineTest {
         assertEquals(setOf(Type.KHARCHA), result.filter.types)
     }
 
+    @Test fun searchAgainAfterDateOnlyFollowUpKeepsOriginalExpenseFilter() {
+        val history = listOf(
+            ChatMessage("u1", true, "today expense"),
+            ChatMessage("a1", false, "Nothing found"),
+            ChatMessage("u2", true, "28 oct"),
+            ChatMessage("a2", false, "Nothing found")
+        )
+        val result = read("search again", history)
+        assertEquals("ask", result.kind)
+        assertEquals("sum", result.what)
+        assertEquals(setOf(Type.KHARCHA), result.filter.types)
+        assertEquals(Query.day("2026-10-28"), result.filter.from)
+        assertEquals(86_399_999L, result.filter.to!! - result.filter.from!!)
+    }
+
     @Test fun bareDateAndSearchDateAreReadOnlyListQueries() {
         val bare = read("28 oct")
         assertEquals("ask", bare.kind)
