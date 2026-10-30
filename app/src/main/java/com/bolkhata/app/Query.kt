@@ -23,11 +23,15 @@ object Query {
         /** Leave out these words: "petrol ke ilawa". */
         val notItems: List<String> = emptyList(),
         /** Exactly these records (the ones on screen: "inko", "ye sari"). */
-        val ids: Set<String> = emptySet()
+        val ids: Set<String> = emptySet(),
+        /** When the record was entered into the app, distinct from the transaction date. */
+        val createdFrom: Long? = null,
+        val createdTo: Long? = null
     ) {
         /** True when nothing narrows it down (then deleting or changing is refused). */
-        val isEmpty get() = from == null && to == null && types.isEmpty() && persons.isEmpty() && cats.isEmpty() &&
-            items.isEmpty() && min == null && max == null && last == 0 && !noPeople && notItems.isEmpty() && ids.isEmpty()
+        val isEmpty get() = from == null && to == null && createdFrom == null && createdTo == null &&
+            types.isEmpty() && persons.isEmpty() && cats.isEmpty() && items.isEmpty() && min == null && max == null &&
+            last == 0 && !noPeople && notItems.isEmpty() && ids.isEmpty()
     }
 
     val typeWords = mapOf(
@@ -60,6 +64,7 @@ object Query {
     fun select(entries: List<Entry>, f: Filter): List<Entry> {
         val list = entries.filter { e ->
             (f.ids.isEmpty() || e.id in f.ids) && (f.from == null || e.date >= f.from) && (f.to == null || e.date <= f.to) &&
+                (f.createdFrom == null || e.createdAt >= f.createdFrom) && (f.createdTo == null || e.createdAt <= f.createdTo) &&
                 (f.types.isEmpty() || e.type in f.types) &&
                 (f.persons.isEmpty() || f.persons.any { samePerson(e.person, it) }) &&
                 (f.cats.isEmpty() || e.category in f.cats) &&
@@ -82,6 +87,11 @@ object Query {
             val a = f.from?.let { fmt.format(java.util.Date(it)) }
             val b = f.to?.let { fmt.format(java.util.Date(it)) }
             parts += if (a != null && b != null && a != b) "$a – $b" else (a ?: b)!!
+        }
+        if (f.createdFrom != null || f.createdTo != null) {
+            val a = f.createdFrom?.let { fmt.format(java.util.Date(it)) }
+            val b = f.createdTo?.let { fmt.format(java.util.Date(it)) }
+            parts += "added " + if (a != null && b != null && a != b) "$a – $b" else (a ?: b)!!
         }
         if (f.last > 0) parts += "last ${f.last}"
         if (f.noPeople) parts += "without transfers / people"
