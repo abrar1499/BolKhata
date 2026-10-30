@@ -51,6 +51,18 @@ android {
         compose = true
         buildConfig = true
     }
+    testOptions {
+        unitTests {
+            // Needed by the screenshot tests, which render real screens with Robolectric.
+            isIncludeAndroidResources = true
+        }
+    }
+}
+
+// Screenshot tests run only on request (gradle ... -Pscreenshots), so normal builds stay fast.
+tasks.withType<Test>().configureEach {
+    if (project.hasProperty("screenshots")) systemProperty("roborazzi.test.record", "true")
+    else exclude("**/screenshots/**")
 }
 
 dependencies {
@@ -71,4 +83,10 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     // Real org.json for unit tests; the Android stub throws "not mocked".
     testImplementation("org.json:json:20240303")
+    // Screenshot tests: render real Compose screens on the JVM and save them as PNG files.
+    testImplementation("org.robolectric:robolectric:4.13")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.26.0")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.26.0")
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
