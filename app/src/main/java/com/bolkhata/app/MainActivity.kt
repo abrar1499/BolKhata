@@ -1690,8 +1690,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 toolAnswer[0] = answer
                 chatInput(command)
             },
-            onHeard = { voicePartial = it },
-            onReply = { voicePartial = "" },
+            // Only the wave shows in the agent call: text coming and going made the panel jump.
+            onHeard = { },
+            onReply = { },
             onLevel = { voiceLevel = it },
             onSpeaking = { voiceStatus = if (it) "Speaking…" else if (toolAnswer[0] != null) "Thinking…" else "Listening…" },
             onEnd = { error -> stopVoice(error) },

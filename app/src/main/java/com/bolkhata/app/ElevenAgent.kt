@@ -44,6 +44,10 @@ class ElevenAgent(
     private var track: AudioTrack? = null
     // Plays the agent's audio pieces one after another, in the order they came.
     private val speaker = java.util.concurrent.Executors.newSingleThreadExecutor()
+    // Until this time the agent's audio is played; later audio (talk it started by itself) is dropped.
+    @Volatile private var talkUntil = 0L
+    // When the mic last heard something louder than background noise.
+    private var lastLoud = 0L
     private val effects = mutableListOf<android.media.audiofx.AudioEffect>()
     @Volatile private var running = false
     // Until this time the agent's audio is still playing (the mic level is then the agent, not the owner).
@@ -52,6 +56,7 @@ class ElevenAgent(
     /** Connects (with a signed link when a key is saved, so the agent can stay private) and starts the mic. */
     fun start() {
         running = true
+        mayTalk(15_000)
         thread(name = "agent-call") {
             val url = runCatching { signedUrl() }.getOrElse {
                 main.post { end("ElevenLabs agent: " + (it.message ?: "can't connect")) }
@@ -112,12 +117,16 @@ class ElevenAgent(
                     startAudio(rate(meta?.optString("user_input_audio_format")), rate(meta?.optString("agent_output_audio_format")))
                     webSocket.send(JSONObject().put("type", "contextual_update").put("text", RULES).toString())
                 }
-                "audio" -> m.optJSONObject("audio_event")?.optString("audio_base_64")?.let { play(Base64.decode(it, Base64.DEFAULT)) }
+                "audio" -> m.optJSONObject("audio_event")?.optString("audio_base_64")
+                    ?.takeIf { System.currentTimeMillis() < talkUntil }?.let { play(Base64.decode(it, Base64.DEFAULT)) }
                 "interruption" -> runCatching { track?.pause(); track?.flush(); track?.play(); speakingUntil = 0L }
                 "user_transcript" -> m.optJSONObject("user_transcription_event")?.optString("user_transcript")
-                    ?.takeIf { it.isNotBlank() }?.let { main.post { onHeard(it) } }
+                    ?.takeIf { it.isNotBlank() }?.let { mayTalk(15_000); main.post { onHeard(it) } }
                 "agent_response" -> m.optJSONObject("agent_response_event")?.optString("agent_response")
-                    ?.takeIf { it.isNotBlank() }?.let { main.post { onReply(it) } }
+                    ?.takeIf { it.isNotBlank() }?.let {
+                        talkUntil = minOf(talkUntil, System.currentTimeMillis() + 5_000) // this reply may finish, no more
+                        main.post { onReply(it) }
+                    }
                 "ping" -> m.optJSONObject("ping_event")?.optLong("event_id")?.let {
                     webSocket.send(JSONObject().put("type", "pong").put("event_id", it).toString())
                 }
@@ -126,7 +135,7 @@ class ElevenAgent(
                     val command = call.optJSONObject("parameters")?.optString("command").orEmpty()
                     main.post {
                         if (command.isBlank()) answer(webSocket, id, "No command given.", true)
-                        else onCommand(command) { answer(webSocket, id, it, false) }
+                        else onCommand(command) { answer(webSocket, id, "Say this in ONE short line (at most 8 words), then stay quiet: $it", false) }
                     }
                 }
             }
@@ -142,15 +151,24 @@ class ElevenAgent(
     }
 
     private companion object {
+        // Mic loudness (RMS of 16-bit samples) below which sound counts as background noise.
+        const val GATE = 450f
         // Sent at the start of every call, so the call stays short and on topic whatever the agent's own prompt says.
         const val RULES = "Rules for this call: answer in ONE short line (at most 8 words), either an answer or one " +
             "question, never both. Talk only about what the person said or the BolKhata app (khata, expenses, udhaar, " +
             "totals). Never start talking by yourself; if the person is quiet, stay quiet. Ignore noise and half words. " +
             "For anything the app should do, call app_command and say only \"ek minute\", then say its answer in one line. " +
+            "The command must be the person's own words exactly as said, never reworded or translated. " +
+            "Never ask if the person is still there. " +
+            "Speak calmly and softly like a polite assistant, at a steady, unhurried pace, with a natural Urdu/Hindi accent. " +
             "Never make up amounts."
     }
 
+    /** The agent may be heard only for a while after the person spoke or the app answered, so it never talks by itself. */
+    private fun mayTalk(ms: Long) { talkUntil = System.currentTimeMillis() + ms }
+
     private fun answer(webSocket: WebSocket, id: String, result: String, isError: Boolean) {
+        mayTalk(15_000)
         webSocket.send(
             JSONObject().put("type", "client_tool_result").put("tool_call_id", id)
                 .put("result", result).put("is_error", isError).toString()
@@ -193,9 +211,13 @@ class ElevenAgent(
             while (running) {
                 val n = rec.read(chunk, 0, chunk.size)
                 if (n <= 0) continue
+                val loud = rms(chunk, n)
+                // Noise gate: quiet background sound goes out as silence; speech (and a short tail after it) as heard.
+                if (loud >= GATE) lastLoud = System.currentTimeMillis()
+                if (System.currentTimeMillis() - lastLoud > 700) chunk.fill(0, 0, n)
                 socket?.send(JSONObject().put("user_audio_chunk", Base64.encodeToString(chunk, 0, n, Base64.NO_WRAP)).toString())
-                val level = (rms(chunk, n) / 3000f).coerceIn(0f, 1f)
-                val speaking = System.currentTimeMillis() < speakingUntil
+                val level = (loud / 3000f).coerceIn(0f, 1f)
+                val speaking = System.currentTimeMillis() < speakingUntil + 400 // short pauses don't flicker the wave
                 main.post { onSpeaking(speaking); if (!speaking) onLevel(level) }
             }
         }
