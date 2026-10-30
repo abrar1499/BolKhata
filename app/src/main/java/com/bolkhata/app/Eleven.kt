@@ -34,7 +34,10 @@ object Eleven {
                     it.write(JSONObject().put("text", text).put("model_id", MODEL).toString().toByteArray(Charsets.UTF_8))
                 }
                 val code = conn.responseCode
-                if (code !in 200..299) error(describe(code))
+                if (code !in 200..299) {
+                    val body = conn.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
+                    error(describe(code, body))
+                }
                 conn.inputStream.use { input -> out.outputStream().use { input.copyTo(it) } }
                 out
             } finally {
@@ -43,11 +46,19 @@ object Eleven {
         }
     }
 
-    private fun describe(code: Int) = when (code) {
-        401 -> "ElevenLabs key is wrong"
-        402, 429 -> "ElevenLabs limit reached"
-        404, 422 -> "ElevenLabs Voice ID not found"
-        else -> "ElevenLabs error $code"
+    /** ElevenLabs' own reason when it gives one (a free plan can't use Voice Library voices, quota used up…). */
+    private fun describe(code: Int, body: String): String {
+        val reason = runCatching {
+            val detail = JSONObject(body).opt("detail")
+            if (detail is JSONObject) detail.optString("message") else detail?.toString().orEmpty()
+        }.getOrDefault("").trim().take(160)
+        return when {
+            reason.isNotEmpty() -> "ElevenLabs: $reason"
+            code == 401 -> "ElevenLabs key is wrong"
+            code == 402 || code == 429 -> "ElevenLabs limit reached"
+            code == 404 || code == 422 -> "ElevenLabs Voice ID not found"
+            else -> "ElevenLabs error $code"
+        }
     }
 }
 
