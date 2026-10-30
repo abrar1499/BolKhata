@@ -205,7 +205,7 @@ class ElevenAgent(
                 if (System.currentTimeMillis() - lastLoud > 700) chunk.fill(0, 0, n)
                 socket?.send(JSONObject().put("user_audio_chunk", Base64.encodeToString(chunk, 0, n, Base64.NO_WRAP)).toString())
                 val level = (loud / 3000f).coerceIn(0f, 1f)
-                val speaking = System.currentTimeMillis() < speakingUntil
+                val speaking = System.currentTimeMillis() < speakingUntil + 400 // short pauses don't flicker the wave
                 main.post { onSpeaking(speaking); if (!speaking) onLevel(level) }
             }
         }
