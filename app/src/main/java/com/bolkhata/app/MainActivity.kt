@@ -967,58 +967,6 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     chatRead = { chatViaReader(it) }
 
     /** Without AI (no key, or no internet): save clear entries, answer simple questions, never stay silent. */
-    fun chatOffline(text: String, roman: String, aiDown: Boolean, why: String? = null) {
-        val question = roman.endsWith("?") || runCatching { Questions.isQuestion(roman) }.getOrDefault(false)
-        val parsed = runCatching { Parser.parse(roman) }.getOrNull()
-        if (!question && parsed != null && (parsed.entries.isNotEmpty() || parsed.unclear.isNotEmpty())) {
-            chatViaReader(text)
-            return
-        }
-        val answer = if (question) runCatching { Questions.answer(roman, entries, currency) }.getOrNull() else null
-        postChat(
-            answer?.text ?: if (aiDown) {
-                "AI didn't answer" + (if (!why.isNullOrBlank()) " ($why)" else "") +
-                    ". I can still save entries like \"petrol 60\", and answer simple questions like \"how much this month?\"."
-            } else {
-                "Hi! Tell me an expense like \"petrol 60\", or ask \"how much did I spend this month?\". Turn on AI in Settings for full answers."
-            },
-            isUser = false
-        )
-    }
-
-    /**
-     * The app's own reading of a chat message: entries it can read, questions it can answer from its own numbers,
-     * commands and edits it understands. True when handled, so no AI is needed.
-     */
-    fun localChat(text: String, roman: String): Boolean {
-        if (Recat.isCommand(roman)) {
-            val g = Recat.plan(entries)
-            openRecat()
-            postChat(if (g.isEmpty()) "No expenses in Other." else "Found ${g.sumOf { it.ids.size }} expenses in Other (${g.size} shops). Check the list and tap Apply.", isUser = false)
-            return true
-        }
-        val u = Understand.read(roman, contactNames(), wordFixes)
-        if (u.kind != Understand.Kind.ENTRY || u.choices.size > 1) { chatViaReader(text); return true }
-        if (Commands.read(roman) != null || Parser.payStatus(roman) != null || Edits.plan(roman, entries) != null) {
-            chatViaReader(text); return true
-        }
-        if (Questions.isQuestion(u.text)) {
-            val a = Questions.answer(u.text, scopeKhataEntries(entries), currency) ?: return false
-            lastSpeech = a.text
-            postChat(a.text, isUser = false)
-            return true
-        }
-        if (Split.detect(u.text, contactNames()) != null) { chatViaReader(text); return true }
-        val r = Parser.parse(u.text)
-        val sure = r.entries.isNotEmpty() && r.unclear.isEmpty() && r.entries.none { it.type == Type.KHARCHA && it.category == Cat.OTHER }
-        if (sure) { chatViaReader(text); return true }
-        return false
-    }
-
-    /**
-     * The single assistant request pipeline used by both the Home input and the full Chat screen.
-     * It resolves language, context, deterministic app actions, AI interpretation, and persistence in one place.
-     */
     fun chatInput(raw: String) {
         val text = raw.trim()
         if (text.isEmpty() || chatLoading) return
