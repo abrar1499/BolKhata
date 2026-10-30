@@ -324,15 +324,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             return
         }
         if (contextualEntries.isNotEmpty()) {
-            val knownFingerprints = entries.mapNotNull { it.sourceFingerprint.takeIf(String::isNotBlank) }.toMutableSet()
-            var skippedDuplicates = 0
-            val freshEntries = contextualEntries.filter { candidate ->
-                val fingerprint = candidate.sourceFingerprint
-                if (fingerprint.isNotBlank() && !knownFingerprints.add(fingerprint)) {
-                    skippedDuplicates++
-                    false
-                } else true
-            }
+            val deduplicated = BankTransactionDeduplicator.filterNew(contextualEntries, entries)
+            val freshEntries = deduplicated.fresh
+            val skippedDuplicates = deduplicated.skipped
             if (freshEntries.isEmpty() && skippedDuplicates > 0) {
                 val message = "This exact bank transaction is already saved. I didn't add it again."
                 chatWatch = null
