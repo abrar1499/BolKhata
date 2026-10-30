@@ -1548,10 +1548,12 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { pad ->
-        Box(Modifier.padding(pad).fillMaxSize()) {
+        // Like ChatGPT, screens run underneath the floating message bar; lists add LocalBarSpace at their end.
+        Box(Modifier.padding(top = pad.calculateTopPadding()).fillMaxSize()) {
             val who = people
             val acct = account
             CompositionLocalProvider(
+                LocalBarSpace provides pad.calculateBottomPadding(),
                 LocalMainOpener provides { a: MainAcct -> ledger = a },
                 LocalEntryMenu provides { e: Entry -> menuFor = e }
             ) {

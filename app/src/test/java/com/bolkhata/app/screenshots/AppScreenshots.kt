@@ -10,6 +10,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.unit.dp
 import com.bolkhata.app.*
 import com.github.takahirom.roborazzi.ExperimentalRoborazziApi
 import com.github.takahirom.roborazzi.captureScreenRoboImage
@@ -65,7 +66,8 @@ class AppScreenshots {
     @Composable
     private fun WithBar(voice: VoiceState? = null, content: @Composable () -> Unit) {
         Box(Modifier.fillMaxSize()) {
-            Column(Modifier.fillMaxSize()) { content() }
+            // As in the app: the list runs under the floating bar and ends with room for it.
+            CompositionLocalProvider(LocalBarSpace provides 90.dp) { Column(Modifier.fillMaxSize()) { content() } }
             Box(Modifier.align(Alignment.BottomCenter)) {
                 InputBar(onSend = {}, onMic = {}, placeholder = "Speak, type or ask…", onAttach = {}, voice = voice)
             }
