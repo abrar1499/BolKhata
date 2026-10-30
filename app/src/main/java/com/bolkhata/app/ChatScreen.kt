@@ -13,10 +13,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Headset
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -64,9 +64,6 @@ fun ChatScreen(
     onDropImports: () -> Unit = {},
     onUpdateSaved: () -> Unit = {},
     voiceOn: Boolean = false,
-    voiceStatus: String = "",
-    voicePartial: String = "",
-    onVoiceToggle: () -> Unit = {},
     pendingChanges: List<String> = emptyList(),
     onApplyChanges: () -> Unit = {},
     onCancelChanges: () -> Unit = {}
@@ -100,31 +97,25 @@ fun ChatScreen(
                         Text("Assistant", color = LocalHeader.current.on, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                         Text(subtitle, color = LocalHeader.current.on.copy(alpha = 0.8f), fontSize = 13.sp, maxLines = 1)
                     }
-                    IconButton(
-                        onClick = onVoiceToggle,
-                        modifier = Modifier.clip(CircleShape).background(
-                            if (voiceOn) MaterialTheme.colorScheme.surface else LocalHeader.current.chip
-                        )
-                    ) {
-                        Icon(
-                            Icons.Filled.Headset,
-                            contentDescription = if (voiceOn) "Stop voice chat" else "Talk to the assistant",
-                            tint = if (voiceOn) MaterialTheme.colorScheme.primary else LocalHeader.current.on
-                        )
-                    }
-                    IconButton(
-                        onClick = { confirmShare = true },
-                        enabled = !loading
-                    ) {
-                        Icon(Icons.Filled.Share, contentDescription = "Share chat diagnostics", tint = LocalHeader.current.on)
-                    }
-                    Spacer(Modifier.width(4.dp))
-                    IconButton(
-                        onClick = { confirmClear = true },
-                        enabled = messages.isNotEmpty() && !loading,
-                        modifier = Modifier.clip(CircleShape).background(LocalHeader.current.chip)
-                    ) {
-                        Icon(Icons.Filled.Delete, contentDescription = "Clear chat", tint = LocalHeader.current.on)
+                    Box {
+                        var more by remember { mutableStateOf(false) }
+                        IconButton(onClick = { more = true }) {
+                            Icon(Icons.Filled.MoreVert, contentDescription = "More options", tint = LocalHeader.current.on)
+                        }
+                        DropdownMenu(expanded = more, onDismissRequest = { more = false }) {
+                            DropdownMenuItem(
+                                text = { Text("Share chat log") },
+                                leadingIcon = { Icon(Icons.Outlined.Share, contentDescription = null) },
+                                enabled = !loading,
+                                onClick = { more = false; confirmShare = true }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Clear chat") },
+                                leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null) },
+                                enabled = messages.isNotEmpty() && !loading,
+                                onClick = { more = false; confirmClear = true }
+                            )
+                        }
                     }
                 }
                 Spacer(Modifier.height(12.dp))
@@ -247,32 +238,6 @@ fun ChatScreen(
             }
         }
 
-        if (voiceOn) {
-            // Voice conversation bar: what it's doing, what it heard, and a stop button.
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(MaterialTheme.colorScheme.primaryContainer)
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    Icons.Filled.Headset, contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(voiceStatus.ifBlank { "Voice chat on" }, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                    if (voicePartial.isNotBlank()) {
-                        Text(voicePartial, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-                TextButton(onClick = onVoiceToggle) { Text("Stop", fontWeight = FontWeight.Bold) }
-            }
-        }
         if (quick.isNotEmpty() && !voiceOn) {
             Row(
                 Modifier

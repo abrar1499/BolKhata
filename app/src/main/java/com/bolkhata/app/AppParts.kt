@@ -29,6 +29,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -49,7 +53,8 @@ internal fun InputBar(
     onMic: () -> Unit,
     placeholder: String = "Type here…",
     onAttach: (() -> Unit)? = null,
-    busy: Boolean = false
+    busy: Boolean = false,
+    voice: VoiceState? = null
 ) {
     var text by rememberSaveable { mutableStateOf("") }
     fun send() {
@@ -61,8 +66,10 @@ internal fun InputBar(
     }
     val bg = MaterialTheme.colorScheme.background
     val ink = MaterialTheme.colorScheme.onSurface
+    val talking = voice?.on == true
     Column(Modifier.fillMaxWidth()) {
         Box(Modifier.fillMaxWidth().height(18.dp).background(Brush.verticalGradient(listOf(bg.copy(alpha = 0f), bg))))
+        if (talking) VoiceCaption(voice!!.status, voice.heard, Modifier.background(bg))
         Box(Modifier.fillMaxWidth().background(bg).navigationBarsPadding().padding(start = 12.dp, end = 12.dp, bottom = 10.dp)) {
             Surface(
                 shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 6.dp,
@@ -102,10 +109,17 @@ internal fun InputBar(
                             .size(44.dp)
                             .clip(CircleShape)
                             .background(GreenDeep)
-                            .clickable(enabled = !busy) { if (text.isNotBlank()) send() else onMic() },
+                            .clickable(enabled = talking || !busy) {
+                                when {
+                                    talking -> voice!!.toggle()
+                                    text.isNotBlank() -> send()
+                                    else -> voice?.toggle?.invoke() ?: onMic()
+                                }
+                            },
                         contentAlignment = Alignment.Center
                     ) {
                         when {
+                            talking -> Box(Modifier.size(14.dp).clip(RoundedCornerShape(3.dp)).background(Color.White))
                             busy -> CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
                             text.isNotBlank() -> Icon(Icons.Filled.ArrowUpward, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(22.dp))
                             else -> SoundWave(Color.White)
@@ -114,6 +128,29 @@ internal fun InputBar(
                 }
             }
         }
+    }
+}
+
+/** Voice chat as the message bar shows it: on/off, what it is doing, what it heard so far; [toggle] connects or stops. */
+class VoiceState(val on: Boolean, val status: String, val heard: String, val toggle: () -> Unit)
+
+/** One or two small lines above the bar while voice chat is on: a green dot, the status, and the words heard. */
+@Composable
+private fun VoiceCaption(status: String, heard: String, modifier: Modifier) {
+    Row(
+        modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Box(Modifier.padding(top = 5.dp).size(6.dp).clip(CircleShape).background(GreenDeep))
+        Spacer(Modifier.width(8.dp))
+        Text(
+            buildAnnotatedString {
+                withStyle(SpanStyle(fontWeight = FontWeight.Medium, color = GreenDeep)) { append(status.ifBlank { "Listening…" }) }
+                if (heard.isNotBlank()) append("  " + heard)
+            },
+            fontSize = 12.sp, lineHeight = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2, overflow = TextOverflow.Ellipsis
+        )
     }
 }
 

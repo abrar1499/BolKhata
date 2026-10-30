@@ -63,10 +63,12 @@ class AppScreenshots {
     }
 
     @Composable
-    private fun WithBar(content: @Composable () -> Unit) {
+    private fun WithBar(voice: VoiceState? = null, content: @Composable () -> Unit) {
         Box(Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize()) { content() }
-            Box(Modifier.align(Alignment.BottomCenter)) { InputBar(onSend = {}, onMic = {}, placeholder = "Speak, type or ask…", onAttach = {}) }
+            Box(Modifier.align(Alignment.BottomCenter)) {
+                InputBar(onSend = {}, onMic = {}, placeholder = "Speak, type or ask…", onAttach = {}, voice = voice)
+            }
         }
     }
 
@@ -90,6 +92,18 @@ class AppScreenshots {
                 messages = messages, loading = false, entries = entries, currency = "SAR", subtitle = "Oct · 930.66 SAR spent",
                 suggestions = emptyList(), quick = emptyList(), showStock = false, onTab = {}, onMenu = {}, onSend = {},
                 onClear = {}, onUndo = {}, onEditEntry = {}, onAddSuggestions = {}, onIgnoreSuggestions = {}, onQuick = {}
+            )
+        }
+    }
+
+    @Test fun chatVoice() = shot("02b-chat-voice") {
+        WithBar(VoiceState(true, "Listening…", "aaj kitna kharcha huwa") {}) {
+            ChatScreen(
+                messages = listOf(ChatMessage("m1", true, "hello"), ChatMessage("m2", false, "Wa alaikum assalam! Add expenses or ask about your money.")),
+                loading = false, entries = entries, currency = "SAR", subtitle = "Oct · 930.66 SAR spent",
+                suggestions = emptyList(), quick = emptyList(), showStock = false, onTab = {}, onMenu = {}, onSend = {},
+                onClear = {}, onUndo = {}, onEditEntry = {}, onAddSuggestions = {}, onIgnoreSuggestions = {}, onQuick = {},
+                voiceOn = true
             )
         }
     }
