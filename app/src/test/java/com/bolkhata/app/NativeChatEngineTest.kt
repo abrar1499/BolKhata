@@ -86,6 +86,38 @@ class NativeChatEngineTest {
         assertEquals(Query.day("2026-10-29"), result.filter.from)
     }
 
+    @Test fun explicitDayMonthSearchUsesTheExactDayAndDoesNotTreatMonthAsAnItem() {
+        val result = read("28 oct expense")
+        assertEquals("ask", result.kind)
+        assertEquals(setOf(Type.KHARCHA), result.filter.types)
+        assertTrue(result.filter.items.isEmpty())
+        assertEquals(Query.day("2026-10-28"), result.filter.from)
+        assertEquals(result.filter.from, result.filter.to?.let { Query.day("2026-10-28") })
+    }
+
+    @Test fun dateOnlyFollowUpInheritsThePreviousExpenseSearch() {
+        val history = listOf(
+            ChatMessage("u1", true, "today expense"),
+            ChatMessage("a1", false, "Nothing found")
+        )
+        val result = read("28 oct", history)
+        assertEquals("ask", result.kind)
+        assertEquals(setOf(Type.KHARCHA), result.filter.types)
+        assertEquals(Query.day("2026-10-28"), result.filter.from)
+    }
+
+    @Test fun searchAgainRepeatsTheLastDatabaseSearch() {
+        val history = listOf(
+            ChatMessage("u1", true, "show expenses between 10 and 50"),
+            ChatMessage("a1", false, "Found 2 entries")
+        )
+        val result = read("search again", history)
+        assertEquals("ask", result.kind)
+        assertEquals(10.0, result.filter.min!!, 0.001)
+        assertEquals(50.0, result.filter.max!!, 0.001)
+        assertEquals(setOf(Type.KHARCHA), result.filter.types)
+    }
+
     @Test fun pronounDeleteUsesOnlyTheExactEntryIdsFromTheLastAssistantResult() {
         val history = listOf(
             ChatMessage("u1", true, "show petrol yesterday"),
