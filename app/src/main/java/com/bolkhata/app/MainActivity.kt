@@ -1056,10 +1056,16 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 val reply = runCatching { runFixed(intent, text, inChat = true) }.getOrElse {
                     "I couldn't safely complete that action. Nothing was changed. Please add the date, amount, item, or person's name."
                 }
+                val matchCount = if (intent.kind in setOf("ask", "open", "delete", "change", "to_khata", "paid_by", "reread")) {
+                    runCatching { Query.select(scopeKhataEntries(entries), intent.filter).size }.getOrNull()
+                } else null
+                val trace = "engine=NativeChatEngine; intent=" + intent.kind +
+                    (if (intent.what.isBlank()) "" else "; query=" + intent.what) +
+                    (matchCount?.let { "; matched=" + it } ?: "") + "; execution=returned"
                 lastTalk = roman + (if (!reply.isNullOrBlank()) " → app: " + reply.take(100) else "")
                 if (!reply.isNullOrBlank()) {
                     lastSpeech = reply
-                    postChat(reply, isUser = false)
+                    postChat(reply, isUser = false, meta = trace)
                 }
             } catch (e: Exception) {
                 val safe = "I couldn't safely understand that. Nothing was changed. Try 'chai 5', 'food this month', or 'last 5 transactions'."
