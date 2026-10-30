@@ -22,6 +22,30 @@ class AssistantSafetyTest {
         ))
     }
 
+    @Test fun naturalLanguageDestinationKhataMatchesSavedName() {
+        assertEquals(
+            "Haji Ashiq",
+            Accounts.khataNameMentionedIn(
+                "es khata ki sari entry haji ashiq waly khata me move kr do",
+                "Affan Ahmed Ilyas Ahmed",
+                listOf("Affan Ahmed Ilyas Ahmed", "Haji Ashiq", "Haji")
+            )
+        )
+        assertEquals(
+            "Haji Ashiq Ahmed",
+            Accounts.khataNameMentionedIn(
+                "move all entries to haji ashiq ahmed khata",
+                "Affan",
+                listOf("Haji Ashiq", "Haji Ashiq Ahmed")
+            )
+        )
+        assertEquals(null, Accounts.khataNameMentionedIn(
+            "move all entries to this khata",
+            "Affan",
+            listOf("Affan", "Haji Ashiq")
+        ))
+    }
+
     @Test fun ambiguousMultiMatchRequiresClarificationUnlessAllWasExplicit() {
         assertEquals(true, Accounts.requiresTargetClarification(3, explicitlyAll = false))
         assertEquals(false, Accounts.requiresTargetClarification(3, explicitlyAll = true))
