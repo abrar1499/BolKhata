@@ -136,6 +136,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var moving by remember { mutableStateOf<Entry?>(null) }
     // The entries before a chat message was handled; what changes after that is reported in the chat.
     var chatWatch by remember { mutableStateOf<List<Entry>?>(null) }
+    var chatSkippedDuplicates by remember { mutableIntStateOf(0) }
     var voiceForChat by remember { mutableStateOf(false) }
     // The assistant's last reply as it should be spoken (voice conversation).
     var lastSpeech by remember { mutableStateOf("") }
@@ -323,16 +324,35 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             return
         }
         if (contextualEntries.isNotEmpty()) {
-            save(contextualEntries + entries)
-            lastAdded = contextualEntries.map { it.id }
-            val ids = lastAdded.toSet()
-            scope.launch {
-                snackbar.currentSnackbarData?.dismiss()
-                val res = snackbar.showSnackbar(
-                    "✓ Added " + contextualEntries.joinToString(", ") { understoodLine(it, currency) },
-                    actionLabel = "Undo", duration = SnackbarDuration.Short
-                )
-                if (res == SnackbarResult.ActionPerformed) moveToTrash(ids)
+            val knownFingerprints = entries.mapNotNull { it.sourceFingerprint.takeIf(String::isNotBlank) }.toMutableSet()
+            var skippedDuplicates = 0
+            val freshEntries = contextualEntries.filter { candidate ->
+                val fingerprint = candidate.sourceFingerprint
+                if (fingerprint.isNotBlank() && !knownFingerprints.add(fingerprint)) {
+                    skippedDuplicates++
+                    false
+                } else true
+            }
+            if (freshEntries.isEmpty() && skippedDuplicates > 0) {
+                val message = "This exact bank transaction is already saved. I didn't add it again."
+                chatWatch = null
+                toast(message)
+                return
+            }
+            if (freshEntries.isNotEmpty()) {
+                save(freshEntries + entries)
+                lastAdded = freshEntries.map { it.id }
+                chatSkippedDuplicates = skippedDuplicates
+                val ids = lastAdded.toSet()
+                scope.launch {
+                    snackbar.currentSnackbarData?.dismiss()
+                    val suffix = if (skippedDuplicates > 0) " · skipped $skippedDuplicates duplicate bank alert(s)" else ""
+                    val res = snackbar.showSnackbar(
+                        "✓ Added " + freshEntries.joinToString(", ") { understoodLine(it, currency) } + suffix,
+                        actionLabel = "Undo", duration = SnackbarDuration.Short
+                    )
+                    if (res == SnackbarResult.ActionPerformed) moveToTrash(ids)
+                }
             }
         }
         if (contextualUnclear.isNotEmpty()) pending = pending + contextualUnclear
@@ -940,18 +960,29 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     LaunchedEffect(entries) {
         val before = chatWatch ?: return@LaunchedEffect
         if (entries === before) return@LaunchedEffect
-        val ids = before.map { it.id }.toSet()
-        val added = entries.filter { it.id !in ids }
+        val beforeById = before.associateBy { it.id }
+        val afterById = entries.associateBy { it.id }
+        val added = entries.filter { it.id !in beforeById }
+        val removed = before.count { it.id !in afterById }
+        val updated = beforeById.keys.intersect(afterById.keys).count { id -> beforeById[id] != afterById[id] }
+        val skipped = chatSkippedDuplicates
+        chatSkippedDuplicates = 0
         chatWatch = null
-        if (added.isNotEmpty()) {
-            postChat(
-                "✓ " + added.size + " " + (if (added.size == 1) "entry" else "entries") + " saved",
-                isUser = false,
-                entryIds = added.map { it.id }
-            )
-        } else {
-            postChat("✓ Done. Your entries are updated.", isUser = false)
+        val summary = when {
+            added.isNotEmpty() && removed == 0 && updated == 0 ->
+                "✓ " + added.size + " " + (if (added.size == 1) "entry" else "entries") + " saved" +
+                    if (skipped > 0) ". Skipped $skipped duplicate bank alert(s)." else "."
+            removed > 0 && added.isEmpty() && updated == 0 ->
+                "✓ Moved $removed " + (if (removed == 1) "entry" else "entries") + " to Trash."
+            added.isEmpty() && removed == 0 && updated > 0 ->
+                "✓ Updated $updated " + (if (updated == 1) "entry" else "entries") + "."
+            added.isNotEmpty() || removed > 0 || updated > 0 ->
+                "✓ Updated records: added ${added.size}, removed $removed, changed $updated." +
+                    if (skipped > 0) ". Skipped $skipped duplicate bank alert(s)." else ""
+            else -> "No database change was detected. Please review the requested action."
         }
+        val trace = "ledger-sync=confirmed; added=${added.size}; removed=$removed; updated=$updated; duplicateSkipped=$skipped"
+        postChat(summary, isUser = false, entryIds = added.map { it.id }, meta = trace)
     }
 
     /**
