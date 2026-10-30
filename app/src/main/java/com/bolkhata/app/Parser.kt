@@ -275,8 +275,7 @@ object Parser {
             """(?i)\b(?:amount|amt)\s*:\s*(?:SAR|AED|PKR|QAR|KWD|OMR|BHD|INR|USD|EUR|GBP)?\s*(\d[\d,]*(?:\.\d{1,2})?)"""
         ).find(input)?.groupValues?.get(1)?.replace(",", "")?.toDoubleOrNull() ?: return ""
         if (kotlin.math.abs(printedAmount - amount) >= 0.01) return ""
-            """(?i)\b(?:at|merchant|store)\s*:\s*(.+?)(?=\s+\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b|\s*$)"""
-            .find(input)?.groupValues?.get(1)?.trim().orEmpty()
+        val merchant = Regex("""(?i)\b(?:at|merchant|store)\s*:\s*(.+?)(?=\s+\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b|\s*$)""").find(input)?.groupValues?.get(1)?.trim().orEmpty()
         if (merchant.isBlank()) return ""
         val dateTime = Regex("""(?i)\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\s+(\d{1,2}:\d{2})\b""")
             .find(input)?.let { it.groupValues[1] + " " + it.groupValues[2] } ?: return ""
@@ -294,13 +293,13 @@ object Parser {
      */
     private fun parseStructuredBankAlert(input: String, now: Long): Entry? {
         val amount = Regex(
-            """(?i)\\b(?:amount|amt)\\s*:\\s*(?:SAR|AED|PKR|QAR|KWD|OMR|BHD|INR|USD|EUR|GBP)?\\s*(\\d[\\d,]*(?:\\.\\d{1,2})?)"""
+            """(?i)\b(?:amount|amt)\s*:\s*(?:SAR|AED|PKR|QAR|KWD|OMR|BHD|INR|USD|EUR|GBP)?\s*(\d[\d,]*(?:\.\d{1,2})?)"""
         ).find(input)?.groupValues?.get(1)?.replace(",", "")?.toDoubleOrNull() ?: return null
         if (amount <= 0.0) return null
         val fingerprint = bankFingerprint(input, amount)
         if (fingerprint.isBlank()) return null
         val merchant = Regex(
-            """(?i)\\b(?:at|merchant|store)\\s*:\\s*(.+?)(?=\\s+\\d{1,2}[/-]\\d{1,2}[/-]\\d{2,4}\\b|\\s*$)"""
+            """(?i)\b(?:at|merchant|store)\s*:\s*(.+?)(?=\s+\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b|\s*$)"""
         ).find(input)?.groupValues?.get(1)?.trim().orEmpty()
         if (merchant.isBlank()) return null
         val date = extractDate(input, now).first ?: return null
