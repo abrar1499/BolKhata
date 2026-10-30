@@ -25,3 +25,9 @@ Open the folder in Android Studio, sync Gradle, connect a phone, and press ▶ R
 - App interface language and speech-recognition language are independent.
 
 Release workflow runs unit tests and builds a signed release APK. Install and test on your own phone before relying on it for important financial records.
+
+## Chat diagnostics and bug reports
+- The Assistant chat header has a Share Diagnostics action. The user must explicitly confirm before a report is created.
+- The report is a plain-text attachment containing up to the latest 100 chat messages, local engine intent/match traces, app version, and Android device metadata.
+- It excludes ledger rows, contact lists, credentials, and attachment file bytes. Chat text can still contain personal or financial details; review before sharing.
+- Share the report to ChatGPT to request debugging. Reports are not sent automatically and the app does not provide a live connection to the developer.
