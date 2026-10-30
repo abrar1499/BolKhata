@@ -116,7 +116,7 @@ object NativeChatEngine {
         if (paidByPhrase) {
             val payer = contacts.firstOrNull { it.isNotBlank() && lower.contains(it.lowercase()) }
                 ?: Understand.matchContact(words, contacts).first
-                ?: Regex("""\\b([\\p{L}]{3,})\\s+(?:ne|has)\\s+(?:paid|pay)\\b""").find(lower)?.groupValues?.get(1)
+                ?: Regex("""\b([\p{L}]{3,})\s+(?:ne|has)\s+(?:paid|pay)\b""").find(lower)?.groupValues?.get(1)
                     ?.replaceFirstChar { it.uppercase() }
             if (payer == null) return chat("Who paid for that entry? Please give the person's saved name.")
             val selectionText = text.replace(payer, " ", ignoreCase = true)
@@ -232,7 +232,7 @@ object NativeChatEngine {
             .ifEmpty { Understand.matchContact(w, contacts).first?.let { listOf(it) }.orEmpty() }
         val last = Regex("""\b(?:last|latest|recent)\s+(\d+)\b""").find(lower)?.groupValues?.get(1)?.toIntOrNull()
             ?: if (Regex("""\b(last|latest|recent)\s+(entry|record|transaction)\b""").containsMatchIn(lower)) 1 else 0
-        val range = Regex("""\\bbetween\\s+(\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+and\\s+(\\d[\\d,]*(?:\\.\\d{1,2})?)\\b""").find(lower)
+        val range = Regex("""\bbetween\s+(\d[\d,]*(?:\.\d{1,2})?)\s+and\s+(\d[\d,]*(?:\.\d{1,2})?)\b""").find(lower)
         val exact = amountAfter(lower, "exactly|equal\\s+to|amount\\s+is|for")
         val min = exact ?: amountAfter(lower, "above|over|more\\s+than|greater\\s+than")
             ?: range?.groupValues?.get(1)?.replace(",", "")?.toDoubleOrNull()
@@ -288,7 +288,7 @@ object NativeChatEngine {
             "last" in w && w.any { it in setOf("year", "saal") } -> return yearBounds(now, -1)
             w.any { it in setOf("this", "is", "iss") } && w.any { it in setOf("year", "saal") } -> return yearBounds(now, 0)
         }
-        val lastDays = Regex("""\\b(?:last|past)\\s+(\\d{1,3})\\s+days?\\b""").find(text)?.groupValues?.get(1)?.toIntOrNull()
+        val lastDays = Regex("""\b(?:last|past)\s+(\d{1,3})\s+days?\b""").find(text)?.groupValues?.get(1)?.toIntOrNull()
         if (lastDays != null) return Bounds(now - lastDays.coerceAtMost(365) * 86_400_000L, now)
 
         val explicit = runCatching { Parser.extractDate(text, now).first }.getOrNull()
