@@ -1033,6 +1033,17 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     fun chatInput(raw: String) {
         val text = raw.trim()
         if (text.isEmpty() || chatLoading) return
+        val previousUser = chatMessages.lastOrNull { it.isUser }
+        val latestAssistant = chatMessages.lastOrNull { !it.isUser }
+        if (previousUser != null && latestAssistant != null &&
+            Accounts.isRecentDuplicateMutationRequest(
+                previousUser.text, previousUser.timestamp, latestAssistant.text, latestAssistant.timestamp,
+                latestAssistant.entryIds.isNotEmpty(), text, System.currentTimeMillis()
+            )
+        ) {
+            postChat("That exact request was just completed, so I didn't run it twice. If you meant another identical transaction, say 'add another'.", isUser = false)
+            return
+        }
         // "speed test": measures each AI model with a tiny question, to see where time goes.
         if (activeKey.isNotBlank() && Regex("""(?i)^\s*(speed ?test|ai ?test|test ?speed)\s*$""").matches(text)) {
             postChat(text, isUser = true)
