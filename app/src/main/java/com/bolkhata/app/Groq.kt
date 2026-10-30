@@ -67,35 +67,46 @@ object Groq {
         }.getOrNull()
     }
 
+    // The voices read Roman Urdu like English, so the line to be heard is written in Hindi (Devanagari) script.
+    private const val SPEAK = "the same sentences for a Hindi voice: in Devanagari script if Urdu or Hindi, unchanged if English"
+
+    /** A line for the call: [text] is shown on screen, [speech] is what the voice reads. */
+    data class Line(val text: String, val speech: String)
+
     private val voiceInstructions = """
         You are the friendly voice of a khata (ledger) app on a phone call. Say the app's answer back to the person
         in one or two short, natural spoken sentences, in the language they spoke (Roman Urdu or English).
         Use ONLY the facts in the app's answer and keep every number exactly, written in digits; never add, guess or
         calculate.
-        No lists, symbols or emojis. Reply with the sentences only.
+        No lists, symbols or emojis. Reply with JSON only: {"say": the sentences, "speak": $SPEAK}.
     """.trimIndent()
 
     /**
      * The voice call's answer as natural speech, or null when Groq is unreachable or the reply has a number the
      * app's answer doesn't (the call then says the app's own first sentence).
      */
-    suspend fun spoken(key: String, said: String, answer: String): String? = withContext(Dispatchers.IO) {
+    suspend fun spoken(key: String, said: String, answer: String): Line? = withContext(Dispatchers.IO) {
         runCatching {
             val body = JSONObject()
                 .put("model", CHAT_MODEL)
                 .put("temperature", 0.3)
-                .put("max_tokens", 200)
+                .put("max_tokens", 400)
                 .put("reasoning_effort", "low")
+                .put("response_format", JSONObject().put("type", "json_object"))
                 .put("messages", JSONArray()
                     .put(JSONObject().put("role", "system").put("content", voiceInstructions))
                     .put(JSONObject().put("role", "user").put("content", "Person said: " + said.take(300) + "\nApp's answer: " + answer.take(800))))
                 .toString().toByteArray(Charsets.UTF_8)
             val (code, text) = post(CHAT_URL, key, "application/json", body)
             if (code !in 200..299) error(describe(code))
-            val reply = JSONObject(text).getJSONArray("choices").getJSONObject(0).getJSONObject("message")
-                .optString("content").trim().removeSurrounding("\"")
+            val reply = JSONObject(JSONObject(text).getJSONArray("choices").getJSONObject(0).getJSONObject("message").optString("content"))
+            val say = reply.optString("say").trim()
+            val speak = reply.optString("speak").trim().ifBlank { say }
             fun digits(s: String) = Regex("""\d+(?:[.,]\d+)?""").findAll(s).map { it.value.replace(",", "") }.toSet()
-            reply.takeIf { it.isNotBlank() && it.length <= 300 && digits(answer).containsAll(digits(it)) }
+            Line(say, speak).takeIf {
+                say.isNotBlank() && say.length <= 300 && speak.length <= 400 &&
+                    digits(answer).containsAll(digits(say)) && digits(answer).containsAll(digits(speak))
+            }
         }.getOrNull()
     }
 
@@ -103,15 +114,15 @@ object Groq {
         You are the friendly female voice assistant of a khata (ledger) app, on a phone call with its owner.
         If they ask the app to do or show anything (add or edit an entry, a balance, a khata, totals, a search,
         a reminder, delete or undo), reply {"say": a very short "one moment" line like "Ek minute, check karti hun.",
-        "command": their request as one short clear message for the app, every number and name kept exactly}.
-        For greetings, small talk or questions about you, reply {"say": a friendly answer of one or two short
-        sentences, "command": ""}. You know nothing about their money: never state amounts or balances yourself.
+        "speak": $SPEAK, "command": their request as one short clear message for the app, every number and name kept
+        exactly}. For greetings, small talk or questions about you, reply {"say": a friendly answer of one or two
+        short sentences, "speak": $SPEAK, "command": ""}. You know nothing about their money: never state amounts or balances yourself.
         If the words are noise or make no sense, reply {"say": "", "command": ""}.
         Speak the way they spoke: Roman Urdu for Urdu or Hindi, else English. Reply with the JSON only.
     """.trimIndent()
 
     /** One turn of the voice call: what to say now, and the request to send to the app (blank for none). */
-    data class Turn(val say: String, val command: String)
+    data class Turn(val say: Line, val command: String)
 
     /**
      * Lets the call feel like talking to an assistant. Null when Groq is unreachable (the call then sends what
@@ -139,8 +150,9 @@ object Groq {
             val reply = JSONObject(JSONObject(text).getJSONArray("choices").getJSONObject(0).getJSONObject("message").optString("content"))
             fun digits(s: String) = Regex("""\d+(?:[.,]\d+)?""").findAll(s).map { it.value.replace(",", "") }.toList()
             val command = reply.optString("command").trim().take(400)
+            val say = reply.optString("say").trim().take(300)
             Turn(
-                say = reply.optString("say").trim().take(300),
+                say = Line(say, reply.optString("speak").trim().take(400).ifBlank { say }),
                 command = if (command.isNotBlank() && digits(command) != digits(said)) said else command
             )
         }.getOrNull()
