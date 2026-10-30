@@ -5,6 +5,14 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class AssistantSafetyTest {
+    @Test fun mutationRequiresTheExactLiveSnapshot() {
+        val old = Entry("entry-1", Type.KHARCHA, 10.0, Cat.KHANA, "Tea", "", "Tea", 1L, 1L)
+        val changed = old.copy(amount = 12.0)
+        assertEquals(true, Accounts.snapshotsMatch(listOf(old), listOf(old)))
+        assertEquals(false, Accounts.snapshotsMatch(listOf(changed), listOf(old)))
+        assertEquals(false, Accounts.snapshotsMatch(emptyList(), listOf(old)))
+    }
+
     @Test fun modelTargetsResolveOnlyByExactStableId() {
         val first = Entry("entry-alpha", Type.KHARCHA, 10.0, Cat.KHANA, "Tea", "", "Tea", 1L, 1L)
         val second = Entry("entry-beta", Type.KHARCHA, 20.0, Cat.TRANSPORT, "Fuel", "", "Fuel", 2L, 2L)
