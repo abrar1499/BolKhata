@@ -90,8 +90,8 @@ class AppScreenshots {
         WithBar {
             ChatScreen(
                 messages = messages, loading = false, entries = entries, currency = "SAR", subtitle = "Oct · 930.66 SAR spent",
-                suggestions = emptyList(), quick = emptyList(), showStock = false, onTab = {}, onMenu = {}, onSend = {},
-                onClear = {}, onUndo = {}, onEditEntry = {}, onAddSuggestions = {}, onIgnoreSuggestions = {}, onQuick = {}
+                suggestions = emptyList(), showStock = false, onTab = {}, onMenu = {}, onSend = {},
+                onClear = {}, onUndo = {}, onEditEntry = {}, onAddSuggestions = {}, onIgnoreSuggestions = {}
             )
         }
     }
@@ -101,8 +101,8 @@ class AppScreenshots {
             ChatScreen(
                 messages = listOf(ChatMessage("m1", true, "hello"), ChatMessage("m2", false, "Wa alaikum assalam! Add expenses or ask about your money.")),
                 loading = false, entries = entries, currency = "SAR", subtitle = "Oct · 930.66 SAR spent",
-                suggestions = emptyList(), quick = emptyList(), showStock = false, onTab = {}, onMenu = {}, onSend = {},
-                onClear = {}, onUndo = {}, onEditEntry = {}, onAddSuggestions = {}, onIgnoreSuggestions = {}, onQuick = {},
+                suggestions = emptyList(), showStock = false, onTab = {}, onMenu = {}, onSend = {},
+                onClear = {}, onUndo = {}, onEditEntry = {}, onAddSuggestions = {}, onIgnoreSuggestions = {},
                 voiceOn = true
             )
         }

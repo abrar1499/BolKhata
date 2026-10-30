@@ -3,7 +3,6 @@ package com.bolkhata.app
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -48,7 +47,6 @@ fun ChatScreen(
     currency: String,
     subtitle: String,
     suggestions: List<Entry>,
-    quick: List<Entry>,
     showStock: Boolean,
     onTab: (Tab) -> Unit,
     onMenu: () -> Unit,
@@ -62,7 +60,6 @@ fun ChatScreen(
     onEditEntry: (Entry) -> Unit,
     onAddSuggestions: (List<Entry>) -> Unit,
     onIgnoreSuggestions: (Set<String>) -> Unit,
-    onQuick: (Entry) -> Unit,
     imports: List<Entry> = emptyList(),
     importDupes: Set<String> = emptySet(),
     onAddImports: (List<Entry>) -> Unit = {},
@@ -242,23 +239,6 @@ fun ChatScreen(
             }
         }
 
-        if (quick.isNotEmpty() && !voiceOn) {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                quick.forEach { e ->
-                    AssistChip(
-                        onClick = { onQuick(e) },
-                        label = { Text("+ " + quickLabel(e) + " " + fmt(e.amount), maxLines = 1) },
-                        shape = CircleShape
-                    )
-                }
-            }
-        }
     }
 
     if (confirmShare) {
@@ -298,7 +278,6 @@ fun ChatScreen(
     }
 }
 
-fun quickLabel(e: Entry): String = e.item.ifBlank { e.note }.ifBlank { e.category.label }.take(18)
 
 /** Long-press a chat message to copy its whole text. */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
