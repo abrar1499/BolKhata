@@ -1070,35 +1070,22 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         chatLoading = true
         scope.launch {
             try {
-                var intent = NativeChatEngine.interpret(
-                    roman, scopeKhataEntries(entries), contactNames(), wordFixes, history, currency = currency
-                )
-                // Hybrid: only when the local engine did not understand, and only with the owner's own Groq key.
-                // Groq rewrites the sentence as a plain command and the app runs it, so numbers still come from records.
+                // With the owner's Groq key, every message is first corrected by Groq (spelling, script, names).
+                // Groq only rewrites; the local engine below still decides and answers from the saved records.
                 var groqTrace = ""
-                if (intent.unsure && groqKey.isNotBlank()) {
-                    loadingLabel = "Thinking with Groq…"
-                    Groq.rephrase(groqKey, text, contactNames(), history).fold(
-                        onSuccess = { help ->
-                            val again = help.command.takeIf { it.isNotBlank() }?.let {
-                                NativeChatEngine.interpret(
-                                    runCatching { Translit.toRoman(it) }.getOrDefault(it),
-                                    scopeKhataEntries(entries), contactNames(), wordFixes, history, currency = currency
-                                )
-                            }
-                            when {
-                                again != null && !again.unsure -> { intent = again; groqTrace = "; groq=command:" + help.command.take(80) }
-                                help.reply.isNotBlank() -> {
-                                    intent = NativeChatEngine.Fixed("", "chat", help.reply)
-                                    groqTrace = "; groq=reply"
-                                }
-                                else -> groqTrace = "; groq=no_help"
-                            }
-                        },
-                        onFailure = { groqTrace = "; groq=error:" + (it.message ?: "network").take(60) }
-                    )
-                    loadingLabel = "Thinking…"
+                val read = if (groqKey.isBlank()) roman else {
+                    val names = Understand.similarNames(roman.split(Regex("""\s+""")), contactNames())
+                    val lastAnswer = history.lastOrNull { !it.isUser }?.text.orEmpty()
+                    val fixed = Groq.correct(groqKey, text, lastAnswer, names)
+                    if (fixed == null) { groqTrace = "; groq=unavailable"; roman }
+                    else {
+                        groqTrace = if (fixed.equals(text, ignoreCase = true)) "; groq=same" else "; groq=" + fixed.take(120)
+                        runCatching { Translit.toRoman(fixed) }.getOrDefault(fixed)
+                    }
                 }
+                val intent = NativeChatEngine.interpret(
+                    read, scopeKhataEntries(entries), contactNames(), wordFixes, history, currency = currency
+                )
                 if (intent.kind in setOf("delete", "clear_all", "change", "to_khata", "paid_by", "reread", "undo")) {
                     val actionSnapshot = entries
                     chatWatch = actionSnapshot

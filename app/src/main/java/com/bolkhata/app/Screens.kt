@@ -1671,9 +1671,10 @@ fun SettingsScreen(
                 text = {
                     Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(
-                            "Optional. When the app doesn't understand a message, it asks Groq to rephrase it, then the app " +
-                                "answers from your own records (Groq never makes up amounts). Only that message, the last few " +
-                                "chat lines and your khata names are sent, never your entries. Needs internet.",
+                            "Optional. Every chat message is first corrected by Groq (spelling, Urdu script, names), then the " +
+                                "app answers from your own records. Groq never answers or changes amounts. Only the message, the " +
+                                "app's last reply and a few similar khata names are sent, never your entries. Needs internet; " +
+                                "without it the app works as before.",
                             fontSize = 13.sp, color = faint
                         )
                         OutlinedTextField(

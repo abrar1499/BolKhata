@@ -11,10 +11,10 @@ import java.net.URL
 /**
  * Optional help from Groq, used only when the owner saved their own key in Settings.
  *
- * - [rephrase]: when the local engine does not understand a sentence, Groq rewrites it as a plain command the app
- *   already knows ("nrgs ka khata kholo" -> "Nargis Rashid ka khata"). The app then runs that command itself, so
- *   every amount and total still comes from the saved records, never from the model. Only the sentence, the last
- *   few chat lines and the saved khata names are sent; entries are not.
+ * - [correct]: every chat message is first corrected by Groq (spelling, Urdu/Hindi script to Roman, names to the
+ *   saved spelling: "nrgs ka khata kholo" -> "Nargis Rashid ka khata"). Groq only corrects; the app's own engine
+ *   then reads the message and answers from the saved records. Only the message, the app's last reply and a few
+ *   similar saved names are sent; entries never are.
  * - [transcribe]: Whisper speech-to-text for the mic button.
  */
 object Groq {
@@ -23,46 +23,46 @@ object Groq {
     private const val CHAT_MODEL = "openai/gpt-oss-20b"
     private const val VOICE_MODEL = "whisper-large-v3"
 
-    /** [command] for the app to run, or [reply] for small talk. Either may be blank. */
-    class Help(val command: String, val reply: String)
-
     private val instructions = """
-        You help an offline khata (personal ledger) app in Pakistan/Gulf. People write Roman Urdu, Urdu script, Hindi
-        or English, often misspelled or from voice typing. Rewrite the user's last message as ONE short command the app
-        understands, using these forms:
-        - add money: "chai 5", "petrol 60", "Ali ko 500 diye", "Ali se 300 liye", "salary 3000 mili"
-        - questions: "aaj kitna kharcha", "kal kitna kharcha", "food this month", "last 5 transactions", "28 oct ka kharcha"
-        - a person's account: "<exact saved name> ka khata", "<exact saved name> ka balance"
-        - edits: "last entry 400 karo", "petrol 50 nahi 40 tha", "last entry delete"
-        Use a saved name exactly as listed when the user means one of them. Never invent amounts, dates or totals.
-        If the message is greeting/small talk or not about money, leave "command" empty and put a short friendly reply
-        in the user's language in "reply". Answer with JSON only: {"command": "...", "reply": "..."}
+        Fix a message for an offline khata (ledger) app. People type Roman Urdu, Urdu or Hindi script, or English,
+        often misspelled or from voice typing. Return the SAME message in simple Roman Urdu/English the app can read:
+        fix spelling, write Urdu/Hindi script in Roman letters, and replace a name with the matching saved name.
+        Keep every number exactly. Do not answer, add or drop meaning. Short replies like "detail do" stay as they are.
+        Reply with the corrected message only.
     """.trimIndent()
 
-    suspend fun rephrase(key: String, said: String, names: List<String>, recent: List<ChatMessage>): Result<Help> =
-        withContext(Dispatchers.IO) {
-            runCatching {
-                val context = buildString {
-                    append("Saved khata names: ").append(names.take(200).joinToString(", ").ifBlank { "(none)" }).append('\n')
-                    recent.takeLast(4).forEach { append(if (it.isUser) "User: " else "App: ").append(it.text.take(300)).append('\n') }
-                    append("User's last message: ").append(said.take(500))
-                }
-                val body = JSONObject()
-                    .put("model", CHAT_MODEL)
-                    .put("temperature", 0)
-                    .put("max_tokens", 400)
-                    .put("messages", JSONArray()
-                        .put(JSONObject().put("role", "system").put("content", instructions))
-                        .put(JSONObject().put("role", "user").put("content", context)))
-                val (code, text) = post(CHAT_URL, key, "application/json", body.toString().toByteArray(Charsets.UTF_8))
-                if (code !in 200..299) error(describe(code))
-                val content = JSONObject(text).getJSONArray("choices").getJSONObject(0).getJSONObject("message").optString("content")
-                // The model is asked for JSON only; take the first {...} in case it adds words around it.
-                val json = Regex("""\{[\s\S]*\}""").find(content)?.value ?: error("No JSON in reply")
-                val o = JSONObject(json)
-                Help(o.optString("command").trim(), o.optString("reply").trim())
+    /**
+     * Every chat message passes through here first when Groq is on. Returns the corrected message, or null when Groq
+     * is unreachable or changed a number (the app then uses the message as typed). [lastAnswer] lets a follow-up
+     * ("dlip shhzad aqbal" after "Which A or B?") be corrected; [names] are only the saved names that look like words
+     * in the message, to keep tokens low.
+     */
+    suspend fun correct(key: String, said: String, lastAnswer: String, names: List<String>): String? = withContext(Dispatchers.IO) {
+        runCatching {
+            val prompt = buildString {
+                if (names.isNotEmpty()) append("Saved names: ").append(names.joinToString(", ")).append('\n')
+                if (lastAnswer.isNotBlank()) append("App's last reply: ").append(lastAnswer.take(150)).append('\n')
+                append("Message: ").append(said.take(300))
             }
-        }
+            fun body(lowEffort: Boolean) = JSONObject()
+                .put("model", CHAT_MODEL)
+                .put("temperature", 0)
+                .put("max_tokens", 300)
+                .apply { if (lowEffort) put("reasoning_effort", "low") }
+                .put("messages", JSONArray()
+                    .put(JSONObject().put("role", "system").put("content", instructions))
+                    .put(JSONObject().put("role", "user").put("content", prompt)))
+                .toString().toByteArray(Charsets.UTF_8)
+            var (code, text) = post(CHAT_URL, key, "application/json", body(true))
+            if (code == 400) post(CHAT_URL, key, "application/json", body(false)).let { code = it.first; text = it.second }
+            if (code !in 200..299) error(describe(code))
+            val fixed = JSONObject(text).getJSONArray("choices").getJSONObject(0).getJSONObject("message")
+                .optString("content").trim().removeSurrounding("\"").lines().firstOrNull { it.isNotBlank() }?.trim().orEmpty()
+            // Never let a correction change money: the digits must stay exactly the same.
+            fun digits(s: String) = Regex("""\d+(?:[.,]\d+)?""").findAll(s).map { it.value.replace(",", "") }.toList()
+            fixed.takeIf { it.isNotBlank() && it.length <= 400 && digits(it) == digits(said) }
+        }.getOrNull()
+    }
 
     /** Whisper speech-to-text. [language] is "ur", "en" or "" to let Whisper detect it. */
     suspend fun transcribe(key: String, audio: File, language: String): Result<String> = withContext(Dispatchers.IO) {
