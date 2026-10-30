@@ -18,7 +18,7 @@ object Normalizer {
         // Days and times
         v("aaj", "aj", "aaj", "aajj", "aja", "today")
         v("kal", "kl", "kall", "kaal")
-        v("parson", "parso", "parsoon", "parsun", "prson", "parsuon")
+        v("parson", "parso", "parsu", "parsoon", "parsun", "prson", "parsuon")
         v("subah", "sube", "subha", "subh", "subeh", "suba", "sobah", "subhe", "subay", "morning")
         v("dopahar", "dopehar", "dopher", "dupehar", "dophar", "dopahr", "duphar", "dopeher", "afternoon")
         v("shaam", "sham", "shm", "shaame", "evening")

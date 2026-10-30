@@ -26,7 +26,7 @@ object NativeChatEngine {
         "spending", "expense", "expenses", "kharcha", "kharch", "ka", "ki", "ke", "ko", "se", "ne", "mein", "men",
         "par", "pe", "per", "kitna", "kitne", "kitni", "kitnay", "kitny", "hua", "huwa", "hue", "huay", "hai", "hain",
         "tha", "thi", "the", "batao", "btao", "dikhao", "karo", "kar", "do", "dein", "mujhe", "mera", "meri", "mere",
-        "today", "yesterday", "aaj", "aj", "kal", "parso", "parson", "this", "last", "month", "months", "week", "weeks",
+        "today", "yesterday", "aaj", "aj", "kal", "parso", "parson", "parsu", "parsoon", "parsun", "this", "last", "month", "months", "week", "weeks",
         "year", "years", "mahina", "mahine", "mahiny", "saal", "pichle", "pichhle", "previous", "ago", "day", "days",
         "date", "tareekh", "tarikh", "jan", "january", "feb", "february", "mar", "march", "apr", "april", "may",
         "jun", "june", "jul", "july", "aug", "august", "sep", "sept", "september", "oct", "october",
@@ -111,6 +111,10 @@ object NativeChatEngine {
 
         // Date-only follow-ups and "search again" replay the conversation's search chain.
         // Reinterpreting only the last date message would lose the original type/category filters.
+        if (history.isNotEmpty() && isDetailFollowUp(lower)) {
+            val base = lastSearchFromHistory(history, entries, contacts, wordFixes, currency, now)
+            if (base != null) return Fixed("", "ask", "", "list", base.filter)
+        }
         val dateOnlyFollowUp = isDateFollowUp(lower)
         val repeatSearch = isRepeatSearch(lower)
         if (history.isNotEmpty() && (dateOnlyFollowUp || repeatSearch)) {
@@ -246,7 +250,10 @@ object NativeChatEngine {
                     Regex("""\blast\s+\d+\b""").containsMatchIn(lower) || simpleLookup -> "list"
                 else -> "sum"
             }
-            return Fixed("", "ask", "", what, filter)
+            // "kal kitna huwa tha" names no kind of money: people mean what they spent.
+            val bare = what == "sum" && filter.types.isEmpty() && filter.cats.isEmpty() && filter.persons.isEmpty() &&
+                filter.items.isEmpty() && filter.from != null
+            return Fixed("", "ask", "", what, if (bare) withTypes(filter, setOf(Type.KHARCHA)) else filter)
         }
 
         if (understood?.kind == Understand.Kind.DELETE_LAST) return Fixed("", "delete", "", filter = Query.Filter(last = 1))
@@ -289,7 +296,9 @@ object NativeChatEngine {
             !has(w, setOf("how", "much", "many", "kitna", "kitne", "kitni", "total", "sum", "count")) &&
             !has(w, setOf("today", "yesterday", "aaj", "aj", "kal", "this", "last", "month", "week", "year",
                 "mahina", "mahine", "saal", "time", "overall", "lifetime", "ever", "alltime"))
+        val howMuch = has(w, setOf("kitna", "kitne", "kitni", "kitnay", "kitny"))
         return text.endsWith("?") || has(w, setOf("report", "summary", "overview")) ||
+            (howMuch && has(w, periods + dayBeforeYesterday + "aj")) ||
             has(w, setOf("show", "find", "search", "list", "total", "sum", "count", "highest", "largest", "biggest")) ||
             (has(w, expense + income) && has(w, periods)) ||
             (categoryMentioned && has(w, periods)) || simpleLedgerLookup ||
@@ -343,6 +352,12 @@ object NativeChatEngine {
         Regex("""\b(?:$words)\s+(\d[\d,]*(?:\.\d{1,2})?)\b""").find(text)?.groupValues?.get(1)
             ?.replace(",", "")?.toDoubleOrNull()
 
+    private fun withTypes(f: Query.Filter, types: Set<Type>) = Query.Filter(
+        from = f.from, to = f.to, types = types, persons = f.persons, cats = f.cats, items = f.items,
+        min = f.min, max = f.max, last = f.last, noPeople = f.noPeople, notItems = f.notItems,
+        ids = f.ids, createdFrom = f.createdFrom, createdTo = f.createdTo
+    )
+
     private fun copyFilter(f: Query.Filter, b: Bounds) = Query.Filter(
         from = b.from, to = b.to, types = f.types, persons = f.persons, cats = f.cats, items = f.items,
         min = f.min, max = f.max, last = f.last, noPeople = f.noPeople, notItems = f.notItems,
@@ -362,7 +377,7 @@ object NativeChatEngine {
             return Bounds(start, end)
         }
         when {
-            w.any { it in setOf("parso", "parson") } || text.contains("day before yesterday") -> return day(-2)
+            w.any { it in dayBeforeYesterday } || text.contains("day before yesterday") -> return day(-2)
             w.any { it in setOf("yesterday", "kal", "kl") } -> return day(-1)
             w.any { it in setOf("today", "aaj", "aj") } -> return day(0)
             "tomorrow" in w -> return day(1)
@@ -475,6 +490,9 @@ object NativeChatEngine {
         return Bounds(from, c.timeInMillis)
     }
 
+    /** "parson" in the ways people type it. */
+    private val dayBeforeYesterday = setOf("parso", "parson", "parsu", "parsoon", "parsun", "prson")
+
     private val monthWords = setOf(
         "jan", "january", "feb", "february", "mar", "march", "apr", "april", "may", "jun", "june",
         "jul", "july", "aug", "august", "sep", "sept", "september", "oct", "october", "nov", "november", "dec", "december"
@@ -482,7 +500,7 @@ object NativeChatEngine {
 
     private fun isDateFollowUp(text: String): Boolean {
         val w = tokens(text)
-        val relative = setOf("yesterday", "today", "aaj", "aj", "kal", "parso", "parson", "tomorrow", "month", "week", "year", "mahina", "mahine", "saal")
+        val relative = dayBeforeYesterday + setOf("yesterday", "today", "aaj", "aj", "kal", "tomorrow", "month", "week", "year", "mahina", "mahine", "saal")
         val allowed = relative + monthWords + setOf(
             "what", "about", "and", "how", "much", "this", "last", "day", "then", "phir", "on", "the", "of", "st", "nd", "rd", "th"
         )
@@ -518,6 +536,15 @@ object NativeChatEngine {
             }
         }
         return lastSearch
+    }
+
+    /** "detail do", "details", "tafseel batao", "list dikhao": show the entries behind the last answer. */
+    private fun isDetailFollowUp(text: String): Boolean {
+        val w = tokens(text)
+        val ask = setOf("detail", "details", "detailed", "tafseel", "tafsil", "breakdown", "list", "entries")
+        val filler = ask + setOf("do", "de", "dein", "dena", "dikhao", "dikha", "batao", "btao", "show", "give", "me", "mujhe",
+            "please", "plz", "ki", "ka", "ke", "sab", "sari", "saari", "un", "in", "inki", "unki", "wo", "woh", "the", "its", "of", "with")
+        return w.isNotEmpty() && w.size <= 5 && has(w, ask) && w.all { it in filler }
     }
 
     private fun isRepeatSearch(text: String): Boolean {

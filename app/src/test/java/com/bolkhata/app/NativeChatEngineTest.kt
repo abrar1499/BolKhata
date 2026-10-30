@@ -292,3 +292,52 @@ class NativeChatEngineTest {
         assertTrue(result.reply.isNotBlank())
     }
 }
+
+class NativeChatEngineDayQuestionTest {
+    private val now = Calendar.getInstance().apply {
+        set(2026, Calendar.OCTOBER, 30, 12, 0, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+
+    private fun at(daysAgo: Int) = Calendar.getInstance().apply { timeInMillis = now; add(Calendar.DAY_OF_YEAR, -daysAgo) }.timeInMillis
+
+    private val entries = listOf(
+        Entry("tea", Type.KHARCHA, 5.0, Cat.KHANA, "Tea", "", "", at(1), at(1)),
+        Entry("fuel", Type.KHARCHA, 60.0, Cat.TRANSPORT, "Petrol", "", "", at(2), at(2)),
+        Entry("pay", Type.AAMDANI, 3000.0, Cat.TANKHWAH, "Salary", "", "", at(1), at(1))
+    )
+
+    private fun read(text: String, history: List<ChatMessage> = emptyList()) =
+        NativeChatEngine.interpret(text, entries, now = now, history = history)
+
+    private fun msg(text: String, user: Boolean) = ChatMessage(text.hashCode().toString(), user, text)
+
+    @Test fun kalKitnaHuwaThaAsksForYesterdaysSpending() {
+        val result = read("kal kitna huwa tha")
+        assertEquals("ask", result.kind)
+        assertEquals("sum", result.what)
+        assertEquals(setOf(Type.KHARCHA), result.filter.types)
+        assertEquals(Query.day("2026-10-29"), result.filter.from)
+        assertTrue(result.filter.items.isEmpty())
+    }
+
+    @Test fun parsuMeansTheDayBeforeYesterday() {
+        val result = read("parsu kitna huwa tha")
+        assertEquals("ask", result.kind)
+        assertEquals(Query.day("2026-10-28"), result.filter.from)
+        assertEquals(setOf(Type.KHARCHA), result.filter.types)
+    }
+
+    @Test fun detailDoListsThePreviousSearch() {
+        val history = listOf(msg("28 oct ko kitna kharcha huwa", true), msg("Spent 60 SAR (1 entry, 28 Oct)", false))
+        val result = read("detail do", history)
+        assertEquals("ask", result.kind)
+        assertEquals("list", result.what)
+        assertEquals(setOf(Type.KHARCHA), result.filter.types)
+        assertEquals(Query.day("2026-10-28"), result.filter.from)
+    }
+
+    @Test fun detailWithoutAPreviousSearchIsNotAGuess() {
+        assertEquals(null, read("detail do").filter.from)
+    }
+}
