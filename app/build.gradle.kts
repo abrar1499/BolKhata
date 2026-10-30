@@ -4,8 +4,9 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-// Every GitHub build gets a higher number, so the app knows when an update exists.
-val buildNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
+// The release number: CI sets APP_VERSION to the last published release + 1, so releases go 295, 296, ...
+// and the app shows the same "1.N" as the release page and the update pop-up.
+val buildNumber = (System.getenv("APP_VERSION") ?: System.getenv("GITHUB_RUN_NUMBER"))?.toIntOrNull() ?: 1
 
 android {
     namespace = "com.bolkhata.app"

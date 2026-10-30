@@ -2074,7 +2074,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     ) { Text("⬆", fontSize = 28.sp, color = MaterialTheme.colorScheme.primary) }
                     Text("Update available", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                     Text(
-                        "Version ${info.version} is ready. Your entries stay safe.",
+                        "Version 1.${info.version} is ready. Your entries stay safe.",
                         fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )

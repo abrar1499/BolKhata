@@ -215,7 +215,7 @@ fun HomeScreen(
                         Column(Modifier.weight(1f)) {
                             Text("New version available", fontWeight = FontWeight.SemiBold)
                             Text(
-                                if (progress >= 0) "Downloading… $progress%" else "Version ${newVersion.version} · your data stays safe",
+                                if (progress >= 0) "Downloading… $progress%" else "Version 1.${newVersion.version} · your data stays safe",
                                 fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }

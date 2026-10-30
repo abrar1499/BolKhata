@@ -24,6 +24,12 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
+      - name: Pick version (last release + 1)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          last=$(gh release view --repo "${{ github.repository }}" --json tagName -q .tagName 2>/dev/null | tr -d 'v')
+          echo "APP_VERSION=$(( ${last:-0} + 1 ))" >> "$GITHUB_ENV"
       - name: Build
         run: |
           set -o pipefail
@@ -41,7 +47,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp app/build/outputs/apk/release/app-release.apk BolKhata.apk
-          gh release create "v${{ github.run_number }}" BolKhata.apk --repo "${{ github.repository }}" --title "Smart Expense ${{ github.run_number }}" --notes "Verified offline assistant update from commit ${{ github.sha }}. Includes shared chat engine, date/category/type search, chained follow-up search context, correct yearly/all-time reports, safer delete confirmation, contact clarification, date-only entry listing, structured bank-alert fingerprinting to prevent truncated-alert duplicates, and consent-based chat diagnostics sharing. Also includes khata-scoped chat safety, bulk move, move history with guarded restore, merge preview and Undo, Trash confirmation, and offline OCR. Unit tests and release compilation must pass before publication. Please validate financial actions on-device; the diagnostic export does not include ledger rows." --latest
+          git log -1 --format=%B | grep -v -e '^Co-Authored-By' -e '^Claude-Session' > notes.txt
+          gh release create "v${APP_VERSION}" BolKhata.apk --repo "${{ github.repository }}" --title "Smart Expense 1.${APP_VERSION}" --notes-file notes.txt --latest
 
   # Started by hand (Run workflow): renders the real screens with sample data and commits the PNGs to
   # docs/screenshots on the same branch, so the look can be reviewed without installing the app.
