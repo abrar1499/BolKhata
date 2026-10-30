@@ -1297,11 +1297,129 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         }
     }
 
+    // Groq Whisper, for the mic and the voice call: sends by itself when the person stops talking (or tap ■).
+    // Audio goes to Groq only.
+    var recorder by remember { mutableStateOf<android.media.MediaRecorder?>(null) }
+    var recordFile by remember { mutableStateOf<File?>(null) }
+    // What to do with the words heard, and what to do when nothing usable was heard.
+    var recordHeard by remember { mutableStateOf<(String) -> Unit>({}) }
+    var recordMissed by remember { mutableStateOf<() -> Unit>({}) }
+    val recordPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        if (!ok) toast("Microphone permission is needed to record.")
+    }
+
+    /** Stops recording and sends the audio to Whisper; [send] false throws it away. */
+    fun finishRecording(send: Boolean = true) {
+        val r = recorder ?: return
+        recorder = null
+        runCatching { r.stop() }
+        runCatching { r.release() }
+        val file = recordFile ?: return
+        if (!send) { runCatching { file.delete() }; return }
+        val heard = recordHeard
+        val missed = recordMissed
+        if (file.length() < 2_000) { missed(); return }
+        chatLoading = true
+        loadingLabel = "Listening with Groq…"
+        if (voiceOn) voiceStatus = "Thinking…"
+        val language = when { lang == "ur-PK" -> "ur"; lang.startsWith("en") -> "en"; else -> "" }
+        scope.launch {
+            val said = Groq.transcribe(groqKey, file, language)
+            runCatching { file.delete() }
+            chatLoading = false
+            loadingLabel = "Thinking…"
+            said.fold(
+                onSuccess = { text -> if (text.isBlank()) missed() else heard(text.trim()) },
+                onFailure = { toast((it.message ?: "Groq voice failed") + ". You can turn off Groq voice in Settings."); missed() }
+            )
+        }
+    }
+
+    /**
+     * Ends the recording once the person stops talking. If they never start, nothing goes to Whisper
+     * (it makes up words for silence and background noise).
+     */
+    fun stopAtPause(r: android.media.MediaRecorder) = scope.launch {
+        val start = System.currentTimeMillis()
+        var spoke = false
+        var lastSound = start
+        while (recorder === r) {
+            kotlinx.coroutines.delay(150)
+            val now = System.currentTimeMillis()
+            val amp = runCatching { r.maxAmplitude }.getOrDefault(0)
+            if (voiceOn) voiceLevel = amp / 3000f
+            if (amp > 2500) { spoke = true; lastSound = now }
+            if (spoke && now - lastSound > 1500) { finishRecording(); break }
+            if (!spoke && now - start > 8000) { finishRecording(send = false); recordMissed(); break }
+        }
+    }
+
+    fun startRecording(heard: (String) -> Unit, missed: () -> Unit) {
+        if (recorder != null) { finishRecording(); return }
+        val granted = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (!granted) { recordPermission.launch(android.Manifest.permission.RECORD_AUDIO); return }
+        val file = File(context.cacheDir, "voice.m4a")
+        val r = (if (Build.VERSION.SDK_INT >= 31) android.media.MediaRecorder(context) else @Suppress("DEPRECATION") android.media.MediaRecorder())
+        runCatching {
+            r.setAudioSource(android.media.MediaRecorder.AudioSource.MIC)
+            r.setOutputFormat(android.media.MediaRecorder.OutputFormat.MPEG_4)
+            r.setAudioEncoder(android.media.MediaRecorder.AudioEncoder.AAC)
+            r.setAudioSamplingRate(16_000)
+            r.setAudioEncodingBitRate(32_000)
+            r.setMaxDuration(30_000)
+            r.setOutputFile(file.absolutePath)
+            r.setOnInfoListener { _, what, _ -> if (what == android.media.MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED) finishRecording() }
+            r.prepare()
+            r.start()
+        }.onSuccess {
+            recordFile = file
+            recordHeard = heard
+            recordMissed = missed
+            recorder = r
+            stopAtPause(r)
+        }.onFailure {
+            runCatching { r.release() }
+            toast("Couldn't start recording.")
+            missed()
+        }
+    }
+
+    fun stopVoice(message: String? = null) {
+        voiceOn = false
+        voiceAwaiting = false
+        voiceStatus = ""
+        voicePartial = ""
+        voiceReply = ""
+        voiceLevel = 0f
+        finishRecording(send = false)
+        runCatching { recognizer?.cancel() }
+        runCatching { tts.stop() }
+        if (message != null) toast(message)
+    }
+
+    /** The call listens with Groq Whisper when Groq voice is on (it hears Urdu far better), else with the phone. */
     fun listenNow() {
-        val r = recognizer ?: return
         if (!voiceOn) return
         voicePartial = ""
         voiceStatus = "Listening…"
+        if (groqKey.isNotBlank() && groqVoice) {
+            startRecording(
+                heard = heard@{ said ->
+                    if (!voiceOn) return@heard
+                    voiceMisses = 0
+                    voicePartial = said
+                    voiceAwaiting = true
+                    chatInput(said)
+                },
+                missed = {
+                    voiceMisses++
+                    if (voiceMisses >= 3) stopVoice("Call ended: nothing heard for a while.") else listenNow()
+                }
+            )
+            return
+        }
+        val r = recognizer ?: return
         val i = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             // No "prefer offline": when the offline model for this language is missing that made every attempt fail
@@ -1316,18 +1434,6 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         runCatching { r.cancel(); r.startListening(i) }
     }
 
-    fun stopVoice(message: String? = null) {
-        voiceOn = false
-        voiceAwaiting = false
-        voiceStatus = ""
-        voicePartial = ""
-        voiceReply = ""
-        voiceLevel = 0f
-        runCatching { recognizer?.cancel() }
-        runCatching { tts.stop() }
-        if (message != null) toast(message)
-    }
-
     /** Reads [text] aloud: Urdu script with an Urdu voice, otherwise English. Listens again when done. */
     fun speak(text: String) {
         val clean = text.replace(Regex("""[✓•*#_]"""), " ").replace(Regex("""(?m)^\s*-\s*"""), "").trim()
@@ -1340,6 +1446,12 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         val ok = tts.setLanguage(wanted)
         if (ok == android.speech.tts.TextToSpeech.LANG_MISSING_DATA || ok == android.speech.tts.TextToSpeech.LANG_NOT_SUPPORTED) {
             tts.setLanguage(java.util.Locale.ENGLISH)
+        }
+        // The most natural installed voice for that language (the online ones sound far less robotic).
+        runCatching {
+            val language = tts.voice?.locale?.language
+            tts.voices.filter { it.locale.language == language && "notInstalled" !in it.features }
+                .maxByOrNull { it.quality }?.let { tts.voice = it }
         }
         voiceStatus = "Speaking…"
         voiceReply = clean
@@ -1473,7 +1585,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
 
     fun toggleVoice() {
         if (voiceOn) { stopVoice(); return }
-        if (recognizer == null) { toast("Speech recognition is not available on this phone."); return }
+        if (recognizer == null && !(groqKey.isNotBlank() && groqVoice)) { toast("Speech recognition is not available on this phone."); return }
         val granted = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) ==
             android.content.pm.PackageManager.PERMISSION_GRANTED
         if (granted) { voiceOn = true; voiceMisses = 0; listenNow() } else micPermission.launch(android.Manifest.permission.RECORD_AUDIO)
@@ -1491,79 +1603,15 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         }
     }
 
-    // Mic button with Groq Whisper: sends by itself when the person stops talking (or tap ■). Audio goes to Groq only.
-    var recorder by remember { mutableStateOf<android.media.MediaRecorder?>(null) }
-    var recordFile by remember { mutableStateOf<File?>(null) }
-    val recordPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
-        if (!ok) toast("Microphone permission is needed to record.")
-    }
-
-    fun finishRecording() {
-        val r = recorder ?: return
-        recorder = null
-        runCatching { r.stop() }
-        runCatching { r.release() }
-        val file = recordFile ?: return
-        if (file.length() < 2_000) { toast("Too short. Hold on a little longer next time."); return }
-        chatLoading = true
-        loadingLabel = "Listening with Groq…"
-        val language = when { lang == "ur-PK" -> "ur"; lang.startsWith("en") -> "en"; else -> "" }
-        scope.launch {
-            val said = Groq.transcribe(groqKey, file, language)
-            runCatching { file.delete() }
-            chatLoading = false
-            loadingLabel = "Thinking…"
-            said.fold(
-                onSuccess = { text -> if (text.isBlank()) toast("Couldn't catch that. Try again.") else if (voiceForChat) chatInput(text) else homeInput(text) },
-                onFailure = { toast((it.message ?: "Groq voice failed") + ". You can turn off Groq voice in Settings.") }
-            )
-        }
-    }
-
-    /** Ends the recording once the person stops talking, or after a while if they never start. */
-    fun stopAtPause(r: android.media.MediaRecorder) = scope.launch {
-        val start = System.currentTimeMillis()
-        var spoke = false
-        var lastSound = start
-        while (recorder === r) {
-            kotlinx.coroutines.delay(150)
-            val now = System.currentTimeMillis()
-            if (runCatching { r.maxAmplitude }.getOrDefault(0) > 2500) { spoke = true; lastSound = now }
-            if ((spoke && now - lastSound > 1500) || (!spoke && now - start > 8000)) { finishRecording(); break }
-        }
-    }
-
-    fun toggleRecording() {
-        if (recorder != null) { finishRecording(); return }
-        val granted = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) ==
-            android.content.pm.PackageManager.PERMISSION_GRANTED
-        if (!granted) { recordPermission.launch(android.Manifest.permission.RECORD_AUDIO); return }
-        val file = File(context.cacheDir, "voice.m4a")
-        val r = (if (Build.VERSION.SDK_INT >= 31) android.media.MediaRecorder(context) else @Suppress("DEPRECATION") android.media.MediaRecorder())
-        runCatching {
-            r.setAudioSource(android.media.MediaRecorder.AudioSource.MIC)
-            r.setOutputFormat(android.media.MediaRecorder.OutputFormat.MPEG_4)
-            r.setAudioEncoder(android.media.MediaRecorder.AudioEncoder.AAC)
-            r.setAudioSamplingRate(16_000)
-            r.setAudioEncodingBitRate(32_000)
-            r.setMaxDuration(30_000)
-            r.setOutputFile(file.absolutePath)
-            r.setOnInfoListener { _, what, _ -> if (what == android.media.MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED) finishRecording() }
-            r.prepare()
-            r.start()
-        }.onSuccess {
-            recordFile = file
-            recorder = r
-            stopAtPause(r)
-        }.onFailure {
-            runCatching { r.release() }
-            toast("Couldn't start recording.")
-        }
-    }
-
     fun startVoice(forChat: Boolean = false) {
         voiceForChat = forChat
-        if (groqKey.isNotBlank() && groqVoice) { toggleRecording(); return }
+        if (groqKey.isNotBlank() && groqVoice) {
+            startRecording(
+                heard = { text -> if (forChat) chatInput(text) else homeInput(text) },
+                missed = { toast("Couldn't catch that. Try again.") }
+            )
+            return
+        }
         val hints = buildList {
             addAll(entries.take(30).flatMap { listOf(it.item, it.person) })
             addAll(listOf(
@@ -1659,7 +1707,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     onSend = { chatInput(it) }, onMic = { startVoice(forChat = true) }, placeholder = "Speak, type or ask…",
                     onAttach = { pickFile.launch(arrayOf("image/*", "application/pdf")) },
                     busy = chatLoading,
-                    voice = if (recorder != null) VoiceState(true, "Listening…", "sends when you stop") { toggleRecording() }
+                    voice = if (recorder != null) VoiceState(true, "Listening…", "sends when you stop") { finishRecording() }
                         else VoiceState(voiceOn, voiceStatus, voicePartial) { toggleVoice() }
                 )
             } else {
@@ -1672,7 +1720,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         onAttach = { pickFile.launch(arrayOf("image/*", "application/pdf")) },
                         busy = chatLoading,
                         // The call's answers also go to the chat, so starting it from Home opens the Chat tab.
-                        voice = if (recorder != null) VoiceState(true, "Listening…", "sends when you stop") { toggleRecording() }
+                        voice = if (recorder != null) VoiceState(true, "Listening…", "sends when you stop") { finishRecording() }
                             else VoiceState(voiceOn, voiceStatus, voicePartial) { tab = Tab.CHAT; toggleVoice() }
                     )
                 }
