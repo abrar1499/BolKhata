@@ -322,9 +322,9 @@ object NativeChatEngine {
             "aug" to 8, "august" to 8, "sep" to 9, "sept" to 9, "september" to 9,
             "oct" to 10, "october" to 10, "nov" to 11, "november" to 11, "dec" to 12, "december" to 12
         )
-        val dayMonth = Regex("""\\b(\\d{1,2})(?:st|nd|rd|th)?[\\s,/-]+([a-z]+)(?:[\\s,/-]+(\\d{4}))?\\b""")
+        val dayMonth = Regex("""\b(\d{1,2})(?:st|nd|rd|th)?[\s,/-]+([a-z]+)(?:[\s,/-]+(\d{4}))?\b""")
             .find(text)
-        val monthDay = Regex("""\\b([a-z]+)[\\s,/-]+(\\d{1,2})(?:st|nd|rd|th)?(?:[\\s,/-]+(\\d{4}))?\\b""")
+        val monthDay = Regex("""\b([a-z]+)[\s,/-]+(\d{1,2})(?:st|nd|rd|th)?(?:[\s,/-]+(\d{4}))?\b""")
             .find(text)
         val explicitMonth = dayMonth?.groupValues?.get(2) ?: monthDay?.groupValues?.get(1)
         val explicitDay = (dayMonth?.groupValues?.get(1) ?: monthDay?.groupValues?.get(2))?.toIntOrNull()
