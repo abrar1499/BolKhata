@@ -462,6 +462,11 @@ class Store(context: Context) {
         get() = prefs.getString("elevenVoice", "") ?: ""
         set(v) = prefs.edit().putString("elevenVoice", v.trim()).apply()
 
+    /** Agent ID of the owner's ElevenLabs agent; the call then talks with that agent (speech to speech). */
+    var elevenAgent: String
+        get() = prefs.getString("elevenAgent", "") ?: ""
+        set(v) = prefs.edit().putString("elevenAgent", v.trim()).apply()
+
     /** Use Groq Whisper for the mic and the voice call instead of the phone's speech recognition. */
     var groqVoice: Boolean
         get() = prefs.getBoolean("groqVoice", true)

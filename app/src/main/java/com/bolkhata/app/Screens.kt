@@ -1568,7 +1568,8 @@ fun SettingsScreen(
     onGroqOff: () -> Unit = {},
     elevenOn: Boolean = false,
     elevenVoice: String = "",
-    onElevenSave: (key: String, voice: String) -> Unit = { _, _ -> },
+    elevenAgent: String = "",
+    onElevenSave: (key: String, voice: String, agent: String) -> Unit = { _, _, _ -> },
     onElevenOff: () -> Unit = {},
 ) {
     var dialog by remember { mutableStateOf<String?>(null) }   // "name", "theme", "groq", "eleven" or "review"
@@ -1713,6 +1714,7 @@ fun SettingsScreen(
         "eleven" -> {
             var key by remember { mutableStateOf("") }
             var voiceId by remember { mutableStateOf(elevenVoice) }
+            var agentId by remember { mutableStateOf(elevenAgent) }
             AlertDialog(
                 onDismissRequest = { dialog = null },
                 title = { Text("Call voice") },
@@ -1732,13 +1734,21 @@ fun SettingsScreen(
                             voiceId, { voiceId = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                             label = { Text("Voice ID") }
                         )
-                        Text("elevenlabs.io → API Keys for the key; Voice Library → a voice → copy its Voice ID.", fontSize = 12.sp, color = faint)
+                        OutlinedTextField(
+                            agentId, { agentId = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                            label = { Text("Agent ID (optional, live call)") }
+                        )
+                        Text(
+                            "elevenlabs.io → API Keys for the key; Voice Library → a voice → copy its Voice ID. With an " +
+                                "Agent ID the call talks with your ElevenLabs agent; its app_command tool runs commands in the chat.",
+                            fontSize = 12.sp, color = faint
+                        )
                     }
                 },
                 confirmButton = {
                     TextButton(
-                        onClick = { onElevenSave(key.trim(), voiceId.trim()); dialog = null },
-                        enabled = voiceId.trim().length >= 10 && (elevenOn || key.trim().length > 20)
+                        onClick = { onElevenSave(key.trim(), voiceId.trim(), agentId.trim()); dialog = null },
+                        enabled = (voiceId.trim().length >= 10 || agentId.trim().length >= 10) && (elevenOn || key.trim().length > 20)
                     ) { Text("Save") }
                 },
                 dismissButton = {
