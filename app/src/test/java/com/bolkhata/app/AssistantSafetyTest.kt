@@ -5,6 +5,19 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class AssistantSafetyTest {
+    @Test fun immediateRepeatIsBlockedOnlyAfterConfirmedMutation() {
+        val previousAt = 1_000_000L
+        assertEquals(true, Accounts.isRecentDuplicateMutationRequest(
+            "coffee 5", previousAt, "Saved coffee", previousAt + 1_000, true, " Coffee 5 ", previousAt + 2_000
+        ))
+        assertEquals(false, Accounts.isRecentDuplicateMutationRequest(
+            "coffee 5", previousAt, "What date?", previousAt + 1_000, false, "coffee 5", previousAt + 2_000
+        ))
+        assertEquals(false, Accounts.isRecentDuplicateMutationRequest(
+            "coffee 5", previousAt, "Saved coffee", previousAt + 1_000, true, "coffee 5", previousAt + 40_000
+        ))
+    }
+
     @Test fun ambiguousMultiMatchRequiresClarificationUnlessAllWasExplicit() {
         assertEquals(true, Accounts.requiresTargetClarification(3, explicitlyAll = false))
         assertEquals(false, Accounts.requiresTargetClarification(3, explicitlyAll = true))
