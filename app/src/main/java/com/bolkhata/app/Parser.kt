@@ -266,18 +266,22 @@ object Parser {
      * Fingerprint only structured bank alerts that provide amount, merchant and transaction timestamp.
      * Hashing avoids storing raw bank-message text while making differently formatted alert fragments idempotent.
      */
+    /**
+     * Fingerprint only structured bank alerts that provide amount, merchant and transaction timestamp.
+     * Hashing avoids storing raw bank-message text while making differently formatted alert fragments idempotent.
+     */
     fun bankFingerprint(input: String, amount: Double): String {
         val printedAmount = Regex(
             """(?i)\b(?:amount|amt)\s*:\s*(?:SAR|AED|PKR|QAR|KWD|OMR|BHD|INR|USD|EUR|GBP)?\s*(\d[\d,]*(?:\.\d{1,2})?)"""
         ).find(input)?.groupValues?.get(1)?.replace(",", "")?.toDoubleOrNull() ?: return ""
+        if (kotlin.math.abs(printedAmount - amount) >= 0.01) return ""
         val merchant = Regex("""(?im)^\s*(?:at|merchant|store)\s*:\s*([^\r\n]+?)\s*$""")
-        val merchant = Regex("""(?im)^\\s*(?:at|merchant|store)\\s*:\\s*([^\\r\\n]+?)\\s*$""")
             .find(input)?.groupValues?.get(1)?.trim().orEmpty()
+        if (merchant.isBlank()) return ""
         val dateTime = Regex("""(?i)\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\s+(\d{1,2}:\d{2})\b""")
-        val dateTime = Regex("""(?i)\\b(\\d{1,2}[/-]\\d{1,2}[/-]\\d{2,4})\\s+(\\d{1,2}:\\d{2})\\b""")
-            .replace(Regex("""[^\p{L}\p{N}]+"""), " ").trim().replace(Regex("""\s+"""), " ")
+            .find(input)?.let { it.groupValues[1] + " " + it.groupValues[2] } ?: return ""
         val normalizedMerchant = merchant.lowercase(java.util.Locale.ROOT)
-            .replace(Regex("""[^\\p{L}\\p{N}]+"""), " ").trim().replace(Regex("""\\s+"""), " ")
+            .replace(Regex("""[^\p{L}\p{N}]+"""), " ").trim().replace(Regex("""\s+"""), " ")
         if (normalizedMerchant.length < 3) return ""
         val key = String.format(java.util.Locale.US, "%.2f", printedAmount) + "|" + normalizedMerchant + "|" + dateTime
         val digest = java.security.MessageDigest.getInstance("SHA-256").digest(key.toByteArray(Charsets.UTF_8))
