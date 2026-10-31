@@ -219,7 +219,11 @@ fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: (
         containerColor = MaterialTheme.colorScheme.surface,
         tonalElevation = 0.dp,
         title = {
-            Text(if (count == 1) "Move entry" else "Move $count entries", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            Text(
+                if (count == 1) "Move entry" else "Move $count entries", Modifier.fillMaxWidth(),
+                fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = sub,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
         },
         text = {
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
