@@ -1575,6 +1575,7 @@ fun SettingsScreen(
     var dialog by remember { mutableStateOf<String?>(null) }   // "name", "theme", "groq", "eleven" or "review"
     val faint = MaterialTheme.colorScheme.onSurfaceVariant
     val langLabel = when {
+        lang.isBlank() -> "Auto"
         lang == "ur-PK" -> "Urdu"
         lang.startsWith("en") -> "English"
         else -> "Roman Urdu"
@@ -1607,7 +1608,7 @@ fun SettingsScreen(
                         var open by remember { mutableStateOf(false) }
                         ListRow("Language", "$langLabel ▾") { open = true }
                         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-                            listOf("Roman Urdu" to "hi-IN", "English" to "en-US", "Urdu" to "ur-PK").forEach { (label, code) ->
+                            listOf("Auto" to "", "Roman Urdu" to "hi-IN", "English" to "en-US", "Urdu" to "ur-PK").forEach { (label, code) ->
                                 DropdownMenuItem(text = { Text(label) }, onClick = { onLang(code); open = false })
                             }
                         }

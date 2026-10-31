@@ -1458,7 +1458,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             // No "prefer offline": when the offline model for this language is missing that made every attempt fail
             // silently and voice chat sat on "Listening…". Android now uses whichever recognizer it has.
-            if (!voiceDefaultLanguage) putExtra(RecognizerIntent.EXTRA_LANGUAGE, lang)
+            if (!voiceDefaultLanguage && lang.isNotBlank()) putExtra(RecognizerIntent.EXTRA_LANGUAGE, lang)
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
             // Give the person time to finish a long story before it stops listening.
@@ -1787,8 +1787,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
 
         val i = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, lang)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, lang)
+            if (lang.isNotBlank()) {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, lang)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, lang)
+            }
             putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak now…")
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 10)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && hints.isNotEmpty()) {
