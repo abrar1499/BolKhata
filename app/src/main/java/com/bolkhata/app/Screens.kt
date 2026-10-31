@@ -1031,7 +1031,7 @@ private fun reportData(entries: List<Entry>, span: Span, offset: Int): ReportDat
 
     val profit = profitBreakdown(entries, inRange)
     val outstanding = balances(entries).filterValues { kotlin.math.abs(it) > 0.005 }
-        .toList().sortedByDescending { kotlin.math.abs(it.second) }
+        .toList().sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.first.trim() }) // khatas always A–Z
     val toReceive = outstanding.filter { it.second > 0 }.sumOf { it.second }
     val toPay = outstanding.filter { it.second < 0 }.sumOf { -it.second }
     return ReportData(start, end, label, startDay, inRange, cashInEntries, cashOutEntries, cashInTotal, cashOutTotal, allCashIn, allCashOut, cashBalance, sales, purchases, totalSales, totalPurchases, salesGroups, purchaseGroups, cashInGroups, cashOutGroups, currentStock, stockByName, stockNames, stockRows, receivedQty, givenQty, profit, outstanding, toReceive, toPay)

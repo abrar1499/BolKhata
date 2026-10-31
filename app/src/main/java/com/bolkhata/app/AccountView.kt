@@ -97,7 +97,7 @@ fun AccountScreen(
     val order = remember(key) {
         data.sortedWith(
             compareByDescending<Sub> { it.name.equals(key.sub, true) }
-                .thenByDescending { it.list.firstOrNull()?.date ?: 0L }
+                .thenBy(String.CASE_INSENSITIVE_ORDER) { it.name.trim() } // then A–Z
         ).map { it.name.lowercase() }
     }
     val subs = order.mapNotNull { n -> data.firstOrNull { it.name.lowercase() == n } } +

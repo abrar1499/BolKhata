@@ -5,7 +5,8 @@ Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Packa
 ## Talking to the owner
 - Reply in short, simple Hinglish (Roman Urdu). No long explanations unless asked.
 - Ask before every release. Never release without a clear "haan/release kar do".
-- Screenshots/mock-ups only when asked; they are expensive.
+- Screenshots/mock-ups only when asked; they are expensive. When the owner asks to see a design, show it as an
+  HTML mock-up Artifact (quick, no build); use the screenshots workflow only if they ask for real screenshots.
 
 ## Build and release (no Android SDK in the cloud container)
 - Code cannot be compiled locally. GitHub Actions (`.github/workflows/build.yml`) is the compiler and test runner.

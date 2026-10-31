@@ -190,7 +190,7 @@ private fun VoiceWave(color: Color, strength: Float, modifier: Modifier) {
 
 /** A thin "+" like ChatGPT's attach button. */
 @Composable
-private fun ThinPlus(color: Color) {
+fun ThinPlus(color: Color) {
     Canvas(Modifier.size(20.dp)) {
         val w = 1.8.dp.toPx()
         drawLine(color, Offset(size.width / 2, 1.dp.toPx()), Offset(size.width / 2, size.height - 1.dp.toPx()), w, StrokeCap.Round)

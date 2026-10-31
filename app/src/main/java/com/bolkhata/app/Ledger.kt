@@ -3,6 +3,9 @@ package com.bolkhata.app
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -10,10 +13,12 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
@@ -21,6 +26,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -175,10 +181,12 @@ private fun cleanMoveKhataName(value: String): String {
     return name.trim().trim('.', '-', '/', ' ')
 }
 
-/** Search-first khata picker: the large category lists stay out of the Move Entry flow. */
+/**
+ * Khata picker for moving entries: a search box with every khata listed under it, A–Z. Tap one to pick it, then Move. A name that isn't saved yet can be made a new khata.
+ */
 @Composable
 fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: () -> Unit, count: Int = 1) {
-    // Keep the real account key for moving entries; clean only the display label.
+    // Keep the real account key for moving entries; clean only the display label. A–Z.
     val people = remember(all) {
         (personAccounts(all).map { it.name } + all.map { it.person })
             .map { it.trim() }
@@ -186,219 +194,126 @@ fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: (
             .distinctBy { it.lowercase(Locale.ROOT) }
             .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { cleanMoveKhataName(it) })
     }
-    var searchOpen by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     var selectedPerson by remember { mutableStateOf<String?>(null) }
-    var creatingKhata by remember { mutableStateOf(false) }
-    var newKhataName by remember { mutableStateOf("") }
+    // "+" beside the search box: the box then takes a new khata's name.
+    var creating by remember { mutableStateOf(false) }
     val query = searchQuery.trim()
-    val filteredPeople = remember(people, query) {
-        if (query.isBlank()) emptyList()
-        else people.filter {
-            cleanMoveKhataName(it).contains(query, ignoreCase = true) ||
-                it.contains(query, ignoreCase = true)
-        }
+    val shown = remember(people, query) {
+        if (query.isBlank()) people
+        else people.filter { cleanMoveKhataName(it).contains(query, ignoreCase = true) || it.contains(query, ignoreCase = true) }
     }
-    val exactMatch = people.any {
-        cleanMoveKhataName(it).equals(query, ignoreCase = true) ||
-            it.equals(query, ignoreCase = true)
-    }
+    val exactMatch = people.any { cleanMoveKhataName(it).equals(query, ignoreCase = true) || it.equals(query, ignoreCase = true) }
+    val sub = MaterialTheme.colorScheme.onSurfaceVariant
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(26.dp),
+        // A compact card: narrower than the screen, short list.
+        modifier = Modifier.fillMaxWidth(0.84f),
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+        shape = RoundedCornerShape(24.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        tonalElevation = 0.dp,
         title = {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text(if (count == 1) "Move entry" else "Move $count entries", fontWeight = FontWeight.Bold, fontSize = 21.sp)
-                    Text(
-                        if (selectedPerson != null) "Confirm the destination"
-                        else "Find the right khata",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    IconButton(
-                        onClick = {
-                            creatingKhata = false
-                            selectedPerson = null
-                            searchOpen = !searchOpen
-                            if (!searchOpen) searchQuery = ""
-                        },
-                        modifier = Modifier.size(40.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.primaryContainer)
-                    ) {
-                        Icon(if (searchOpen && !creatingKhata) Icons.Filled.Close else Icons.Filled.Search,
-                            contentDescription = "Search khata",
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer)
-                    }
-                    IconButton(
-                        onClick = {
-                            selectedPerson = null
-                            searchOpen = false
-                            creatingKhata = true
-                            newKhataName = ""
-                        },
-                        modifier = Modifier.size(40.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.primaryContainer)
-                    ) {
-                        Text("+", fontWeight = FontWeight.Bold, fontSize = 24.sp,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer)
-                    }
-                }
-            }
+            Text(
+                if (count == 1) "Move entry" else "Move $count entries", Modifier.fillMaxWidth(),
+                fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = sub,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
         },
         text = {
-            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (selectedPerson != null) {
-                    Text(if (count == 1) "Move this entry to:" else "Move $count selected entries to:", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer
-                    ) {
-                        Text(
-                            cleanMoveKhataName(selectedPerson!!),
-                            modifier = Modifier.padding(16.dp),
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
-                    Text(
-                        "Amount, date and note will stay unchanged.",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                } else if (creatingKhata) {
-                    OutlinedTextField(
-                        value = newKhataName,
-                        onValueChange = { newKhataName = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("New khata name") },
-                        singleLine = true,
-                        shape = RoundedCornerShape(16.dp)
-                    )
-                    if (people.any { it.equals(newKhataName.trim(), ignoreCase = true) }) {
-                        Text("This khata already exists. Use Search to select it.",
-                            fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
-                    } else {
-                        Text("Choose this new khata, then review and confirm the move.",
-                            fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                } else if (!searchOpen) {
-                    Text(
-                        "Tap the search icon to find a khata.",
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                } else {
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("Search khata by name") },
-                        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                        trailingIcon = {
-                            if (searchQuery.isNotEmpty()) {
-                                IconButton(onClick = { searchQuery = "" }) {
-                                    Icon(Icons.Filled.Close, contentDescription = "Clear search")
-                                }
-                            }
-                        },
-                        shape = RoundedCornerShape(16.dp),
-                        singleLine = true
-                    )
-                    if (query.isBlank()) {
-                        Text(
-                            "Start typing to see matching khatas · A–Z",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    } else {
-                        Text(
-                            "${filteredPeople.size} matching khata${if (filteredPeople.size == 1) "" else "s"} · A–Z",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        LazyColumn(
-                            modifier = Modifier.fillMaxWidth().heightIn(max = 320.dp),
-                            verticalArrangement = Arrangement.spacedBy(5.dp)
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                val taken = creating && exactMatch
+                // Looks like the chat's message bar, a little lower: a white pill, "+" on the left (here: new khata).
+                val ink = MaterialTheme.colorScheme.onSurface
+                Surface(
+                    shape = RoundedCornerShape(26.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 3.dp,
+                    border = if (taken) BorderStroke(1.dp, MaterialTheme.colorScheme.error) else null,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(Modifier.heightIn(min = 40.dp).padding(start = 2.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            Modifier.size(36.dp).clip(CircleShape).clickable {
+                                creating = !creating
+                                selectedPerson = if (creating) query.takeIf { it.isNotEmpty() && !exactMatch } else null
+                            },
+                            contentAlignment = Alignment.Center
                         ) {
-                            items(filteredPeople, key = { it }) { person ->
-                                val current = e.person.equals(person, ignoreCase = true)
-                                Row(
-                                    modifier = Modifier.fillMaxWidth()
-                                        .clip(RoundedCornerShape(14.dp))
-                                        .background(
-                                            if (current) MaterialTheme.colorScheme.primaryContainer
-                                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.50f)
-                                        )
-                                        .clickable { selectedPerson = person }
-                                        .padding(horizontal = 14.dp, vertical = 13.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        cleanMoveKhataName(person),
-                                        modifier = Modifier.weight(1f),
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                    if (current) {
-                                        Text("Current", fontSize = 11.sp,
-                                            color = MaterialTheme.colorScheme.primary)
-                                    } else {
-                                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
+                            if (creating) Icon(Icons.Filled.Close, contentDescription = "Back to search", tint = ink)
+                            else ThinPlus(ink)
+                        }
+                        BasicTextField(
+                            value = searchQuery,
+                            onValueChange = {
+                                searchQuery = it
+                                selectedPerson = if (creating) it.trim().takeIf { n -> n.isNotEmpty() && people.none { p -> p.equals(n, true) } } else null
+                            },
+                            modifier = Modifier.weight(1f).padding(horizontal = 4.dp, vertical = 8.dp),
+                            singleLine = true,
+                            textStyle = LocalTextStyle.current.copy(fontSize = 16.sp, color = ink),
+                            cursorBrush = SolidColor(GreenDeep),
+                            decorationBox = { field ->
+                                Box(contentAlignment = Alignment.CenterStart) {
+                                    if (searchQuery.isEmpty()) Text(if (creating) "New khata name" else "Search party", fontSize = 16.sp, color = sub, maxLines = 1)
+                                    field()
                                 }
                             }
-                        }
-                        if (filteredPeople.isEmpty()) {
-                            Text("No matching khata found.",
-                                fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        if (!exactMatch && query.isNotBlank()) {
-                            TextButton(onClick = { selectedPerson = query }) {
-                                Text("+ Create new khata: \"$query\"")
-                            }
-                        }
+                        )
+                        if (!creating) Icon(Icons.Filled.Search, contentDescription = null, tint = sub, modifier = Modifier.size(20.dp))
+                    }
+                }
+                if (creating) Text(
+                    if (taken) "This khata already exists. Tap × and pick it from the list." else "A new khata with this name gets the entry.",
+                    fontSize = 12.sp, color = if (taken) MaterialTheme.colorScheme.error else sub
+                )
+                if (!creating) LazyColumn(Modifier.fillMaxWidth().heightIn(max = 250.dp)) {
+                    if (query.isNotBlank() && !exactMatch) item(key = "+new") {
+                        KhataChoice("+", "New khata: $query", query == selectedPerson, false) { selectedPerson = query }
+                    }
+                    items(shown, key = { it }) { person ->
+                        val current = e.person.equals(person, ignoreCase = true)
+                        KhataChoice(cleanMoveKhataName(person).take(1).uppercase(), cleanMoveKhataName(person),
+                            person == selectedPerson, current) { if (!current) selectedPerson = person }
+                    }
+                    if (shown.isEmpty() && query.isBlank()) item(key = "none") {
+                        Text("No khatas yet. Type a name to make one.", fontSize = 13.sp, color = sub, modifier = Modifier.padding(8.dp))
                     }
                 }
             }
         },
         confirmButton = {
-            if (creatingKhata) {
-                Button(
-                    enabled = newKhataName.trim().isNotBlank() &&
-                        people.none { it.equals(newKhataName.trim(), ignoreCase = true) },
-                    onClick = {
-                        selectedPerson = newKhataName.trim()
-                        creatingKhata = false
-                    }
-                ) { Text("Review destination") }
-            } else if (selectedPerson != null) {
-                Button(enabled = !selectedPerson.orEmpty().equals(e.person, ignoreCase = true), onClick = {
-                    val person = selectedPerson ?: return@Button
-                    onMove(movedTo(e, all, null, false, person))
-                }) { Text(if (count == 1) "Confirm move" else "Move $count entries") }
-            }
+            Button(enabled = selectedPerson != null, onClick = {
+                val person = selectedPerson ?: return@Button
+                onMove(movedTo(e, all, null, false, person))
+            }) { Text(if (creating) "Create & move" else if (count == 1) "Move" else "Move $count") }
         },
-        dismissButton = {
-            TextButton(onClick = {
-                if (selectedPerson != null) selectedPerson = null
-                else if (creatingKhata) creatingKhata = false
-                else onDismiss()
-            }) { Text(if (selectedPerson != null) "Back" else "Cancel") }
-        }
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
+}
+
+/** One khata in the Move list: initial, name, and a tick when picked ("Current" for the entry's own khata). */
+@Composable
+private fun KhataChoice(initial: String, name: String, picked: Boolean, current: Boolean, onClick: () -> Unit) {
+    val green = MaterialTheme.colorScheme.primary
+    Row(
+        Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (picked) green.copy(alpha = 0.10f) else Color.Transparent)
+            .clickable(enabled = !current) { onClick() }
+            .padding(horizontal = 6.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(Modifier.size(30.dp).clip(CircleShape).background(green.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+            Text(initial, color = green, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+        }
+        Spacer(Modifier.width(12.dp))
+        Text(name, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
+            fontWeight = if (picked) FontWeight.SemiBold else FontWeight.Medium)
+        when {
+            current -> Text("Current", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            picked -> Text("✓", color = green, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+        }
+    }
 }
 
 // ---------------------------------------------------------------- the account screens
@@ -543,7 +458,7 @@ private fun SubView(
     val mine = remember(entries, cat, income) {
         entries.filter { it.type == type && it.category == cat }.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt })
     }
-    val vendors = remember(mine) { mine.groupBy { vendorKey(it) }.values.sortedByDescending { v -> v.sumOf { it.amount } } }
+    val vendors = remember(mine) { mine.groupBy { vendorKey(it) }.values.sortedBy { vendorKey(it.first()) } }
     val m0 = monthStart()
     val color = if (income) GreenIn else RedSpend
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = barSpace())) {
@@ -948,7 +863,7 @@ private fun sortedNewest(l: List<Entry>) = l.sortedWith(compareByDescending<Entr
 private fun groupNodes(prefix: String, list: List<Entry>, keyOf: (Entry) -> String, nameOf: (List<Entry>) -> String, children: (String, List<Entry>) -> List<Node>): List<Node> =
     list.groupBy { keyOf(it).lowercase().ifBlank { "-" } }
         .map { (k, l) -> Node("$prefix/$k", nameOf(l), sortedNewest(l), children("$prefix/$k", l)) }
-        .sortedByDescending { n -> n.list.sumOf { it.amount } }
+        .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name.trim() }) // khatas always A–Z
 
 /**
  * Category -> item (Petrol, Taxi, Roti; transfers grouped as "Transfers to people") -> shop or person -> entries.
