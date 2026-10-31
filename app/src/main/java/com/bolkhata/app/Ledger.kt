@@ -26,6 +26,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
@@ -965,22 +966,33 @@ private fun TreeView(income: Boolean, entries: List<Entry>, currency: String, on
             if (x is Node) {
                 val isOpen = x.key in open
                 val toggle = Modifier.clickable { open = if (isOpen) open.filterNot { it == x.key || it.startsWith(x.key + "/") }.toSet() else open + x.key }
-                if (depth == 0) {
+                // A clean ">" at the end that turns down when open (instead of a small triangle in front).
+                val chevron = @Composable {
+                    Icon(
+                        Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = if (isOpen) "Close" else "Open",
+                        tint = if (isOpen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp).rotate(if (isOpen) 90f else 0f)
+                    )
+                }
+                if (depth == 0) Column {
+                    // A line between main headings.
+                    if (!first) HorizontalDivider(Modifier.padding(horizontal = 20.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
                     CardLine(first, last, 0, 46.dp, highlight = isOpen, modifier = toggle) {
-                        Text(if (isOpen) "▾" else "▸", fontSize = 12.sp, color = if (isOpen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(14.dp))
                         CatBubble(x.list.first().category, 26.dp)
                         Spacer(Modifier.width(10.dp))
                         Text(x.name, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                         Text("${x.list.size}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text(fmt(x.list.sumOf { it.amount }), fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, color = color, textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.widthIn(min = 78.dp))
+                        Spacer(Modifier.width(4.dp))
+                        chevron()
                     }
                 } else {
                     CardLine(first, last, depth, 38.dp, modifier = toggle) {
-                        Text(if (isOpen) "▾" else "▸", fontSize = 11.sp, color = if (isOpen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(12.dp))
-                        Spacer(Modifier.width(6.dp))
                         Text(x.name, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                         Text("${x.list.size}×", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text(fmt(x.list.sumOf { it.amount }), fontWeight = FontWeight.Bold, fontSize = 14.sp, color = color, textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.widthIn(min = 64.dp))
+                        Spacer(Modifier.width(4.dp))
+                        chevron()
                     }
                 }
             } else {
