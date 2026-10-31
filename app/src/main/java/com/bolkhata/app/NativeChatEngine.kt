@@ -151,7 +151,8 @@ object NativeChatEngine {
         }
 
         // "Ye entry Ashiq ke khata me bhej do", "3 no entry Haji Ashiq me daal do": entries the chat just showed.
-        moveShown(text, lower, words, contacts, history)?.let { return it }
+        // Read from the words as said: number reading would turn "3 no" (number 3) into "3 9".
+        moveShown(text, roman.lowercase(Locale.ROOT), words, contacts, history)?.let { return it }
 
         if (Recat.isCommand(lower) || (words.contains("other") && has(words, setOf("sort", "fix", "categorize", "category", "theek"))))
             return Fixed("", "sort_other", "I'll group uncategorized expenses for you to review.")
