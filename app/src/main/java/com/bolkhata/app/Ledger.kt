@@ -458,7 +458,7 @@ private fun SubView(
     val mine = remember(entries, cat, income) {
         entries.filter { it.type == type && it.category == cat }.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt })
     }
-    val vendors = remember(mine) { mine.groupBy { vendorKey(it) }.values.sortedByDescending { v -> v.sumOf { it.amount } } }
+    val vendors = remember(mine) { mine.groupBy { vendorKey(it) }.values.sortedBy { vendorKey(it.first()) } }
     val m0 = monthStart()
     val color = if (income) GreenIn else RedSpend
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = barSpace())) {
@@ -863,7 +863,7 @@ private fun sortedNewest(l: List<Entry>) = l.sortedWith(compareByDescending<Entr
 private fun groupNodes(prefix: String, list: List<Entry>, keyOf: (Entry) -> String, nameOf: (List<Entry>) -> String, children: (String, List<Entry>) -> List<Node>): List<Node> =
     list.groupBy { keyOf(it).lowercase().ifBlank { "-" } }
         .map { (k, l) -> Node("$prefix/$k", nameOf(l), sortedNewest(l), children("$prefix/$k", l)) }
-        .sortedByDescending { n -> n.list.sumOf { it.amount } }
+        .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name.trim() }) // khatas always A–Z
 
 /**
  * Category -> item (Petrol, Taxi, Roti; transfers grouped as "Transfers to people") -> shop or person -> entries.
