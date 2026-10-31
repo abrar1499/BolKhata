@@ -145,6 +145,14 @@ class AppScreenshots {
         }
     }
 
+    @Test fun moveEntry() = shot("11-move-entry") {
+        val more = entries + listOf(
+            e("m1", Type.DIYA, 200.0, Cat.UDHAAR, "Loans", "Hamid Akram", daysAgo = 1),
+            e("m2", Type.LIYA, 90.0, Cat.UDHAAR, "Loans", "Nargis Salim Rashid", daysAgo = 6)
+        )
+        MoveDialog(entries[1], more, onMove = {}, onDismiss = {})
+    }
+
     @Test fun khataMenu() = shot("09-khata-menu") {
         KhataMenu("Abdulaziz Sulaiman", 12, 350.0, "SAR", onRename = {}, onMerge = {}, onDelete = {}, onDismiss = {})
     }
