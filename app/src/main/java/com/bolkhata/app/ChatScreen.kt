@@ -163,11 +163,14 @@ fun ChatScreen(
                 } else {
                     Column(Modifier.fillMaxWidth()) {
                         if (message.entryIds.isNotEmpty()) SavedCard(message, byId, currency, onUndo, onEditEntry)
-                        else AssistantBubble(message.text)
+                        else Report.parse(message.text, currency)?.let { ReportCard(it, message.text) } ?: AssistantBubble(message.text)
                         // "Which A or B do you mean?": one tap on a name opens that khata.
                         if (message == messages.lastOrNull()) {
                             val names = NativeChatEngine.nameChoices(message.text)
-                            if (names.isNotEmpty()) NameChoices(names) { name -> onSend("$name ka khata") }
+                            // "Move to which khata: A or B?": the tap repeats the move with the full name.
+                            val moving = message.text.startsWith("Move to which khata")
+                            val asked = messages.lastOrNull { it.isUser }?.text.orEmpty()
+                            if (names.isNotEmpty()) NameChoices(names) { name -> onSend(if (moving) "$asked $name" else "$name ka khata") }
                         }
                         AnswerActions(ratings[message.id]) { good -> onRate(message.id, good) }
                     }
@@ -346,22 +349,30 @@ private fun AnswerActions(rating: Boolean?, onRate: (good: Boolean) -> Unit) {
 
 /** Tappable names under a "which one?" question, so the person picks instead of typing. */
 @OptIn(ExperimentalLayoutApi::class)
+/** Saved names to pick from, in one card; a tap opens that khata (or finishes the move that asked). */
 @Composable
 private fun NameChoices(names: List<String>, onPick: (String) -> Unit) {
-    FlowRow(
-        Modifier.padding(start = 10.dp, end = 10.dp, top = 2.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+    Column(
+        Modifier
+            .fillMaxWidth(0.92f)
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(vertical = 6.dp)
     ) {
-        names.forEach { name ->
-            Text(
-                name, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = GreenDeep,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(GreenDeep.copy(alpha = 0.08f))
-                    .clickable { onPick(name) }
-                    .padding(horizontal = 14.dp, vertical = 9.dp)
-            )
+        names.forEachIndexed { i, name ->
+            if (i > 0) HorizontalDivider(Modifier.padding(start = 60.dp), color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.12f))
+            Row(
+                Modifier.fillMaxWidth().clickable { onPick(name) }.padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(Modifier.size(34.dp).clip(CircleShape).background(GreenDeep.copy(alpha = 0.10f)), contentAlignment = Alignment.Center) {
+                    Text(name.trim().take(1).uppercase(), color = GreenDeep, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                }
+                Spacer(Modifier.width(12.dp))
+                Text(name, Modifier.weight(1f), fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("›", fontSize = 20.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
     }
 }
@@ -378,6 +389,59 @@ private fun AssistantBubble(text: String) {
             .copyable(text)
             .padding(horizontal = 14.dp, vertical = 8.dp)
     )
+}
+
+/** A khata, report or list answer as a card: the main amount big, every other amount on its own line. */
+@Composable
+private fun ReportCard(r: Report, text: String) {
+    val grey = MaterialTheme.colorScheme.onSurfaceVariant
+    fun color(tone: Int) = when (tone) { 1 -> GreenIn; -1 -> RedSpend; else -> Color.Unspecified }
+    val hero = r.hero
+    Column(
+        Modifier
+            .fillMaxWidth(0.92f)
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .copyable(text)
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        if (r.title.isNotBlank() && r.title != hero?.label) Text(r.title, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+        if (hero != null) {
+            Text(hero.label, fontSize = 13.sp, color = grey)
+            Text(hero.amount, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = color(hero.tone))
+        }
+        val others = r.stats.filter { it !== hero }
+        if (others.isNotEmpty()) HorizontalDivider(Modifier.padding(vertical = 4.dp), color = grey.copy(alpha = 0.15f))
+        others.forEach { s ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(s.label, Modifier.weight(1f), fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
+                Text(s.amount, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = color(s.tone))
+            }
+        }
+        r.rows.forEachIndexed { i, l ->
+            if (i > 0 || hero != null) HorizontalDivider(color = grey.copy(alpha = 0.12f))
+            Row(Modifier.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(l.title, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    val sub = listOf(l.date, l.sub).filter { it.isNotBlank() }.joinToString(" · ")
+                    if (sub.isNotBlank()) Text(sub, fontSize = 12.sp, color = grey, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Text(l.amount, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            }
+        }
+        if (r.total.isNotEmpty()) {
+            HorizontalDivider(Modifier.padding(vertical = 2.dp), color = grey.copy(alpha = 0.3f))
+            r.total.forEach { s ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(if (s.label == "Total") "Total" else "Total · " + s.label, Modifier.weight(1f), fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Text(s.amount, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = color(s.tone))
+                }
+            }
+        }
+        if (r.notes.isNotEmpty()) Text(r.notes.joinToString(" · "), fontSize = 12.sp, color = grey, lineHeight = 16.sp)
+    }
 }
 
 @Composable

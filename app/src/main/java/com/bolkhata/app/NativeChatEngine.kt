@@ -150,6 +150,9 @@ object NativeChatEngine {
                 return Fixed("", "change", "", filter = Query.Filter(ids = ids), set = mapOf("amount" to n.replace(",", "")))
         }
 
+        // "Ye entry Ashiq ke khata me bhej do", "3 no entry Haji Ashiq me daal do": entries the chat just showed.
+        moveShown(text, lower, words, contacts, history)?.let { return it }
+
         if (Recat.isCommand(lower) || (words.contains("other") && has(words, setOf("sort", "fix", "categorize", "category", "theek"))))
             return Fixed("", "sort_other", "I'll group uncategorized expenses for you to review.")
         if (has(words, setOf("duplicate", "duplicates", "dupes", "dupe"))) return Fixed("", "duplicates", "")
@@ -275,10 +278,64 @@ object NativeChatEngine {
         return talk(lower)
     }
 
+    private val moveVerbs = setOf(
+        "move", "shift", "transfer", "send", "bhej", "bhejo", "bhejdo", "bhijwa", "bhijwado", "dal", "daal", "dalo", "daalo",
+        "daldo", "daaldo", "rakh", "rakho", "rakhdo", "put"
+    )
+    private val ordinalWords = mapOf(
+        "pehli" to 1, "pehla" to 1, "pehle" to 1, "first" to 1, "doosri" to 2, "dusri" to 2, "doosra" to 2, "dusra" to 2,
+        "second" to 2, "teesri" to 3, "tisri" to 3, "teesra" to 3, "third" to 3, "chothi" to 4, "chauthi" to 4,
+        "chautha" to 4, "fourth" to 4, "panchvi" to 5, "panchwi" to 5, "fifth" to 5
+    )
+    // "3 no", "3rd entry", "2 aur 4 number wali": a row number. "50 wali entry" is an amount, so it needs a marker.
+    private val numbered = Regex("""\b((?:\d{1,2}\s*(?:,|aur|and|or|&)\s*)*\d{1,2})\s*(?:(?:no|number|nambar|nmbr|st|nd|rd|th)\b\.?(?:\s*(?:wali|wala|wale))?(?:\s*(?:entry|entri|entries|record))?|(?:entry|entri|record))\b""")
+    private val numberedAfter = Regex("""\b(?:entry|record)\s*(?:no|number|#)?\.?\s*(\d{1,2})\b""")
+    private val ordinal = Regex("""\b(${ordinalWords.keys.joinToString("|")}|aakhri|akhri|last)\s+(?:wali\s+|wala\s+)?(?:entry|entri|record)\b""")
+    private val pointing = Regex("""\b(ye|yeh|isko|isay|this|that|it|wo|woh|usko|inko|these|those)\b|\biss?\s+(?:entry|entri|record)""")
+    private val plural = setOf("sab", "sari", "saari", "all", "these", "those", "inko", "entries", "records", "tamam")
+
+    /** Row numbers asked for ("3 no entry", "2 aur 4 number wali", "teesri entry", "entry 5"), last = -1. */
+    fun rowNumbers(lower: String): List<Int> {
+        numbered.find(lower)?.let { m -> return Regex("""\d{1,2}""").findAll(m.groupValues[1]).map { it.value.toInt() }.toList() }
+        numberedAfter.find(lower)?.let { return listOf(it.groupValues[1].toInt()) }
+        ordinal.find(lower)?.let { m -> return listOf(ordinalWords[m.groupValues[1]] ?: -1) }
+        return emptyList()
+    }
+
+    /**
+     * "Ye entry Ashiq ke khata me bhej do / daal do / rakh do / move kar do", "3 no entry Haji Ashiq me send karo":
+     * the entries the chat last listed or saved go to that person's khata. Null when the message isn't that
+     * ("Ali ko 500 bhej diye" is a new entry, so a message with an amount never counts as pointing at entries).
+     */
+    private fun moveShown(text: String, lower: String, words: List<String>, contacts: List<String>, history: List<ChatMessage>): Fixed? {
+        if (!has(words, moveVerbs) && !Regex("""\bkhat[ae]y?\s+(?:me|mein|main|men)\s+(?:kar|kr)\s*do\b""").containsMatchIn(lower)) return null
+        val shown = history.lastOrNull { !it.isUser && (it.listIds.isNotEmpty() || it.entryIds.isNotEmpty()) } ?: return null
+        val rows = shown.listIds.ifEmpty { shown.entryIds }
+        val numbers = rowNumbers(lower)
+        val rest = lower.replace(numbered, " ").replace(numberedAfter, " ").replace(ordinal, " ")
+        val ids = when {
+            numbers.isNotEmpty() -> numbers.map { n -> rows.getOrNull(if (n == -1) rows.lastIndex else n - 1) ?: return chat(
+                "I can't see entry number $n in the last list (it has ${rows.size}). Which one do you mean?") }
+            pointing.containsMatchIn(rest) && rest.none { it.isDigit() } ->
+                if (rows.size > 1 && !has(tokens(rest), plural))
+                    return chat("Which one of the ${rows.size}? Say its number, e.g. \"2 no entry\", or say \"sab\".")
+                else rows
+            else -> return null
+        }
+        val destination = Accounts.khataNameMentionedIn(text, "", contacts)
+            ?: Understand.matchContact(tokens(rest).filter { it !in moveVerbs }, contacts).let { (name, choices, _) ->
+                if (name == null && choices.size >= 2) return chat("Move to which khata: " + choices.joinToString(" or ") + "?")
+                name
+            }
+            ?: return chat("Which khata should get it? Say the person's saved name.")
+        return Fixed("", "to_khata", "", filter = Query.Filter(ids = ids.toSet()), set = mapOf("person" to destination))
+    }
+
     /** The saved names offered in "Which A or B do you mean?" / "Please choose one saved name: A or B." */
     fun nameChoices(text: String): List<String> {
         val list = Regex("""^Which (.+) do you mean\?$""").find(text.trim())?.groupValues?.get(1)
             ?: Regex("""^Please choose one saved name: (.+)\.$""").find(text.trim())?.groupValues?.get(1)
+            ?: Regex("""^Move to which khata: (.+)\?$""").find(text.trim())?.groupValues?.get(1)
             ?: return emptyList()
         return list.split(" or ").map { it.trim() }.filter { it.isNotEmpty() }.takeIf { it.size >= 2 }.orEmpty()
     }

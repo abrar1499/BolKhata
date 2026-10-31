@@ -585,3 +585,15 @@ fun HeroBackground(modifier: Modifier = Modifier) {
         drawCircle(Color.White.copy(alpha = 0.04f * k), radius = w * 0.18f, center = Offset(w * 0.05f, h * 0.15f))
     }
 }
+
+/** A clean pop-up list (white, rounded) that opens at the right edge of the row whose Box it is placed in. */
+@Composable
+fun BoxScope.PickMenu(open: Boolean, onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+    Box(Modifier.align(Alignment.BottomEnd).padding(end = 16.dp)) {
+        DropdownMenu(
+            expanded = open, onDismissRequest = onDismiss, shape = RoundedCornerShape(16.dp),
+            containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp, shadowElevation = 6.dp,
+            content = content
+        )
+    }
+}

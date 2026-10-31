@@ -112,10 +112,6 @@ internal fun InputBar(
                             }
                         }
                     )
-                    Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onMic), contentAlignment = Alignment.Center) {
-                        ThinMic(ink)
-                    }
-                    Spacer(Modifier.width(2.dp))
                     Box(
                         Modifier
                             .size(36.dp)
@@ -125,7 +121,7 @@ internal fun InputBar(
                                 when {
                                     talking -> voice!!.toggle()
                                     text.isNotBlank() -> send()
-                                    else -> voice?.toggle?.invoke() ?: onMic()
+                                    else -> onMic()
                                 }
                             },
                         contentAlignment = Alignment.Center
@@ -134,7 +130,7 @@ internal fun InputBar(
                             talking -> Box(Modifier.size(12.dp).clip(RoundedCornerShape(3.dp)).background(Color.White))
                             busy -> CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
                             text.isNotBlank() -> Icon(Icons.Filled.ArrowUpward, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(20.dp))
-                            else -> SoundWave(Color.White)
+                            else -> ThinMic(Color.White)
                         }
                     }
                 }
@@ -218,21 +214,6 @@ private fun ThinMic(color: Color) {
     }
 }
 
-/** Short vertical bars: tap the empty send button to speak. */
-@Composable
-private fun SoundWave(color: Color) {
-    Canvas(Modifier.size(16.dp)) {
-        val w = 1.7.dp.toPx()
-        val heights = listOf(0.35f, 0.75f, 1f, 0.55f)
-        val gap = size.width / (heights.size + 1)
-        heights.forEachIndexed { i, h ->
-            val x = gap * (i + 1)
-            val half = size.height * h / 2
-            drawLine(color, Offset(x, size.height / 2 - half), Offset(x, size.height / 2 + half), w, StrokeCap.Round)
-        }
-    }
-}
-
 /** The side menu in the same plain style as Settings: who you are, then simple rows with line icons. */
 @Composable
 internal fun DrawerMenu(tab: Tab, name: String, currency: String, onCurrency: (String) -> Unit, onPick: (Tab) -> Unit) {
@@ -265,7 +246,7 @@ internal fun DrawerMenu(tab: Tab, name: String, currency: String, onCurrency: (S
         HorizontalDivider(Modifier.padding(horizontal = 20.dp, vertical = 10.dp), color = MaterialTheme.colorScheme.outlineVariant)
         Box {
             DrawerRow("Currency", Icons.Outlined.Payments, false, value = "$currency ▾") { currencyOpen = true }
-            DropdownMenu(expanded = currencyOpen, onDismissRequest = { currencyOpen = false }) {
+            PickMenu(currencyOpen, { currencyOpen = false }) {
                 CURRENCIES.forEach { c ->
                     DropdownMenuItem(
                         text = { Text(c, fontWeight = if (c == currency) FontWeight.SemiBold else FontWeight.Normal) },

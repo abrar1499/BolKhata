@@ -432,3 +432,52 @@ class NativeChatEngineUnsureTest {
         assertTrue(!read("aaj kitna kharcha huwa").unsure)
     }
 }
+
+class NativeChatEngineMoveShownTest {
+    private val contacts = listOf("Haji Ashiq", "Ali Abrar", "Ali Raza", "Hamid Akram")
+    private val history = listOf(
+        ChatMessage("u1", true, "chai ki entries"),
+        ChatMessage("a1", false, "28 Oct · Chai · 5 SAR\n27 Oct · Chai · 6 SAR\n26 Oct · Chai · 7 SAR", listIds = listOf("e1", "e2", "e3"))
+    )
+    private fun read(text: String) = NativeChatEngine.interpret(text, emptyList(), contacts, history = history)
+
+    @Test fun numberedEntryGoesToTheNamedKhata() {
+        val r = read("3 no entry haji ashiq me bhej do")
+        assertEquals("to_khata", r.kind)
+        assertEquals(setOf("e3"), r.filter.ids)
+        assertEquals("Haji Ashiq", r.set["person"])
+    }
+
+    @Test fun severalNumbersAndAnyVerb() {
+        val r = read("2 aur 3 number wali entry Hamid Akram ko move kar do")
+        assertEquals(setOf("e2", "e3"), r.filter.ids)
+        assertEquals("Hamid Akram", r.set["person"])
+        assertEquals(setOf("e1", "e2", "e3"), read("ye sab Hamid Akram ke khata me rakh do").filter.ids)
+    }
+
+    @Test fun oneEntryOfManyAsksWhichNumber() {
+        val r = read("ye entry Hamid Akram ko send kar do")
+        assertEquals("chat", r.kind)
+        assertTrue(r.reply.contains("number"))
+        assertTrue(read("5 no entry Hamid Akram ko bhej do").reply.contains("entry number 5"))
+    }
+
+    @Test fun partOfANameSharedByTwoOffersBoth() {
+        val r = read("3 no entry ali me bhej do")
+        assertEquals("chat", r.kind)
+        assertEquals(listOf("Ali Abrar", "Ali Raza"), NativeChatEngine.nameChoices(r.reply))
+        // The tap repeats the command with the full name.
+        assertEquals("Ali Raza", read("3 no entry ali me bhej do Ali Raza").set["person"])
+    }
+
+    @Test fun sendingMoneyIsStillAnEntry() {
+        assertTrue(read("Hamid Akram ko 500 bhej diye").kind != "to_khata")
+    }
+
+    @Test fun rowNumbers() {
+        assertEquals(listOf(3), NativeChatEngine.rowNumbers("3rd entry"))
+        assertEquals(listOf(2), NativeChatEngine.rowNumbers("entry 2 bhej do"))
+        assertEquals(listOf(3), NativeChatEngine.rowNumbers("teesri entry"))
+        assertEquals(emptyList<Int>(), NativeChatEngine.rowNumbers("50 wali entry"))
+    }
+}

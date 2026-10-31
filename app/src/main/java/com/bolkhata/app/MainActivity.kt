@@ -734,6 +734,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         return "Done. Converted " + changed.size + " transfer entries in " + person + "'s khata. The khata stays open."
     }
 
+    // The rows the last answer listed, kept with that chat message ("3 no entry Hamid ke khata me bhej do").
+    val listedRows = remember { arrayOf(emptyList<String>()) }
     /**
      * Carries out what the local engine understood. The AI only translated; every record is picked, counted, added up,
      * deleted or changed here by the app. Returns a line to show, or null when the action shows itself.
@@ -757,6 +759,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             val preview = hits.take(4).joinToString("\n") { e ->
                 shortDate(e.date) + " · " + entryTitle(e) + " · " + fmt(e.amount) + " " + currency
             }
+            listedRows[0] = hits.take(4).map { it.id }
             return "I found ${hits.size} matching entries for $action:\n$preview\nWhich one do you mean? Give the date or amount, or say 'all entries' when you want a bulk action."
         }
         return when (f.kind) {
@@ -783,7 +786,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 if (f.what == "balance" && q.persons.size == 1) {
                     Questions.answer(q.persons.first() + " kitna", available, currency)?.text ?: "No entries with ${q.persons.first()}."
                 } else {
-                    val main = Query.answer(Query.select(available, q), f.what.ifBlank { "sum" }, q, currency)
+                    val picked = Query.select(available, q)
+                    if (f.what == "list") listedRows[0] = Query.shown(picked).map { it.id }
+                    val main = Query.answer(picked, f.what.ifBlank { "sum" }, q, currency)
                     // "kitna kharcha": money that went out as loans or paybacks that day is shown too, so nothing looks missing.
                     if (q.types == setOf(Type.KHARCHA) && f.what.ifBlank { "sum" } == "sum") {
                         val outs = Query.Filter(q.from, q.to, setOf(Type.DIYA, Type.WAPIS_DIYA), q.persons, emptySet(), q.items, q.min, q.max, q.last, false, q.notItems, q.ids, q.createdFrom, q.createdTo)
@@ -830,7 +835,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 val hits = scoped(Query.select(entries, q))
                     .filter { !it.person.equals(name, true) }.sortedWith(compareBy<Entry> { it.date }.thenBy { it.createdAt })
                 if (hits.isEmpty()) return "Nothing found (${Query.label(q)})."
-                clarifyMultiple("move to $name khata", hits)?.let { return it }
+                // Entries picked one by one ("3 no entry", "ye entry") are meant exactly; no need to ask again.
+                if (f.filter.ids.isEmpty()) clarifyMultiple("move to $name khata", hits)?.let { return it }
                 var work = entries
                 val changed = hits.map { e ->
                     val moved = movedTo(e, work, null, false, name).copy(item = e.item.ifBlank { "Loans" })
@@ -953,8 +959,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     }
 
     /** Adds a message to the chat and keeps it on the phone. */
-    fun postChat(text: String, isUser: Boolean, entryIds: List<String> = emptyList(), attachment: String = "", meta: String = "") {
+    fun postChat(text: String, isUser: Boolean, entryIds: List<String> = emptyList(), attachment: String = "", meta: String = "", listIds: List<String> = emptyList()) {
         val message = ChatMessage(
+            listIds = listIds,
             id = "chat-" + System.currentTimeMillis() + "-" + System.nanoTime(),
             isUser = isUser,
             text = text,
@@ -1111,6 +1118,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     }
                 }
                 var executionStatus = "returned"
+                listedRows[0] = emptyList()
                 val reply = runCatching { runFixed(intent, text, inChat = true) }
                     .onFailure { executionStatus = "exception:" + it.javaClass.simpleName }
                     .getOrElse {
@@ -1125,7 +1133,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     (matchCount?.let { "; matched=" + it } ?: "") + "; execution=" + executionStatus + groqTrace
                 if (!reply.isNullOrBlank()) {
                     lastSpeech = reply
-                    postChat(reply, isUser = false, meta = trace)
+                    postChat(reply, isUser = false, meta = trace, listIds = listedRows[0])
                 }
             } catch (e: Exception) {
                 val safe = "I couldn't safely understand that. Nothing was changed. Try 'chai 5', 'food this month', or 'last 5 transactions'."
@@ -1325,9 +1333,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         chatLoading = true
         loadingLabel = "Listening with Groq…"
         if (voiceOn) voiceStatus = "Thinking…"
-        val language = when { lang == "ur-PK" -> "ur"; lang.startsWith("en") -> "en"; else -> "" }
         scope.launch {
-            val said = Groq.transcribe(groqKey, file, language)
+            val said = Groq.transcribe(groqKey, file)
             runCatching { file.delete() }
             chatLoading = false
             loadingLabel = "Thinking…"
@@ -1346,14 +1353,19 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         val start = System.currentTimeMillis()
         var spoke = false
         var lastSound = start
+        // Background noise level, learnt while recording, so a noisy room still counts as a pause. Speech only has to
+        // be a little above it, so a soft voice is heard too; steady noise slowly becomes the new level.
+        var floor = 300f
         while (recorder === r) {
             kotlinx.coroutines.delay(150)
             val now = System.currentTimeMillis()
             val amp = runCatching { r.maxAmplitude }.getOrDefault(0)
-            voiceLevel = amp / 12_000f
-            if (amp > 2500) { spoke = true; lastSound = now }
+            voiceLevel = (amp / 6_000f).coerceAtMost(1f)
+            val loud = maxOf(700f, floor * 2.2f)
+            if (amp > loud) { spoke = true; lastSound = now; floor = floor * 0.98f + amp * 0.02f }
+            else floor = floor * 0.9f + amp * 0.1f
             // A call answers sooner after a pause than the mic, so it feels live.
-            if (spoke && now - lastSound > (if (voiceOn) 900 else 1500)) { finishRecording(); break }
+            if (spoke && now - lastSound > (if (voiceOn) 900 else 1200)) { finishRecording(); break }
             if (!spoke && now - start > 8000) { finishRecording(send = false); recordMissed(); break }
         }
     }
@@ -1366,11 +1378,12 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         val file = File(context.cacheDir, "voice.m4a")
         val r = (if (Build.VERSION.SDK_INT >= 31) android.media.MediaRecorder(context) else @Suppress("DEPRECATION") android.media.MediaRecorder())
         runCatching {
-            r.setAudioSource(android.media.MediaRecorder.AudioSource.MIC)
+            // The phone's voice-call mic: its noise suppression keeps fans, traffic and other voices down.
+            r.setAudioSource(android.media.MediaRecorder.AudioSource.VOICE_COMMUNICATION)
             r.setOutputFormat(android.media.MediaRecorder.OutputFormat.MPEG_4)
             r.setAudioEncoder(android.media.MediaRecorder.AudioEncoder.AAC)
             r.setAudioSamplingRate(16_000)
-            r.setAudioEncodingBitRate(32_000)
+            r.setAudioEncodingBitRate(64_000)
             r.setMaxDuration(30_000)
             r.setOutputFile(file.absolutePath)
             r.setOnInfoListener { _, what, _ -> if (what == android.media.MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED) finishRecording() }
@@ -1455,7 +1468,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             // No "prefer offline": when the offline model for this language is missing that made every attempt fail
             // silently and voice chat sat on "Listening…". Android now uses whichever recognizer it has.
-            if (!voiceDefaultLanguage) putExtra(RecognizerIntent.EXTRA_LANGUAGE, lang)
+            if (!voiceDefaultLanguage && lang.isNotBlank()) putExtra(RecognizerIntent.EXTRA_LANGUAGE, lang)
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
             // Give the person time to finish a long story before it stops listening.
@@ -1784,8 +1797,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
 
         val i = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, lang)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, lang)
+            if (lang.isNotBlank()) {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, lang)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, lang)
+            }
             putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak now…")
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 10)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && hints.isNotEmpty()) {
@@ -1868,8 +1883,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     onSend = { chatInput(it) }, onMic = { startVoice(forChat = true) }, placeholder = "Speak, type or ask…",
                     onAttach = { pickFile.launch(arrayOf("image/*", "application/pdf")) },
                     busy = chatLoading,
-                    voice = if (recorder != null && !voiceOn) VoiceState(true, "Listening…", "sends when you stop", level = voiceLevel) { finishRecording() }
-                        else VoiceState(voiceOn, voiceStatus, voicePartial, voiceReply, voiceLevel) { toggleVoice() }
+                    voice = if (recorder != null) VoiceState(true, "Listening…", "sends when you stop", level = voiceLevel) { finishRecording() } else null
                 )
             } else {
                 Column {
@@ -1880,9 +1894,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         placeholder = "Speak, type or ask…",
                         onAttach = { pickFile.launch(arrayOf("image/*", "application/pdf")) },
                         busy = chatLoading,
-                        // The call's answers also go to the chat, so starting it from Home opens the Chat tab.
-                        voice = if (recorder != null && !voiceOn) VoiceState(true, "Listening…", "sends when you stop", level = voiceLevel) { finishRecording() }
-                            else VoiceState(voiceOn, voiceStatus, voicePartial, voiceReply, voiceLevel) { tab = Tab.CHAT; toggleVoice() }
+                        voice = if (recorder != null) VoiceState(true, "Listening…", "sends when you stop", level = voiceLevel) { finishRecording() } else null
                     )
                 }
             }

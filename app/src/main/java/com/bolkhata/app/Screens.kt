@@ -1575,6 +1575,7 @@ fun SettingsScreen(
     var dialog by remember { mutableStateOf<String?>(null) }   // "name", "theme", "groq", "eleven" or "review"
     val faint = MaterialTheme.colorScheme.onSurfaceVariant
     val langLabel = when {
+        lang.isBlank() -> "Auto"
         lang == "ur-PK" -> "Urdu"
         lang.startsWith("en") -> "English"
         else -> "Roman Urdu"
@@ -1598,17 +1599,17 @@ fun SettingsScreen(
                     Box {
                         var open by remember { mutableStateOf(false) }
                         ListRow("Currency", "$currency ▾") { open = true }
-                        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-                            CURRENCIES.forEach { c -> DropdownMenuItem(text = { Text(c) }, onClick = { onCurrency(c); open = false }) }
+                        PickMenu(open, { open = false }) {
+                            CURRENCIES.forEach { c -> DropdownMenuItem(text = { Text(c, fontWeight = if (c == currency) FontWeight.SemiBold else FontWeight.Normal) }, onClick = { onCurrency(c); open = false }) }
                         }
                     }
                     ListDivider()
                     Box {
                         var open by remember { mutableStateOf(false) }
                         ListRow("Language", "$langLabel ▾") { open = true }
-                        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-                            listOf("Roman Urdu" to "hi-IN", "English" to "en-US", "Urdu" to "ur-PK").forEach { (label, code) ->
-                                DropdownMenuItem(text = { Text(label) }, onClick = { onLang(code); open = false })
+                        PickMenu(open, { open = false }) {
+                            listOf("Auto" to "", "Roman Urdu" to "hi-IN", "English" to "en-US", "Urdu" to "ur-PK").forEach { (label, code) ->
+                                DropdownMenuItem(text = { Text(label, fontWeight = if (code == lang) FontWeight.SemiBold else FontWeight.Normal) }, onClick = { onLang(code); open = false })
                             }
                         }
                     }
@@ -1628,7 +1629,7 @@ fun SettingsScreen(
                     Box {
                         var open by remember { mutableStateOf(false) }
                         ListRow("Backup", "Export · Import") { open = true }
-                        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                        PickMenu(open, { open = false }) {
                             DropdownMenuItem(text = { Text("Export data") }, onClick = { open = false; onExport() })
                             DropdownMenuItem(text = { Text("Import data") }, onClick = { open = false; onImport() })
                         }

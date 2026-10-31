@@ -72,7 +72,9 @@ data class ChatMessage(
     /** Preview picture of an attached photo or PDF (first page), saved in the app's own storage. */
     val attachment: String = "",
     /** Optional small diagnostic line under a local-engine answer. */
-    val meta: String = ""
+    val meta: String = "",
+    /** Entries of a list answer, in the order shown, so "3 no entry" means the third row. */
+    val listIds: List<String> = emptyList()
 )
 
 /** A reversible account move. Store only the fields that a move is allowed to change. */
@@ -232,7 +234,10 @@ class Store(context: Context) {
                         (0 until ids.length()).map { ids.optString(it) }.filter { it.isNotBlank() }
                     } ?: emptyList(),
                     attachment = o.optString("attachment", ""),
-                    meta = o.optString("meta", "")
+                    meta = o.optString("meta", ""),
+                    listIds = o.optJSONArray("listIds")?.let { ids ->
+                        (0 until ids.length()).map { ids.optString(it) }.filter { it.isNotBlank() }
+                    } ?: emptyList()
                 )
             }
         }.takeLast(100)
@@ -252,6 +257,7 @@ class Store(context: Context) {
                     .put("entryIds", JSONArray(message.entryIds))
                     .put("attachment", message.attachment)
                     .put("meta", message.meta)
+                    .put("listIds", JSONArray(message.listIds))
             )
         }
         prefs.edit().putString("chatMessages", arr.toString()).apply()
@@ -413,19 +419,15 @@ class Store(context: Context) {
         prefs.edit().putString(key, arr.toString()).apply()
     }
 
-    /** Voice recognition language, independent of the app's English interface and chat input. */
-    private fun defaultVoiceLanguage(): String =
-        if (java.util.Locale.getDefault().language in setOf("hi", "ur")) "hi-IN" else "en-US"
-
+    /**
+     * Voice recognition language, independent of the app's English interface and chat input. Blank is Auto (the
+     * default, for people anywhere): Groq detects the language itself and the phone uses its own.
+     */
     var language: String
         get() {
-            // Respect a previous explicit choice; new English-language users must not be forced into Hindi.
-            if (!prefs.getBoolean("langV2", false)) {
-                val selected = prefs.getString("lang", null)?.takeIf { it.isNotBlank() }
-                    ?: defaultVoiceLanguage()
-                prefs.edit().putBoolean("langV2", true).putString("lang", selected).apply()
-            }
-            return prefs.getString("lang", defaultVoiceLanguage()) ?: defaultVoiceLanguage()
+            // Everyone starts on Auto once; a language picked after that is kept.
+            if (!prefs.getBoolean("langV3", false)) prefs.edit().putBoolean("langV3", true).putString("lang", "").apply()
+            return prefs.getString("lang", "") ?: ""
         }
         set(v) = prefs.edit().putString("lang", v).apply()
 
