@@ -291,7 +291,7 @@ fun PartyPicker(
                             person == selectedPerson, isCurrent) { if (!isCurrent) selectedPerson = person }
                     }
                     if (shown.isEmpty() && query.isBlank()) item(key = "none") {
-                        Text("No khatas yet. Type a name to make one.", fontSize = 13.sp, color = sub, modifier = Modifier.padding(8.dp))
+                        Text("No parties yet. Tap + or type a name to add one.", fontSize = 13.sp, color = sub, modifier = Modifier.padding(8.dp))
                     }
                 }
             }
