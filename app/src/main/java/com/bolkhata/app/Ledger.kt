@@ -224,16 +224,16 @@ fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: (
         text = {
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 val taken = creating && exactMatch
-                // Looks like the chat's message bar: a white pill, "+" on the left (here: new khata), green circle on the right.
+                // Looks like the chat's message bar, a little lower: a white pill, "+" on the left (here: new khata).
                 val ink = MaterialTheme.colorScheme.onSurface
                 Surface(
                     shape = RoundedCornerShape(26.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 3.dp,
                     border = if (taken) BorderStroke(1.dp, MaterialTheme.colorScheme.error) else null,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Row(Modifier.heightIn(min = 48.dp).padding(start = 4.dp, end = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.heightIn(min = 40.dp).padding(start = 2.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Box(
-                            Modifier.size(40.dp).clip(CircleShape).clickable {
+                            Modifier.size(36.dp).clip(CircleShape).clickable {
                                 creating = !creating
                                 selectedPerson = if (creating) query.takeIf { it.isNotEmpty() && !exactMatch } else null
                             },
@@ -248,7 +248,7 @@ fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: (
                                 searchQuery = it
                                 selectedPerson = if (creating) it.trim().takeIf { n -> n.isNotEmpty() && people.none { p -> p.equals(n, true) } } else null
                             },
-                            modifier = Modifier.weight(1f).padding(horizontal = 4.dp, vertical = 12.dp),
+                            modifier = Modifier.weight(1f).padding(horizontal = 4.dp, vertical = 8.dp),
                             singleLine = true,
                             textStyle = LocalTextStyle.current.copy(fontSize = 16.sp, color = ink),
                             cursorBrush = SolidColor(GreenDeep),
@@ -259,9 +259,7 @@ fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: (
                                 }
                             }
                         )
-                        Box(Modifier.size(36.dp).clip(CircleShape).background(GreenDeep), contentAlignment = Alignment.Center) {
-                            Icon(if (creating) Icons.Filled.Add else Icons.Filled.Search, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
-                        }
+                        if (!creating) Icon(Icons.Filled.Search, contentDescription = null, tint = sub, modifier = Modifier.size(20.dp))
                     }
                 }
                 if (creating) Text(
