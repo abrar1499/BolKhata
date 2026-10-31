@@ -3,6 +3,9 @@ package com.bolkhata.app
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -221,33 +224,45 @@ fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: (
         text = {
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 val taken = creating && exactMatch
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = {
-                            searchQuery = it
-                            selectedPerson = if (creating) it.trim().takeIf { n -> n.isNotEmpty() && people.none { p -> p.equals(n, true) } } else null
-                        },
-                        modifier = Modifier.weight(1f),
-                        placeholder = { Text(if (creating) "New khata name" else "Search khata") },
-                        leadingIcon = { Icon(if (creating) Icons.Filled.Add else Icons.Filled.Search, contentDescription = null) },
-                        trailingIcon = {
-                            if (searchQuery.isNotEmpty()) IconButton(onClick = { searchQuery = ""; selectedPerson = null }) {
-                                Icon(Icons.Filled.Close, contentDescription = "Clear")
+                // Looks like the chat's message bar: a white pill, "+" on the left (here: new khata), green circle on the right.
+                val ink = MaterialTheme.colorScheme.onSurface
+                Surface(
+                    shape = RoundedCornerShape(26.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 3.dp,
+                    border = if (taken) BorderStroke(1.dp, MaterialTheme.colorScheme.error) else null,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(Modifier.heightIn(min = 48.dp).padding(start = 4.dp, end = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            Modifier.size(40.dp).clip(CircleShape).clickable {
+                                creating = !creating
+                                selectedPerson = if (creating) query.takeIf { it.isNotEmpty() && !exactMatch } else null
+                            },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (creating) Icon(Icons.Filled.Close, contentDescription = "Back to search", tint = ink)
+                            else ThinPlus(ink)
+                        }
+                        BasicTextField(
+                            value = searchQuery,
+                            onValueChange = {
+                                searchQuery = it
+                                selectedPerson = if (creating) it.trim().takeIf { n -> n.isNotEmpty() && people.none { p -> p.equals(n, true) } } else null
+                            },
+                            modifier = Modifier.weight(1f).padding(horizontal = 4.dp, vertical = 12.dp),
+                            singleLine = true,
+                            textStyle = LocalTextStyle.current.copy(fontSize = 16.sp, color = ink),
+                            cursorBrush = SolidColor(GreenDeep),
+                            decorationBox = { field ->
+                                Box(contentAlignment = Alignment.CenterStart) {
+                                    if (searchQuery.isEmpty()) Text(if (creating) "New khata name" else "Search khata", fontSize = 16.sp, color = sub, maxLines = 1)
+                                    field()
+                                }
                             }
-                        },
-                        isError = taken,
-                        shape = RoundedCornerShape(16.dp),
-                        singleLine = true
-                    )
-                    FilledTonalIconButton(
-                        onClick = {
-                            creating = !creating
-                            selectedPerson = if (creating) query.takeIf { it.isNotEmpty() && !exactMatch } else null
-                        },
-                        modifier = Modifier.size(52.dp),
-                        shape = RoundedCornerShape(16.dp)
-                    ) { Icon(if (creating) Icons.Filled.Close else Icons.Filled.Add, contentDescription = if (creating) "Back to search" else "New khata") }
+                        )
+                        Box(Modifier.size(36.dp).clip(CircleShape).background(GreenDeep), contentAlignment = Alignment.Center) {
+                            Icon(if (creating) Icons.Filled.Add else Icons.Filled.Search, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                        }
+                    }
                 }
                 if (creating) Text(
                     if (taken) "This khata already exists. Tap × and pick it from the list." else "A new khata with this name gets the entry.",
