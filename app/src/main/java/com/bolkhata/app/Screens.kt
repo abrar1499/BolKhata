@@ -244,7 +244,8 @@ fun HomeScreen(
         if (todayList.isNotEmpty()) {
             item {
                 Box(Modifier.padding(horizontal = 16.dp)) {
-                    DailyCashHeader("Today", todayList.size, "today" in open, dailyCashSummary(entries, todayList), currency) { toggle("today") }
+                    val s = dailyCashSummary(entries, todayList)
+                    DayLine(dayDate(todayList.first().date), todayList.size, "today" in open, s.cashIn, s.cashOut, "Today") { toggle("today") }
                 }
             }
             if ("today" in open) {
@@ -269,7 +270,9 @@ fun HomeScreen(
                 }
             }
             if (!thisYear && yKey !in open) return@forEach
-            item(key = "mh-$key") {
+            // Likewise this month's days show straight away; the month gets its own heading once it is over.
+            val thisMonth = thisYear && cal(list.first().date).get(Calendar.MONTH) == Calendar.getInstance().get(Calendar.MONTH)
+            if (!thisMonth) item(key = "mh-$key") {
                 Box(Modifier.padding(horizontal = 16.dp)) {
                     MonthHeader(
                         SimpleDateFormat("MMMM", Locale.US).format(Date(list.first().date)),
@@ -280,13 +283,14 @@ fun HomeScreen(
                     ) { toggle(key) }
                 }
             }
-            if (key in open) {
+            if (thisMonth || key in open) {
                 (d.monthDays[key] ?: emptyMap()).forEach { (day, dayList) ->
                     val dKey = "day-$day"
                     item(key = "md-$key-$day") {
                         Box(Modifier.padding(horizontal = 16.dp)) {
                             val s = dailyCashSummary(entries, dayList)
-                            DayLine(dayLabel(dayList.first().date), dayList.size, dKey in open, s.cashIn, s.cashOut) { toggle(dKey) }
+                            val day0 = dayList.first().date
+                            DayLine(dayDate(day0), dayList.size, dKey in open, s.cashIn, s.cashOut, if (dayLabel(day0) == "Yesterday") "Yesterday" else "") { toggle(dKey) }
                         }
                     }
                     if (dKey in open) dayEntries(dayList, currency, onEdit)
@@ -472,7 +476,7 @@ private fun MiniFlowChip(text: String, color: Color, icon: ImageVector, size: In
 
 /** A day inside a month: one slim line (date, count, small in / out), opens on tap. */
 @Composable
-private fun DayLine(title: String, count: Int, expanded: Boolean, cashIn: Double, cashOut: Double, onToggle: () -> Unit) {
+private fun DayLine(title: String, count: Int, expanded: Boolean, cashIn: Double, cashOut: Double, tag: String = "", onToggle: () -> Unit) {
     val (bar, ink, sub) = slateColors()
     val shape = if (expanded) RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp) else RoundedCornerShape(12.dp)
     Row(
@@ -486,8 +490,13 @@ private fun DayLine(title: String, count: Int, expanded: Boolean, cashIn: Double
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(title, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = ink, maxLines = 1)
+        // "31 Oct 2026  Today": the date in line with the other days, today / yesterday small after it.
+        if (tag.isNotEmpty()) {
+            Spacer(Modifier.width(6.dp))
+            Text(tag, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = GreenDeep, maxLines = 1)
+        }
         Spacer(Modifier.width(6.dp))
-        Text("$count", fontSize = 11.sp, color = sub, maxLines = 1)
+        Text(if (count == 1) "1 entry" else "$count entries", fontSize = 9.sp, color = sub, maxLines = 1)
         Spacer(Modifier.weight(1f))
         if (cashOut > 0) MiniFlowChip(fmt(cashOut), RedSpend, Icons.Filled.ArrowUpward, 12)
         if (cashOut > 0 && cashIn > 0) Spacer(Modifier.width(5.dp))
@@ -531,53 +540,6 @@ private fun slateColors(): Triple<Color, Color, Color> {
     val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     return if (dark) Triple(Color(0xFF2A313B), Color(0xFFE5E9EF), Color(0xFFAAB3BF))
     else Triple(Color(0xFFECEFF3), Color(0xFF1F2A37), Color(0xFF4B5563))
-}
-
-@Composable
-private fun DailyCashHeader(
-    title: String,
-    count: Int,
-    expanded: Boolean,
-    summary: DailyCashSummary,
-    currency: String,
-    onToggle: (() -> Unit)?
-) {
-    // A day is a slate bar, never a white card, so it can't be mistaken for an entry.
-    // An open day's bar is the top of one card that holds its entries; a closed day is a single bar.
-    val (bar, ink, sub) = slateColors()
-    val shape = if (expanded) RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp) else RoundedCornerShape(16.dp)
-    Row(
-        Modifier
-            .padding(top = if (expanded) 12.dp else 8.dp)
-            .fillMaxWidth()
-            .clip(shape)
-            .background(bar)
-            .then(if (onToggle != null) Modifier.clickable { onToggle() } else Modifier)
-            .padding(start = 14.dp, end = 8.dp, top = 9.dp, bottom = 9.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(title, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, color = ink, maxLines = 1)
-        Spacer(Modifier.width(8.dp))
-        Text(
-            if (count == 1) "1 entry" else "$count entries",
-            fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = sub, maxLines = 1
-        )
-        Spacer(Modifier.weight(1f))
-        // Money out points up (red), money in points down (green). Only what happened that day is shown.
-        if (summary.cashOut > 0) FlowChip(fmt(summary.cashOut), RedSpend, Icons.Filled.ArrowUpward)
-        if (summary.cashOut > 0 && summary.cashIn > 0) Spacer(Modifier.width(6.dp))
-        if (summary.cashIn > 0) FlowChip(fmt(summary.cashIn), GreenIn, Icons.Filled.ArrowDownward)
-        if (onToggle != null) {
-            Spacer(Modifier.width(2.dp))
-            Icon(
-                if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-                contentDescription = if (expanded) "Close" else "Open",
-                tint = ink
-            )
-        } else {
-            Spacer(Modifier.width(6.dp))
-        }
-    }
 }
 
 /** All entries of one day inside a single card, with thin lines between them. */
