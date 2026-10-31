@@ -727,9 +727,10 @@ private data class StockReportRow(
     val history: List<Entry>
 )
 
-enum class ReportKind(val label: String) {
-    CASH_OUT("Cash Out"), CASH_IN("Cash In"), SALES("Sales"), PURCHASES("Purchases"),
-    STOCK("Stock"), PROFIT("Profit"), CASH_BALANCE("Cash Balance"), DUES("Dues")
+/** The report tabs, by main heading. [tab] false: opened only from elsewhere (Home's cash, the shop's profit). */
+enum class ReportKind(val label: String, val tab: Boolean = true) {
+    CASH_OUT("Expense"), CASH_IN("Income"), TO_PAY("To pay"), TO_RECEIVE("To receive"), SALES("Sales"),
+    PURCHASES("Purchases"), STOCK("Stock"), ASSETS("Assets"), PROFIT("Profit", false), CASH_BALANCE("Cash Balance", false)
 }
 
 private fun Entry.isCashInFlow(): Boolean = when (type) {
@@ -999,8 +1000,6 @@ private class ReportData(
     val totalPurchases: Double,
     val salesGroups: List<ReportGroup>,
     val purchaseGroups: List<ReportGroup>,
-    val cashInGroups: List<ReportGroup>,
-    val cashOutGroups: List<ReportGroup>,
     val currentStock: List<StockLine>,
     val stockByName: Map<String, StockLine>,
     val stockNames: List<String>,
@@ -1039,8 +1038,6 @@ private fun reportData(entries: List<Entry>, span: Span, offset: Int): ReportDat
     val totalPurchases = purchases.sumOf { it.amount }
     val salesGroups = itemGroups(sales, ReportKind.SALES)
     val purchaseGroups = itemGroups(purchases, ReportKind.PURCHASES)
-    val cashInGroups = flowGroups(cashInEntries, ReportKind.CASH_IN)
-    val cashOutGroups = flowGroups(cashOutEntries, ReportKind.CASH_OUT)
 
     val currentStock = stock(entries)
     val stockByName = currentStock.associateBy { it.name.trim().lowercase() }
@@ -1072,7 +1069,7 @@ private fun reportData(entries: List<Entry>, span: Span, offset: Int): ReportDat
         .toList().sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.first.trim() }) // khatas always A–Z
     val toReceive = outstanding.filter { it.second > 0 }.sumOf { it.second }
     val toPay = outstanding.filter { it.second < 0 }.sumOf { -it.second }
-    return ReportData(start, end, label, startDay, inRange, cashInEntries, cashOutEntries, cashInTotal, cashOutTotal, allCashIn, allCashOut, cashBalance, sales, purchases, totalSales, totalPurchases, salesGroups, purchaseGroups, cashInGroups, cashOutGroups, currentStock, stockByName, stockNames, stockRows, receivedQty, givenQty, profit, outstanding, toReceive, toPay)
+    return ReportData(start, end, label, startDay, inRange, cashInEntries, cashOutEntries, cashInTotal, cashOutTotal, allCashIn, allCashOut, cashBalance, sales, purchases, totalSales, totalPurchases, salesGroups, purchaseGroups, currentStock, stockByName, stockNames, stockRows, receivedQty, givenQty, profit, outstanding, toReceive, toPay)
 }
 
 @Composable
@@ -1083,13 +1080,20 @@ fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit, st
     var openGroups by remember { mutableStateOf(setOf<String>()) }
 
     val rd = remember(entries, span, offset) { reportData(entries, span, offset) }
+    // Expense and Income are only real spending and earning; loans and transfers live in To pay / To receive.
+    val expenseEntries = remember(rd) { rd.inRange.filter { it.type == Type.KHARCHA } }
+    val expenseGroups = remember(rd) { flowGroups(expenseEntries, ReportKind.CASH_OUT) }
+    val expenseTotal = expenseEntries.sumOf { it.amount }
+    val incomeEntries = remember(rd) { rd.inRange.filter { it.type == Type.AAMDANI } }
+    val incomeGroups = remember(rd) { flowGroups(incomeEntries, ReportKind.CASH_IN) }
+    val incomeTotal = incomeEntries.sumOf { it.amount }
+    val assetEntries = remember(rd) { rd.inRange.filter { it.category == Cat.ASSETS } }
+    val assetGroups = remember(rd) { itemGroups(assetEntries, ReportKind.ASSETS) }
     val start = rd.start
     val end = rd.end
     val label = rd.label
     val startDay = rd.startDay
     val inRange = rd.inRange
-    val cashInEntries = rd.cashInEntries
-    val cashOutEntries = rd.cashOutEntries
     val cashInTotal = rd.cashInTotal
     val cashOutTotal = rd.cashOutTotal
     val allCashIn = rd.allCashIn
@@ -1101,8 +1105,6 @@ fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit, st
     val totalPurchases = rd.totalPurchases
     val salesGroups = rd.salesGroups
     val purchaseGroups = rd.purchaseGroups
-    val cashInGroups = rd.cashInGroups
-    val cashOutGroups = rd.cashOutGroups
     val currentStock = rd.currentStock
     val stockByName = rd.stockByName
     val stockNames = rd.stockNames
@@ -1118,7 +1120,7 @@ fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit, st
         item { ScreenTitle("Reports", onMenu = onMenu) }
         item {
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                ReportKind.entries.forEach { kind ->
+                ReportKind.entries.filter { it.tab || it == reportKind }.forEach { kind ->
                     FilterChip(selected = reportKind == kind, onClick = { reportKind = kind; openGroups = emptySet() }, label = { Text(kind.label) })
                 }
             }
@@ -1145,33 +1147,33 @@ fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit, st
 
         when (reportKind) {
             ReportKind.CASH_OUT -> {
-                item { ReportDonut(currency, cashOutTotal, cashOutTotal, "Total Cash Out", cashOutGroups) }
+                item { ReportDonut(currency, expenseTotal, expenseTotal, "Total Expense", expenseGroups) }
                 item {
                     Panel(Modifier.fillMaxWidth(), padding = 14.dp) {
-                        Text("Cash Out · $label", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
-                        Text(moneyA(currency, cashOutTotal), fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = RedSpend)
-                        Text("${cashOutEntries.size} entries, including expenses, paid purchases and money lent", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Expense · $label", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+                        Text(moneyA(currency, expenseTotal), fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = RedSpend)
+                        Text("${expenseEntries.size} entries", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-                if (cashOutGroups.isEmpty()) item { Text("No cash-out entries in this period.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                items(cashOutGroups, key = { it.key }) { group ->
-                    ReportGroupCard(group, cashOutTotal, currency, group.key in openGroups) {
+                if (expenseGroups.isEmpty()) item { Text("No expenses in this period.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                items(expenseGroups, key = { it.key }) { group ->
+                    ReportGroupCard(group, expenseTotal, currency, group.key in openGroups) {
                         openGroups = if (group.key in openGroups) openGroups - group.key else openGroups + group.key
                     }
                 }
             }
             ReportKind.CASH_IN -> {
-                item { ReportDonut(currency, cashInTotal, cashInTotal, "Total Cash In", cashInGroups) }
+                item { ReportDonut(currency, incomeTotal, incomeTotal, "Total Income", incomeGroups) }
                 item {
                     Panel(Modifier.fillMaxWidth(), padding = 14.dp) {
-                        Text("Cash In · $label", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
-                        Text(moneyA(currency, cashInTotal), fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = GreenIn)
-                        Text("${cashInEntries.size} entries, including other income, paid sales and money received back", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Income · $label", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+                        Text(moneyA(currency, incomeTotal), fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = GreenIn)
+                        Text("${incomeEntries.size} entries", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-                if (cashInGroups.isEmpty()) item { Text("No cash-in entries in this period.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                items(cashInGroups, key = { it.key }) { group ->
-                    ReportGroupCard(group, cashInTotal, currency, group.key in openGroups) {
+                if (incomeGroups.isEmpty()) item { Text("No income in this period.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                items(incomeGroups, key = { it.key }) { group ->
+                    ReportGroupCard(group, incomeTotal, currency, group.key in openGroups) {
                         openGroups = if (group.key in openGroups) openGroups - group.key else openGroups + group.key
                     }
                 }
@@ -1350,25 +1352,28 @@ fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit, st
                     }
                 }
             }
-            ReportKind.DUES -> {
-                item {
-                    Panel(Modifier.fillMaxWidth(), padding = 14.dp) {
-                        Text("Current outstanding · all time", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Column(Modifier.weight(1f)) {
-                                Text("To receive", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text(moneyA(currency, toReceive), fontWeight = FontWeight.Bold, color = GreenIn)
-                            }
-                            Column(Modifier.weight(1f)) {
-                                Text("To pay", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text(moneyA(currency, toPay), fontWeight = FontWeight.Bold, color = OrangeOwe)
-                            }
-                        }
-                        Text("${outstanding.size} people with an outstanding balance", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
+            ReportKind.ASSETS -> {
+                val assetTotal = assetEntries.sumOf { it.amount }
+                item { ReportDonut(currency, assetTotal, assetTotal, "Total Assets", assetGroups) }
+                if (assetGroups.isEmpty()) item { Text("No asset entries in this period.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                items(assetGroups, key = { it.key }) { group ->
+                    ReportGroupCard(group, assetTotal, currency, group.key in openGroups) {
+                        openGroups = if (group.key in openGroups) openGroups - group.key else openGroups + group.key
                     }
                 }
-                if (outstanding.isEmpty()) item { Text("No outstanding balances.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                items(outstanding, key = { it.first.lowercase() }) { (person, balance) ->
+            }
+            ReportKind.TO_PAY, ReportKind.TO_RECEIVE -> {
+                val receive = reportKind == ReportKind.TO_RECEIVE
+                val owed = outstanding.filter { if (receive) it.second > 0 else it.second < 0 }
+                item {
+                    Panel(Modifier.fillMaxWidth(), padding = 14.dp) {
+                        Text((if (receive) "To receive" else "To pay") + " · all time", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(moneyA(currency, if (receive) toReceive else toPay), fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = if (receive) GreenIn else OrangeOwe)
+                        Text("${owed.size} people", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                if (owed.isEmpty()) item { Text("Nothing here.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                items(owed, key = { it.first.lowercase() }) { (person, balance) ->
                     val key = "dues:" + person.lowercase()
                     val expanded = key in openGroups
                     val history = entries.filter { it.person.trim().equals(person, ignoreCase = true) && withPerson(it) }
