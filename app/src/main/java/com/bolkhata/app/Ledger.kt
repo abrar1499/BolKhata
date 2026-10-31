@@ -257,7 +257,7 @@ fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: (
                             cursorBrush = SolidColor(GreenDeep),
                             decorationBox = { field ->
                                 Box(contentAlignment = Alignment.CenterStart) {
-                                    if (searchQuery.isEmpty()) Text(if (creating) "New khata name" else "Search khata", fontSize = 16.sp, color = sub, maxLines = 1)
+                                    if (searchQuery.isEmpty()) Text(if (creating) "New khata name" else "Search party", fontSize = 16.sp, color = sub, maxLines = 1)
                                     field()
                                 }
                             }
