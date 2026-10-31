@@ -309,7 +309,8 @@ object NativeChatEngine {
      * ("Ali ko 500 bhej diye" is a new entry, so a message with an amount never counts as pointing at entries).
      */
     private fun moveShown(text: String, lower: String, words: List<String>, contacts: List<String>, history: List<ChatMessage>): Fixed? {
-        if (!has(words, moveVerbs) && !Regex("""\bkhat[ae]y?\s+(?:me|mein|main|men)\s+(?:kar|kr)\s*do\b""").containsMatchIn(lower)) return null
+        // The words as said: spelling fixes turn "bhej" into "bheja" (money sent), which is a new entry.
+        if (!has(tokens(lower), moveVerbs) && !Regex("""\bkhat[ae]y?\s+(?:me|mein|main|men)\s+(?:kar|kr)\s*do\b""").containsMatchIn(lower)) return null
         val shown = history.lastOrNull { !it.isUser && (it.listIds.isNotEmpty() || it.entryIds.isNotEmpty()) } ?: return null
         val rows = shown.listIds.ifEmpty { shown.entryIds }
         val numbers = rowNumbers(lower)
