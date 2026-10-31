@@ -242,6 +242,9 @@ fun dayLabel(d: Long): String {
     }
 }
 
+/** "31 Oct 2026", always the date (home's day rows add "Today" / "Yesterday" beside it). */
+fun dayDate(d: Long): String = SimpleDateFormat("d MMM yyyy", Locale.US).format(Date(d))
+
 /** Time the entry was added, e.g. "7:51 AM". */
 fun timeLabel(ms: Long): String = SimpleDateFormat("h:mm a", Locale.US).format(Date(ms))
 
