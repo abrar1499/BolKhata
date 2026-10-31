@@ -2368,7 +2368,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 question = "You said: \"${m.note}\"",
                 askType = true,
                 currency = currency,
-                people = partyNames(entries),
+                all = entries,
                 saveLabel = "Save",
                 onSave = { e ->
                     learnFrom(null, e)
@@ -2583,7 +2583,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 question = null,
                 askType = false,
                 currency = currency,
-                people = partyNames(entries),
+                all = entries,
                 saveLabel = "Save",
                 onSave = { e ->
                     save(listOf(e) + entries)
@@ -2620,7 +2620,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 question = null,
                 askType = false,
                 currency = currency,
-                people = partyNames(entries),
+                all = entries,
                 saveLabel = "Save",
                 onSave = { changed ->
                     learnFrom(e, changed)
@@ -2647,7 +2647,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 question = null,
                 askType = false,
                 currency = currency,
-                people = partyNames(entries),
+                all = entries,
                 saveLabel = "Save entry",
                 onSave = { e ->
                     save(listOf(e) + entries)

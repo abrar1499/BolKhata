@@ -3,7 +3,6 @@ package com.bolkhata.app
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -38,25 +37,8 @@ fun blankEntry(): Entry {
     )
 }
 
-private fun shortType(t: Type) = when (t) {
-    Type.KHARCHA -> "Expense"
-    Type.AAMDANI -> "Income"
-    Type.DIYA -> "Gave (to receive)"
-    Type.LIYA -> "Took (to pay)"
-    Type.WAPIS_MILA -> "Got back"
-    Type.WAPIS_DIYA -> "Paid back"
-    Type.SALE -> "Sale"
-    Type.PURCHASE -> "Purchase"
-    Type.TRANSFER_IN -> "Transfer in"
-    Type.TRANSFER_OUT -> "Transfer out"
-}
-
-private fun typeColor(t: Type) = when (t) {
-    Type.KHARCHA, Type.PURCHASE -> RedSpend
-    Type.AAMDANI, Type.WAPIS_MILA, Type.SALE -> GreenIn
-    Type.TRANSFER_IN, Type.TRANSFER_OUT -> OrangeOwe
-    else -> OrangeOwe
-}
+/** Money going out of the owner's hand: expense, lent, paid back, bought, sent. */
+private fun isOut(t: Type) = t == Type.KHARCHA || t == Type.DIYA || t == Type.WAPIS_DIYA || t == Type.PURCHASE || t == Type.TRANSFER_OUT
 
 /** A rounded popup that floats over the screen instead of filling it. */
 @Composable
@@ -75,8 +57,10 @@ fun FormPopup(onDismiss: () -> Unit, content: @Composable () -> Unit) {
 }
 
 /**
- * One compact form for adding, editing and answering "what is this?".
- * When [askType] is true no type is pre-selected, so the user has to choose.
+ * One compact form for adding, editing and answering "what is this?". The owner only picks Cash out or Cash in
+ * (none picked when [askType]); the app works out the rest: no party means an expense (its category read from the
+ * note and goods) or income; a party means a loan or a repayment, from that party's balance. An edit that keeps the
+ * direction and the party keeps the entry's own kind (sale, purchase, transfer…).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -91,11 +75,11 @@ fun EntryForm(
     onDelete: (() -> Unit)?,
     onCancel: () -> Unit,
     header: @Composable () -> Unit = {},
-    /** Saved parties: the Person field then opens a list to pick from (with + for a new one). */
-    people: List<String> = emptyList()
+    /** All saved entries: the party list and each party's balance come from them. */
+    all: List<Entry> = emptyList()
 ) {
-    var type by remember(initial.id) { mutableStateOf<Type?>(if (askType) null else initial.type) }
-    var cat by remember(initial.id) { mutableStateOf(if (initial.category == Cat.UDHAAR || initial.category == Cat.TANKHWAH) Cat.OTHER else initial.category) }
+    var out by remember(initial.id) { mutableStateOf<Boolean?>(if (askType) null else isOut(initial.type)) }
+    val people = remember(all) { partyNames(all) }
     var amount by remember(initial.id) { mutableStateOf(if (initial.amount > 0) plain(initial.amount) else "") }
     var item by remember(initial.id) { mutableStateOf(if (initial.item == "Loans") "" else initial.item) }
     var qty by remember(initial.id) { mutableStateOf(if (initial.qty > 0) plain(initial.qty) else "") }
@@ -106,9 +90,18 @@ fun EntryForm(
     var showDate by remember { mutableStateOf(false) }
     var askDelete by remember { mutableStateOf(false) }
 
-    val chosen = type
     val amountValue = amount.toDoubleOrNull()
-    val accent = chosen?.let { typeColor(it) } ?: MaterialTheme.colorScheme.primary
+    val accent = when (out) { true -> RedSpend; false -> GreenIn; null -> MaterialTheme.colorScheme.primary }
+
+    /** The entry's kind from Cash out / in and the party (see the class comment). */
+    fun kind(o: Boolean): Type {
+        val p = person.trim()
+        if (!askType && o == isOut(initial.type) && p.equals(initial.person.trim(), true)) return initial.type
+        if (p.isEmpty()) return if (o) Type.KHARCHA else Type.AAMDANI
+        val bal = personAccounts(all.filter { it.id != initial.id }).firstOrNull { it.name.equals(p, true) }?.balance ?: 0.0
+        return if (o) (if (bal < -0.005) Type.WAPIS_DIYA else Type.DIYA) else (if (bal > 0.005) Type.WAPIS_MILA else Type.LIYA)
+    }
+    val chosen = out?.let { kind(it) }
     val small = TextStyle(fontSize = 15.sp)
 
     Column(
@@ -136,14 +129,10 @@ fun EntryForm(
             }
         }
 
-        // Type: one scrollable row of coloured pills
-        Row(
-            Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Type.entries.forEach { t ->
-                Pill(shortType(t), chosen == t, typeColor(t)) { type = t }
-            }
+        // Only the direction; the app works out expense / income / loan.
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Pill("↑ Cash out", out == true, RedSpend, Modifier.weight(1f)) { out = true }
+            Pill("↓ Cash in", out == false, GreenIn, Modifier.weight(1f)) { out = false }
         }
 
         // Amount + date side by side
@@ -172,76 +161,55 @@ fun EntryForm(
             }
         }
 
-        if (chosen != null && (isLoan(chosen) || isTrade(chosen) || isTransfer(chosen))) {
-            var picking by remember { mutableStateOf(false) }
-            Box {
-                OutlinedTextField(
-                    value = person, onValueChange = { person = it }, readOnly = people.isNotEmpty(),
-                    label = { Text(if (isTrade(chosen)) "Customer / supplier (optional)" else if (isTransfer(chosen)) "Person (optional)" else "Person", fontSize = 12.sp) }, singleLine = true, textStyle = small,
-                    placeholder = { if (people.isNotEmpty()) Text("Select party", fontSize = 14.sp) },
-                    trailingIcon = { if (people.isNotEmpty()) Icon(Icons.Filled.ArrowDropDown, contentDescription = null) },
-                    shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()
-                )
-                // The whole field opens the party list.
-                if (people.isNotEmpty()) Box(Modifier.matchParentSize().padding(top = 8.dp).clip(RoundedCornerShape(14.dp)).clickable { picking = true })
-            }
-            if (picking) PartyPicker(
-                people, "", "Select party",
-                confirm = { creating -> if (creating) "Create & select" else "Select" },
-                onPick = { person = it; picking = false }, onDismiss = { picking = false }
-            )
-            if (isTrade(chosen) && person.isNotBlank()) {
-                // On credit: the amount goes in To pay / To receive. Paid: settled in cash, khata unchanged.
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Pill("On credit", !paid, OrangeOwe) { paid = false }
-                    Pill("Paid now", paid, GreenIn) { paid = true }
-                }
-            }
-        }
-
-        if (chosen == Type.KHARCHA) {
-            Row(
-                Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Cat.entries.filter { it != Cat.UDHAAR && it != Cat.TANKHWAH && it != Cat.SALES && it != Cat.STOCK }.forEach { c ->
-                    Pill("${c.icon} ${c.label}", cat == c, catColor(c)) { cat = c }
-                }
-            }
-        }
-
-        if (chosen != null) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = item, onValueChange = { item = it },
-                    label = {
-                        Text(
-                            when {
-                                isLoan(chosen) || isTrade(chosen) -> "Goods (optional)"
-                                chosen == Type.AAMDANI -> "Item (Salary, Bonus…)"
-                                else -> "Item (Petrol, Milk…)"
-                            },
-                            fontSize = 12.sp
-                        )
-                    },
-                    singleLine = true, textStyle = small,
-                    shape = RoundedCornerShape(14.dp), modifier = Modifier.weight(1f)
-                )
-                OutlinedTextField(
-                    value = qty, onValueChange = { v -> qty = v.filter { it.isDigit() || it == '.' } },
-                    label = { Text("Qty", fontSize = 12.sp) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    singleLine = true, textStyle = small,
-                    shape = RoundedCornerShape(14.dp), modifier = Modifier.width(90.dp)
-                )
-            }
-        }
-
         OutlinedTextField(
             value = note, onValueChange = { note = it },
             label = { Text("Note", fontSize = 12.sp) }, singleLine = true, textStyle = small,
             shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()
         )
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = item, onValueChange = { item = it },
+                label = { Text("Goods (optional)", fontSize = 12.sp) },
+                singleLine = true, textStyle = small,
+                shape = RoundedCornerShape(14.dp), modifier = Modifier.weight(1f)
+            )
+            OutlinedTextField(
+                value = qty, onValueChange = { v -> qty = v.filter { it.isDigit() || it == '.' } },
+                label = { Text("Qty", fontSize = 12.sp) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                singleLine = true, textStyle = small,
+                shape = RoundedCornerShape(14.dp), modifier = Modifier.width(90.dp)
+            )
+        }
+
+        var picking by remember { mutableStateOf(false) }
+        Box {
+            OutlinedTextField(
+                value = person, onValueChange = { person = it }, readOnly = people.isNotEmpty(),
+                label = { Text("Person (optional)", fontSize = 12.sp) }, singleLine = true, textStyle = small,
+                placeholder = { if (people.isNotEmpty()) Text("Select party", fontSize = 14.sp) },
+                trailingIcon = {
+                    if (person.isNotBlank()) IconButton(onClick = { person = "" }) { Icon(Icons.Filled.Close, contentDescription = "No party") }
+                    else if (people.isNotEmpty()) Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
+                },
+                shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()
+            )
+            // The field (not its × button) opens the party list.
+            if (people.isNotEmpty()) Box(Modifier.matchParentSize().padding(top = 8.dp, end = 48.dp).clip(RoundedCornerShape(14.dp)).clickable { picking = true })
+        }
+        if (picking) PartyPicker(
+            people, "", "Select party",
+            confirm = { creating -> if (creating) "Create & select" else "Select" },
+            onPick = { person = it; picking = false }, onDismiss = { picking = false }
+        )
+        if (chosen != null && isTrade(chosen) && person.isNotBlank()) {
+            // On credit: the amount goes in To pay / To receive. Paid: settled in cash, khata unchanged.
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Pill("On credit", !paid, OrangeOwe) { paid = false }
+                Pill("Paid now", paid, GreenIn) { paid = true }
+            }
+        }
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             if (onDelete != null) {
@@ -262,6 +230,10 @@ fun EntryForm(
             Button(
                 onClick = {
                     chosen?.let { t ->
+                        // An expense's category comes from what the note and goods say ("nashta" -> Food).
+                        val guess = Parser.guessCategory((item + " " + note).trim())
+                        val cat = guess?.first
+                            ?: initial.category.takeIf { initial.type == Type.KHARCHA && it != Cat.UDHAAR } ?: Cat.OTHER
                         val finalCat = when {
                             t == Type.SALE -> Cat.SALES
                             t == Type.PURCHASE -> Cat.STOCK
@@ -277,7 +249,7 @@ fun EntryForm(
                             isTrade(t) -> item.trim().ifBlank { if (t == Type.SALE) "Sale" else "Purchase" }
                             item.isNotBlank() -> item.trim()
                             t == Type.AAMDANI -> "Income"
-                            else -> finalCat.label
+                            else -> guess?.second ?: finalCat.label
                         }
                         onSave(
                             initial.copy(
@@ -288,7 +260,9 @@ fun EntryForm(
                                 qty = qty.toDoubleOrNull() ?: 0.0,
                                 person = if (isLoan(t) || isTrade(t) || isTransfer(t)) person.trim() else "",
                                 paid = isTrade(t) && person.isNotBlank() && paid,
-                                date = date,
+                                // A new "nashta" today after 9 AM is put at 7 AM, and so on (see Parser.partOfDayTime).
+                                date = if (initial.amount == 0.0 && date == initial.date)
+                                    Parser.partOfDayTime(date, Parser.dayPartHour("$note $item"), System.currentTimeMillis()) else date,
                                 note = note.trim().ifBlank { finalItem }
                             )
                         )
@@ -318,15 +292,16 @@ fun EntryForm(
 }
 
 @Composable
-private fun Pill(label: String, selected: Boolean, color: Color, onClick: () -> Unit) {
+private fun Pill(label: String, selected: Boolean, color: Color, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val shape = CircleShape
     Box(
-        Modifier
+        modifier
             .clip(shape)
             .background(if (selected) color.copy(alpha = 0.18f) else Color.Transparent)
             .border(1.dp, if (selected) color else MaterialTheme.colorScheme.outline, shape)
             .clickable { onClick() }
-            .padding(horizontal = 12.dp, vertical = 7.dp)
+            .padding(horizontal = 12.dp, vertical = 7.dp),
+        contentAlignment = Alignment.Center
     ) {
         Text(
             label, fontSize = 13.sp,
