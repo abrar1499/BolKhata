@@ -212,12 +212,15 @@ fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: (
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(26.dp),
+        // A compact card: narrower than the screen, short list.
+        modifier = Modifier.fillMaxWidth(0.84f),
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+        shape = RoundedCornerShape(24.dp),
         containerColor = MaterialTheme.colorScheme.surface,
         tonalElevation = 0.dp,
         title = {
-            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(if (count == 1) "Move entry" else "Move $count entries", fontWeight = FontWeight.Bold, fontSize = 20.sp)
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(if (count == 1) "Move entry" else "Move $count entries", fontWeight = FontWeight.Bold, fontSize = 18.sp)
                 Text("Pick a khata · amount, date and note stay the same", fontSize = 12.sp, color = sub)
             }
         },
@@ -266,7 +269,7 @@ fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: (
                     if (taken) "This khata already exists. Tap × and pick it from the list." else "A new khata with this name gets the entry.",
                     fontSize = 12.sp, color = if (taken) MaterialTheme.colorScheme.error else sub
                 )
-                if (!creating) LazyColumn(Modifier.fillMaxWidth().heightIn(max = 360.dp)) {
+                if (!creating) LazyColumn(Modifier.fillMaxWidth().heightIn(max = 250.dp)) {
                     if (query.isNotBlank() && !exactMatch) item(key = "+new") {
                         KhataChoice("+", "New khata: $query", query == selectedPerson, false) { selectedPerson = query }
                     }
@@ -300,10 +303,10 @@ private fun KhataChoice(initial: String, name: String, picked: Boolean, current:
             .clip(RoundedCornerShape(14.dp))
             .background(if (picked) green.copy(alpha = 0.10f) else Color.Transparent)
             .clickable(enabled = !current) { onClick() }
-            .padding(horizontal = 8.dp, vertical = 9.dp),
+            .padding(horizontal = 6.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(Modifier.size(34.dp).clip(CircleShape).background(green.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(30.dp).clip(CircleShape).background(green.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
             Text(initial, color = green, fontWeight = FontWeight.Bold, fontSize = 15.sp)
         }
         Spacer(Modifier.width(12.dp))
