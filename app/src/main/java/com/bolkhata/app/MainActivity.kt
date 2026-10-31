@@ -734,6 +734,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         return "Done. Converted " + changed.size + " transfer entries in " + person + "'s khata. The khata stays open."
     }
 
+    // The rows the last answer listed, kept with that chat message ("3 no entry Hamid ke khata me bhej do").
+    val listedRows = remember { arrayOf(emptyList<String>()) }
     /**
      * Carries out what the local engine understood. The AI only translated; every record is picked, counted, added up,
      * deleted or changed here by the app. Returns a line to show, or null when the action shows itself.
@@ -757,6 +759,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             val preview = hits.take(4).joinToString("\n") { e ->
                 shortDate(e.date) + " · " + entryTitle(e) + " · " + fmt(e.amount) + " " + currency
             }
+            listedRows[0] = hits.take(4).map { it.id }
             return "I found ${hits.size} matching entries for $action:\n$preview\nWhich one do you mean? Give the date or amount, or say 'all entries' when you want a bulk action."
         }
         return when (f.kind) {
@@ -783,7 +786,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 if (f.what == "balance" && q.persons.size == 1) {
                     Questions.answer(q.persons.first() + " kitna", available, currency)?.text ?: "No entries with ${q.persons.first()}."
                 } else {
-                    val main = Query.answer(Query.select(available, q), f.what.ifBlank { "sum" }, q, currency)
+                    val picked = Query.select(available, q)
+                    if (f.what == "list") listedRows[0] = Query.shown(picked).map { it.id }
+                    val main = Query.answer(picked, f.what.ifBlank { "sum" }, q, currency)
                     // "kitna kharcha": money that went out as loans or paybacks that day is shown too, so nothing looks missing.
                     if (q.types == setOf(Type.KHARCHA) && f.what.ifBlank { "sum" } == "sum") {
                         val outs = Query.Filter(q.from, q.to, setOf(Type.DIYA, Type.WAPIS_DIYA), q.persons, emptySet(), q.items, q.min, q.max, q.last, false, q.notItems, q.ids, q.createdFrom, q.createdTo)
@@ -830,7 +835,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 val hits = scoped(Query.select(entries, q))
                     .filter { !it.person.equals(name, true) }.sortedWith(compareBy<Entry> { it.date }.thenBy { it.createdAt })
                 if (hits.isEmpty()) return "Nothing found (${Query.label(q)})."
-                clarifyMultiple("move to $name khata", hits)?.let { return it }
+                // Entries picked one by one ("3 no entry", "ye entry") are meant exactly; no need to ask again.
+                if (f.filter.ids.isEmpty()) clarifyMultiple("move to $name khata", hits)?.let { return it }
                 var work = entries
                 val changed = hits.map { e ->
                     val moved = movedTo(e, work, null, false, name).copy(item = e.item.ifBlank { "Loans" })
@@ -953,8 +959,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     }
 
     /** Adds a message to the chat and keeps it on the phone. */
-    fun postChat(text: String, isUser: Boolean, entryIds: List<String> = emptyList(), attachment: String = "", meta: String = "") {
+    fun postChat(text: String, isUser: Boolean, entryIds: List<String> = emptyList(), attachment: String = "", meta: String = "", listIds: List<String> = emptyList()) {
         val message = ChatMessage(
+            listIds = listIds,
             id = "chat-" + System.currentTimeMillis() + "-" + System.nanoTime(),
             isUser = isUser,
             text = text,
@@ -1111,6 +1118,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     }
                 }
                 var executionStatus = "returned"
+                listedRows[0] = emptyList()
                 val reply = runCatching { runFixed(intent, text, inChat = true) }
                     .onFailure { executionStatus = "exception:" + it.javaClass.simpleName }
                     .getOrElse {
@@ -1125,7 +1133,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     (matchCount?.let { "; matched=" + it } ?: "") + "; execution=" + executionStatus + groqTrace
                 if (!reply.isNullOrBlank()) {
                     lastSpeech = reply
-                    postChat(reply, isUser = false, meta = trace)
+                    postChat(reply, isUser = false, meta = trace, listIds = listedRows[0])
                 }
             } catch (e: Exception) {
                 val safe = "I couldn't safely understand that. Nothing was changed. Try 'chai 5', 'food this month', or 'last 5 transactions'."

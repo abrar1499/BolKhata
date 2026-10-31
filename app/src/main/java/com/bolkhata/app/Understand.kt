@@ -81,8 +81,12 @@ object Understand {
         val names = contacts.filter { it.isNotBlank() }.distinctBy { it.lowercase() }
         for (w in words) {
             if (w.length < 3 || w in notNames || w.any { it.isDigit() }) continue
-            // A contact named exactly this word wins straight away.
-            names.firstOrNull { it.equals(w, true) }?.let { return Triple(it, emptyList(), w) }
+            // A contact named exactly this word wins straight away, unless another saved name has it too
+            // ("ali" with "Ali" and "Ali Abrar" saved): then all of them are offered.
+            names.firstOrNull { it.equals(w, true) }?.let { exact ->
+                val shared = names.filter { n -> n != exact && n.lowercase().split(Regex("[^\\p{L}]+")).contains(w.lowercase()) }
+                if (shared.isEmpty()) return Triple(exact, emptyList(), w)
+            }
             val scored = names.mapNotNull { n ->
                 val best = n.lowercase().split(Regex("[^\\p{L}]+")).filter { it.length >= 3 }
                     .maxOfOrNull { part -> if (closeName(w, part)) Normalizer.similarity(w, part) else 0.0 } ?: 0.0

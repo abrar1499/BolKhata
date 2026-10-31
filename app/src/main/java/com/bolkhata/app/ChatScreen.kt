@@ -167,7 +167,10 @@ fun ChatScreen(
                         // "Which A or B do you mean?": one tap on a name opens that khata.
                         if (message == messages.lastOrNull()) {
                             val names = NativeChatEngine.nameChoices(message.text)
-                            if (names.isNotEmpty()) NameChoices(names) { name -> onSend("$name ka khata") }
+                            // "Move to which khata: A or B?": the tap repeats the move with the full name.
+                            val moving = message.text.startsWith("Move to which khata")
+                            val asked = messages.lastOrNull { it.isUser }?.text.orEmpty()
+                            if (names.isNotEmpty()) NameChoices(names) { name -> onSend(if (moving) "$asked $name" else "$name ka khata") }
                         }
                         AnswerActions(ratings[message.id]) { good -> onRate(message.id, good) }
                     }
@@ -346,22 +349,30 @@ private fun AnswerActions(rating: Boolean?, onRate: (good: Boolean) -> Unit) {
 
 /** Tappable names under a "which one?" question, so the person picks instead of typing. */
 @OptIn(ExperimentalLayoutApi::class)
+/** Saved names to pick from, in one card; a tap opens that khata (or finishes the move that asked). */
 @Composable
 private fun NameChoices(names: List<String>, onPick: (String) -> Unit) {
-    FlowRow(
-        Modifier.padding(start = 10.dp, end = 10.dp, top = 2.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+    Column(
+        Modifier
+            .fillMaxWidth(0.92f)
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(vertical = 6.dp)
     ) {
-        names.forEach { name ->
-            Text(
-                name, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = GreenDeep,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(GreenDeep.copy(alpha = 0.08f))
-                    .clickable { onPick(name) }
-                    .padding(horizontal = 14.dp, vertical = 9.dp)
-            )
+        names.forEachIndexed { i, name ->
+            if (i > 0) HorizontalDivider(Modifier.padding(start = 60.dp), color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.12f))
+            Row(
+                Modifier.fillMaxWidth().clickable { onPick(name) }.padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(Modifier.size(34.dp).clip(CircleShape).background(GreenDeep.copy(alpha = 0.10f)), contentAlignment = Alignment.Center) {
+                    Text(name.trim().take(1).uppercase(), color = GreenDeep, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                }
+                Spacer(Modifier.width(12.dp))
+                Text(name, Modifier.weight(1f), fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("›", fontSize = 20.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
     }
 }

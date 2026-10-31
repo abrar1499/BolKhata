@@ -134,6 +134,9 @@ object Query {
         return parts.joinToString(" · ").ifBlank { "all" }
     }
 
+    /** The rows a "list" answer shows, in order (the chat remembers them for "3 no entry"). */
+    fun shown(list: List<Entry>): List<Entry> = list.take(5)
+
     /** The answer, worked out by the app: a total, a count or a short list. */
     fun answer(list: List<Entry>, what: String, f: Filter, currency: String): String {
         val head = label(f)
@@ -142,7 +145,7 @@ object Query {
             "count" -> "${list.size} " + (if (list.size == 1) "entry" else "entries") + " ($head)."
             "list" -> {
                 val dateFmt = java.text.SimpleDateFormat("d MMM", java.util.Locale.US)
-                val rows = list.take(5).joinToString("\n") { e ->
+                val rows = shown(list).joinToString("\n") { e ->
                     dateFmt.format(java.util.Date(e.date)) + " · " + (e.item.ifBlank { e.category.label }) +
                         (if (e.person.isNotBlank()) " · " + e.person else "") + " · " + fmt(e.amount) + " " + currency
                 } + if (list.size > 5) "\n+${list.size - 5} more" else ""

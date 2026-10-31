@@ -72,7 +72,9 @@ data class ChatMessage(
     /** Preview picture of an attached photo or PDF (first page), saved in the app's own storage. */
     val attachment: String = "",
     /** Optional small diagnostic line under a local-engine answer. */
-    val meta: String = ""
+    val meta: String = "",
+    /** Entries of a list answer, in the order shown, so "3 no entry" means the third row. */
+    val listIds: List<String> = emptyList()
 )
 
 /** A reversible account move. Store only the fields that a move is allowed to change. */
@@ -232,7 +234,10 @@ class Store(context: Context) {
                         (0 until ids.length()).map { ids.optString(it) }.filter { it.isNotBlank() }
                     } ?: emptyList(),
                     attachment = o.optString("attachment", ""),
-                    meta = o.optString("meta", "")
+                    meta = o.optString("meta", ""),
+                    listIds = o.optJSONArray("listIds")?.let { ids ->
+                        (0 until ids.length()).map { ids.optString(it) }.filter { it.isNotBlank() }
+                    } ?: emptyList()
                 )
             }
         }.takeLast(100)
@@ -252,6 +257,7 @@ class Store(context: Context) {
                     .put("entryIds", JSONArray(message.entryIds))
                     .put("attachment", message.attachment)
                     .put("meta", message.meta)
+                    .put("listIds", JSONArray(message.listIds))
             )
         }
         prefs.edit().putString("chatMessages", arr.toString()).apply()
