@@ -869,9 +869,6 @@ private fun personOnNote(e: Entry): String {
     }
 }
 
-/** The shop or place on a statement note ("Sasco, Riyadh" -> "Sasco"). */
-private fun placeOnNote(e: Entry): String = if (',' in e.note) e.note.substringBefore(',').trim() else ""
-
 private fun sortedNewest(l: List<Entry>) = l.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt })
 
 private fun groupNodes(prefix: String, list: List<Entry>, keyOf: (Entry) -> String, nameOf: (List<Entry>) -> String, children: (String, List<Entry>) -> List<Node>): List<Node> =
@@ -880,8 +877,8 @@ private fun groupNodes(prefix: String, list: List<Entry>, keyOf: (Entry) -> Stri
         .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name.trim() }) // khatas always A–Z
 
 /**
- * Category -> item (Petrol, Taxi, Roti; transfers grouped as "Transfers to people") -> shop or person -> entries.
- * A level with only one branch is skipped, so the tree never shows a pointless step.
+ * Category -> item or shop (Petrol, Panda; transfers grouped as "Transfers to people") -> entries straight away.
+ * Only transfers get one more level, the person. A level with only one branch is skipped.
  */
 private fun buildTree(list: List<Entry>): List<Node> =
     groupNodes("c", list, { it.category.name }, { it.first().category.label }) { cp, cl ->
@@ -889,11 +886,9 @@ private fun buildTree(list: List<Entry>): List<Node> =
             { if (transfer(it)) "~transfers" else it.item.trim().ifBlank { it.category.label } },
             { l -> if (transfer(l.first())) "Transfers to people" else l.first().item.trim().ifBlank { l.first().category.label } }
         ) { ip, il ->
-            val third = groupNodes(ip, il,
-                { if (transfer(it)) personOnNote(it).ifBlank { "Others" } else placeOnNote(it).ifBlank { it.item } },
-                { l -> if (transfer(l.first())) personOnNote(l.first()).ifBlank { "Others" } else placeOnNote(l.first()).ifBlank { l.first().item } }
-            ) { _, _ -> emptyList() }
-            if (third.size > 1) third else emptyList()
+            if (!transfer(il.first())) emptyList()
+            else groupNodes(ip, il, { personOnNote(it).ifBlank { "Others" } }, { l -> personOnNote(l.first()).ifBlank { "Others" } }) { _, _ -> emptyList() }
+                .takeIf { it.size > 1 }.orEmpty()
         }.let { items -> if (items.size == 1) items.first().children else items }
     }
 
