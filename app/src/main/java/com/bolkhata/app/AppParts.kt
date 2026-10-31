@@ -246,7 +246,7 @@ internal fun DrawerMenu(tab: Tab, name: String, currency: String, onCurrency: (S
         HorizontalDivider(Modifier.padding(horizontal = 20.dp, vertical = 10.dp), color = MaterialTheme.colorScheme.outlineVariant)
         Box {
             DrawerRow("Currency", Icons.Outlined.Payments, false, value = "$currency ▾") { currencyOpen = true }
-            DropdownMenu(expanded = currencyOpen, onDismissRequest = { currencyOpen = false }) {
+            PickMenu(currencyOpen, { currencyOpen = false }) {
                 CURRENCIES.forEach { c ->
                     DropdownMenuItem(
                         text = { Text(c, fontWeight = if (c == currency) FontWeight.SemiBold else FontWeight.Normal) },
