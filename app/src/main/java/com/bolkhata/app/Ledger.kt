@@ -182,20 +182,17 @@ private fun cleanMoveKhataName(value: String): String {
 }
 
 /**
- * Khata picker for moving entries: a search box with every khata listed under it (most recently used first, A–Z
- * while typing). Tap one to pick it, then Move. A name that isn't saved yet can be made a new khata.
+ * Khata picker for moving entries: a search box with every khata listed under it, A–Z. Tap one to pick it, then Move. A name that isn't saved yet can be made a new khata.
  */
 @Composable
 fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: () -> Unit, count: Int = 1) {
-    // Keep the real account key for moving entries; clean only the display label.
+    // Keep the real account key for moving entries; clean only the display label. A–Z.
     val people = remember(all) {
-        val lastUsed = all.filter { it.person.isNotBlank() }.groupBy { it.person.trim().lowercase(Locale.ROOT) }
-            .mapValues { (_, v) -> v.maxOf { it.date } }
         (personAccounts(all).map { it.name } + all.map { it.person })
             .map { it.trim() }
             .filter { it.isNotBlank() }
             .distinctBy { it.lowercase(Locale.ROOT) }
-            .sortedByDescending { lastUsed[it.lowercase(Locale.ROOT)] ?: 0L }
+            .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { cleanMoveKhataName(it) })
     }
     var searchQuery by remember { mutableStateOf("") }
     var selectedPerson by remember { mutableStateOf<String?>(null) }
@@ -205,7 +202,6 @@ fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: (
     val shown = remember(people, query) {
         if (query.isBlank()) people
         else people.filter { cleanMoveKhataName(it).contains(query, ignoreCase = true) || it.contains(query, ignoreCase = true) }
-            .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { cleanMoveKhataName(it) })
     }
     val exactMatch = people.any { cleanMoveKhataName(it).equals(query, ignoreCase = true) || it.equals(query, ignoreCase = true) }
     val sub = MaterialTheme.colorScheme.onSurfaceVariant
