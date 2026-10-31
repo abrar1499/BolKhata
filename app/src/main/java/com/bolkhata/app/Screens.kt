@@ -269,7 +269,9 @@ fun HomeScreen(
                 }
             }
             if (!thisYear && yKey !in open) return@forEach
-            item(key = "mh-$key") {
+            // Likewise this month's days show straight away; the month gets its own heading once it is over.
+            val thisMonth = thisYear && cal(list.first().date).get(Calendar.MONTH) == Calendar.getInstance().get(Calendar.MONTH)
+            if (!thisMonth) item(key = "mh-$key") {
                 Box(Modifier.padding(horizontal = 16.dp)) {
                     MonthHeader(
                         SimpleDateFormat("MMMM", Locale.US).format(Date(list.first().date)),
@@ -280,7 +282,7 @@ fun HomeScreen(
                     ) { toggle(key) }
                 }
             }
-            if (key in open) {
+            if (thisMonth || key in open) {
                 (d.monthDays[key] ?: emptyMap()).forEach { (day, dayList) ->
                     val dKey = "day-$day"
                     item(key = "md-$key-$day") {
