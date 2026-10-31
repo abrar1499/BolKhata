@@ -181,19 +181,34 @@ private fun cleanMoveKhataName(value: String): String {
     return name.trim().trim('.', '-', '/', ' ')
 }
 
-/**
- * Khata picker for moving entries: a search box with every khata listed under it, A–Z. Tap one to pick it, then Move. A name that isn't saved yet can be made a new khata.
- */
+/** Move entry: pick the party (khata) the entry goes to. */
 @Composable
 fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: () -> Unit, count: Int = 1) {
-    // Keep the real account key for moving entries; clean only the display label. A–Z.
-    val people = remember(all) {
-        (personAccounts(all).map { it.name } + all.map { it.person })
-            .map { it.trim() }
-            .filter { it.isNotBlank() }
-            .distinctBy { it.lowercase(Locale.ROOT) }
-            .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { cleanMoveKhataName(it) })
-    }
+    val people = remember(all) { partyNames(all) }
+    PartyPicker(
+        people, e.person, if (count == 1) "Move entry" else "Move $count entries",
+        confirm = { creating -> if (creating) "Create & move" else if (count == 1) "Move" else "Move $count" },
+        onPick = { onMove(movedTo(e, all, null, false, it)) }, onDismiss = onDismiss
+    )
+}
+
+/** Every saved party (khata) name, A–Z. The real account key is kept; only the shown label is cleaned. */
+fun partyNames(all: List<Entry>): List<String> =
+    (personAccounts(all).map { it.name } + all.map { it.person })
+        .map { it.trim() }
+        .filter { it.isNotBlank() }
+        .distinctBy { it.lowercase(Locale.ROOT) }
+        .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { cleanMoveKhataName(it) })
+
+/**
+ * The party list used by Move entry and by the entry form's Person field: a chat-bar style search with "+" for a
+ * new khata, every party A–Z under it; tap one, then the confirm button. [current] is marked and can't be picked.
+ */
+@Composable
+fun PartyPicker(
+    people: List<String>, current: String, title: String,
+    confirm: (creating: Boolean) -> String, onPick: (String) -> Unit, onDismiss: () -> Unit
+) {
     var searchQuery by remember { mutableStateOf("") }
     var selectedPerson by remember { mutableStateOf<String?>(null) }
     // "+" beside the search box: the box then takes a new khata's name.
@@ -216,7 +231,7 @@ fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: (
         tonalElevation = 0.dp,
         title = {
             Text(
-                if (count == 1) "Move entry" else "Move $count entries", Modifier.fillMaxWidth(),
+                title, Modifier.fillMaxWidth(),
                 fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = sub,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
@@ -263,7 +278,7 @@ fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: (
                     }
                 }
                 if (creating) Text(
-                    if (taken) "This khata already exists. Tap × and pick it from the list." else "A new khata with this name gets the entry.",
+                    if (taken) "This khata already exists. Tap × and pick it from the list." else "A new khata with this name will be made.",
                     fontSize = 12.sp, color = if (taken) MaterialTheme.colorScheme.error else sub
                 )
                 if (!creating) LazyColumn(Modifier.fillMaxWidth().heightIn(max = 250.dp)) {
@@ -271,9 +286,9 @@ fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: (
                         KhataChoice("+", "New khata: $query", query == selectedPerson, false) { selectedPerson = query }
                     }
                     items(shown, key = { it }) { person ->
-                        val current = e.person.equals(person, ignoreCase = true)
+                        val isCurrent = current.equals(person, ignoreCase = true)
                         KhataChoice(cleanMoveKhataName(person).take(1).uppercase(), cleanMoveKhataName(person),
-                            person == selectedPerson, current) { if (!current) selectedPerson = person }
+                            person == selectedPerson, isCurrent) { if (!isCurrent) selectedPerson = person }
                     }
                     if (shown.isEmpty() && query.isBlank()) item(key = "none") {
                         Text("No khatas yet. Type a name to make one.", fontSize = 13.sp, color = sub, modifier = Modifier.padding(8.dp))
@@ -283,9 +298,8 @@ fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: (
         },
         confirmButton = {
             Button(enabled = selectedPerson != null, onClick = {
-                val person = selectedPerson ?: return@Button
-                onMove(movedTo(e, all, null, false, person))
-            }) { Text(if (creating) "Create & move" else if (count == 1) "Move" else "Move $count") }
+                onPick(selectedPerson ?: return@Button)
+            }) { Text(confirm(creating)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )

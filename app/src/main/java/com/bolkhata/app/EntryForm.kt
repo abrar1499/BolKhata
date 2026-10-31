@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.*
@@ -89,7 +90,9 @@ fun EntryForm(
     onSave: (Entry) -> Unit,
     onDelete: (() -> Unit)?,
     onCancel: () -> Unit,
-    header: @Composable () -> Unit = {}
+    header: @Composable () -> Unit = {},
+    /** Saved parties: the Person field then opens a list to pick from (with + for a new one). */
+    people: List<String> = emptyList()
 ) {
     var type by remember(initial.id) { mutableStateOf<Type?>(if (askType) null else initial.type) }
     var cat by remember(initial.id) { mutableStateOf(if (initial.category == Cat.UDHAAR || initial.category == Cat.TANKHWAH) Cat.OTHER else initial.category) }
@@ -170,10 +173,22 @@ fun EntryForm(
         }
 
         if (chosen != null && (isLoan(chosen) || isTrade(chosen) || isTransfer(chosen))) {
-            OutlinedTextField(
-                value = person, onValueChange = { person = it },
-                label = { Text(if (isTrade(chosen)) "Customer / supplier (optional)" else if (isTransfer(chosen)) "Person (optional)" else "Person", fontSize = 12.sp) }, singleLine = true, textStyle = small,
-                shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()
+            var picking by remember { mutableStateOf(false) }
+            Box {
+                OutlinedTextField(
+                    value = person, onValueChange = { person = it }, readOnly = people.isNotEmpty(),
+                    label = { Text(if (isTrade(chosen)) "Customer / supplier (optional)" else if (isTransfer(chosen)) "Person (optional)" else "Person", fontSize = 12.sp) }, singleLine = true, textStyle = small,
+                    placeholder = { if (people.isNotEmpty()) Text("Select party", fontSize = 14.sp) },
+                    trailingIcon = { if (people.isNotEmpty()) Icon(Icons.Filled.ArrowDropDown, contentDescription = null) },
+                    shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()
+                )
+                // The whole field opens the party list.
+                if (people.isNotEmpty()) Box(Modifier.matchParentSize().padding(top = 8.dp).clip(RoundedCornerShape(14.dp)).clickable { picking = true })
+            }
+            if (picking) PartyPicker(
+                people, "", "Select party",
+                confirm = { creating -> if (creating) "Create & select" else "Select" },
+                onPick = { person = it; picking = false }, onDismiss = { picking = false }
             )
             if (isTrade(chosen) && person.isNotBlank()) {
                 // On credit: the amount goes in To pay / To receive. Paid: settled in cash, khata unchanged.
