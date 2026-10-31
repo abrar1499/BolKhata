@@ -1346,14 +1346,17 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         val start = System.currentTimeMillis()
         var spoke = false
         var lastSound = start
+        // Background noise level, learnt while recording, so a noisy room still counts as a pause.
+        var floor = 800f
         while (recorder === r) {
             kotlinx.coroutines.delay(150)
             val now = System.currentTimeMillis()
             val amp = runCatching { r.maxAmplitude }.getOrDefault(0)
             voiceLevel = amp / 12_000f
-            if (amp > 2500) { spoke = true; lastSound = now }
+            val loud = maxOf(2500f, floor * 2.5f)
+            if (amp > loud) { spoke = true; lastSound = now } else floor = floor * 0.9f + amp * 0.1f
             // A call answers sooner after a pause than the mic, so it feels live.
-            if (spoke && now - lastSound > (if (voiceOn) 900 else 1500)) { finishRecording(); break }
+            if (spoke && now - lastSound > (if (voiceOn) 900 else 1200)) { finishRecording(); break }
             if (!spoke && now - start > 8000) { finishRecording(send = false); recordMissed(); break }
         }
     }
