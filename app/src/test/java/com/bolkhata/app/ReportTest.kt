@@ -27,6 +27,14 @@ class ReportTest {
         assertEquals(listOf("Food" to "500 SAR", "Transport" to "300 SAR"), r.stats.drop(1).map { it.label to it.amount })
     }
 
+    @Test fun secondLineKeepsItsOwnName() {
+        val r = Report.parse("Spent 4,699.27 SAR (69 entries, Sep)\nOther money out: Lent 4,688.68 SAR (14 entries, Sep)", "SAR")!!
+        assertEquals("", r.title)
+        assertEquals(Report.Stat("Spent", "4,699.27 SAR", -1), r.hero)
+        assertEquals(Report.Stat("Lent (other money out)", "4,688.68 SAR", -1), r.stats[1])
+        assertEquals(listOf("69 entries, Sep", "other money out: 14 entries, Sep"), r.notes)
+    }
+
     @Test fun plainSentencesAndQuestionsStayText() {
         assertNull(Report.parse("Nothing found (Chai · 28 Oct).", "SAR"))
         assertNull(Report.parse("Change chai from 50 SAR to 60 SAR?", "SAR"))

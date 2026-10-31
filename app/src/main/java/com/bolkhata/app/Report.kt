@@ -39,8 +39,9 @@ data class Report(
             val notes = mutableListOf<String>()
 
             /** "you gave 500 SAR, got back 200 SAR. Hamid will pay you 300 SAR (2 entries)" → amounts and notes. */
-            fun amounts(part: String, into: MutableList<Stat>, fallback: String = "Amount") {
-                Regex("""\(([^()]*)\)""").findAll(part).forEach { notes += it.groupValues[1].trim() }
+            fun amounts(part: String, into: MutableList<Stat>, fallback: String = "Amount", tag: String = "") {
+                fun tagged(s: String) = if (tag.isEmpty() || s == tag) s else "$s ($tag)"
+                Regex("""\(([^()]*)\)""").findAll(part).forEach { notes += (if (tag.isEmpty()) "" else "$tag: ") + it.groupValues[1].trim() }
                 var spending = false
                 Regex("""\s·\s|[.;]\s+|,\s+|[.;]$""").split(part.replace(Regex("""\s*\([^()]*\)"""), ""))
                     .map { it.trim() }.filter { it.isNotEmpty() }.forEach { seg0 ->
@@ -51,7 +52,7 @@ data class Report(
                         val amount = m.groupValues.getOrElse(1) { "" }.ifEmpty { m.value }
                         val label = (seg.removeRange(m.range)).trim().trim(':', '-', ' ')
                             .replaceFirstChar { it.uppercase() }.ifBlank { fallback }
-                        into += Stat(label, "$amount $currency", if (spending) -1 else tone(label))
+                        into += Stat(tagged(label), "$amount $currency", if (spending) -1 else tone(label))
                     }
             }
 
@@ -69,10 +70,13 @@ data class Report(
                     else -> {
                         val colon = raw.indexOf(": ")
                         val first = money.find(raw)?.range?.first ?: -1
-                        if (colon in 1 until first && title.isEmpty()) {
-                            title = raw.substring(0, colon)
-                            amounts(raw.substring(colon + 2), stats, title)
-                        } else amounts(raw, stats)
+                        val head = if (colon in 1 until first) raw.substring(0, colon) else ""
+                        when {
+                            head.isEmpty() -> amounts(raw, stats)
+                            // Only the first line names the card; a later "Other money out: Lent 50 SAR" keeps its own name.
+                            title.isEmpty() && stats.isEmpty() -> { title = head; amounts(raw.substring(colon + 2), stats, title) }
+                            else -> amounts(raw.substring(colon + 2), stats, head, head.lowercase())
+                        }
                     }
                 }
             }
