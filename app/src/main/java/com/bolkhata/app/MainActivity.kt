@@ -1345,15 +1345,17 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         val start = System.currentTimeMillis()
         var spoke = false
         var lastSound = start
-        // Background noise level, learnt while recording, so a noisy room still counts as a pause.
-        var floor = 800f
+        // Background noise level, learnt while recording, so a noisy room still counts as a pause. Speech only has to
+        // be a little above it, so a soft voice is heard too; steady noise slowly becomes the new level.
+        var floor = 300f
         while (recorder === r) {
             kotlinx.coroutines.delay(150)
             val now = System.currentTimeMillis()
             val amp = runCatching { r.maxAmplitude }.getOrDefault(0)
-            voiceLevel = amp / 12_000f
-            val loud = maxOf(2500f, floor * 2.5f)
-            if (amp > loud) { spoke = true; lastSound = now } else floor = floor * 0.9f + amp * 0.1f
+            voiceLevel = (amp / 6_000f).coerceAtMost(1f)
+            val loud = maxOf(700f, floor * 2.2f)
+            if (amp > loud) { spoke = true; lastSound = now; floor = floor * 0.98f + amp * 0.02f }
+            else floor = floor * 0.9f + amp * 0.1f
             // A call answers sooner after a pause than the mic, so it feels live.
             if (spoke && now - lastSound > (if (voiceOn) 900 else 1200)) { finishRecording(); break }
             if (!spoke && now - start > 8000) { finishRecording(send = false); recordMissed(); break }
@@ -1373,7 +1375,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             r.setOutputFormat(android.media.MediaRecorder.OutputFormat.MPEG_4)
             r.setAudioEncoder(android.media.MediaRecorder.AudioEncoder.AAC)
             r.setAudioSamplingRate(16_000)
-            r.setAudioEncodingBitRate(32_000)
+            r.setAudioEncodingBitRate(64_000)
             r.setMaxDuration(30_000)
             r.setOutputFile(file.absolutePath)
             r.setOnInfoListener { _, what, _ -> if (what == android.media.MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED) finishRecording() }
