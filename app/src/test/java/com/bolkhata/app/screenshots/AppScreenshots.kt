@@ -87,7 +87,9 @@ class AppScreenshots {
             ChatMessage("m1", true, "28 oct ko kitna kharcha huwa"),
             ChatMessage("m2", false, "Spent 79 SAR (3 entries, 28 Oct)", meta = "engine=NativeChatEngine; intent=ask; query=sum; matched=3"),
             ChatMessage("m3", true, "detail do"),
-            ChatMessage("m4", false, "Petrol 50, Groceries 23, Nashta 6")
+            ChatMessage("m4", false, "28 Oct · Petrol · 50 SAR\n28 Oct · Groceries · 23 SAR\n28 Oct · Nashta · 6 SAR\nTotal: Spent 79 SAR (3 entries, 28 Oct)"),
+            ChatMessage("m5", true, "Hamid Akram ka khata"),
+            ChatMessage("m6", false, "Hamid Akram all time: you gave 500 SAR, got back 200 SAR. Hamid Akram will pay you 300 SAR.")
         )
         WithBar {
             ChatScreen(
