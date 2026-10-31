@@ -239,7 +239,7 @@ object Parser {
 
     /**
      * The part of the day a sentence talks about, as a typical hour:
-     * morning / breakfast 8 AM, lunch 1 PM, evening / dinner 7 PM, night 9 PM. Null when no time is said.
+     * morning / breakfast 7 AM, lunch 1 PM, evening / dinner 7 PM, night 9 PM. Null when no time is said.
      */
     fun dayPartHour(text: String): Int? {
         val w = text.lowercase().split(Regex("""[^\p{L}]+""")).filter { it.isNotEmpty() }.toSet()
@@ -248,9 +248,22 @@ object Parser {
             any("raat", "rat", "night", "tonight", "رات") -> 21
             any("dinner", "sham", "shaam", "shām", "evening", "شام") -> 19
             any("dopahar", "dopehar", "dopehr", "dupehr", "dupahar", "dupehar", "dopahr", "dophar", "lunch", "noon", "afternoon", "دوپہر") -> 13
-            any("suba", "subah", "subha", "sobah", "morning", "nashta", "nashtay", "nashte", "breakfast", "صبح", "ناشتہ") -> 8
+            any("suba", "subah", "subha", "sobah", "morning", "nashta", "nashtay", "nashte", "breakfast", "صبح", "ناشتہ") -> 7
             else -> null
         }
+    }
+
+    /**
+     * When an entry for that part of the day happened. Today, while that part of the day is still on (nashta before
+     * 9 AM, lunch before 3 PM, dinner before 9 PM, night before 11 PM), it is now; later today, or on a past day, it is
+     * the typical hour. No part of the day said: [date] as it is.
+     */
+    fun partOfDayTime(date: Long, hour: Int?, now: Long): Long {
+        if (hour == null) return date
+        val d = Calendar.getInstance().apply { timeInMillis = date }
+        val n = Calendar.getInstance().apply { timeInMillis = now }
+        val today = d.get(Calendar.YEAR) == n.get(Calendar.YEAR) && d.get(Calendar.DAY_OF_YEAR) == n.get(Calendar.DAY_OF_YEAR)
+        return if (today && n.get(Calendar.HOUR_OF_DAY) < hour + 2) now else atHour(date, hour)
     }
 
     /** The same day as [ms], at [hour]:00. */
@@ -432,7 +445,7 @@ object Parser {
                 .take(3).joinToString(" ").trim().replaceFirstChar { it.uppercase() }
 
             val partHour = dayPartHour(part) ?: sentenceHour
-            val partDate = if (partHour != null) atHour(date, partHour) else date
+            val partDate = partOfDayTime(date, partHour, now)
             fun make(type: Type, cat: Cat, item: String, who: String) = Entry(
                 id = "e" + System.nanoTime() + entries.size + unclear.size,
                 type = type, amount = amount, category = cat,
