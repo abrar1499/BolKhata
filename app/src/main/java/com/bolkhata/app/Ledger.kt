@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
@@ -195,6 +196,8 @@ fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: (
     }
     var searchQuery by remember { mutableStateOf("") }
     var selectedPerson by remember { mutableStateOf<String?>(null) }
+    // "+" beside the search box: the box then takes a new khata's name.
+    var creating by remember { mutableStateOf(false) }
     val query = searchQuery.trim()
     val shown = remember(people, query) {
         if (query.isBlank()) people
@@ -217,21 +220,40 @@ fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: (
         },
         text = {
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it; selectedPerson = null },
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("Search or type a new name") },
-                    leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                    trailingIcon = {
-                        if (searchQuery.isNotEmpty()) IconButton(onClick = { searchQuery = ""; selectedPerson = null }) {
-                            Icon(Icons.Filled.Close, contentDescription = "Clear search")
-                        }
-                    },
-                    shape = RoundedCornerShape(16.dp),
-                    singleLine = true
+                val taken = creating && exactMatch
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = {
+                            searchQuery = it
+                            selectedPerson = if (creating) it.trim().takeIf { n -> n.isNotEmpty() && people.none { p -> p.equals(n, true) } } else null
+                        },
+                        modifier = Modifier.weight(1f),
+                        placeholder = { Text(if (creating) "New khata name" else "Search khata") },
+                        leadingIcon = { Icon(if (creating) Icons.Filled.Add else Icons.Filled.Search, contentDescription = null) },
+                        trailingIcon = {
+                            if (searchQuery.isNotEmpty()) IconButton(onClick = { searchQuery = ""; selectedPerson = null }) {
+                                Icon(Icons.Filled.Close, contentDescription = "Clear")
+                            }
+                        },
+                        isError = taken,
+                        shape = RoundedCornerShape(16.dp),
+                        singleLine = true
+                    )
+                    FilledTonalIconButton(
+                        onClick = {
+                            creating = !creating
+                            selectedPerson = if (creating) query.takeIf { it.isNotEmpty() && !exactMatch } else null
+                        },
+                        modifier = Modifier.size(52.dp),
+                        shape = RoundedCornerShape(16.dp)
+                    ) { Icon(if (creating) Icons.Filled.Close else Icons.Filled.Add, contentDescription = if (creating) "Back to search" else "New khata") }
+                }
+                if (creating) Text(
+                    if (taken) "This khata already exists. Tap × and pick it from the list." else "A new khata with this name gets the entry.",
+                    fontSize = 12.sp, color = if (taken) MaterialTheme.colorScheme.error else sub
                 )
-                LazyColumn(Modifier.fillMaxWidth().heightIn(max = 360.dp)) {
+                if (!creating) LazyColumn(Modifier.fillMaxWidth().heightIn(max = 360.dp)) {
                     if (query.isNotBlank() && !exactMatch) item(key = "+new") {
                         KhataChoice("+", "New khata: $query", query == selectedPerson, false) { selectedPerson = query }
                     }
@@ -250,7 +272,7 @@ fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: (
             Button(enabled = selectedPerson != null, onClick = {
                 val person = selectedPerson ?: return@Button
                 onMove(movedTo(e, all, null, false, person))
-            }) { Text(if (count == 1) "Move" else "Move $count") }
+            }) { Text(if (creating) "Create & move" else if (count == 1) "Move" else "Move $count") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
