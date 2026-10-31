@@ -112,10 +112,6 @@ internal fun InputBar(
                             }
                         }
                     )
-                    Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onMic), contentAlignment = Alignment.Center) {
-                        ThinMic(ink)
-                    }
-                    Spacer(Modifier.width(2.dp))
                     Box(
                         Modifier
                             .size(36.dp)
@@ -125,7 +121,7 @@ internal fun InputBar(
                                 when {
                                     talking -> voice!!.toggle()
                                     text.isNotBlank() -> send()
-                                    else -> voice?.toggle?.invoke() ?: onMic()
+                                    else -> onMic()
                                 }
                             },
                         contentAlignment = Alignment.Center
@@ -134,7 +130,7 @@ internal fun InputBar(
                             talking -> Box(Modifier.size(12.dp).clip(RoundedCornerShape(3.dp)).background(Color.White))
                             busy -> CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
                             text.isNotBlank() -> Icon(Icons.Filled.ArrowUpward, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(20.dp))
-                            else -> SoundWave(Color.White)
+                            else -> ThinMic(Color.White)
                         }
                     }
                 }
@@ -215,21 +211,6 @@ private fun ThinMic(color: Color) {
         val arcW = size.width * 0.66f
         drawArc(color, 0f, 180f, false, Offset(cx - arcW / 2, top + capH * 0.35f), Size(arcW, capH * 0.95f), style = Stroke(w, cap = StrokeCap.Round))
         drawLine(color, Offset(cx, top + capH * 0.35f + capH * 0.95f), Offset(cx, size.height - 1.dp.toPx()), w, StrokeCap.Round)
-    }
-}
-
-/** Short vertical bars: tap the empty send button to speak. */
-@Composable
-private fun SoundWave(color: Color) {
-    Canvas(Modifier.size(16.dp)) {
-        val w = 1.7.dp.toPx()
-        val heights = listOf(0.35f, 0.75f, 1f, 0.55f)
-        val gap = size.width / (heights.size + 1)
-        heights.forEachIndexed { i, h ->
-            val x = gap * (i + 1)
-            val half = size.height * h / 2
-            drawLine(color, Offset(x, size.height / 2 - half), Offset(x, size.height / 2 + half), w, StrokeCap.Round)
-        }
     }
 }
 

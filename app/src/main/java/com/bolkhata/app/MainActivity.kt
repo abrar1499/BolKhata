@@ -1868,8 +1868,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     onSend = { chatInput(it) }, onMic = { startVoice(forChat = true) }, placeholder = "Speak, type or ask…",
                     onAttach = { pickFile.launch(arrayOf("image/*", "application/pdf")) },
                     busy = chatLoading,
-                    voice = if (recorder != null && !voiceOn) VoiceState(true, "Listening…", "sends when you stop", level = voiceLevel) { finishRecording() }
-                        else VoiceState(voiceOn, voiceStatus, voicePartial, voiceReply, voiceLevel) { toggleVoice() }
+                    voice = if (recorder != null) VoiceState(true, "Listening…", "sends when you stop", level = voiceLevel) { finishRecording() } else null
                 )
             } else {
                 Column {
@@ -1880,9 +1879,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         placeholder = "Speak, type or ask…",
                         onAttach = { pickFile.launch(arrayOf("image/*", "application/pdf")) },
                         busy = chatLoading,
-                        // The call's answers also go to the chat, so starting it from Home opens the Chat tab.
-                        voice = if (recorder != null && !voiceOn) VoiceState(true, "Listening…", "sends when you stop", level = voiceLevel) { finishRecording() }
-                            else VoiceState(voiceOn, voiceStatus, voicePartial, voiceReply, voiceLevel) { tab = Tab.CHAT; toggleVoice() }
+                        voice = if (recorder != null) VoiceState(true, "Listening…", "sends when you stop", level = voiceLevel) { finishRecording() } else null
                     )
                 }
             }
