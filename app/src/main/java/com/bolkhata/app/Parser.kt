@@ -41,6 +41,8 @@ object Parser {
         r(Cat.TRANSPORT, "Taxi", "taxi", "uber", "careem", "bolt", "ٹیکسی"),
         r(Cat.TRANSPORT, "Bus / Metro", "bus", "metro", "train"),
         r(Cat.TRANSPORT, "Tickets", "ticket", "flight", "jahaz", "ٹکٹ"),
+        // Only names the Transport sub-account (a fine is filed under Fees & Govt by the "Fines" rule above).
+        r(Cat.TRANSPORT, "Traffic fines", "violation", "traffic fine", "mukhalfa", "mukhalafa", "challan"),
 
         r(Cat.RENT, "Rent", "rent", "kiraya", "kiraaya", "kraya", "کرایہ"),
 
@@ -661,6 +663,17 @@ object Parser {
         note.lowercase().split(Regex("""[^\p{L}]+"""))
             .filter { it.length >= 3 && it !in learnStop && it !in notNames && it !in knownPeople && !Understand.isCommonName(it) }
             .distinct()
+
+    /**
+     * The fixed sub-account an expense sits in inside its category (Transport -> Petrol, Car repair, Taxi…;
+     * Food -> Meals, Groceries, Tea & Coffee…), read from its item and note; "Other" when none fits.
+     */
+    fun subAccount(e: Entry): String {
+        val t = (e.item + " " + e.note).lowercase()
+        val words = t.split(Regex("""[^\p{L}\p{N}]+""")).filter { it.isNotEmpty() }
+        rules.firstOrNull { r -> r.cat == e.category && r.keys.any { matches(it, t, words) } }?.let { return it.item }
+        return if (e.category == Cat.TRANSPORT && repairWords.any { matches(it, t, words) }) "Car repair" else "Other"
+    }
 
     private fun matchSpending(t: String, words: List<String>): Pair<Cat, String>? {
         // A name ("ali") learned by mistake earlier never decides what was bought.

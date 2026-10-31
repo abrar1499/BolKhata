@@ -28,3 +28,16 @@ class PartOfDayTest {
         assertEquals(now, Parser.partOfDayTime(now, Parser.dayPartHour("khana 50"), now))
     }
 }
+
+class SubAccountTest {
+    private fun e(cat: Cat, item: String, note: String = "") = Entry("x", Type.KHARCHA, 10.0, cat, item, "", note, 0L, 0L)
+
+    @Test fun shopsAndWordsFallIntoFixedSubAccounts() {
+        assertEquals("Petrol", Parser.subAccount(e(Cat.TRANSPORT, "NAFT Services Company")))
+        assertEquals("Groceries", Parser.subAccount(e(Cat.KHANA, "Panda 241")))
+        assertEquals("Meals", Parser.subAccount(e(Cat.KHANA, "Nashta")))
+        assertEquals("Traffic fines", Parser.subAccount(e(Cat.TRANSPORT, "Traffic violation")))
+        assertEquals("Car repair", Parser.subAccount(e(Cat.TRANSPORT, "Workshop", "gari repair")))
+        assertEquals("Other", Parser.subAccount(e(Cat.TRANSPORT, "Something")))
+    }
+}

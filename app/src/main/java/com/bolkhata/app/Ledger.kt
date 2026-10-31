@@ -877,14 +877,15 @@ private fun groupNodes(prefix: String, list: List<Entry>, keyOf: (Entry) -> Stri
         .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name.trim() }) // khatas always A–Z
 
 /**
- * Category -> item or shop (Petrol, Panda; transfers grouped as "Transfers to people") -> entries straight away.
+ * Category -> its fixed sub-account (Petrol, Car repair, Meals, Groceries…; transfers as "Transfers to people") ->
+ * entries straight away.
  * Only transfers get one more level, the person. A level with only one branch is skipped.
  */
 private fun buildTree(list: List<Entry>): List<Node> =
     groupNodes("c", list, { it.category.name }, { it.first().category.label }) { cp, cl ->
         groupNodes(cp, cl,
-            { if (transfer(it)) "~transfers" else it.item.trim().ifBlank { it.category.label } },
-            { l -> if (transfer(l.first())) "Transfers to people" else l.first().item.trim().ifBlank { l.first().category.label } }
+            { if (transfer(it)) "~transfers" else Parser.subAccount(it) },
+            { l -> if (transfer(l.first())) "Transfers to people" else Parser.subAccount(l.first()) }
         ) { ip, il ->
             if (!transfer(il.first())) emptyList()
             else groupNodes(ip, il, { personOnNote(it).ifBlank { "Others" } }, { l -> personOnNote(l.first()).ifBlank { "Others" } }) { _, _ -> emptyList() }
