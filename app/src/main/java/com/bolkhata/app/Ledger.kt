@@ -269,7 +269,7 @@ fun PartyPicker(
                             cursorBrush = SolidColor(GreenDeep),
                             decorationBox = { field ->
                                 Box(contentAlignment = Alignment.CenterStart) {
-                                    if (searchQuery.isEmpty()) Text(if (creating) "New khata name" else "Search party", fontSize = 16.sp, color = sub, maxLines = 1)
+                                    if (searchQuery.isEmpty()) Text(if (creating) "New party name" else "Search party", fontSize = 16.sp, color = sub, maxLines = 1)
                                     field()
                                 }
                             }
@@ -278,12 +278,12 @@ fun PartyPicker(
                     }
                 }
                 if (creating) Text(
-                    if (taken) "This khata already exists. Tap × and pick it from the list." else "A new khata with this name will be made.",
+                    if (taken) "This party already exists. Tap × and pick it from the list." else "A new party with this name will be made.",
                     fontSize = 12.sp, color = if (taken) MaterialTheme.colorScheme.error else sub
                 )
                 if (!creating) LazyColumn(Modifier.fillMaxWidth().heightIn(max = 250.dp)) {
                     if (query.isNotBlank() && !exactMatch) item(key = "+new") {
-                        KhataChoice("+", "New khata: $query", query == selectedPerson, false) { selectedPerson = query }
+                        KhataChoice("+", "New party: $query", query == selectedPerson, false) { selectedPerson = query }
                     }
                     items(shown, key = { it }) { person ->
                         val isCurrent = current.equals(person, ignoreCase = true)
