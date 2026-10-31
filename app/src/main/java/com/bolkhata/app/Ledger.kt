@@ -219,10 +219,7 @@ fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: (
         containerColor = MaterialTheme.colorScheme.surface,
         tonalElevation = 0.dp,
         title = {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(if (count == 1) "Move entry" else "Move $count entries", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                Text("Pick a khata · amount, date and note stay the same", fontSize = 12.sp, color = sub)
-            }
+            Text(if (count == 1) "Move entry" else "Move $count entries", fontWeight = FontWeight.Bold, fontSize = 18.sp)
         },
         text = {
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
