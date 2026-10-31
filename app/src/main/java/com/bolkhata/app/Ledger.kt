@@ -858,17 +858,6 @@ internal fun template(type: Type, person: String): Entry {
 /** One branch of the Expense / Income tree: a name, its total, how many entries, and what's under it. */
 private class Node(val key: String, val name: String, val list: List<Entry>, val children: List<Node>)
 
-private fun transfer(e: Entry) = e.item.equals("Transfer", true) || e.item.equals("Transfer fee", true)
-
-private fun personOnNote(e: Entry): String {
-    val n = e.note.trim()
-    return when {
-        n.startsWith("To ") || n.startsWith("From ") -> n.substringAfter(' ').trim()
-        n.startsWith("Fee: transfer to ") -> n.removePrefix("Fee: transfer to ").trim()
-        else -> ""
-    }
-}
-
 private fun sortedNewest(l: List<Entry>) = l.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt })
 
 private fun groupNodes(prefix: String, list: List<Entry>, keyOf: (Entry) -> String, nameOf: (List<Entry>) -> String, children: (String, List<Entry>) -> List<Node>): List<Node> =
@@ -876,22 +865,9 @@ private fun groupNodes(prefix: String, list: List<Entry>, keyOf: (Entry) -> Stri
         .map { (k, l) -> Node("$prefix/$k", nameOf(l), sortedNewest(l), children("$prefix/$k", l)) }
         .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name.trim() }) // khatas always A–Z
 
-/**
- * Category -> its fixed sub-account (Petrol, Car repair, Meals, Groceries…; transfers as "Transfers to people") ->
- * entries straight away.
- * Only transfers get one more level, the person. A level with only one branch is skipped.
- */
+/** Expense / income list: each category with its entries straight away (the detail is in Reports). */
 private fun buildTree(list: List<Entry>): List<Node> =
-    groupNodes("c", list, { it.category.name }, { it.first().category.label }) { cp, cl ->
-        groupNodes(cp, cl,
-            { if (transfer(it)) "~transfers" else Parser.subAccount(it) },
-            { l -> if (transfer(l.first())) "Transfers to people" else Parser.subAccount(l.first()) }
-        ) { ip, il ->
-            if (!transfer(il.first())) emptyList()
-            else groupNodes(ip, il, { personOnNote(it).ifBlank { "Others" } }, { l -> personOnNote(l.first()).ifBlank { "Others" } }) { _, _ -> emptyList() }
-                .takeIf { it.size > 1 }.orEmpty()
-        }.let { items -> if (items.size == 1) items.first().children else items }
-    }
+    groupNodes("c", list, { it.category.name }, { it.first().category.label }) { _, _ -> emptyList() }
 
 /** The thin "This month · All time" strip at the top of a tree. */
 @Composable
