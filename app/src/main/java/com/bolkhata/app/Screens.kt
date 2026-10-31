@@ -496,7 +496,7 @@ private fun DayLine(title: String, count: Int, expanded: Boolean, cashIn: Double
             Text(tag, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = GreenDeep, maxLines = 1)
         }
         Spacer(Modifier.width(6.dp))
-        Text("$count", fontSize = 11.sp, color = sub, maxLines = 1)
+        Text(if (count == 1) "1 entry" else "$count entries", fontSize = 9.sp, color = sub, maxLines = 1)
         Spacer(Modifier.weight(1f))
         if (cashOut > 0) MiniFlowChip(fmt(cashOut), RedSpend, Icons.Filled.ArrowUpward, 12)
         if (cashOut > 0 && cashIn > 0) Spacer(Modifier.width(5.dp))
