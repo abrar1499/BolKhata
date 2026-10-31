@@ -172,8 +172,11 @@ object Groq {
             .any { it in t }
     }
 
-    /** Whisper speech-to-text. [language] is "ur", "en" or "" to let Whisper detect it. */
-    suspend fun transcribe(key: String, audio: File, language: String): Result<String> = withContext(Dispatchers.IO) {
+    /**
+     * Whisper speech-to-text. The language is detected by itself (Urdu, Hindi, English or a mix); the short example
+     * nudges it to write the way people type here, in Roman Urdu.
+     */
+    suspend fun transcribe(key: String, audio: File): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
             val boundary = "----bolkhata" + System.nanoTime()
             val out = java.io.ByteArrayOutputStream()
@@ -182,7 +185,7 @@ object Groq {
             }
             field("model", VOICE_MODEL)
             field("response_format", "json")
-            if (language.isNotBlank()) field("language", language)
+            field("prompt", "Hamid ka khata kholo. Chai 50 riyal likho. Is mahine kitna kharcha hua?")
             out.write("--$boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"voice.m4a\"\r\nContent-Type: audio/mp4\r\n\r\n".toByteArray())
             out.write(audio.readBytes())
             out.write("\r\n--$boundary--\r\n".toByteArray())

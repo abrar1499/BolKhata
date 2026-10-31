@@ -1325,9 +1325,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         chatLoading = true
         loadingLabel = "Listening with Groq…"
         if (voiceOn) voiceStatus = "Thinking…"
-        val language = when { lang == "ur-PK" -> "ur"; lang.startsWith("en") -> "en"; else -> "" }
         scope.launch {
-            val said = Groq.transcribe(groqKey, file, language)
+            val said = Groq.transcribe(groqKey, file)
             runCatching { file.delete() }
             chatLoading = false
             loadingLabel = "Thinking…"
@@ -1369,7 +1368,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         val file = File(context.cacheDir, "voice.m4a")
         val r = (if (Build.VERSION.SDK_INT >= 31) android.media.MediaRecorder(context) else @Suppress("DEPRECATION") android.media.MediaRecorder())
         runCatching {
-            r.setAudioSource(android.media.MediaRecorder.AudioSource.MIC)
+            // The phone's voice-call mic: its noise suppression keeps fans, traffic and other voices down.
+            r.setAudioSource(android.media.MediaRecorder.AudioSource.VOICE_COMMUNICATION)
             r.setOutputFormat(android.media.MediaRecorder.OutputFormat.MPEG_4)
             r.setAudioEncoder(android.media.MediaRecorder.AudioEncoder.AAC)
             r.setAudioSamplingRate(16_000)
