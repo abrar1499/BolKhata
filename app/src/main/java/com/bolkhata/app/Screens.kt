@@ -863,7 +863,7 @@ private fun ReportGroupCard(
         Text("${group.entries.size} entries", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
         if (expanded) {
             HorizontalDivider(Modifier.padding(vertical = 6.dp))
-            group.entries.forEach { e ->
+            fun detail(e: Entry): String {
                 val item = e.item.takeIf { it.isNotBlank() && it != "Loans" }
                 val party = e.person.takeIf { it.isNotBlank() }?.let {
                     when (e.type) {
@@ -873,13 +873,51 @@ private fun ReportGroupCard(
                     }
                 }
                 val quantity = if (e.qty > 0.0) fmt(e.qty) + if (e.unit.isBlank()) "" else " ${e.unit}" else null
-                val detail = listOf(item, party, e.note.takeIf { it.isNotBlank() }, quantity)
+                return listOf(item, party, e.note.takeIf { it.isNotBlank() }, quantity)
                     .filterNotNull().joinToString(" · ").ifBlank { typeLabel(e.type, e.person) }
-                ReportLine(e, detail, currency)
+            }
+            // Full depth: sub-account (Groceries, Meals…) -> each thing (cheeni, milk, nashta) -> its entries,
+            // every level with its own total. Tap a row to open it.
+            var open by remember(group.key) { mutableStateOf(setOf<String>()) }
+            fun thing(e: Entry) = e.item.takeIf { it.isNotBlank() && it != "Loans" } ?: e.note.ifBlank { typeLabel(e.type, e.person) }
+            val subs = group.entries.groupBy { if (it.type == Type.KHARCHA) Parser.subAccount(it) else thing(it) }
+                .toList().sortedByDescending { (_, l) -> l.sumOf { it.amount } }
+            subs.forEach { (sub, list) ->
+                val sKey = "s/$sub"
+                DepthRow(sub, list.size, list.sumOf { it.amount }, currency, 0, sKey in open) { open = open.toggle(sKey) }
+                if (sKey in open) {
+                    val things = list.groupBy { thing(it).trim().lowercase() }.toList().sortedByDescending { (_, l) -> l.sumOf { it.amount } }
+                    if (things.size == 1) list.forEach { ReportLine(it, detail(it), currency) }
+                    else things.forEach { (k, l) ->
+                        val tKey = "$sKey/$k"
+                        DepthRow(thing(l.first()).trim().replaceFirstChar { it.uppercase() }, l.size, l.sumOf { it.amount }, currency, 1, tKey in open) { open = open.toggle(tKey) }
+                        if (tKey in open) l.forEach { ReportLine(it, detail(it), currency) }
+                    }
+                }
             }
         } else {
             Text("Tap to see every entry", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+    }
+}
+
+private fun Set<String>.toggle(k: String) = if (k in this) this - k else this + k
+
+/** One level of a report's depth: name, how many entries, their total; [depth] indents it. */
+@Composable
+private fun DepthRow(name: String, count: Int, total: Double, currency: String, depth: Int, open: Boolean, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(onClick = onClick)
+            .padding(start = (depth * 16).dp, top = 7.dp, bottom = 7.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(if (open) "▾" else "▸", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.width(8.dp))
+        Text(name, Modifier.weight(1f), fontWeight = if (depth == 0) FontWeight.SemiBold else FontWeight.Medium,
+            fontSize = if (depth == 0) 14.sp else 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text("${count}×", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.width(10.dp))
+        Text(moneyA(currency, total), fontWeight = FontWeight.SemiBold, fontSize = if (depth == 0) 14.sp else 13.sp)
     }
 }
 
