@@ -1640,7 +1640,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         guesses.mapIndexedNotNull { index, raw ->
             val roman = runCatching { Translit.toRoman(raw) }.getOrDefault(raw).trim()
             if (roman.isBlank()) null
-            else (if (raw.any { it in '\u0600'..'\u06FF' }) raw.trim() else roman) to voiceGuessScore(roman, confidence?.getOrNull(index))
+            else roman to voiceGuessScore(roman, confidence?.getOrNull(index))
         }.maxByOrNull { it.second }?.first.orEmpty()
 
     DisposableEffect(recognizer) {
@@ -1653,7 +1653,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             override fun onEvent(eventType: Int, params: Bundle?) {}
             override fun onPartialResults(partialResults: Bundle?) {
                 partialResults?.getStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
-                    ?.let { voicePartial = it }
+                    ?.let { voicePartial = runCatching { Translit.toRoman(it) }.getOrDefault(it) }
             }
             override fun onResults(results: Bundle?) {
                 if (!voiceOn) return

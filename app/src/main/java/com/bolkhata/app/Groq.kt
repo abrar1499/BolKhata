@@ -191,7 +191,8 @@ object Groq {
             out.write("\r\n--$boundary--\r\n".toByteArray())
             val (code, text) = post(VOICE_URL, key, "multipart/form-data; boundary=$boundary", out.toByteArray())
             if (code !in 200..299) error(describe(code))
-            JSONObject(text).optString("text").trim()
+            // Urdu or Hindi script is written in English letters, the way the app and the owner type.
+            JSONObject(text).optString("text").trim().let { runCatching { Translit.toRoman(it) }.getOrDefault(it).trim() }
         }
     }
 
