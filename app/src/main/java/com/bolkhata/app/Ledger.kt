@@ -26,6 +26,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
@@ -181,19 +182,34 @@ private fun cleanMoveKhataName(value: String): String {
     return name.trim().trim('.', '-', '/', ' ')
 }
 
-/**
- * Khata picker for moving entries: a search box with every khata listed under it, A–Z. Tap one to pick it, then Move. A name that isn't saved yet can be made a new khata.
- */
+/** Move entry: pick the party (khata) the entry goes to. */
 @Composable
 fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: () -> Unit, count: Int = 1) {
-    // Keep the real account key for moving entries; clean only the display label. A–Z.
-    val people = remember(all) {
-        (personAccounts(all).map { it.name } + all.map { it.person })
-            .map { it.trim() }
-            .filter { it.isNotBlank() }
-            .distinctBy { it.lowercase(Locale.ROOT) }
-            .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { cleanMoveKhataName(it) })
-    }
+    val people = remember(all) { partyNames(all) }
+    PartyPicker(
+        people, e.person, if (count == 1) "Move entry" else "Move $count entries",
+        confirm = { creating -> if (creating) "Create & move" else if (count == 1) "Move" else "Move $count" },
+        onPick = { onMove(movedTo(e, all, null, false, it)) }, onDismiss = onDismiss
+    )
+}
+
+/** Every saved party (khata) name, A–Z. The real account key is kept; only the shown label is cleaned. */
+fun partyNames(all: List<Entry>): List<String> =
+    (personAccounts(all).map { it.name } + all.map { it.person })
+        .map { it.trim() }
+        .filter { it.isNotBlank() }
+        .distinctBy { it.lowercase(Locale.ROOT) }
+        .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { cleanMoveKhataName(it) })
+
+/**
+ * The party list used by Move entry and by the entry form's Person field: a chat-bar style search with "+" for a
+ * new khata, every party A–Z under it; tap one, then the confirm button. [current] is marked and can't be picked.
+ */
+@Composable
+fun PartyPicker(
+    people: List<String>, current: String, title: String,
+    confirm: (creating: Boolean) -> String, onPick: (String) -> Unit, onDismiss: () -> Unit
+) {
     var searchQuery by remember { mutableStateOf("") }
     var selectedPerson by remember { mutableStateOf<String?>(null) }
     // "+" beside the search box: the box then takes a new khata's name.
@@ -216,7 +232,7 @@ fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: (
         tonalElevation = 0.dp,
         title = {
             Text(
-                if (count == 1) "Move entry" else "Move $count entries", Modifier.fillMaxWidth(),
+                title, Modifier.fillMaxWidth(),
                 fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = sub,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
@@ -254,7 +270,7 @@ fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: (
                             cursorBrush = SolidColor(GreenDeep),
                             decorationBox = { field ->
                                 Box(contentAlignment = Alignment.CenterStart) {
-                                    if (searchQuery.isEmpty()) Text(if (creating) "New khata name" else "Search party", fontSize = 16.sp, color = sub, maxLines = 1)
+                                    if (searchQuery.isEmpty()) Text(if (creating) "New party name" else "Search party", fontSize = 16.sp, color = sub, maxLines = 1)
                                     field()
                                 }
                             }
@@ -263,29 +279,28 @@ fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: (
                     }
                 }
                 if (creating) Text(
-                    if (taken) "This khata already exists. Tap × and pick it from the list." else "A new khata with this name gets the entry.",
+                    if (taken) "This party already exists. Tap × and pick it from the list." else "A new party with this name will be made.",
                     fontSize = 12.sp, color = if (taken) MaterialTheme.colorScheme.error else sub
                 )
                 if (!creating) LazyColumn(Modifier.fillMaxWidth().heightIn(max = 250.dp)) {
                     if (query.isNotBlank() && !exactMatch) item(key = "+new") {
-                        KhataChoice("+", "New khata: $query", query == selectedPerson, false) { selectedPerson = query }
+                        KhataChoice("+", "New party: $query", query == selectedPerson, false) { selectedPerson = query }
                     }
                     items(shown, key = { it }) { person ->
-                        val current = e.person.equals(person, ignoreCase = true)
+                        val isCurrent = current.equals(person, ignoreCase = true)
                         KhataChoice(cleanMoveKhataName(person).take(1).uppercase(), cleanMoveKhataName(person),
-                            person == selectedPerson, current) { if (!current) selectedPerson = person }
+                            person == selectedPerson, isCurrent) { if (!isCurrent) selectedPerson = person }
                     }
                     if (shown.isEmpty() && query.isBlank()) item(key = "none") {
-                        Text("No khatas yet. Type a name to make one.", fontSize = 13.sp, color = sub, modifier = Modifier.padding(8.dp))
+                        Text("No parties yet. Tap + or type a name to add one.", fontSize = 13.sp, color = sub, modifier = Modifier.padding(8.dp))
                     }
                 }
             }
         },
         confirmButton = {
             Button(enabled = selectedPerson != null, onClick = {
-                val person = selectedPerson ?: return@Button
-                onMove(movedTo(e, all, null, false, person))
-            }) { Text(if (creating) "Create & move" else if (count == 1) "Move" else "Move $count") }
+                onPick(selectedPerson ?: return@Button)
+            }) { Text(confirm(creating)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
@@ -844,20 +859,6 @@ internal fun template(type: Type, person: String): Entry {
 /** One branch of the Expense / Income tree: a name, its total, how many entries, and what's under it. */
 private class Node(val key: String, val name: String, val list: List<Entry>, val children: List<Node>)
 
-private fun transfer(e: Entry) = e.item.equals("Transfer", true) || e.item.equals("Transfer fee", true)
-
-private fun personOnNote(e: Entry): String {
-    val n = e.note.trim()
-    return when {
-        n.startsWith("To ") || n.startsWith("From ") -> n.substringAfter(' ').trim()
-        n.startsWith("Fee: transfer to ") -> n.removePrefix("Fee: transfer to ").trim()
-        else -> ""
-    }
-}
-
-/** The shop or place on a statement note ("Sasco, Riyadh" -> "Sasco"). */
-private fun placeOnNote(e: Entry): String = if (',' in e.note) e.note.substringBefore(',').trim() else ""
-
 private fun sortedNewest(l: List<Entry>) = l.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt })
 
 private fun groupNodes(prefix: String, list: List<Entry>, keyOf: (Entry) -> String, nameOf: (List<Entry>) -> String, children: (String, List<Entry>) -> List<Node>): List<Node> =
@@ -865,23 +866,9 @@ private fun groupNodes(prefix: String, list: List<Entry>, keyOf: (Entry) -> Stri
         .map { (k, l) -> Node("$prefix/$k", nameOf(l), sortedNewest(l), children("$prefix/$k", l)) }
         .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name.trim() }) // khatas always A–Z
 
-/**
- * Category -> item (Petrol, Taxi, Roti; transfers grouped as "Transfers to people") -> shop or person -> entries.
- * A level with only one branch is skipped, so the tree never shows a pointless step.
- */
+/** Expense / income list: each category with its entries straight away (the detail is in Reports). */
 private fun buildTree(list: List<Entry>): List<Node> =
-    groupNodes("c", list, { it.category.name }, { it.first().category.label }) { cp, cl ->
-        groupNodes(cp, cl,
-            { if (transfer(it)) "~transfers" else it.item.trim().ifBlank { it.category.label } },
-            { l -> if (transfer(l.first())) "Transfers to people" else l.first().item.trim().ifBlank { l.first().category.label } }
-        ) { ip, il ->
-            val third = groupNodes(ip, il,
-                { if (transfer(it)) personOnNote(it).ifBlank { "Others" } else placeOnNote(it).ifBlank { it.item } },
-                { l -> if (transfer(l.first())) personOnNote(l.first()).ifBlank { "Others" } else placeOnNote(l.first()).ifBlank { l.first().item } }
-            ) { _, _ -> emptyList() }
-            if (third.size > 1) third else emptyList()
-        }.let { items -> if (items.size == 1) items.first().children else items }
-    }
+    groupNodes("c", list, { it.category.name }, { it.first().category.label }) { _, _ -> emptyList() }
 
 /** The thin "This month · All time" strip at the top of a tree. */
 @Composable
@@ -979,22 +966,33 @@ private fun TreeView(income: Boolean, entries: List<Entry>, currency: String, on
             if (x is Node) {
                 val isOpen = x.key in open
                 val toggle = Modifier.clickable { open = if (isOpen) open.filterNot { it == x.key || it.startsWith(x.key + "/") }.toSet() else open + x.key }
-                if (depth == 0) {
+                // A clean ">" at the end that turns down when open (instead of a small triangle in front).
+                val chevron = @Composable {
+                    Icon(
+                        Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = if (isOpen) "Close" else "Open",
+                        tint = if (isOpen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp).rotate(if (isOpen) 90f else 0f)
+                    )
+                }
+                if (depth == 0) Column {
+                    // A line between main headings.
+                    if (!first) HorizontalDivider(Modifier.padding(horizontal = 20.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
                     CardLine(first, last, 0, 46.dp, highlight = isOpen, modifier = toggle) {
-                        Text(if (isOpen) "▾" else "▸", fontSize = 12.sp, color = if (isOpen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(14.dp))
                         CatBubble(x.list.first().category, 26.dp)
                         Spacer(Modifier.width(10.dp))
                         Text(x.name, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                         Text("${x.list.size}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text(fmt(x.list.sumOf { it.amount }), fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, color = color, textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.widthIn(min = 78.dp))
+                        Spacer(Modifier.width(4.dp))
+                        chevron()
                     }
                 } else {
                     CardLine(first, last, depth, 38.dp, modifier = toggle) {
-                        Text(if (isOpen) "▾" else "▸", fontSize = 11.sp, color = if (isOpen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(12.dp))
-                        Spacer(Modifier.width(6.dp))
                         Text(x.name, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                         Text("${x.list.size}×", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text(fmt(x.list.sumOf { it.amount }), fontWeight = FontWeight.Bold, fontSize = 14.sp, color = color, textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.widthIn(min = 64.dp))
+                        Spacer(Modifier.width(4.dp))
+                        chevron()
                     }
                 }
             } else {
