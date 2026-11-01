@@ -321,7 +321,7 @@ private fun RegHead(left: String, out: String, inn: String, outSub: String = "",
         listOf(Triple(out, outSub, RedSpend), Triple(inn, inSub, GreenIn)).forEach { (t, s, c) ->
             ColLine()
             Column(Modifier.width(ColW).padding(top = 6.dp, bottom = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(t, fontSize = 10.sp, color = sub, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                Text(t, fontSize = 9.sp, color = sub, fontWeight = FontWeight.Medium, maxLines = 1)
                 if (s.isNotEmpty()) Text(s, fontSize = 12.sp, color = c, fontWeight = FontWeight.Bold, maxLines = 1)
             }
         }
@@ -455,7 +455,7 @@ fun CashBookScreen(
             item {
                 val label = if (q.isNotBlank()) "Found" else months.firstOrNull { it.first == month }?.let { monthFmt.format(Date(it.second)) } ?: ""
                 RegHead(
-                    "$label · " + (if (list.size == 1) "1 entry" else "${list.size} entries"), "OUT", "IN",
+                    "$label · " + (if (list.size == 1) "1 entry" else "${list.size} entries"), "Total out", "Total in",
                     "↑ " + fmt(list.filter(::cashOut).sumOf { it.amount }), "↓ " + fmt(list.filter(::cashIn).sumOf { it.amount })
                 )
             }
