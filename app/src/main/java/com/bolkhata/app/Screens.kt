@@ -245,7 +245,7 @@ fun HomeScreen(
             item {
                 Box(Modifier.padding(horizontal = 16.dp)) {
                     val s = dailyCashSummary(entries, todayList)
-                    DayLine(dayDate(todayList.first().date), todayList.size, "today" in open, s.cashIn, s.cashOut, "Today") { toggle("today") }
+                    DayLine(todayList.first().date, todayList, "today" in open, s.cashIn, s.cashOut) { toggle("today") }
                 }
             }
             if ("today" in open) {
@@ -289,8 +289,7 @@ fun HomeScreen(
                     item(key = "md-$key-$day") {
                         Box(Modifier.padding(horizontal = 16.dp)) {
                             val s = dailyCashSummary(entries, dayList)
-                            val day0 = dayList.first().date
-                            DayLine(dayDate(day0), dayList.size, dKey in open, s.cashIn, s.cashOut, if (dayLabel(day0) == "Yesterday") "Yesterday" else "") { toggle(dKey) }
+                            DayLine(dayList.first().date, dayList, dKey in open, s.cashIn, s.cashOut) { toggle(dKey) }
                         }
                     }
                     if (dKey in open) dayEntries(dayList, currency, onEdit)
@@ -429,34 +428,23 @@ private fun YearHeader(title: String, income: Double, expense: Double, expanded:
 /** A month: a premium card with a colour edge, the month's name, entry count, income and expense. */
 @Composable
 private fun MonthHeader(title: String, count: Int, income: Double, expense: Double, expanded: Boolean, onToggle: () -> Unit) {
-    val primary = MaterialTheme.colorScheme.primary
-    val tertiary = MaterialTheme.colorScheme.tertiary
+    // A slim heading over its days: name and count, out / in on the right.
+    val sub = MaterialTheme.colorScheme.onSurfaceVariant
     Row(
-        Modifier
-            .padding(top = 10.dp)
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .background(Brush.horizontalGradient(listOf(primary.copy(alpha = 0.10f), tertiary.copy(alpha = 0.04f))))
-            .border(1.dp, primary.copy(alpha = if (expanded) 0.35f else 0.15f), RoundedCornerShape(14.dp))
-            .clickable { onToggle() }
-            .height(IntrinsicSize.Min),
+        Modifier.padding(top = 12.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { onToggle() }
+            .padding(start = 4.dp, end = 2.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(Modifier.width(5.dp).fillMaxHeight().background(Brush.verticalGradient(listOf(primary, tertiary))))
-        // One line: name, count, in / out — slim but still stands out from the days.
-        Text(title, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, maxLines = 1,
-            modifier = Modifier.padding(start = 12.dp, top = 9.dp, bottom = 9.dp))
+        Text(title, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, maxLines = 1)
         Spacer(Modifier.width(6.dp))
-        Text("$count", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+        Text("$count", fontSize = 10.sp, color = sub, maxLines = 1)
         Spacer(Modifier.weight(1f))
-        if (expense > 0) MiniFlowChip(fmt(expense), RedSpend, Icons.Filled.ArrowUpward, 13)
-        if (expense > 0 && income > 0) Spacer(Modifier.width(5.dp))
-        if (income > 0) MiniFlowChip(fmt(income), GreenIn, Icons.Filled.ArrowDownward, 13)
+        if (expense > 0) Text("↑ " + fmt(expense), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = RedSpend)
+        if (expense > 0 && income > 0) Text("  ·  ", fontSize = 12.sp, color = sub)
+        if (income > 0) Text("↓ " + fmt(income), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = GreenIn)
         Icon(
             if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-            contentDescription = if (expanded) "Close" else "Open",
-            tint = primary, modifier = Modifier.padding(start = 4.dp, end = 8.dp).size(20.dp)
+            contentDescription = if (expanded) "Close" else "Open", tint = sub, modifier = Modifier.padding(start = 4.dp).size(18.dp)
         )
     }
 }
@@ -476,30 +464,42 @@ private fun MiniFlowChip(text: String, color: Color, icon: ImageVector, size: In
 
 /** A day inside a month: one slim line (date, count, small in / out), opens on tap. */
 @Composable
-private fun DayLine(title: String, count: Int, expanded: Boolean, cashIn: Double, cashOut: Double, tag: String = "", onToggle: () -> Unit) {
-    val (bar, ink, sub) = slateColors()
-    val shape = if (expanded) RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp) else RoundedCornerShape(12.dp)
+private fun DayLine(date: Long, list: List<Entry>, expanded: Boolean, cashIn: Double, cashOut: Double, onToggle: () -> Unit) {
+    // A slim white row: a small date box (31 / FRI), the day's name with "3 entries · Food, Bills" under it, then in / out.
+    val sub = MaterialTheme.colorScheme.onSurfaceVariant
+    val shape = if (expanded) RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp) else RoundedCornerShape(14.dp)
+    val c = cal(date)
+    val name = dayLabel(date).takeIf { it == "Today" || it == "Yesterday" } ?: SimpleDateFormat("EEEE", Locale.US).format(Date(date))
+    val kinds = list.map { it.category.label }.distinct().take(2).joinToString(", ")
     Row(
         Modifier
-            .padding(top = 6.dp)
+            .padding(top = 5.dp)
             .fillMaxWidth()
             .clip(shape)
-            .background(bar.copy(alpha = 0.7f))
+            .background(if (expanded) GreenDeep.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surface)
             .clickable { onToggle() }
-            .padding(start = 12.dp, end = 6.dp, top = 7.dp, bottom = 7.dp),
+            .padding(start = 8.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(title, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = ink, maxLines = 1)
-        // "31 Oct 2026  Today": the date in line with the other days, today / yesterday small after it.
-        if (tag.isNotEmpty()) {
-            Spacer(Modifier.width(6.dp))
-            Text(tag, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = GreenDeep, maxLines = 1)
+        Column(
+            Modifier.size(34.dp).clip(RoundedCornerShape(10.dp))
+                .background(if (expanded) GreenDeep else MaterialTheme.colorScheme.surfaceVariant),
+            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
+        ) {
+            val on = if (expanded) Color.White else MaterialTheme.colorScheme.onSurface
+            Text("${c.get(Calendar.DAY_OF_MONTH)}", fontSize = 13.sp, lineHeight = 14.sp, fontWeight = FontWeight.Bold, color = on)
+            Text(SimpleDateFormat("MMM", Locale.US).format(Date(date)).uppercase(), fontSize = 8.sp, lineHeight = 9.sp, color = if (expanded) Color.White else sub)
         }
-        Spacer(Modifier.width(6.dp))
-        Text(if (count == 1) "1 entry" else "$count entries", fontSize = 9.sp, color = sub, maxLines = 1)
-        Spacer(Modifier.weight(1f))
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(name, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, lineHeight = 15.sp, maxLines = 1)
+            Text(
+                (if (list.size == 1) "1 entry" else "${list.size} entries") + if (kinds.isEmpty()) "" else " · $kinds",
+                fontSize = 10.sp, lineHeight = 12.sp, color = sub, maxLines = 1, overflow = TextOverflow.Ellipsis
+            )
+        }
         if (cashOut > 0) MiniFlowChip(fmt(cashOut), RedSpend, Icons.Filled.ArrowUpward, 12)
-        if (cashOut > 0 && cashIn > 0) Spacer(Modifier.width(5.dp))
+        if (cashOut > 0 && cashIn > 0) Spacer(Modifier.width(4.dp))
         if (cashIn > 0) MiniFlowChip(fmt(cashIn), GreenIn, Icons.Filled.ArrowDownward, 12)
         Icon(
             if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
