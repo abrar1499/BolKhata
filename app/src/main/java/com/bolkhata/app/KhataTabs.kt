@@ -541,7 +541,7 @@ fun MoneyScreen(
                     SumCard(Triple(money(currency, lastMonth), "Last month", color), Triple(money(currency, thisMonth), "This month", color), "Report ›", onReport)
                 }
             }
-            if (groups.isNotEmpty()) item { Heading(if (income) "By source" else "By category", "Total " + money(currency, total)) }
+            item { Spacer(Modifier.height(12.dp)) }
             groups.forEach { g ->
                 val isOpen = g.name in open
                 item(key = "g" + g.name) {
@@ -620,14 +620,6 @@ internal fun source(e: Entry): String {
     if (!generic) return e.item.trim()
     Regex("""(?i)\bfrom\s+([^.,\d]+)""").find(e.note)?.let { return it.groupValues[1].trim() }
     return e.person.ifBlank { e.item.ifBlank { "Income" } }
-}
-
-@Composable
-private fun Heading(left: String, right: String) {
-    Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 6.dp)) {
-        Text(left, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-        Text(right, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
 }
 
 /** A blank Cash in / Cash out entry for the form; the category is guessed from what is typed. */
