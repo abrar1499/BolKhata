@@ -31,6 +31,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -436,25 +437,23 @@ private fun YearHeader(title: String, income: Double, expense: Double, expanded:
 /** A month: a premium card with a colour edge, the month's name, entry count, income and expense. */
 @Composable
 private fun MonthHeader(title: String, count: Int, income: Double, expense: Double, expanded: Boolean, onToggle: () -> Unit) {
-    // A past month is one white card row; open, its days hang under it in the same card.
+    // A past month: a soft green band (its name in dark green, out / in as plain numbers); open, its days hang under it.
     val sub = MaterialTheme.colorScheme.onSurfaceVariant
-    val shape = if (expanded) RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp) else RoundedCornerShape(14.dp)
+    val shape = if (expanded) RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp) else RoundedCornerShape(16.dp)
     Row(
-        Modifier.padding(top = 8.dp).fillMaxWidth().clip(shape).background(MaterialTheme.colorScheme.surface)
-            .clickable { onToggle() }.padding(start = 12.dp, end = 6.dp, top = 10.dp, bottom = 10.dp),
+        Modifier.padding(top = 10.dp).fillMaxWidth().clip(shape).background(MaterialTheme.colorScheme.surface)
+            .background(GreenDeep.copy(alpha = 0.10f)).clickable { onToggle() }
+            .padding(start = 14.dp, end = 8.dp, top = 11.dp, bottom = 11.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(title, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, maxLines = 1)
+        Text(title, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, color = GreenDeep, maxLines = 1)
         Spacer(Modifier.width(6.dp))
         Text("$count", fontSize = 10.sp, color = sub, maxLines = 1)
         Spacer(Modifier.weight(1f))
-        if (expense > 0) MiniFlowChip(fmt(expense), RedSpend, Icons.Filled.ArrowUpward, 12)
-        if (expense > 0 && income > 0) Spacer(Modifier.width(4.dp))
-        if (income > 0) MiniFlowChip(fmt(income), GreenIn, Icons.Filled.ArrowDownward, 12)
-        Icon(
-            if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-            contentDescription = if (expanded) "Close" else "Open", tint = sub, modifier = Modifier.padding(start = 2.dp).size(18.dp)
-        )
+        if (expense > 0) Text("↑ " + fmt(expense), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = RedSpend)
+        if (expense > 0 && income > 0) Spacer(Modifier.width(8.dp))
+        if (income > 0) Text("↓ " + fmt(income), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = GreenIn)
+        SoftChevron(expanded)
     }
 }
 
@@ -491,7 +490,7 @@ private fun DayLine(date: Long, list: List<Entry>, expanded: Boolean, cashIn: Do
             .fillMaxWidth()
             .clip(shape)
             .background(MaterialTheme.colorScheme.surface)
-            .background(if (expanded) GreenDeep.copy(alpha = 0.08f) else Color.Transparent)
+            .background(Color.Transparent)
             .clickable { onToggle() }
             .padding(start = 8.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -513,14 +512,23 @@ private fun DayLine(date: Long, list: List<Entry>, expanded: Boolean, cashIn: Do
                 fontSize = 10.sp, lineHeight = 12.sp, color = sub, maxLines = 1, overflow = TextOverflow.Ellipsis
             )
         }
-        if (cashOut > 0) MiniFlowChip(fmt(cashOut), RedSpend, Icons.Filled.ArrowUpward, 12)
-        if (cashOut > 0 && cashIn > 0) Spacer(Modifier.width(4.dp))
-        if (cashIn > 0) MiniFlowChip(fmt(cashIn), GreenIn, Icons.Filled.ArrowDownward, 12)
-        Icon(
-            if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-            contentDescription = if (expanded) "Close" else "Open", tint = sub, modifier = Modifier.size(18.dp).padding(start = 2.dp)
-        )
+        // Plain coloured numbers (no pills), so only the month band carries colour.
+        Column(horizontalAlignment = Alignment.End) {
+            if (cashOut > 0) Text("−" + fmt(cashOut), fontSize = 13.sp, lineHeight = 15.sp, fontWeight = FontWeight.Bold, color = RedSpend)
+            if (cashIn > 0) Text("+" + fmt(cashIn), fontSize = 13.sp, lineHeight = 15.sp, fontWeight = FontWeight.Bold, color = GreenIn)
+        }
+        SoftChevron(expanded)
     }
+}
+
+/** A thin, faint ">" that turns down when the row is open. */
+@Composable
+private fun SoftChevron(open: Boolean) {
+    Icon(
+        Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = if (open) "Close" else "Open",
+        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
+        modifier = Modifier.padding(start = 4.dp).size(18.dp).rotate(if (open) 90f else 0f)
+    )
 }
 
 /** Income (green, in) and expense (red, out) chips; a zero side is left out. */
@@ -576,16 +584,18 @@ private fun GroupedTxRow(e: Entry, currency: String, first: Boolean, last: Boole
             .fillMaxWidth()
             .clip(shape)
             .background(MaterialTheme.colorScheme.surface)
+            // The open day's entries sit on soft grey, a little indented, so they read as inside the day.
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
             .entryTap(e, onClick)
     ) {
         if (!first) {
             HorizontalDivider(
-                Modifier.padding(start = 59.dp),
+                Modifier.padding(start = 79.dp),
                 thickness = 1.dp,
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
             )
         }
-        TxRowContent(e, currency, showDate = false)
+        Box(Modifier.padding(start = 20.dp)) { TxRowContent(e, currency, showDate = false) }
     }
 }
 

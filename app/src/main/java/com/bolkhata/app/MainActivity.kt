@@ -834,7 +834,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 if (f.set.isEmpty()) return runFixed(NativeChatEngine.Fixed("", "reread", "", "", q), said, inChat)
                 val hits = scoped(Query.select(entries, q))
                 if (hits.isEmpty()) return "Nothing found (${Query.label(q)})."
-                clarifyMultiple("change", hits)?.let { return it }
+                // Entries picked exactly (by id) are meant as they are; no need to ask "which one".
+                if (f.filter.ids.isEmpty()) clarifyMultiple("change", hits)?.let { return it }
                 val changed = hits.map { it to Query.change(it, f.set) }.filter { (a, b) -> a != b }
                 if (changed.isEmpty()) return "Already like that."
                 if (!applyPlan(EditPlan(changed, emptyList(), "Changed ${changed.size} " + (if (changed.size == 1) "entry" else "entries")))) {

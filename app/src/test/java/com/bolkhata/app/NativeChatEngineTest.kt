@@ -523,3 +523,17 @@ class NativeChatEngineAfterEntryTest {
         assertTrue(r.text.startsWith("170") && "after" !in r.text && "315" !in r.text)
     }
 }
+
+class NativeChatEngineMoveCategoryTest {
+    private fun e(id: String, cat: Cat, item: String) = Entry(id, Type.KHARCHA, 10.0, cat, item, "", "POS purchase", 0L, 0L)
+    private val entries = listOf(e("m1", Cat.OTHER, "Mahnaz Parveen Est"), e("m2", Cat.OTHER, "Mahnaz Parveen Est"), e("x", Cat.OTHER, "Smart Memory"), e("f", Cat.KHANA, "Mahnaz Parveen Est"))
+
+    @Test fun otherEntriesOfANameGoToFood() {
+        val r = NativeChatEngine.interpret("other me jo mahnaz parveen ki entry hain wo food me move karo", entries)
+        assertEquals("change", r.kind)
+        assertEquals(setOf("m1", "m2"), r.filter.ids)
+        assertEquals("food", r.set["category"])
+        val r2 = NativeChatEngine.interpret("expense me jo other wali entry me mahnaz parveen name se jitni b entry hain wo food me dal do", entries)
+        assertEquals(setOf("m1", "m2"), r2.filter.ids)
+    }
+}

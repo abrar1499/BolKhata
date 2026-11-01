@@ -163,6 +163,8 @@ object NativeChatEngine {
 
         // "Ye entry Ashiq ke khata me bhej do", "3 no entry Haji Ashiq me daal do": entries the chat just showed.
         // Read from the words as said: number reading would turn "3 no" (number 3) into "3 9".
+        // "Other me jo Mahnaz Parveen ki entries hain wo food me move karo": those entries change category.
+        moveToCategory(roman.lowercase(Locale.ROOT), entries)?.let { return it }
         moveShown(text, roman.lowercase(Locale.ROOT), words, contacts, history)?.let { return it }
         // "170 food mess after Shahbaz's 315", "315 wali entry ke baad 170 food aur 15 wifi bill daal do".
         afterEntry(text, entries, contacts)?.let { return it }
@@ -344,6 +346,35 @@ object NativeChatEngine {
             }
             ?: return chat("Which khata should get it? Say the person's saved name.")
         return Fixed("", "to_khata", "", filter = Query.Filter(ids = ids.toSet()), set = mapOf("person" to destination))
+    }
+
+    private val intoCategory = Regex("""\b(\p{L}+)\s+(?:me|mein|main|men|mai|into|to|in)\s+(?:move|shift|dal|daal|dalo|daalo|rakh|rakho|bhej|bhejo|send|transfer|put|kar|kr|karo|kro)\b""")
+    private val categoryFiller = setOf(
+        "other", "expense", "expenses", "kharcha", "category", "me", "mein", "main", "men", "jo", "jis", "jin", "wali", "wala",
+        "wale", "entry", "entries", "ki", "ka", "ke", "ko", "se", "hain", "hai", "name", "naam", "jitni", "jitne", "bhi",
+        "sab", "sari", "saari", "all", "wo", "woh", "ye", "yeh", "the", "from", "with", "per", "par", "account", "tamam"
+    )
+
+    /**
+     * "Other me jo Mahnaz Parveen ki entry hain wo food me move karo": the expenses in the first category (Other) whose
+     * name or note has those words move into the named category (Food). Null when no category is named as the target.
+     */
+    private fun moveToCategory(lower: String, entries: List<Entry>): Fixed? {
+        // "chai 50 food me daal do" is a new entry, not a move.
+        if (lower.any(Char::isDigit)) return null
+        val m = intoCategory.findAll(lower).lastOrNull() ?: return null
+        val word = m.groupValues[1]
+        val target = Query.catWords[word]?.takeIf { it != Cat.UDHAAR } ?: return null
+        val before = tokens(lower.substring(0, m.range.first))
+        val from = before.mapNotNull { Query.catWords[it] }.firstOrNull { it != target }
+        val terms = before.filter { it.length >= 3 && it !in categoryFiller && Query.catWords[it] == null && it.none(Char::isDigit) }
+        if (from == null && terms.isEmpty()) return null
+        val hits = entries.filter { e ->
+            e.type == Type.KHARCHA && (from == null || e.category == from) &&
+                terms.all { t -> (e.item + " " + e.note + " " + e.person).lowercase().contains(t) }
+        }
+        if (hits.isEmpty()) return chat("No " + (from?.label ?: "") + " entries with \"" + terms.joinToString(" ") + "\" found.")
+        return Fixed("", "change", "", filter = Query.Filter(ids = hits.map { it.id }.toSet()), set = mapOf("category" to word))
     }
 
     private val afterEnglish = Regex("""^(.+?)\s+after\s+(.+)$""", RegexOption.IGNORE_CASE)
