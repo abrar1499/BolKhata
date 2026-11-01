@@ -355,11 +355,11 @@ private fun RegRow(title: String?, whenText: String, bal: Double, out: Boolean, 
             )
         }
         ColLine()
-        Box(Modifier.width(ColW).fillMaxHeight().background(OutTint).padding(end = 12.dp), contentAlignment = Alignment.CenterEnd) {
+        Box(Modifier.width(ColW).fillMaxHeight().background(OutTint), contentAlignment = Alignment.Center) {
             if (out) Text(fmt(amount), color = RedSpend, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
         }
         ColLine()
-        Box(Modifier.width(ColW).fillMaxHeight().padding(end = 12.dp), contentAlignment = Alignment.CenterEnd) {
+        Box(Modifier.width(ColW).fillMaxHeight(), contentAlignment = Alignment.Center) {
             if (!out) Text(fmt(amount), color = GreenIn, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
         }
     }
@@ -610,8 +610,8 @@ fun MoneyScreen(
                         }
                         ColLine()
                         Box(
-                            Modifier.width(ColW).fillMaxHeight().background(if (income) GreenIn.copy(alpha = 0.06f) else OutTint).padding(end = 12.dp),
-                            contentAlignment = Alignment.CenterEnd
+                            Modifier.width(ColW).fillMaxHeight().background(if (income) GreenIn.copy(alpha = 0.06f) else OutTint),
+                            contentAlignment = Alignment.Center
                         ) { Text(fmt(e.amount), color = color, fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1) }
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f))
