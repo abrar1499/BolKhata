@@ -75,7 +75,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-enum class Tab { HOME, STOCK, CHAT, ENTRIES, REPORTS, TRASH, SETTINGS }
+enum class Tab { HOME, STOCK, CHAT, ENTRIES, REPORTS, TRASH, SETTINGS, PARTIES, CASHBOOK, EXPENSE, INCOME }
 
 /** The open tab and the tabs it was reached from, so Back returns the same way. Home starts over. */
 class TabNav {
@@ -1903,6 +1903,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     voice = if (recorder != null) VoiceState(true, "Listening…", "sends when you stop", level = voiceLevel) { finishRecording() } else null
                 )
             } else {
+                // The khata tabs sit under the chat bar on the main screens.
+                val nav = main && tab in KHATA_TABS
                 Column {
                     FlashStrip(flash) { flash = null }
                     InputBar(
@@ -1911,8 +1913,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         placeholder = "Speak, type or ask…",
                         onAttach = { pickFile.launch(arrayOf("image/*", "application/pdf")) },
                         busy = chatLoading,
-                        voice = if (recorder != null) VoiceState(true, "Listening…", "sends when you stop", level = voiceLevel) { finishRecording() } else null
+                        voice = if (recorder != null) VoiceState(true, "Listening…", "sends when you stop", level = voiceLevel) { finishRecording() } else null,
+                        navPad = !nav
                     )
+                    if (nav) KhataNav(tab) { tab = it }
                 }
             }
         },
@@ -1940,6 +1944,24 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     )
                 }
                 who != null -> PeopleScreen(entries, currency, who, onBack = { people = null }, onEdit = { editing = it })
+                tab == Tab.PARTIES -> PartiesScreen(
+                    entries, currency, onMenu = { openMenu() },
+                    onOpen = { p -> ledgerPerson = p.name; ledger = if (p.toReceive) MainAcct.TO_RECEIVE else MainAcct.TO_PAY },
+                    onReport = { reportStart = ReportKind.TO_RECEIVE; tab = Tab.REPORTS },
+                    onAdd = { trade = template(Type.DIYA, "") }
+                )
+                tab == Tab.CASHBOOK -> CashBookScreen(
+                    entries, currency, onMenu = { openMenu() }, onEdit = { editing = it }, onHistory = { tab = Tab.ENTRIES },
+                    onAdd = { inc -> trade = cashTemplate(inc) }
+                )
+                tab == Tab.EXPENSE || tab == Tab.INCOME -> {
+                    val inc = tab == Tab.INCOME
+                    MoneyScreen(
+                        inc, entries, currency, onMenu = { openMenu() }, onEdit = { editing = it },
+                        onReport = { reportStart = if (inc) ReportKind.CASH_IN else ReportKind.CASH_OUT; tab = Tab.REPORTS },
+                        onAdd = { trade = cashTemplate(inc) }
+                    )
+                }
                 tab == Tab.HOME -> HomeScreen(
                     name = name, entries = entries, currency = currency,
                     newVersion = null, progress = progress, onUpdate = { startUpdate() },
@@ -2598,7 +2620,14 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         FormPopup(onDismiss = { trade = null }) {
             EntryForm(
                 initial = t,
-                title = if (t.type == Type.SALE) "Sold " + t.item else "Bought " + t.item,
+                title = when {
+                    t.type == Type.SALE -> "Sold " + t.item
+                    t.type == Type.PURCHASE -> "Bought " + t.item
+                    t.person.isNotBlank() -> t.person
+                    t.type == Type.DIYA -> "New party entry"
+                    t.type == Type.AAMDANI -> "Cash in"
+                    else -> "Cash out"
+                },
                 question = null,
                 askType = false,
                 currency = currency,

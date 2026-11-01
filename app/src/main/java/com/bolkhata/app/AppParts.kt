@@ -65,7 +65,9 @@ internal fun InputBar(
     placeholder: String = "Type here…",
     onAttach: (() -> Unit)? = null,
     busy: Boolean = false,
-    voice: VoiceState? = null
+    voice: VoiceState? = null,
+    /** False when a bar below (the bottom tabs) already keeps clear of the system navigation. */
+    navPad: Boolean = true
 ) {
     var text by rememberSaveable { mutableStateOf("") }
     fun send() {
@@ -84,7 +86,7 @@ internal fun InputBar(
     Column(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(bg.copy(alpha = 0f), shade)))) {
         Spacer(Modifier.height(40.dp))
         if (talking) VoicePanel(voice!!)
-        Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 10.dp)) {
+        Box(Modifier.fillMaxWidth().then(if (navPad) Modifier.navigationBarsPadding() else Modifier).padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 10.dp)) {
             // Like ChatGPT's bar: a white pill with a soft shadow and no outline, on the off-white page.
             Surface(
                 shape = RoundedCornerShape(26.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 3.dp,
