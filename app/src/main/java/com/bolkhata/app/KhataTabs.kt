@@ -418,7 +418,9 @@ fun CashBookScreen(
         newest.asReversed().associate { e -> run += if (cashIn(e)) e.amount else -e.amount; e.id to run }
     }
     val hand = newest.firstOrNull()?.let { bal[it.id] } ?: 0.0
-    val todayOut = newest.filter { sameDay(it.date, System.currentTimeMillis()) && cashOut(it) }.sumOf { it.amount }
+    // This month's net cash: in minus out.
+    val nowKey = monthKey(System.currentTimeMillis())
+    val thisMonth = newest.filter { monthKey(it.date) == nowKey }.sumOf { if (cashIn(it)) it.amount else -it.amount }
     val months = remember(newest) { monthsOf(newest) }
     var month by rememberSaveable(months.firstOrNull()?.first) { mutableIntStateOf(months.firstOrNull()?.first ?: 0) }
     var q by rememberSaveable { mutableStateOf("") }
@@ -433,7 +435,7 @@ fun CashBookScreen(
                 KhataTop("Cash Book", "Parties, expenses and income in one place", onMenu) {
                     SumCard(
                         Triple(money(currency, hand), "Cash in hand", if (hand < 0) RedSpend else GreenIn),
-                        Triple(money(currency, todayOut), "Today out", RedSpend),
+                        Triple(money(currency, thisMonth), "This month", if (thisMonth < 0) RedSpend else GreenIn),
                         "History", onHistory
                     )
                 }
