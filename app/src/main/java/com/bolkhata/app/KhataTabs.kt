@@ -334,22 +334,22 @@ private fun ColLine() = VerticalDivider(Modifier.fillMaxHeight(), color = Materi
 private fun RegRow(title: String?, whenText: String, bal: Double, out: Boolean, amount: Double, currency: String, onClick: () -> Unit) {
     val sub = MaterialTheme.colorScheme.onSurfaceVariant
     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).background(MaterialTheme.colorScheme.surface).clickable { onClick() }) {
-        Column(Modifier.weight(1f).padding(horizontal = 14.dp, vertical = 8.dp)) {
-            if (title != null) Text(title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(whenText, fontSize = 11.sp, color = sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Column(Modifier.weight(1f).padding(horizontal = 14.dp, vertical = 5.dp)) {
+            if (title != null) Text(title, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(whenText, fontSize = 10.sp, color = sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
-                "Bal. " + money(currency, kotlin.math.abs(bal)), fontSize = 11.sp, color = sub,
-                modifier = Modifier.padding(top = 4.dp).clip(RoundedCornerShape(4.dp))
+                "Bal. " + money(currency, kotlin.math.abs(bal)), fontSize = 10.sp, color = sub,
+                modifier = Modifier.padding(top = 2.dp).clip(RoundedCornerShape(4.dp))
                     .background((if (out) RedSpend else GreenIn).copy(alpha = 0.12f)).padding(horizontal = 6.dp, vertical = 1.dp)
             )
         }
         ColLine()
         Box(Modifier.width(ColW).fillMaxHeight().background(OutTint).padding(end = 12.dp), contentAlignment = Alignment.CenterEnd) {
-            if (out) Text(fmt(amount), color = RedSpend, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            if (out) Text(fmt(amount), color = RedSpend, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
         }
         ColLine()
         Box(Modifier.width(ColW).fillMaxHeight().padding(end = 12.dp), contentAlignment = Alignment.CenterEnd) {
-            if (!out) Text(fmt(amount), color = GreenIn, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            if (!out) Text(fmt(amount), color = GreenIn, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
         }
     }
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f))
@@ -576,19 +576,19 @@ fun MoneyScreen(
                 }
                 // A group's own entries open right under it.
                 if (isOpen) items(g.list, key = { it.id }) { e ->
-                    Row(
-                        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).clickable { onEdit(e) }
-                            .padding(start = 62.dp, end = 14.dp, top = 4.dp, bottom = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(title(e), fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(lastSeen(e.date) + if (e.note.isNotBlank()) " · " + e.note else "", fontSize = 10.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).background(MaterialTheme.colorScheme.surface).clickable { onEdit(e) }) {
+                        Column(Modifier.weight(1f).padding(start = 62.dp, end = 8.dp, top = 5.dp, bottom = 5.dp)) {
+                            Text(title(e), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(dayFmt.format(Date(e.date)) + " • " + timeFmt.format(Date(e.date)) + if (e.note.isNotBlank()) " · " + e.note else "",
+                                fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
-                        Text(fmt(e.amount), color = color, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        ColLine()
+                        Box(
+                            Modifier.width(ColW).fillMaxHeight().background(if (income) GreenIn.copy(alpha = 0.06f) else OutTint).padding(end = 12.dp),
+                            contentAlignment = Alignment.CenterEnd
+                        ) { Text(fmt(e.amount), color = color, fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1) }
                     }
-                    HorizontalDivider(Modifier.padding(start = 62.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f))
                 }
             }
             if (list.isEmpty()) item {
