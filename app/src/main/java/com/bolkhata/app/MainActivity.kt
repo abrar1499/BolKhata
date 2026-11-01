@@ -144,6 +144,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var menuFor by remember { mutableStateOf<Entry?>(null) }
     var ledgerPerson by remember { mutableStateOf<String?>(null) }
     var activeLedgerPerson by remember { mutableStateOf<String?>(null) }
+    /** The party khata open from the Parties tab. */
+    var partyOpen by remember { mutableStateOf<String?>(null) }
     // Smart understanding: entries the local engine read (shown before saving), a name to pick, what was just added (Undo),
     // the entry being edited from the card (to learn from), and words the person corrected before.
     var confirmNew by remember { mutableStateOf<Pair<List<Entry>, String>?>(null) }
@@ -1859,7 +1861,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     }
 
     // Back closes whatever is on top first (an account opens over a khata), then walks back through the tabs.
-    BackHandler(enabled = ledger != null || account != null || results != null || people != null || tab != Tab.HOME) {
+    BackHandler(enabled = ledger != null || account != null || results != null || people != null || partyOpen != null || tab != Tab.HOME) {
         if (account != null) {
             account = null
         } else if (ledger != null) {
@@ -1870,6 +1872,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             answerText = null
         } else if (people != null) {
             people = null
+        } else if (partyOpen != null) {
+            partyOpen = null
+            activeLedgerPerson = null
         } else {
             tabNav.back()
         }
@@ -1887,6 +1892,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 tab = t
                 people = null
                 results = null
+                partyOpen = null
                 scope.launch { drawer.close() }
             }
         }
@@ -1904,7 +1910,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 )
             } else {
                 // The khata tabs sit under the chat bar on the main screens.
-                val nav = main && tab in KHATA_TABS
+                val nav = main && tab in KHATA_TABS && partyOpen == null
                 Column {
                     FlashStrip(flash) { flash = null }
                     InputBar(
@@ -1944,9 +1950,21 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     )
                 }
                 who != null -> PeopleScreen(entries, currency, who, onBack = { people = null }, onEdit = { editing = it })
+                tab == Tab.PARTIES && partyOpen != null -> {
+                    val name = partyOpen!!
+                    PartyKhataScreen(
+                        name, entries, currency, onBack = { partyOpen = null; activeLedgerPerson = null }, onEdit = { editing = it },
+                        onReport = {
+                            val p = personAccounts(entries).firstOrNull { it.name.equals(name, true) }
+                            ledgerPerson = name
+                            ledger = if (p == null || p.toReceive) MainAcct.TO_RECEIVE else MainAcct.TO_PAY
+                        },
+                        onAdd = { paid -> trade = template(if (paid) Type.DIYA else Type.WAPIS_MILA, name) }
+                    )
+                }
                 tab == Tab.PARTIES -> PartiesScreen(
                     entries, currency, onMenu = { openMenu() },
-                    onOpen = { p -> ledgerPerson = p.name; ledger = if (p.toReceive) MainAcct.TO_RECEIVE else MainAcct.TO_PAY },
+                    onOpen = { p -> partyOpen = p.name; activeLedgerPerson = p.name },
                     onReport = { reportStart = ReportKind.TO_RECEIVE; tab = Tab.REPORTS },
                     onAdd = { trade = template(Type.DIYA, "") }
                 )
@@ -2185,7 +2203,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     CompositionLocalProvider(LocalEntryMenu provides { e: Entry -> menuFor = e }) {
                         LedgerScreen(
                             start = start, entries = entries, currency = currency,
-                            onClose = { ledger = null; ledgerPerson = null; activeLedgerPerson = null }, onEdit = { editing = it }, onNew = { trade = it },
+                            onClose = { ledger = null; ledgerPerson = null; activeLedgerPerson = partyOpen }, onEdit = { editing = it }, onNew = { trade = it },
                             person = ledgerPerson,
                             onActivePerson = { activeLedgerPerson = it },
                             onBulkMove = { ids, destination ->
