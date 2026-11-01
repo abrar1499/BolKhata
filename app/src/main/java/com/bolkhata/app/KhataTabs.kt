@@ -320,7 +320,7 @@ private fun RegHead(left: String, out: String, inn: String, outSub: String = "",
         Text(left, fontSize = 12.sp, color = sub, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).padding(start = 14.dp))
         listOf(Triple(out, outSub, RedSpend), Triple(inn, inSub, GreenIn)).forEach { (t, s, c) ->
             ColLine()
-            Column(Modifier.width(ColW).padding(end = 12.dp, top = 6.dp, bottom = 6.dp), horizontalAlignment = Alignment.End) {
+            Column(Modifier.width(ColW).padding(top = 6.dp, bottom = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(t, fontSize = 10.sp, color = sub, fontWeight = FontWeight.SemiBold, maxLines = 1)
                 if (s.isNotEmpty()) Text(s, fontSize = 12.sp, color = c, fontWeight = FontWeight.Bold, maxLines = 1)
             }
@@ -381,9 +381,9 @@ private fun DayLine(day: String, list: List<Entry>, open: Boolean, onClick: () -
         val o = list.filter(::cashOut).sumOf { it.amount }
         val i = list.filter(::cashIn).sumOf { it.amount }
         ColLine()
-        Text(if (o > 0) "↑ " + fmt(o) else "", Modifier.width(ColW).padding(end = 12.dp), fontSize = 12.sp, color = RedSpend, fontWeight = FontWeight.Bold, textAlign = TextAlign.End)
+        Text(if (o > 0) "↑ " + fmt(o) else "", Modifier.width(ColW), fontSize = 12.sp, color = RedSpend, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
         ColLine()
-        Text(if (i > 0) "↓ " + fmt(i) else "", Modifier.width(ColW).padding(end = 12.dp), fontSize = 12.sp, color = GreenIn, fontWeight = FontWeight.Bold, textAlign = TextAlign.End)
+        Text(if (i > 0) "↓ " + fmt(i) else "", Modifier.width(ColW), fontSize = 12.sp, color = GreenIn, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
     }
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 }
@@ -586,8 +586,8 @@ fun MoneyScreen(
                         // Total and share in the same column as the entries' amounts.
                         ColLine()
                         Column(
-                            Modifier.width(ColW).fillMaxHeight().padding(end = 12.dp),
-                            horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.Center
+                            Modifier.width(ColW).fillMaxHeight(),
+                            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
                         ) {
                             Text(fmt(g.total), fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1, color = if (g.cat == null) color else MaterialTheme.colorScheme.onSurface)
                             Text(if (g.cat != null) "${Math.round(share * 100)}%" else if (g.list.size == 1) "1 entry" else "${g.list.size} entries",
