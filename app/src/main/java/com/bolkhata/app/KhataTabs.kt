@@ -294,10 +294,12 @@ private fun MonthChips(months: List<Pair<Int, Long>>, current: Int, onPick: (Int
 @Composable
 private fun RegHead(left: String, out: String, inn: String, outSub: String = "", inSub: String = "") {
     val sub = MaterialTheme.colorScheme.onSurfaceVariant
-    Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).background(MaterialTheme.colorScheme.background), verticalAlignment = Alignment.CenterVertically) {
         Text(left, fontSize = 12.sp, color = sub, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).padding(start = 14.dp))
         listOf(Triple(out, outSub, RedSpend), Triple(inn, inSub, GreenIn)).forEach { (t, s, c) ->
-            Column(Modifier.width(ColW).padding(end = 12.dp), horizontalAlignment = Alignment.End) {
+            ColLine()
+            Column(Modifier.width(ColW).padding(end = 12.dp, top = 6.dp, bottom = 6.dp), horizontalAlignment = Alignment.End) {
                 Text(t, fontSize = 11.sp, color = sub, fontWeight = FontWeight.SemiBold, maxLines = 1)
                 if (s.isNotEmpty()) Text(s, fontSize = 12.sp, color = c, fontWeight = FontWeight.Bold, maxLines = 1)
             }
@@ -305,6 +307,10 @@ private fun RegHead(left: String, out: String, inn: String, outSub: String = "",
     }
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 }
+
+/** Faint line between the Entries, Out and In columns. */
+@Composable
+private fun ColLine() = VerticalDivider(Modifier.fillMaxHeight(), color = MaterialTheme.colorScheme.outlineVariant)
 
 /** One entry: optional title, date or time, a Bal. tag, and the amount in the Out (tinted) or In column. */
 @Composable
@@ -320,9 +326,11 @@ private fun RegRow(title: String?, whenText: String, bal: Double, out: Boolean, 
                     .background((if (out) RedSpend else GreenIn).copy(alpha = 0.12f)).padding(horizontal = 6.dp, vertical = 1.dp)
             )
         }
+        ColLine()
         Box(Modifier.width(ColW).fillMaxHeight().background(OutTint).padding(end = 12.dp), contentAlignment = Alignment.CenterEnd) {
             if (out) Text(fmt(amount), color = RedSpend, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1)
         }
+        ColLine()
         Box(Modifier.width(ColW).fillMaxHeight().padding(end = 12.dp), contentAlignment = Alignment.CenterEnd) {
             if (!out) Text(fmt(amount), color = GreenIn, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1)
         }
@@ -334,17 +342,19 @@ private fun RegRow(title: String?, whenText: String, bal: Double, out: Boolean, 
 @Composable
 private fun DayLine(day: String, list: List<Entry>, open: Boolean, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).clickable { onClick() }.padding(vertical = 7.dp),
+        Modifier.fillMaxWidth().height(IntrinsicSize.Min).background(MaterialTheme.colorScheme.background).clickable { onClick() },
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(Modifier.weight(1f).padding(start = 14.dp)) {
+        Column(Modifier.weight(1f).padding(start = 14.dp, top = 7.dp, bottom = 7.dp)) {
             Text(day.uppercase(), fontSize = 12.sp, fontWeight = FontWeight.ExtraBold)
             Text((if (list.size == 1) "1 entry" else "${list.size} entries") + if (open) "" else " · tap to open",
                 fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         val o = list.filter(::cashOut).sumOf { it.amount }
         val i = list.filter(::cashIn).sumOf { it.amount }
+        ColLine()
         Text(if (o > 0) fmt(o) else "", Modifier.width(ColW).padding(end = 12.dp), fontSize = 12.sp, color = RedSpend, fontWeight = FontWeight.Bold, textAlign = TextAlign.End)
+        ColLine()
         Text(if (i > 0) fmt(i) else "", Modifier.width(ColW).padding(end = 12.dp), fontSize = 12.sp, color = GreenIn, fontWeight = FontWeight.Bold, textAlign = TextAlign.End)
     }
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
