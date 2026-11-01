@@ -578,15 +578,15 @@ fun MoneyScreen(
                 if (isOpen) items(g.list, key = { it.id }) { e ->
                     Row(
                         Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).clickable { onEdit(e) }
-                            .padding(start = 62.dp, end = 14.dp, top = 8.dp, bottom = 8.dp),
+                            .padding(start = 62.dp, end = 14.dp, top = 4.dp, bottom = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(Modifier.weight(1f)) {
-                            Text(title(e), fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(lastSeen(e.date) + if (e.note.isNotBlank()) " · " + e.note else "", fontSize = 11.sp,
+                            Text(title(e), fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(lastSeen(e.date) + if (e.note.isNotBlank()) " · " + e.note else "", fontSize = 10.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
-                        Text(fmt(e.amount), color = color, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Text(fmt(e.amount), color = color, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     }
                     HorizontalDivider(Modifier.padding(start = 62.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
                 }
