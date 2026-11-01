@@ -338,7 +338,7 @@ private fun ColLine() = VerticalDivider(Modifier.fillMaxHeight(), color = Materi
 private fun RegRow(title: String?, whenText: String, bal: Double, out: Boolean, amount: Double, currency: String, note: String = "", onClick: () -> Unit) {
     val sub = MaterialTheme.colorScheme.onSurfaceVariant
     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).background(MaterialTheme.colorScheme.surface).clickable { onClick() }) {
-        Column(Modifier.weight(1f).padding(horizontal = 14.dp, vertical = 5.dp)) {
+        Column(Modifier.weight(1f).padding(horizontal = 14.dp, vertical = 3.dp)) {
             if (title != null) Text(title, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             // The time stays small; the note after it is a little larger so it reads easily.
             Text(
@@ -346,11 +346,11 @@ private fun RegRow(title: String?, whenText: String, bal: Double, out: Boolean, 
                     append(whenText)
                     if (note.isNotBlank()) withStyle(SpanStyle(fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface)) { append(" · $note") }
                 },
-                fontSize = 10.sp, color = sub, maxLines = 1, overflow = TextOverflow.Ellipsis
+                fontSize = 10.sp, lineHeight = 14.sp, color = sub, maxLines = 1, overflow = TextOverflow.Ellipsis
             )
             Text(
                 "Bal. " + money(currency, kotlin.math.abs(bal)), fontSize = 10.sp, color = sub,
-                modifier = Modifier.padding(top = 2.dp).clip(RoundedCornerShape(4.dp))
+                modifier = Modifier.padding(top = 1.dp).clip(RoundedCornerShape(4.dp))
                     .background((if (out) RedSpend else GreenIn).copy(alpha = 0.12f)).padding(horizontal = 6.dp, vertical = 1.dp)
             )
         }
