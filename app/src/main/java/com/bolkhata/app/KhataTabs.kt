@@ -79,7 +79,7 @@ val KHATA_TABS = listOf(Tab.HOME, Tab.PARTIES, Tab.CASHBOOK, Tab.EXPENSE, Tab.IN
 @Composable
 fun KhataNav(tab: Tab, onTab: (Tab) -> Unit) {
     Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 6.dp) {
-        Row(Modifier.fillMaxWidth().navigationBarsPadding().height(52.dp)) {
+        Row(Modifier.fillMaxWidth().navigationBarsPadding().height(58.dp)) {
             KHATA_TABS.forEach { t ->
                 val (label, icon) = navItem(t)
                 val on = t == tab
@@ -88,7 +88,7 @@ fun KhataNav(tab: Tab, onTab: (Tab) -> Unit) {
                     Modifier.weight(1f).fillMaxHeight().clickable { onTab(t) },
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
                 ) {
-                    Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(20.dp))
+                    Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(22.dp))
                     Text(label, fontSize = 10.sp, color = tint, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium)
                 }
             }
@@ -108,9 +108,9 @@ private fun navItem(t: Tab): Pair<String, ImageVector> = when (t) {
 @Composable
 private fun KhataTop(title: String, subtitle: String, onMenu: () -> Unit, back: Boolean = false, card: @Composable () -> Unit) {
     Box(Modifier.fillMaxWidth()) {
-        Box(Modifier.matchParentSize().padding(bottom = 30.dp).background(EmberBrush))
+        Box(Modifier.matchParentSize().padding(bottom = 36.dp).background(EmberBrush))
         Column(Modifier.statusBarsPadding().padding(horizontal = 14.dp)) {
-            Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onMenu) {
                     Icon(if (back) Icons.AutoMirrored.Filled.ArrowBack else Icons.Filled.Menu, contentDescription = if (back) "Back" else "Menu", tint = Color.White)
                 }
@@ -119,7 +119,7 @@ private fun KhataTop(title: String, subtitle: String, onMenu: () -> Unit, back: 
                     if (subtitle.isNotEmpty()) Text(subtitle, color = Color.White.copy(alpha = 0.85f), fontSize = 11.sp)
                 }
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(14.dp))
             card()
         }
     }
@@ -128,8 +128,8 @@ private fun KhataTop(title: String, subtitle: String, onMenu: () -> Unit, back: 
 /** White card with two figures side by side and a small link at the end. */
 @Composable
 private fun SumCard(a: Triple<String, String, Color>, b: Triple<String, String, Color>, link: String, onLink: () -> Unit) {
-    Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 3.dp) {
-        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+    Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 4.dp) {
+        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             listOf(a, b).forEachIndexed { i, (value, label, color) ->
                 if (i > 0) VerticalDivider(Modifier.fillMaxHeight(), color = MaterialTheme.colorScheme.outlineVariant)
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -140,7 +140,7 @@ private fun SumCard(a: Triple<String, String, Color>, b: Triple<String, String, 
             VerticalDivider(Modifier.fillMaxHeight(), color = MaterialTheme.colorScheme.outlineVariant)
             Text(
                 link, color = Ember, fontSize = 12.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
-                modifier = Modifier.width(64.dp).clickable { onLink() }.padding(vertical = 8.dp)
+                modifier = Modifier.width(72.dp).clickable { onLink() }.padding(vertical = 8.dp)
             )
         }
     }
@@ -151,13 +151,13 @@ private fun SumCard(a: Triple<String, String, Color>, b: Triple<String, String, 
 private fun SearchBox(q: String, hint: String, onChange: (String) -> Unit) {
     val sub = MaterialTheme.colorScheme.onSurfaceVariant
     Row(
-        Modifier.padding(horizontal = 14.dp, vertical = 8.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp))
+        Modifier.padding(horizontal = 14.dp, vertical = 10.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp))
             .background(MaterialTheme.colorScheme.surface)
             .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(Icons.Filled.Search, contentDescription = null, tint = sub, modifier = Modifier.size(18.dp))
+        Icon(Icons.Filled.Search, contentDescription = null, tint = sub, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(8.dp))
         Box(Modifier.weight(1f)) {
             if (q.isEmpty()) Text(hint, color = sub, fontSize = 13.sp)
@@ -173,7 +173,7 @@ private fun SearchBox(q: String, hint: String, onChange: (String) -> Unit) {
 /** Round letter badge for a party or an income source. */
 @Composable
 private fun Initial(name: String) {
-    Box(Modifier.size(34.dp).clip(CircleShape).background(MaterialTheme.colorScheme.background), contentAlignment = Alignment.Center) {
+    Box(Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.background), contentAlignment = Alignment.Center) {
         Text(name.trim().take(1).uppercase(), color = Ember, fontWeight = FontWeight.Bold, fontSize = 15.sp)
     }
 }
@@ -185,7 +185,7 @@ private fun SmallChip(label: String, on: Boolean, onClick: () -> Unit) {
         label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (on) Color.White else MaterialTheme.colorScheme.onSurface,
         modifier = Modifier.clip(CircleShape).background(if (on) Ember else MaterialTheme.colorScheme.surface)
             .border(1.dp, if (on) Ember else MaterialTheme.colorScheme.outlineVariant, CircleShape)
-            .clickable { onClick() }.padding(horizontal = 12.dp, vertical = 5.dp)
+            .clickable { onClick() }.padding(horizontal = 14.dp, vertical = 7.dp)
     )
 }
 
@@ -202,7 +202,7 @@ private fun BoxScope.Pills(vararg pills: Pill) {
         pills.forEach { p ->
             Box(
                 Modifier.shadow(4.dp, CircleShape).clip(CircleShape).background(p.brush).clickable { p.onClick() }
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .padding(horizontal = 18.dp, vertical = 9.dp)
             ) { Text(p.label, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.3.sp) }
         }
     }
@@ -236,7 +236,7 @@ fun PartiesScreen(
                 }
             }
             item {
-                Row(Modifier.padding(start = 14.dp, top = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(Modifier.padding(start = 14.dp, top = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf("All", "Receivable", "Payable").forEachIndexed { i, t -> SmallChip(t, filter == i) { filter = i } }
                 }
             }
@@ -256,7 +256,7 @@ private fun PartyRow(p: PersonAcct, currency: String, onClick: () -> Unit) {
     val bal = p.balance
     val color = if (bal > 0.005) GreenIn else if (bal < -0.005) RedSpend else MaterialTheme.colorScheme.onSurfaceVariant
     Row(
-        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).clickable { onClick() }.padding(horizontal = 14.dp, vertical = 8.dp),
+        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).clickable { onClick() }.padding(horizontal = 14.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Initial(p.name)
@@ -270,7 +270,7 @@ private fun PartyRow(p: PersonAcct, currency: String, onClick: () -> Unit) {
             Text(if (bal > 0.005) "Receivable" else if (bal < -0.005) "Payable" else "Settled", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
-    HorizontalDivider(Modifier.padding(start = 60.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+    HorizontalDivider(Modifier.padding(start = 66.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
 }
 
 // ---------------------------------------------------------------- Cash book and party khata (one register look)
@@ -547,15 +547,15 @@ fun MoneyScreen(
                     val share = if (total > 0) (g.total / total).toFloat() else 0f
                     Row(
                         Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface)
-                            .clickable { if (isOpen) open.remove(g.name) else open.add(g.name) }.padding(start = 14.dp, end = 8.dp, top = 7.dp, bottom = 7.dp),
+                            .clickable { if (isOpen) open.remove(g.name) else open.add(g.name) }.padding(start = 14.dp, end = 8.dp, top = 9.dp, bottom = 9.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (g.cat != null) CatBubble(g.cat, 32.dp) else Initial(g.name)
+                        if (g.cat != null) CatBubble(g.cat, 36.dp) else Initial(g.name)
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(g.name, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             if (g.cat != null) {
-                                Box(Modifier.padding(top = 4.dp).fillMaxWidth().height(5.dp).clip(CircleShape).background(MaterialTheme.colorScheme.outlineVariant)) {
+                                Box(Modifier.padding(top = 5.dp).fillMaxWidth().height(6.dp).clip(CircleShape).background(MaterialTheme.colorScheme.outlineVariant)) {
                                     Box(Modifier.fillMaxWidth(share).fillMaxHeight().clip(CircleShape).background(catColor(g.cat)))
                                 }
                             } else {
@@ -578,7 +578,7 @@ fun MoneyScreen(
                 if (isOpen) items(g.list, key = { it.id }) { e ->
                     Row(
                         Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).clickable { onEdit(e) }
-                            .padding(start = 58.dp, end = 14.dp, top = 7.dp, bottom = 7.dp),
+                            .padding(start = 62.dp, end = 14.dp, top = 8.dp, bottom = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(Modifier.weight(1f)) {
@@ -588,7 +588,7 @@ fun MoneyScreen(
                         }
                         Text(fmt(e.amount), color = color, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
-                    HorizontalDivider(Modifier.padding(start = 58.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                    HorizontalDivider(Modifier.padding(start = 62.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
                 }
             }
             if (list.isEmpty()) item {
@@ -614,7 +614,7 @@ internal fun source(e: Entry): String {
 
 @Composable
 private fun Heading(left: String, right: String) {
-    Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 6.dp)) {
+    Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 6.dp)) {
         Text(left, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
         Text(right, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
