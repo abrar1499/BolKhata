@@ -24,6 +24,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
@@ -2434,43 +2435,45 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     newVersion?.let { info ->
         Dialog(
             onDismissRequest = {},
-            properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
+            properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false, usePlatformDefaultWidth = false)
         ) {
-            Surface(shape = RoundedCornerShape(26.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 12.dp) {
-                Column(
-                    Modifier.padding(24.dp).fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Box(
-                        Modifier.size(60.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
-                        contentAlignment = Alignment.Center
-                    ) { Text("⬆", fontSize = 28.sp, color = MaterialTheme.colorScheme.primary) }
-                    Text("Update available", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    Text(
-                        "Version 1.${info.version} is ready. Your entries stay safe.",
-                        fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                    )
+            // Compact: icon and title on one row, then either the button or a slim progress line in its place.
+            Surface(
+                shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 12.dp,
+                modifier = Modifier.fillMaxWidth(0.86f)
+            ) {
+                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
+                            contentAlignment = Alignment.Center
+                        ) { Icon(Icons.Filled.ArrowUpward, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp)) }
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text("Update to 1.${info.version}", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                            Text("Your entries stay safe", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    updateMsg?.let { Text(it, fontSize = 12.sp, color = RedSpend, lineHeight = 16.sp) }
                     if (progress >= 0) {
-                        LinearProgressIndicator(
-                            progress = { progress / 100f },
-                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp))
-                        )
-                        Text("Downloading… $progress%", fontSize = 13.sp)
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            LinearProgressIndicator(
+                                progress = { progress / 100f },
+                                modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                            Row {
+                                Text("Downloading…", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                                Text("$progress%", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    } else {
+                        Button(
+                            onClick = { startUpdate() },
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth().height(42.dp)
+                        ) { Text("Update now", fontWeight = FontWeight.SemiBold) }
                     }
-                    updateMsg?.let {
-                        Text(
-                            it, fontSize = 13.sp, color = RedSpend,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                        )
-                    }
-                    Button(
-                        onClick = { startUpdate() },
-                        enabled = progress < 0,
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier.fillMaxWidth().height(48.dp)
-                    ) { Text("Update now", fontWeight = FontWeight.Bold) }
                 }
             }
         }
