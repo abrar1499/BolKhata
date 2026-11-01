@@ -147,6 +147,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var activeLedgerPerson by remember { mutableStateOf<String?>(null) }
     /** The party khata open from the Parties tab. */
     var partyOpen by remember { mutableStateOf<String?>(null) }
+    /** The open business's name, and whether the business list is showing. */
+    var businessName by remember { mutableStateOf(store.businesses().firstOrNull { it.first == store.business }?.second ?: "My business") }
+    var pickingBusiness by remember { mutableStateOf(false) }
+    var businessTick by remember { mutableIntStateOf(0) }
     // Smart understanding: entries the local engine read (shown before saving), a name to pick, what was just added (Undo),
     // the entry being edited from the card (to learn from), and words the person corrected before.
     var confirmNew by remember { mutableStateOf<Pair<List<Entry>, String>?>(null) }
@@ -1968,7 +1972,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     )
                 }
                 tab == Tab.PARTIES -> PartiesScreen(
-                    entries, currency, onMenu = { openMenu() },
+                    entries, currency, onMenu = { openMenu() }, business = businessName, onBusiness = { pickingBusiness = true },
                     onOpen = { p -> partyOpen = p.name; activeLedgerPerson = p.name },
                     onReport = { reportStart = ReportKind.TO_RECEIVE; tab = Tab.REPORTS },
                     onAdd = { trade = template(Type.DIYA, "") }
@@ -2634,6 +2638,24 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 ) { Text("Delete") }
             },
             dismissButton = { TextButton(onClick = { confirm = null }) { Text("Cancel") } }
+        )
+    }
+
+    if (pickingBusiness) {
+        fun open(id: String) {
+            store.business = id
+            entries = store.load()
+            trash = store.loadTrash()
+            businessName = store.businesses().firstOrNull { it.first == id }?.second ?: "My business"
+            partyOpen = null
+            pickingBusiness = false
+        }
+        BusinessPicker(
+            list = remember(businessTick, entries) { store.businesses().map { (id, n) -> Triple(id, n, personAccounts(store.loadFor(id)).size) } },
+            current = store.business, onBack = { pickingBusiness = false }, onPick = { open(it) },
+            onAdd = { open(store.addBusiness(it)) },
+            onRename = { id, n -> store.renameBusiness(id, n); if (id == store.business) businessName = n; businessTick++ },
+            onDelete = { id -> val wasOpen = id == store.business; store.deleteBusiness(id); if (wasOpen) open("") else businessTick++ }
         )
     }
 

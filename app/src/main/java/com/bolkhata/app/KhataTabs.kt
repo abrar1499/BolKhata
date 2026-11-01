@@ -21,6 +21,9 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.outlined.Storefront
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
@@ -111,10 +114,14 @@ private fun navItem(t: Tab): Pair<String, ImageVector> = when (t) {
 
 /** Orange-red header with the summary card hanging half over its bottom edge. */
 @Composable
-private fun KhataTop(title: String, subtitle: String, onMenu: () -> Unit, back: Boolean = false, card: @Composable () -> Unit) {
+private fun KhataTop(
+    title: String, subtitle: String, onMenu: () -> Unit, back: Boolean = false,
+    business: String? = null, onBusiness: () -> Unit = {}, card: @Composable () -> Unit
+) {
     Box(Modifier.fillMaxWidth()) {
         Box(Modifier.matchParentSize().padding(bottom = 36.dp).background(EmberBrush))
         Column(Modifier.statusBarsPadding().padding(horizontal = 14.dp)) {
+            if (business != null) BusinessPill(business, onMenu, onBusiness) else
             Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onMenu) {
                     Icon(if (back) Icons.AutoMirrored.Filled.ArrowBack else Icons.Filled.Menu, contentDescription = if (back) "Back" else "Menu", tint = Color.White)
@@ -126,6 +133,22 @@ private fun KhataTop(title: String, subtitle: String, onMenu: () -> Unit, back: 
             }
             Spacer(Modifier.height(14.dp))
             card()
+        }
+    }
+}
+
+/** White pill at the top: menu button, then the open business with ▾ to switch or add one. */
+@Composable
+private fun BusinessPill(name: String, onMenu: () -> Unit, onBusiness: () -> Unit) {
+    Row(
+        Modifier.padding(top = 10.dp).clip(CircleShape).background(Color.White).padding(end = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = onMenu) { Icon(Icons.Filled.Menu, contentDescription = "Menu", tint = Ember) }
+        Row(Modifier.clickable { onBusiness() }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF1C1917), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 180.dp))
+            Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Switch business", tint = Ember, modifier = Modifier.padding(start = 6.dp).size(20.dp))
         }
     }
 }
@@ -222,7 +245,7 @@ private fun lastSeen(ms: Long): String {
 
 @Composable
 fun PartiesScreen(
-    entries: List<Entry>, currency: String, onMenu: () -> Unit,
+    entries: List<Entry>, currency: String, onMenu: () -> Unit, business: String, onBusiness: () -> Unit,
     onOpen: (PersonAcct) -> Unit, onReport: () -> Unit, onAdd: () -> Unit
 ) {
     val accts = remember(entries) { personAccounts(entries) }
@@ -236,7 +259,7 @@ fun PartiesScreen(
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
             item {
-                KhataTop("", "", onMenu) {
+                KhataTop("", "", onMenu, business = business, onBusiness = onBusiness) {
                     SumCard(Triple(money(currency, pay), "Payable", RedSpend), Triple(money(currency, rec), "Receivable", GreenIn), "Report ›", onReport)
                 }
             }
@@ -652,3 +675,80 @@ internal fun source(e: Entry): String {
 /** A blank Cash in / Cash out entry for the form; the category is guessed from what is typed. */
 internal fun cashTemplate(income: Boolean): Entry =
     template(if (income) Type.AAMDANI else Type.KHARCHA, "").copy(category = if (income) Cat.TANKHWAH else Cat.OTHER, item = "")
+
+// ---------------------------------------------------------------- businesses
+
+/** Full-screen list of businesses: tick on the open one, ⋮ to rename or delete, and Add New Business. */
+@Composable
+fun BusinessPicker(
+    list: List<Triple<String, String, Int>>, current: String, onBack: () -> Unit, onPick: (String) -> Unit,
+    onAdd: (String) -> Unit, onRename: (String, String) -> Unit, onDelete: (String) -> Unit
+) {
+    var naming by remember { mutableStateOf<Pair<String?, String>?>(null) }   // (id or null for new, text)
+    var deleting by remember { mutableStateOf<Pair<String, String>?>(null) }
+    androidx.compose.ui.window.Dialog(onDismissRequest = onBack, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            Column {
+                Row(Modifier.fillMaxWidth().background(EmberBrush).padding(horizontal = 6.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White) }
+                    Text("Select Business", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                }
+                LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(top = 10.dp)) {
+                    items(list, key = { it.first }) { (id, name, parties) ->
+                        var more by remember { mutableStateOf(false) }
+                        Row(
+                            Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).clickable { onPick(id) }
+                                .padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Outlined.Storefront, contentDescription = null, tint = Ember, modifier = Modifier.size(26.dp))
+                            Spacer(Modifier.width(14.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(if (parties == 1) "1 party" else "$parties parties", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            if (id == current) Icon(Icons.Filled.Check, contentDescription = "Open", tint = Ember)
+                            Box {
+                                IconButton(onClick = { more = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "More", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+                                DropdownMenu(expanded = more, onDismissRequest = { more = false }) {
+                                    DropdownMenuItem(text = { Text("Rename") }, onClick = { more = false; naming = id to name })
+                                    if (id.isNotEmpty()) DropdownMenuItem(text = { Text("Delete", color = RedSpend) }, onClick = { more = false; deleting = id to name })
+                                }
+                            }
+                        }
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                    }
+                }
+                Box(
+                    Modifier.navigationBarsPadding().padding(16.dp).fillMaxWidth().height(50.dp).clip(CircleShape).background(EmberBrush)
+                        .clickable { naming = null to "" },
+                    contentAlignment = Alignment.Center
+                ) { Text("+  Add New Business", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
+            }
+        }
+    }
+    naming?.let { (id, start) ->
+        var text by remember(id) { mutableStateOf(start) }
+        AlertDialog(
+            onDismissRequest = { naming = null },
+            title = { Text(if (id == null) "New business" else "Rename business") },
+            text = { OutlinedTextField(text, { text = it }, singleLine = true, placeholder = { Text("Business name") }) },
+            confirmButton = {
+                TextButton(enabled = text.isNotBlank(), onClick = {
+                    if (id == null) onAdd(text.trim()) else onRename(id, text.trim())
+                    naming = null
+                }) { Text("Save") }
+            },
+            dismissButton = { TextButton(onClick = { naming = null }) { Text("Cancel") } }
+        )
+    }
+    deleting?.let { (id, name) ->
+        AlertDialog(
+            onDismissRequest = { deleting = null },
+            title = { Text("Delete $name?") },
+            text = { Text("All its entries will be deleted too.") },
+            confirmButton = { TextButton(onClick = { onDelete(id); deleting = null }) { Text("Delete", color = RedSpend) } },
+            dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancel") } }
+        )
+    }
+}
