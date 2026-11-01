@@ -277,6 +277,7 @@ private fun PartyRow(p: PersonAcct, currency: String, onClick: () -> Unit) {
 
 private val dayFmt = SimpleDateFormat("EEE, dd MMM yy", Locale.US)
 private val timeFmt = SimpleDateFormat("h:mm a", Locale.US)
+private val shortDay = SimpleDateFormat("d MMM", Locale.US)
 private val monthFmt = SimpleDateFormat("MMM yyyy", Locale.US)
 private val OutTint = Color(0xFFE5484D).copy(alpha = 0.06f)
 private val ColW = 88.dp
@@ -577,10 +578,14 @@ fun MoneyScreen(
                 // A group's own entries open right under it.
                 if (isOpen) items(g.list, key = { it.id }) { e ->
                     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).background(MaterialTheme.colorScheme.surface).clickable { onEdit(e) }) {
-                        Column(Modifier.weight(1f).padding(start = 62.dp, end = 8.dp, top = 5.dp, bottom = 5.dp)) {
+                        // Date and time in the left space, under the category icon.
+                        Column(Modifier.width(62.dp).padding(start = 14.dp, top = 5.dp, bottom = 5.dp)) {
+                            Text(shortDay.format(Date(e.date)), fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                            Text(timeFmt.format(Date(e.date)), fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                        }
+                        Column(Modifier.weight(1f).padding(end = 8.dp, top = 5.dp, bottom = 5.dp)) {
                             Text(title(e), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(dayFmt.format(Date(e.date)) + " • " + timeFmt.format(Date(e.date)) + if (e.note.isNotBlank()) " · " + e.note else "",
-                                fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            if (e.note.isNotBlank()) Text(e.note, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                         ColLine()
                         Box(
