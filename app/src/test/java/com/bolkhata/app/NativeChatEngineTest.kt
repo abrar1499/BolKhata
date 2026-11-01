@@ -496,9 +496,11 @@ class NativeChatEngineNameAnswerTest {
             ChatMessage("u1", true, "170 riyal food mess after shabaz return 315 on the same day"),
             ChatMessage("a1", false, "Which Shahbaz or Qaisar Shahbaz Ghulam do you mean?")
         )
-        val r = NativeChatEngine.interpret("Shahbaz ka khata", emptyList(), contacts, history = history)
-        assertEquals("entry", r.kind)
-        assertTrue(r.text.contains("Shahbaz"))
+        // Shahbaz's 315 is saved, so the finished sentence puts the 170 right after it.
+        val back = Entry("b1", Type.WAPIS_MILA, 315.0, Cat.UDHAAR, "Loans", "Shahbaz", "", 1_000_000L, 1_000_000L)
+        val r = NativeChatEngine.interpret("Shahbaz ka khata", listOf(back), contacts, history = history)
+        assertEquals("entry_after", r.kind)
+        assertEquals(setOf("b1"), r.filter.ids)
     }
 }
 
