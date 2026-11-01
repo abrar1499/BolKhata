@@ -547,13 +547,13 @@ fun MoneyScreen(
                 item(key = "g" + g.name) {
                     val share = if (total > 0) (g.total / total).toFloat() else 0f
                     Row(
-                        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface)
-                            .clickable { if (isOpen) open.remove(g.name) else open.add(g.name) }.padding(start = 14.dp, end = 8.dp, top = 9.dp, bottom = 9.dp),
+                        Modifier.fillMaxWidth().height(IntrinsicSize.Min).background(MaterialTheme.colorScheme.surface)
+                            .clickable { if (isOpen) open.remove(g.name) else open.add(g.name) }.padding(start = 14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         if (g.cat != null) CatBubble(g.cat, 36.dp) else Initial(g.name)
                         Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
+                        Column(Modifier.weight(1f).padding(vertical = 9.dp)) {
                             Text(g.name, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             if (g.cat != null) {
                                 Box(Modifier.padding(top = 5.dp).fillMaxWidth().height(6.dp).clip(CircleShape).background(MaterialTheme.colorScheme.outlineVariant)) {
@@ -563,15 +563,20 @@ fun MoneyScreen(
                                 Text(lastSeen(g.list.maxOf { it.date }), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
-                        Column(Modifier.padding(start = 12.dp), horizontalAlignment = Alignment.End) {
-                            Text(fmt(g.total), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = if (g.cat == null) color else MaterialTheme.colorScheme.onSurface)
+                        Icon(
+                            if (isOpen) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown, contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 4.dp).size(20.dp)
+                        )
+                        // Total and share in the same column as the entries' amounts.
+                        ColLine()
+                        Column(
+                            Modifier.width(ColW).fillMaxHeight().padding(end = 12.dp),
+                            horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.Center
+                        ) {
+                            Text(fmt(g.total), fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1, color = if (g.cat == null) color else MaterialTheme.colorScheme.onSurface)
                             Text(if (g.cat != null) "${Math.round(share * 100)}%" else if (g.list.size == 1) "1 entry" else "${g.list.size} entries",
                                 fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        Icon(
-                            if (isOpen) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown, contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f), modifier = Modifier.padding(start = 4.dp).size(20.dp)
-                        )
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
                 }
