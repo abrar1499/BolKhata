@@ -997,14 +997,20 @@ private fun TreeView(income: Boolean, entries: List<Entry>, currency: String, on
                 }
             } else {
                 val e = x as Entry
-                val place = e.note.substringAfter(", ", "").ifBlank { e.note.takeIf { !it.equals(e.item, true) }.orEmpty() }
+                // What it is first ("Bank transfer fee"), then the bank's long note in grey.
+                val title = entryTitle(e)
+                val note = e.note.trim().takeIf { it.isNotBlank() && !it.equals(title, true) && !it.equals(e.item, true) }
                 CardLine(
                     first, last, depth, 34.dp, shade = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
                     modifier = Modifier.entryTap(e) { onEdit(e) }
                 ) {
                     Text(timeFmt.format(Date(e.date)), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(48.dp))
+                    val sub = MaterialTheme.colorScheme.onSurfaceVariant
                     Text(
-                        listOf(place, clockFmt.format(Date(e.date))).filter { it.isNotBlank() }.joinToString(" · "),
+                        androidx.compose.ui.text.buildAnnotatedString {
+                            withStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.SemiBold)) { append(title) }
+                            withStyle(androidx.compose.ui.text.SpanStyle(color = sub)) { append(" · " + (note ?: clockFmt.format(Date(e.date)))) }
+                        },
                         fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f)
                     )
                     Text((if (income) "+" else "−") + fmt(e.amount), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = color)
