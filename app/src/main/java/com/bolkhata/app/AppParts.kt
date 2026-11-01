@@ -239,7 +239,6 @@ internal fun DrawerMenu(tab: Tab, name: String, currency: String, onCurrency: (S
                 )
             }
         }
-        DrawerRow("Home", Icons.Outlined.Home, tab == Tab.HOME) { onPick(Tab.HOME) }
         DrawerRow("Chat", Icons.Outlined.ChatBubbleOutline, tab == Tab.CHAT) { onPick(Tab.CHAT) }
         DrawerRow("Entries", Icons.Outlined.ReceiptLong, tab == Tab.ENTRIES) { onPick(Tab.ENTRIES) }
         DrawerRow("Reports", Icons.Outlined.BarChart, tab == Tab.REPORTS) { onPick(Tab.REPORTS) }

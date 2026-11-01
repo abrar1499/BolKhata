@@ -23,7 +23,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
-import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.ReceiptLong
@@ -58,7 +58,7 @@ import kotlinx.coroutines.launch
 // (Parties, Cash book, Expense, Income) next to Home. Every number comes from the saved entries.
 
 private val Ember = Color(0xFFE3342F)
-private val EmberBrush = Brush.linearGradient(listOf(Color(0xFFF0572E), Color(0xFFE3342F)))
+internal val EmberBrush = Brush.linearGradient(listOf(Color(0xFFF0572E), Color(0xFFE3342F)))
 private val OutBrush = Brush.horizontalGradient(listOf(Color(0xFF8E1414), Color(0xFFD13A33)))
 private val InBrush = Brush.horizontalGradient(listOf(Color(0xFF0F7A3A), Color(0xFF3FB46B)))
 
@@ -77,7 +77,7 @@ fun cashIn(e: Entry) = when (e.type) {
 }
 
 /** The tabs shown in the bottom bar, in order. */
-val KHATA_TABS = listOf(Tab.HOME, Tab.PARTIES, Tab.CASHBOOK, Tab.EXPENSE, Tab.INCOME)
+val KHATA_TABS = listOf(Tab.CHAT, Tab.PARTIES, Tab.CASHBOOK, Tab.EXPENSE, Tab.INCOME)
 
 @Composable
 fun KhataNav(tab: Tab, onTab: (Tab) -> Unit) {
@@ -104,7 +104,7 @@ private fun navItem(t: Tab): Pair<String, ImageVector> = when (t) {
     Tab.CASHBOOK -> "Cash" to Icons.Outlined.AccountBalanceWallet
     Tab.EXPENSE -> "Expense" to Icons.Outlined.ReceiptLong
     Tab.INCOME -> "Income" to Icons.Outlined.Payments
-    else -> "Home" to Icons.Outlined.Home
+    else -> "Chat" to Icons.Outlined.ChatBubbleOutline
 }
 
 /** Orange-red header with the summary card hanging half over its bottom edge. */

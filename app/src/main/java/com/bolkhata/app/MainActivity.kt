@@ -77,17 +77,17 @@ class MainActivity : ComponentActivity() {
 
 enum class Tab { HOME, STOCK, CHAT, ENTRIES, REPORTS, TRASH, SETTINGS, PARTIES, CASHBOOK, EXPENSE, INCOME }
 
-/** The open tab and the tabs it was reached from, so Back returns the same way. Home starts over. */
+/** The open tab and the tabs it was reached from, so Back returns the same way. Chat (the first tab) starts over. */
 class TabNav {
-    private val now = mutableStateOf(Tab.HOME)
+    private val now = mutableStateOf(Tab.CHAT)
     private val past = mutableStateListOf<Tab>()
     operator fun getValue(thisRef: Any?, property: KProperty<*>): Tab = now.value
     operator fun setValue(thisRef: Any?, property: KProperty<*>, t: Tab) {
         if (t == now.value) return
-        if (t == Tab.HOME) past.clear() else { past.remove(t); past.add(now.value) }
+        if (t == Tab.CHAT) past.clear() else { past.remove(t); past.add(now.value) }
         now.value = t
     }
-    fun back() { now.value = past.removeLastOrNull() ?: Tab.HOME }
+    fun back() { now.value = past.removeLastOrNull() ?: Tab.CHAT }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -1861,7 +1861,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     }
 
     // Back closes whatever is on top first (an account opens over a khata), then walks back through the tabs.
-    BackHandler(enabled = ledger != null || account != null || results != null || people != null || partyOpen != null || tab != Tab.HOME) {
+    BackHandler(enabled = ledger != null || account != null || results != null || people != null || partyOpen != null || tab != Tab.CHAT) {
         if (account != null) {
             account = null
         } else if (ledger != null) {
@@ -1902,12 +1902,16 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         bottomBar = {
             val main = results == null && people == null && account == null && ledger == null
             if (main && tab == Tab.CHAT) {
-                InputBar(
-                    onSend = { chatInput(it) }, onMic = { startVoice(forChat = true) }, placeholder = "Speak, type or ask…",
-                    onAttach = { pickFile.launch(arrayOf("image/*", "application/pdf")) },
-                    busy = chatLoading,
-                    voice = if (recorder != null) VoiceState(true, "Listening…", "sends when you stop", level = voiceLevel) { finishRecording() } else null
-                )
+                Column {
+                    InputBar(
+                        onSend = { chatInput(it) }, onMic = { startVoice(forChat = true) }, placeholder = "Speak, type or ask…",
+                        onAttach = { pickFile.launch(arrayOf("image/*", "application/pdf")) },
+                        busy = chatLoading,
+                        voice = if (recorder != null) VoiceState(true, "Listening…", "sends when you stop", level = voiceLevel) { finishRecording() } else null,
+                        navPad = false
+                    )
+                    KhataNav(tab) { tab = it }
+                }
             } else {
                 // The khata tabs sit under the chat bar on the main screens.
                 val nav = main && tab in KHATA_TABS && partyOpen == null
@@ -2038,8 +2042,6 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         currency = currency,
                         subtitle = "$monthName · ${fmt(monthSpent)} $currency spent",
                         suggestions = suggestions,
-                        showStock = entries.any { isTrade(it.type) },
-                        onTab = { tab = it },
                         onMenu = { openMenu() },
                         onSend = { chatInput(it) },
                         onClear = {
@@ -2146,7 +2148,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                             } else if (newVersion == null) {
                                 toast("You have the latest version")
                             } else {
-                                tab = Tab.HOME
+                                tab = Tab.CHAT
                             }
                         }
                     },

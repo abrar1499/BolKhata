@@ -47,8 +47,6 @@ fun ChatScreen(
     currency: String,
     subtitle: String,
     suggestions: List<Entry>,
-    showStock: Boolean,
-    onTab: (Tab) -> Unit,
     onMenu: () -> Unit,
     onSend: (String) -> Unit,
     onClear: () -> Unit,
@@ -83,25 +81,21 @@ fun ChatScreen(
 
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.fillMaxWidth()) {
-            Box(
-                Modifier
-                    .matchParentSize()
-                    .clip(RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp))
-            ) { HeroBackground(Modifier.matchParentSize()) }
-            Column(Modifier.padding(horizontal = 16.dp).padding(top = 14.dp, bottom = 16.dp)) {
+            // Same orange header as Parties and Cash book.
+            Box(Modifier.matchParentSize().background(EmberBrush))
+            Column(Modifier.statusBarsPadding().padding(horizontal = 14.dp).padding(top = 8.dp, bottom = 12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = onMenu) {
-                        Icon(Icons.Filled.Menu, contentDescription = "Open menu", tint = LocalHeader.current.on)
+                        Icon(Icons.Filled.Menu, contentDescription = "Open menu", tint = Color.White)
                     }
-                    Spacer(Modifier.width(4.dp))
                     Column(Modifier.weight(1f)) {
-                        Text("Assistant", color = LocalHeader.current.on, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                        Text(subtitle, color = LocalHeader.current.on.copy(alpha = 0.8f), fontSize = 13.sp, maxLines = 1)
+                        Text("Chat", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                        Text(subtitle, color = Color.White.copy(alpha = 0.85f), fontSize = 11.sp, maxLines = 1)
                     }
                     Box {
                         var more by remember { mutableStateOf(false) }
                         IconButton(onClick = { more = true }) {
-                            Icon(Icons.Filled.MoreVert, contentDescription = "More options", tint = LocalHeader.current.on)
+                            Icon(Icons.Filled.MoreVert, contentDescription = "More options", tint = Color.White)
                         }
                         DropdownMenu(expanded = more, onDismissRequest = { more = false }) {
                             DropdownMenuItem(
@@ -119,8 +113,6 @@ fun ChatScreen(
                         }
                     }
                 }
-                Spacer(Modifier.height(12.dp))
-                TabSwitcher(Tab.CHAT, showStock, 0, onTab)
             }
         }
 
