@@ -371,9 +371,9 @@ private fun DayLine(day: String, list: List<Entry>, open: Boolean, onClick: () -
         val o = list.filter(::cashOut).sumOf { it.amount }
         val i = list.filter(::cashIn).sumOf { it.amount }
         ColLine()
-        Text(if (o > 0) fmt(o) else "", Modifier.width(ColW).padding(end = 12.dp), fontSize = 12.sp, color = RedSpend, fontWeight = FontWeight.Bold, textAlign = TextAlign.End)
+        Text(if (o > 0) "↑ " + fmt(o) else "", Modifier.width(ColW).padding(end = 12.dp), fontSize = 12.sp, color = RedSpend, fontWeight = FontWeight.Bold, textAlign = TextAlign.End)
         ColLine()
-        Text(if (i > 0) fmt(i) else "", Modifier.width(ColW).padding(end = 12.dp), fontSize = 12.sp, color = GreenIn, fontWeight = FontWeight.Bold, textAlign = TextAlign.End)
+        Text(if (i > 0) "↓ " + fmt(i) else "", Modifier.width(ColW).padding(end = 12.dp), fontSize = 12.sp, color = GreenIn, fontWeight = FontWeight.Bold, textAlign = TextAlign.End)
     }
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 }
@@ -446,7 +446,7 @@ fun CashBookScreen(
                 val label = if (q.isNotBlank()) "Found" else months.firstOrNull { it.first == month }?.let { monthFmt.format(Date(it.second)) } ?: ""
                 RegHead(
                     "$label · " + (if (list.size == 1) "1 entry" else "${list.size} entries"), "OUT", "IN",
-                    fmt(list.filter(::cashOut).sumOf { it.amount }), fmt(list.filter(::cashIn).sumOf { it.amount })
+                    "↑ " + fmt(list.filter(::cashOut).sumOf { it.amount }), "↓ " + fmt(list.filter(::cashIn).sumOf { it.amount })
                 )
             }
             days.forEach { (day, l) ->
