@@ -38,7 +38,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -332,12 +335,19 @@ private fun ColLine() = VerticalDivider(Modifier.fillMaxHeight(), color = Materi
 
 /** One entry: optional title, date or time, a Bal. tag, and the amount in the Out (tinted) or In column. */
 @Composable
-private fun RegRow(title: String?, whenText: String, bal: Double, out: Boolean, amount: Double, currency: String, onClick: () -> Unit) {
+private fun RegRow(title: String?, whenText: String, bal: Double, out: Boolean, amount: Double, currency: String, note: String = "", onClick: () -> Unit) {
     val sub = MaterialTheme.colorScheme.onSurfaceVariant
     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).background(MaterialTheme.colorScheme.surface).clickable { onClick() }) {
         Column(Modifier.weight(1f).padding(horizontal = 14.dp, vertical = 5.dp)) {
             if (title != null) Text(title, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(whenText, fontSize = 11.sp, color = sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            // The time stays small; the note after it is a little larger so it reads easily.
+            Text(
+                buildAnnotatedString {
+                    append(whenText)
+                    if (note.isNotBlank()) withStyle(SpanStyle(fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface)) { append(" · $note") }
+                },
+                fontSize = 10.sp, color = sub, maxLines = 1, overflow = TextOverflow.Ellipsis
+            )
             Text(
                 "Bal. " + money(currency, kotlin.math.abs(bal)), fontSize = 10.sp, color = sub,
                 modifier = Modifier.padding(top = 2.dp).clip(RoundedCornerShape(4.dp))
@@ -453,7 +463,7 @@ fun CashBookScreen(
                 val open = day !in shut
                 item(key = "d$day") { DayLine(day, l, open) { if (open) shut.add(day) else shut.remove(day) } }
                 if (open) items(l, key = { it.id }) { e ->
-                    RegRow(title(e), timeFmt.format(Date(e.date)) + if (e.note.isNotBlank()) " · " + e.note else "", bal[e.id] ?: 0.0, cashOut(e), e.amount, currency) { onEdit(e) }
+                    RegRow(title(e), timeFmt.format(Date(e.date)), bal[e.id] ?: 0.0, cashOut(e), e.amount, currency, e.note) { onEdit(e) }
                 }
             }
             if (list.isEmpty()) item {
@@ -501,8 +511,8 @@ fun PartyKhataScreen(
             items(list, key = { it.first.id }) { (e, b) ->
                 val note = e.note.ifBlank { e.item.takeIf { it != "Loans" } ?: "" }
                 RegRow(
-                    null, dayFmt.format(Date(e.date)) + " • " + timeFmt.format(Date(e.date)) + if (note.isNotBlank()) " · $note" else "",
-                    b, personHistoryIsOutflow(e), e.amount, currency
+                    null, dayFmt.format(Date(e.date)) + " • " + timeFmt.format(Date(e.date)),
+                    b, personHistoryIsOutflow(e), e.amount, currency, note
                 ) { onEdit(e) }
             }
             if (list.isEmpty()) item {
