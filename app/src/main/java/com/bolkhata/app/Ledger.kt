@@ -1031,12 +1031,16 @@ private fun TreeView(income: Boolean, entries: List<Entry>, currency: String, on
                     first, last, depth, 34.dp, shade = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
                     modifier = Modifier.entryTap(e) { onEdit(e) }
                 ) {
-                    Text(timeFmt.format(Date(e.date)), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(48.dp))
+                    // The date, and the time small under it.
+                    Column(Modifier.width(52.dp)) {
+                        Text(timeFmt.format(Date(e.date)), fontSize = 12.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(clockFmt.format(Date(e.date)), fontSize = 9.sp, lineHeight = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f))
+                    }
                     val sub = MaterialTheme.colorScheme.onSurfaceVariant
                     Text(
                         androidx.compose.ui.text.buildAnnotatedString {
                             withStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.SemiBold)) { append(title) }
-                            withStyle(androidx.compose.ui.text.SpanStyle(color = sub)) { append(" · " + (note ?: clockFmt.format(Date(e.date)))) }
+                            if (note != null) withStyle(androidx.compose.ui.text.SpanStyle(color = sub)) { append(" · $note") }
                         },
                         fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f)
                     )
