@@ -24,13 +24,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.outlined.BarChart
-import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.outlined.FormatListBulleted
-import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.Payments
-import androidx.compose.material.icons.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.*
@@ -246,12 +242,6 @@ internal fun DrawerMenu(tab: Tab, name: String, currency: String, onCurrency: (S
             }
         }
         Spacer(Modifier.height(8.dp))
-        DrawerRow("Chat", Icons.Outlined.ChatBubbleOutline, tab == Tab.CHAT, Color(0xFF0B7A4B)) { onPick(Tab.CHAT) }
-        DrawerRow("Parties", Icons.Outlined.People, tab == Tab.PARTIES, Color(0xFF3B82F6)) { onPick(Tab.PARTIES) }
-        DrawerRow("Cash book", Icons.Outlined.AccountBalanceWallet, tab == Tab.CASHBOOK, Color(0xFFF0572E)) { onPick(Tab.CASHBOOK) }
-        DrawerRow("Expense", Icons.Outlined.ReceiptLong, tab == Tab.EXPENSE, RedSpend) { onPick(Tab.EXPENSE) }
-        DrawerRow("Income", Icons.Outlined.Payments, tab == Tab.INCOME, GreenIn) { onPick(Tab.INCOME) }
-        HorizontalDivider(Modifier.padding(horizontal = 20.dp, vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant)
         DrawerRow("All entries", Icons.Outlined.FormatListBulleted, tab == Tab.ENTRIES, Color(0xFF8B5CF6)) { onPick(Tab.ENTRIES) }
         DrawerRow("Reports", Icons.Outlined.BarChart, tab == Tab.REPORTS, Color(0xFF0EA5E9)) { onPick(Tab.REPORTS) }
         DrawerRow("Trash", Icons.Outlined.Delete, tab == Tab.TRASH, Color(0xFF64748B)) { onPick(Tab.TRASH) }
