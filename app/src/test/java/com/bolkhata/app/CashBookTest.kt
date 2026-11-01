@@ -1,5 +1,6 @@
 package com.bolkhata.app
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -23,5 +24,12 @@ class CashBookTest {
         assertFalse(cashOut(e(Type.PURCHASE, "Nargis Salim Rashid")))
         assertTrue(cashIn(e(Type.SALE, "Hamid Akram", paid = true)))
         assertTrue(cashOut(e(Type.PURCHASE)))
+    }
+
+    @Test
+    fun incomeSourceIsThePayer() {
+        val alert = Entry("2", Type.AAMDANI, 1500.0, Cat.TANKHWAH, "Transfer", "", "From Hamid Akram. 20261007REF", 0L, 0L)
+        assertEquals("Hamid Akram", source(alert))
+        assertEquals("Nargis Trading Est.", source(alert.copy(item = "Nargis Trading Est.", note = "Company income")))
     }
 }

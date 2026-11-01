@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -19,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -47,9 +49,9 @@ fun FormPopup(onDismiss: () -> Unit, content: @Composable () -> Unit) {
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(
             modifier = Modifier
-                .fillMaxWidth(0.92f)
+                .fillMaxWidth(0.88f)
                 .heightIn(max = maxH),
-            shape = RoundedCornerShape(26.dp),
+            shape = RoundedCornerShape(22.dp),
             color = MaterialTheme.colorScheme.surface,
             shadowElevation = 12.dp
         ) { content() }
@@ -102,101 +104,82 @@ fun EntryForm(
         return if (o) (if (bal < -0.005) Type.WAPIS_DIYA else Type.DIYA) else (if (bal > 0.005) Type.WAPIS_MILA else Type.LIYA)
     }
     val chosen = out?.let { kind(it) }
-    val small = TextStyle(fontSize = 15.sp)
 
     Column(
         Modifier
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
-            .padding(18.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         header()
 
         // Title row
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(title, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                Text(title, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (question != null) {
                     Text(
-                        question, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        question, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 2, overflow = TextOverflow.Ellipsis
                     )
                 }
             }
-            IconButton(onClick = onCancel, modifier = Modifier.size(36.dp)) {
-                Icon(Icons.Filled.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            IconButton(onClick = onCancel, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Filled.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
             }
         }
 
         // Only the direction; the app works out expense / income / loan.
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Pill("↑ Cash out", out == true, RedSpend, Modifier.weight(1f)) { out = true }
-            Pill("↓ Cash in", out == false, GreenIn, Modifier.weight(1f)) { out = false }
+        Row(
+            Modifier.fillMaxWidth().height(38.dp).clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.background).padding(3.dp)
+        ) {
+            Seg("↑ Cash out", out == true, RedSpend, Modifier.weight(1f)) { out = true }
+            Seg("↓ Cash in", out == false, GreenIn, Modifier.weight(1f)) { out = false }
         }
 
         // Amount + date side by side
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(
-                value = amount,
-                onValueChange = { v -> amount = v.filter { it.isDigit() || it == '.' } },
-                label = { Text("Amount ($currency)", fontSize = 12.sp) },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                singleLine = true,
-                textStyle = TextStyle(fontSize = 20.sp, fontWeight = FontWeight.Bold, color = accent),
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier.weight(1f)
+            Field(
+                amount, { v -> amount = v.filter { it.isDigit() || it == '.' } }, "Amount ($currency)", Modifier.weight(1f),
+                numeric = true, style = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.Bold, color = accent)
             )
             Row(
                 Modifier
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .height(44.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.background)
                     .clickable { showDate = true }
-                    .padding(horizontal = 12.dp, vertical = 16.dp),
+                    .padding(horizontal = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Filled.DateRange, contentDescription = "Date", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
-                Text(shortDate(date), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Icon(Icons.Filled.DateRange, contentDescription = "Date", tint = accent, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(5.dp))
+                Text(shortDate(date), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             }
         }
 
-        OutlinedTextField(
-            value = note, onValueChange = { note = it },
-            label = { Text("Note", fontSize = 12.sp) }, singleLine = true, textStyle = small,
-            shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()
-        )
+        Field(note, { note = it }, "Note (what for?)", Modifier.fillMaxWidth())
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(
-                value = item, onValueChange = { item = it },
-                label = { Text("Goods (optional)", fontSize = 12.sp) },
-                singleLine = true, textStyle = small,
-                shape = RoundedCornerShape(14.dp), modifier = Modifier.weight(1f)
-            )
-            OutlinedTextField(
-                value = qty, onValueChange = { v -> qty = v.filter { it.isDigit() || it == '.' } },
-                label = { Text("Qty", fontSize = 12.sp) },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                singleLine = true, textStyle = small,
-                shape = RoundedCornerShape(14.dp), modifier = Modifier.width(90.dp)
-            )
+            Field(item, { item = it }, "Goods (optional)", Modifier.weight(1f))
+            Field(qty, { v -> qty = v.filter { it.isDigit() || it == '.' } }, "Qty", Modifier.width(72.dp), numeric = true)
         }
 
         var picking by remember { mutableStateOf(false) }
         Box {
-            OutlinedTextField(
-                value = person, onValueChange = { person = it }, readOnly = people.isNotEmpty(),
-                label = { Text("Person (optional)", fontSize = 12.sp) }, singleLine = true, textStyle = small,
-                placeholder = { if (people.isNotEmpty()) Text("Select party", fontSize = 14.sp) },
-                trailingIcon = {
-                    if (person.isNotBlank()) IconButton(onClick = { person = "" }) { Icon(Icons.Filled.Close, contentDescription = "No party") }
-                    else if (people.isNotEmpty()) Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
-                },
-                shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()
-            )
+            Field(
+                person, { person = it }, if (people.isNotEmpty()) "Person (optional) · select party" else "Person (optional)",
+                Modifier.fillMaxWidth(), readOnly = people.isNotEmpty()
+            ) {
+                if (person.isNotBlank()) IconButton(onClick = { person = "" }, modifier = Modifier.size(36.dp)) {
+                    Icon(Icons.Filled.Close, contentDescription = "No party", modifier = Modifier.size(18.dp))
+                }
+                else if (people.isNotEmpty()) Icon(Icons.Filled.ArrowDropDown, contentDescription = null, modifier = Modifier.padding(end = 6.dp))
+            }
             // The field (not its × button) opens the party list.
-            if (people.isNotEmpty()) Box(Modifier.matchParentSize().padding(top = 8.dp, end = 48.dp).clip(RoundedCornerShape(14.dp)).clickable { picking = true })
+            if (people.isNotEmpty()) Box(Modifier.matchParentSize().padding(end = 40.dp).clip(RoundedCornerShape(12.dp)).clickable { picking = true })
         }
         if (picking) PartyPicker(
             people, "", "Select party",
@@ -217,13 +200,13 @@ fun EntryForm(
                     Button(
                         onClick = onDelete,
                         colors = ButtonDefaults.buttonColors(containerColor = RedSpend),
-                        shape = RoundedCornerShape(14.dp)
+                        shape = RoundedCornerShape(12.dp)
                     ) { Text("Yes, delete") }
                 } else {
                     OutlinedButton(
                         onClick = { askDelete = true },
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = RedSpend),
-                        shape = RoundedCornerShape(14.dp)
+                        shape = RoundedCornerShape(12.dp)
                     ) { Text("Delete") }
                 }
             }
@@ -270,8 +253,9 @@ fun EntryForm(
                 },
                 enabled = chosen != null && amountValue != null && amountValue > 0 &&
                     (!isLoan(chosen) || person.isNotBlank()),
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier.weight(1f).height(48.dp)
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = accent),
+                modifier = Modifier.weight(1f).height(44.dp)
             ) { Text(saveLabel, fontWeight = FontWeight.Bold) }
         }
     }
@@ -288,6 +272,43 @@ fun EntryForm(
             },
             dismissButton = { TextButton(onClick = { showDate = false }) { Text("Cancel") } }
         ) { DatePicker(state = state) }
+    }
+}
+
+/** A small form field: hint inside, no floating label, so the form stays short. */
+@Composable
+private fun Field(
+    value: String, onChange: (String) -> Unit, hint: String, modifier: Modifier = Modifier,
+    numeric: Boolean = false, readOnly: Boolean = false, style: TextStyle = TextStyle(fontSize = 15.sp),
+    trailing: (@Composable () -> Unit)? = null
+) {
+    val shape = RoundedCornerShape(12.dp)
+    Row(
+        modifier.height(44.dp).clip(shape).background(MaterialTheme.colorScheme.background)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape).padding(start = 12.dp, end = if (trailing == null) 10.dp else 2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(Modifier.weight(1f)) {
+            if (value.isEmpty()) Text(hint, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            BasicTextField(
+                value, onChange, singleLine = true, readOnly = readOnly, modifier = Modifier.fillMaxWidth(),
+                textStyle = style.copy(color = if (style.color == Color.Unspecified) MaterialTheme.colorScheme.onSurface else style.color),
+                keyboardOptions = if (numeric) KeyboardOptions(keyboardType = KeyboardType.Decimal) else KeyboardOptions.Default,
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary)
+            )
+        }
+        trailing?.invoke()
+    }
+}
+
+/** One half of the Cash out / Cash in switch. */
+@Composable
+private fun Seg(label: String, selected: Boolean, color: Color, modifier: Modifier, onClick: () -> Unit) {
+    Box(
+        modifier.fillMaxHeight().clip(RoundedCornerShape(9.dp)).background(if (selected) color else Color.Transparent).clickable { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        Text(label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
