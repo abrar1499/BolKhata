@@ -1,17 +1,23 @@
-@file:OptIn(ExperimentalMaterial3Api::class)
+@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 
 package com.bolkhata.app
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
@@ -38,8 +44,10 @@ import androidx.compose.ui.unit.coerceAtLeast
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 // Khata look: orange-red header, a white summary card over it, pill buttons above the chat bar, and four tabs
 // (Parties, Cash book, Expense, Income) next to Home. Every number comes from the saved entries.
@@ -96,14 +104,16 @@ private fun navItem(t: Tab): Pair<String, ImageVector> = when (t) {
 
 /** Orange-red header with the summary card hanging half over its bottom edge. */
 @Composable
-private fun KhataTop(title: String, subtitle: String, onMenu: () -> Unit, card: @Composable () -> Unit) {
+private fun KhataTop(title: String, subtitle: String, onMenu: () -> Unit, back: Boolean = false, card: @Composable () -> Unit) {
     Box(Modifier.fillMaxWidth()) {
         Box(Modifier.matchParentSize().padding(bottom = 36.dp).background(EmberBrush))
         Column(Modifier.statusBarsPadding().padding(horizontal = 14.dp)) {
             Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onMenu) { Icon(Icons.Filled.Menu, contentDescription = "Menu", tint = Color.White) }
+                IconButton(onClick = onMenu) {
+                    Icon(if (back) Icons.AutoMirrored.Filled.ArrowBack else Icons.Filled.Menu, contentDescription = if (back) "Back" else "Menu", tint = Color.White)
+                }
                 Column {
-                    Text(title, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text(title, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (subtitle.isNotEmpty()) Text(subtitle, color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp)
                 }
             }
@@ -246,93 +256,220 @@ private fun PartyRow(p: PersonAcct, currency: String, onClick: () -> Unit) {
     HorizontalDivider(Modifier.padding(start = 66.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
 }
 
-// ---------------------------------------------------------------- Cash book
+// ---------------------------------------------------------------- Cash book and party khata (one register look)
 
-private val dayFmt = SimpleDateFormat("EEE, dd MMM yyyy", Locale.US)
+private val dayFmt = SimpleDateFormat("EEE, dd MMM yy", Locale.US)
 private val timeFmt = SimpleDateFormat("h:mm a", Locale.US)
+private val monthFmt = SimpleDateFormat("MMM yyyy", Locale.US)
+private val OutTint = Color(0xFFE5484D).copy(alpha = 0.06f)
+private val ColW = 88.dp
 
 private fun title(e: Entry) = e.person.ifBlank { e.item.ifBlank { e.category.label } }
+private fun monthKey(ms: Long): Int = cal(ms).let { it.get(Calendar.YEAR) * 12 + it.get(Calendar.MONTH) }
+
+/** Months that have entries, newest first, as (key, a date in that month). [newest] must be sorted newest first. */
+private fun monthsOf(newest: List<Entry>) = newest.distinctBy { monthKey(it.date) }.map { monthKey(it.date) to it.date }
+
+/** Month chips; only one month is listed at a time so the page stays short. */
+@Composable
+private fun MonthChips(months: List<Pair<Int, Long>>, current: Int, onPick: (Int) -> Unit) {
+    LazyRow(
+        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background),
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        items(months, key = { it.first }) { (k, ms) ->
+            val on = k == current
+            Text(
+                monthFmt.format(Date(ms)), fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                color = if (on) Color.White else MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.clip(CircleShape).background(if (on) Ember else MaterialTheme.colorScheme.surface)
+                    .border(1.dp, if (on) Ember else MaterialTheme.colorScheme.outlineVariant, CircleShape)
+                    .clickable { onPick(k) }.padding(horizontal = 12.dp, vertical = 5.dp)
+            )
+        }
+    }
+}
+
+/** Column titles: Entries | Out | In (or You paid | You received). */
+@Composable
+private fun RegHead(left: String, out: String, inn: String, outSub: String = "", inSub: String = "") {
+    val sub = MaterialTheme.colorScheme.onSurfaceVariant
+    Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(left, fontSize = 12.sp, color = sub, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).padding(start = 14.dp))
+        listOf(Triple(out, outSub, RedSpend), Triple(inn, inSub, GreenIn)).forEach { (t, s, c) ->
+            Column(Modifier.width(ColW).padding(end = 12.dp), horizontalAlignment = Alignment.End) {
+                Text(t, fontSize = 11.sp, color = sub, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                if (s.isNotEmpty()) Text(s, fontSize = 12.sp, color = c, fontWeight = FontWeight.Bold, maxLines = 1)
+            }
+        }
+    }
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+}
+
+/** One entry: optional title, date or time, a Bal. tag, and the amount in the Out (tinted) or In column. */
+@Composable
+private fun RegRow(title: String?, whenText: String, bal: Double, out: Boolean, amount: Double, currency: String, onClick: () -> Unit) {
+    val sub = MaterialTheme.colorScheme.onSurfaceVariant
+    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).background(MaterialTheme.colorScheme.surface).clickable { onClick() }) {
+        Column(Modifier.weight(1f).padding(horizontal = 14.dp, vertical = 8.dp)) {
+            if (title != null) Text(title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(whenText, fontSize = 11.sp, color = sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                "Bal. " + money(currency, kotlin.math.abs(bal)), fontSize = 11.sp, color = sub,
+                modifier = Modifier.padding(top = 4.dp).clip(RoundedCornerShape(4.dp))
+                    .background((if (out) RedSpend else GreenIn).copy(alpha = 0.12f)).padding(horizontal = 6.dp, vertical = 1.dp)
+            )
+        }
+        Box(Modifier.width(ColW).fillMaxHeight().background(OutTint).padding(end = 12.dp), contentAlignment = Alignment.CenterEnd) {
+            if (out) Text(fmt(amount), color = RedSpend, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        }
+        Box(Modifier.width(ColW).fillMaxHeight().padding(end = 12.dp), contentAlignment = Alignment.CenterEnd) {
+            if (!out) Text(fmt(amount), color = GreenIn, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        }
+    }
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f))
+}
+
+/** A day's line in the cash book: tap to fold or open its entries. */
+@Composable
+private fun DayLine(day: String, list: List<Entry>, open: Boolean, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).clickable { onClick() }.padding(vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(Modifier.weight(1f).padding(start = 14.dp)) {
+            Text(day.uppercase(), fontSize = 12.sp, fontWeight = FontWeight.ExtraBold)
+            Text((if (list.size == 1) "1 entry" else "${list.size} entries") + if (open) "" else " · tap to open",
+                fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        val o = list.filter(::cashOut).sumOf { it.amount }
+        val i = list.filter(::cashIn).sumOf { it.amount }
+        Text(if (o > 0) fmt(o) else "", Modifier.width(ColW).padding(end = 12.dp), fontSize = 12.sp, color = RedSpend, fontWeight = FontWeight.Bold, textAlign = TextAlign.End)
+        Text(if (i > 0) fmt(i) else "", Modifier.width(ColW).padding(end = 12.dp), fontSize = 12.sp, color = GreenIn, fontWeight = FontWeight.Bold, textAlign = TextAlign.End)
+    }
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+}
+
+/** Round ↑ button that appears once the list is scrolled down. */
+@Composable
+private fun BoxScope.UpButton(state: LazyListState) {
+    val scope = rememberCoroutineScope()
+    val show by remember { derivedStateOf { state.firstVisibleItemIndex > 4 } }
+    if (show) Box(
+        Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = (LocalBarSpace.current - 30.dp).coerceAtLeast(8.dp) + 52.dp)
+            .size(40.dp).shadow(4.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.onSurface)
+            .clickable { scope.launch { state.animateScrollToItem(0) } },
+        contentAlignment = Alignment.Center
+    ) { Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Back to top", tint = MaterialTheme.colorScheme.surface) }
+}
+
+private fun matches(e: Entry, q: String) =
+    listOf(e.person, e.item, e.note, e.category.label, fmt(e.amount)).any { it.contains(q.trim(), true) }
 
 @Composable
 fun CashBookScreen(
     entries: List<Entry>, currency: String, onMenu: () -> Unit,
     onEdit: (Entry) -> Unit, onHistory: () -> Unit, onAdd: (income: Boolean) -> Unit
 ) {
-    val cash = remember(entries) {
+    val newest = remember(entries) {
         entries.filter { cashIn(it) || cashOut(it) }.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt })
     }
-    var q by rememberSaveable { mutableStateOf("") }
-    fun net(l: List<Entry>) = l.filter(::cashIn).sumOf { it.amount } - l.filter(::cashOut).sumOf { it.amount }
-    val hand = net(cash)
-    val today = net(cash.filter { sameDay(it.date, System.currentTimeMillis()) })
-    val shown = if (q.isBlank()) cash else cash.filter { e ->
-        listOf(e.person, e.item, e.note, e.category.label, fmt(e.amount)).any { it.contains(q.trim(), true) }
+    // Cash in hand after each entry, counted from the oldest.
+    val bal = remember(newest) {
+        var run = 0.0
+        newest.asReversed().associate { e -> run += if (cashIn(e)) e.amount else -e.amount; e.id to run }
     }
-    val days = shown.groupBy { dayFmt.format(Date(it.date)) }
+    val hand = newest.firstOrNull()?.let { bal[it.id] } ?: 0.0
+    val todayOut = newest.filter { sameDay(it.date, System.currentTimeMillis()) && cashOut(it) }.sumOf { it.amount }
+    val months = remember(newest) { monthsOf(newest) }
+    var month by rememberSaveable(months.firstOrNull()?.first) { mutableIntStateOf(months.firstOrNull()?.first ?: 0) }
+    var q by rememberSaveable { mutableStateOf("") }
+    val shut = remember { mutableStateListOf<String>() }
+    // A search looks through every month; otherwise only the picked month is listed.
+    val list = if (q.isBlank()) newest.filter { monthKey(it.date) == month } else newest.filter { matches(it, q) }
+    val days = list.groupBy { dayFmt.format(Date(it.date)) }
+    val state = rememberLazyListState()
     Box(Modifier.fillMaxSize()) {
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
+        LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
             item {
                 KhataTop("Cash Book", "Parties, expenses and income in one place", onMenu) {
                     SumCard(
                         Triple(money(currency, hand), "Cash in hand", if (hand < 0) RedSpend else GreenIn),
-                        Triple(money(currency, today), "Today balance", if (today < 0) RedSpend else GreenIn),
+                        Triple(money(currency, todayOut), "Today out", RedSpend),
                         "History", onHistory
                     )
                 }
             }
             item { SearchBox(q, "Search") { q = it } }
-            days.forEach { (day, list) ->
-                item(key = "d$day") {
-                    Row(
-                        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).padding(horizontal = 14.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(day.uppercase(), fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                            Text(if (list.size == 1) "1 entry" else "${list.size} entries", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        Total("Out", list.filter(::cashOut).sumOf { it.amount }, RedSpend)
-                        Total("In", list.filter(::cashIn).sumOf { it.amount }, GreenIn)
-                    }
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                }
-                items(list, key = { it.id }) { e -> CashRow(e) { onEdit(e) } }
-                item(key = "s$day") { Spacer(Modifier.height(8.dp)) }
+            if (q.isBlank() && months.isNotEmpty()) stickyHeader { MonthChips(months, month) { month = it } }
+            item {
+                val label = if (q.isNotBlank()) "Found" else months.firstOrNull { it.first == month }?.let { monthFmt.format(Date(it.second)) } ?: ""
+                RegHead(
+                    "$label · " + (if (list.size == 1) "1 entry" else "${list.size} entries"), "OUT", "IN",
+                    fmt(list.filter(::cashOut).sumOf { it.amount }), fmt(list.filter(::cashIn).sumOf { it.amount })
+                )
             }
-            if (shown.isEmpty()) item {
-                Text("No cash entries yet.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp, modifier = Modifier.padding(24.dp))
+            days.forEach { (day, l) ->
+                val open = day !in shut
+                item(key = "d$day") { DayLine(day, l, open) { if (open) shut.add(day) else shut.remove(day) } }
+                if (open) items(l, key = { it.id }) { e ->
+                    RegRow(title(e), timeFmt.format(Date(e.date)) + if (e.note.isNotBlank()) " · " + e.note else "", bal[e.id] ?: 0.0, cashOut(e), e.amount, currency) { onEdit(e) }
+                }
+            }
+            if (list.isEmpty()) item {
+                Text("No cash entries here.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp, modifier = Modifier.padding(24.dp))
             }
         }
+        UpButton(state)
         Pills(Pill("CASH OUT", OutBrush) { onAdd(false) }, Pill("CASH IN", InBrush) { onAdd(true) })
     }
 }
 
+/** One party's khata: date and time, a Bal. tag, and You paid / You received columns, one month at a time. */
 @Composable
-private fun Total(label: String, v: Double, color: Color) {
-    Column(Modifier.width(84.dp), horizontalAlignment = Alignment.End) {
-        Text(label, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(fmt(v), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = color)
+fun PartyKhataScreen(
+    name: String, entries: List<Entry>, currency: String, onBack: () -> Unit,
+    onEdit: (Entry) -> Unit, onReport: () -> Unit, onAdd: (paid: Boolean) -> Unit
+) {
+    val p = remember(entries, name) { personAccounts(entries).firstOrNull { it.name.equals(name, true) } }
+    val hist = remember(p) { p?.history?.asReversed() ?: emptyList() }
+    val months = remember(hist) { monthsOf(hist.map { it.first }) }
+    var month by rememberSaveable(name, months.firstOrNull()?.first) { mutableIntStateOf(months.firstOrNull()?.first ?: 0) }
+    var q by rememberSaveable(name) { mutableStateOf("") }
+    val list = if (q.isBlank()) hist.filter { monthKey(it.first.date) == month } else hist.filter { matches(it.first, q) }
+    val bal = p?.balance ?: 0.0
+    val state = rememberLazyListState()
+    Box(Modifier.fillMaxSize()) {
+        LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
+            item {
+                KhataTop(name, if (hist.size == 1) "1 entry" else "${hist.size} entries", onBack, back = true) {
+                    SumCard(
+                        Triple(money(currency, kotlin.math.abs(bal)), if (bal > 0.005) "Receivable" else if (bal < -0.005) "Payable" else "Settled",
+                            if (bal > 0.005) GreenIn else if (bal < -0.005) RedSpend else MaterialTheme.colorScheme.onSurfaceVariant),
+                        Triple(money(currency, p?.gave ?: 0.0), "You paid", RedSpend),
+                        "Report ›", onReport
+                    )
+                }
+            }
+            item { SearchBox(q, "Search") { q = it } }
+            if (q.isBlank() && months.size > 1) stickyHeader { MonthChips(months, month) { month = it } }
+            item { RegHead("Entries", "YOU PAID", "YOU RECEIVED") }
+            items(list, key = { it.first.id }) { (e, b) ->
+                val note = e.note.ifBlank { e.item.takeIf { it != "Loans" } ?: "" }
+                RegRow(
+                    null, dayFmt.format(Date(e.date)) + " • " + timeFmt.format(Date(e.date)) + if (note.isNotBlank()) " · $note" else "",
+                    b, personHistoryIsOutflow(e), e.amount, currency
+                ) { onEdit(e) }
+            }
+            if (list.isEmpty()) item {
+                Text("No entries with $name yet.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp, modifier = Modifier.padding(24.dp))
+            }
+        }
+        UpButton(state)
+        Pills(Pill("YOU PAID", OutBrush) { onAdd(true) }, Pill("YOU RECEIVED", InBrush) { onAdd(false) })
     }
 }
 
-@Composable
-private fun CashRow(e: Entry, onClick: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).clickable { onClick() }.padding(horizontal = 14.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(title(e), fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(
-                (timeFmt.format(Date(e.date)) + if (e.note.isNotBlank()) " · " + e.note else ""),
-                fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis
-            )
-        }
-        Text(if (cashOut(e)) fmt(e.amount) else "", Modifier.width(84.dp), color = RedSpend, fontWeight = FontWeight.Bold, fontSize = 14.sp, textAlign = TextAlign.End)
-        Text(if (cashIn(e)) fmt(e.amount) else "", Modifier.width(84.dp), color = GreenIn, fontWeight = FontWeight.Bold, fontSize = 14.sp, textAlign = TextAlign.End)
-    }
-    HorizontalDivider(Modifier.padding(horizontal = 14.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
-}
 
 // ---------------------------------------------------------------- Expense / Income
 
