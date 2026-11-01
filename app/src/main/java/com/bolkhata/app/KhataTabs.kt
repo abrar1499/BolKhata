@@ -79,7 +79,7 @@ val KHATA_TABS = listOf(Tab.HOME, Tab.PARTIES, Tab.CASHBOOK, Tab.EXPENSE, Tab.IN
 @Composable
 fun KhataNav(tab: Tab, onTab: (Tab) -> Unit) {
     Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 6.dp) {
-        Row(Modifier.fillMaxWidth().navigationBarsPadding().height(58.dp)) {
+        Row(Modifier.fillMaxWidth().navigationBarsPadding().height(52.dp)) {
             KHATA_TABS.forEach { t ->
                 val (label, icon) = navItem(t)
                 val on = t == tab
@@ -88,8 +88,8 @@ fun KhataNav(tab: Tab, onTab: (Tab) -> Unit) {
                     Modifier.weight(1f).fillMaxHeight().clickable { onTab(t) },
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
                 ) {
-                    Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(22.dp))
-                    Text(label, fontSize = 11.sp, color = tint, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium)
+                    Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(20.dp))
+                    Text(label, fontSize = 10.sp, color = tint, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium)
                 }
             }
         }
@@ -108,18 +108,18 @@ private fun navItem(t: Tab): Pair<String, ImageVector> = when (t) {
 @Composable
 private fun KhataTop(title: String, subtitle: String, onMenu: () -> Unit, back: Boolean = false, card: @Composable () -> Unit) {
     Box(Modifier.fillMaxWidth()) {
-        Box(Modifier.matchParentSize().padding(bottom = 36.dp).background(EmberBrush))
+        Box(Modifier.matchParentSize().padding(bottom = 30.dp).background(EmberBrush))
         Column(Modifier.statusBarsPadding().padding(horizontal = 14.dp)) {
-            Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onMenu) {
                     Icon(if (back) Icons.AutoMirrored.Filled.ArrowBack else Icons.Filled.Menu, contentDescription = if (back) "Back" else "Menu", tint = Color.White)
                 }
                 Column {
-                    Text(title, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    if (subtitle.isNotEmpty()) Text(subtitle, color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp)
+                    Text(title, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (subtitle.isNotEmpty()) Text(subtitle, color = Color.White.copy(alpha = 0.85f), fontSize = 11.sp)
                 }
             }
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(8.dp))
             card()
         }
     }
@@ -128,19 +128,19 @@ private fun KhataTop(title: String, subtitle: String, onMenu: () -> Unit, back: 
 /** White card with two figures side by side and a small link at the end. */
 @Composable
 private fun SumCard(a: Triple<String, String, Color>, b: Triple<String, String, Color>, link: String, onLink: () -> Unit) {
-    Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 4.dp) {
-        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+    Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 3.dp) {
+        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
             listOf(a, b).forEachIndexed { i, (value, label, color) ->
                 if (i > 0) VerticalDivider(Modifier.fillMaxHeight(), color = MaterialTheme.colorScheme.outlineVariant)
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(value, color = color, fontSize = 19.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                    Text(label, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(value, color = color, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                    Text(label, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             VerticalDivider(Modifier.fillMaxHeight(), color = MaterialTheme.colorScheme.outlineVariant)
             Text(
-                link, color = Ember, fontSize = 13.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
-                modifier = Modifier.width(72.dp).clickable { onLink() }.padding(vertical = 8.dp)
+                link, color = Ember, fontSize = 12.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
+                modifier = Modifier.width(64.dp).clickable { onLink() }.padding(vertical = 8.dp)
             )
         }
     }
@@ -151,23 +151,42 @@ private fun SumCard(a: Triple<String, String, Color>, b: Triple<String, String, 
 private fun SearchBox(q: String, hint: String, onChange: (String) -> Unit) {
     val sub = MaterialTheme.colorScheme.onSurfaceVariant
     Row(
-        Modifier.padding(horizontal = 14.dp, vertical = 10.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp))
+        Modifier.padding(horizontal = 14.dp, vertical = 8.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp))
             .background(MaterialTheme.colorScheme.surface)
             .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(Icons.Filled.Search, contentDescription = null, tint = sub, modifier = Modifier.size(20.dp))
+        Icon(Icons.Filled.Search, contentDescription = null, tint = sub, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(8.dp))
         Box(Modifier.weight(1f)) {
-            if (q.isEmpty()) Text(hint, color = sub, fontSize = 14.sp)
+            if (q.isEmpty()) Text(hint, color = sub, fontSize = 13.sp)
             BasicTextField(
                 q, onChange, singleLine = true, modifier = Modifier.fillMaxWidth(),
-                textStyle = TextStyle(fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface),
+                textStyle = TextStyle(fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface),
                 cursorBrush = SolidColor(Ember)
             )
         }
     }
+}
+
+/** Round letter badge for a party or an income source. */
+@Composable
+private fun Initial(name: String) {
+    Box(Modifier.size(34.dp).clip(CircleShape).background(MaterialTheme.colorScheme.background), contentAlignment = Alignment.Center) {
+        Text(name.trim().take(1).uppercase(), color = Ember, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+    }
+}
+
+/** Small filter chip (All / Receivable / Payable). */
+@Composable
+private fun SmallChip(label: String, on: Boolean, onClick: () -> Unit) {
+    Text(
+        label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (on) Color.White else MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.clip(CircleShape).background(if (on) Ember else MaterialTheme.colorScheme.surface)
+            .border(1.dp, if (on) Ember else MaterialTheme.colorScheme.outlineVariant, CircleShape)
+            .clickable { onClick() }.padding(horizontal = 12.dp, vertical = 5.dp)
+    )
 }
 
 /** One small gradient pill button. */
@@ -183,8 +202,8 @@ private fun BoxScope.Pills(vararg pills: Pill) {
         pills.forEach { p ->
             Box(
                 Modifier.shadow(4.dp, CircleShape).clip(CircleShape).background(p.brush).clickable { p.onClick() }
-                    .padding(horizontal = 18.dp, vertical = 9.dp)
-            ) { Text(p.label, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.3.sp) }
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) { Text(p.label, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.3.sp) }
         }
     }
 }
@@ -217,10 +236,8 @@ fun PartiesScreen(
                 }
             }
             item {
-                Row(Modifier.padding(start = 14.dp, top = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf("All", "Receivable", "Payable").forEachIndexed { i, t ->
-                        FilterChip(selected = filter == i, onClick = { filter = i }, label = { Text(t, fontSize = 13.sp) }, shape = CircleShape)
-                    }
+                Row(Modifier.padding(start = 14.dp, top = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("All", "Receivable", "Payable").forEachIndexed { i, t -> SmallChip(t, filter == i) { filter = i } }
                 }
             }
             item { SearchBox(q, if (shown.size == 1) "1 party" else "${shown.size} parties") { q = it } }
@@ -239,23 +256,21 @@ private fun PartyRow(p: PersonAcct, currency: String, onClick: () -> Unit) {
     val bal = p.balance
     val color = if (bal > 0.005) GreenIn else if (bal < -0.005) RedSpend else MaterialTheme.colorScheme.onSurfaceVariant
     Row(
-        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).clickable { onClick() }.padding(horizontal = 14.dp, vertical = 11.dp),
+        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).clickable { onClick() }.padding(horizontal = 14.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.background), contentAlignment = Alignment.Center) {
-            Text(p.name.take(1).uppercase(), color = Ember, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-        }
+        Initial(p.name)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(p.name, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            p.history.lastOrNull()?.let { Text(lastSeen(it.first.date), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            Text(p.name, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            p.history.lastOrNull()?.let { Text(lastSeen(it.first.date), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
         Column(horizontalAlignment = Alignment.End) {
-            Text(money(currency, kotlin.math.abs(bal)), color = color, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-            Text(if (bal > 0.005) "Receivable" else if (bal < -0.005) "Payable" else "Settled", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(money(currency, kotlin.math.abs(bal)), color = color, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.padding(start = 8.dp))
+            Text(if (bal > 0.005) "Receivable" else if (bal < -0.005) "Payable" else "Settled", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
-    HorizontalDivider(Modifier.padding(start = 66.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+    HorizontalDivider(Modifier.padding(start = 60.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
 }
 
 // ---------------------------------------------------------------- Cash book and party khata (one register look)
@@ -330,11 +345,11 @@ private fun RegRow(title: String?, whenText: String, bal: Double, out: Boolean, 
         }
         ColLine()
         Box(Modifier.width(ColW).fillMaxHeight().background(OutTint).padding(end = 12.dp), contentAlignment = Alignment.CenterEnd) {
-            if (out) Text(fmt(amount), color = RedSpend, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            if (out) Text(fmt(amount), color = RedSpend, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
         }
         ColLine()
         Box(Modifier.width(ColW).fillMaxHeight().padding(end = 12.dp), contentAlignment = Alignment.CenterEnd) {
-            if (!out) Text(fmt(amount), color = GreenIn, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            if (!out) Text(fmt(amount), color = GreenIn, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
         }
     }
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f))
@@ -514,8 +529,10 @@ fun MoneyScreen(
     val thisMonth = list.filter { it.date >= thisStart }.sumOf { it.amount }
     val lastMonth = list.filter { it.date in lastStart until thisStart }.sumOf { it.amount }
     val total = list.sumOf { it.amount }
-    val byCat = list.groupBy { it.category }.map { (c, l) -> c to l.sumOf { it.amount } }.sortedByDescending { it.second }
-    val open = remember(income) { mutableStateListOf<Cat>() }
+    // Expense by category; income by who paid (like the party list).
+    val groups = (if (income) list.groupBy { source(it).lowercase() }.map { (_, l) -> Group(source(l.first()), null, l) }
+    else list.groupBy { it.category }.map { (c, l) -> Group(c.label, c, l) }).sortedByDescending { it.total }
+    val open = remember(income) { mutableStateListOf<String>() }
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
             item {
@@ -523,27 +540,32 @@ fun MoneyScreen(
                     SumCard(Triple(money(currency, lastMonth), "Last month", color), Triple(money(currency, thisMonth), "This month", color), "Report ›", onReport)
                 }
             }
-            if (byCat.isNotEmpty()) item { Heading("By category", "Total " + money(currency, total)) }
-            byCat.forEach { (c, v) ->
-                val isOpen = c in open
-                item(key = "c" + c.name) {
-                    val share = if (total > 0) (v / total).toFloat() else 0f
+            if (groups.isNotEmpty()) item { Heading(if (income) "By source" else "By category", "Total " + money(currency, total)) }
+            groups.forEach { g ->
+                val isOpen = g.name in open
+                item(key = "g" + g.name) {
+                    val share = if (total > 0) (g.total / total).toFloat() else 0f
                     Row(
                         Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface)
-                            .clickable { if (isOpen) open.remove(c) else open.add(c) }.padding(start = 14.dp, end = 8.dp, top = 9.dp, bottom = 9.dp),
+                            .clickable { if (isOpen) open.remove(g.name) else open.add(g.name) }.padding(start = 14.dp, end = 8.dp, top = 7.dp, bottom = 7.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        CatBubble(c, 36.dp)
+                        if (g.cat != null) CatBubble(g.cat, 32.dp) else Initial(g.name)
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(c.label, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                            Box(Modifier.padding(top = 5.dp).fillMaxWidth().height(6.dp).clip(CircleShape).background(MaterialTheme.colorScheme.outlineVariant)) {
-                                Box(Modifier.fillMaxWidth(share).fillMaxHeight().clip(CircleShape).background(catColor(c)))
+                            Text(g.name, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            if (g.cat != null) {
+                                Box(Modifier.padding(top = 4.dp).fillMaxWidth().height(5.dp).clip(CircleShape).background(MaterialTheme.colorScheme.outlineVariant)) {
+                                    Box(Modifier.fillMaxWidth(share).fillMaxHeight().clip(CircleShape).background(catColor(g.cat)))
+                                }
+                            } else {
+                                Text(lastSeen(g.list.maxOf { it.date }), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                         Column(Modifier.padding(start = 12.dp), horizontalAlignment = Alignment.End) {
-                            Text(fmt(v), fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                            Text("${Math.round(share * 100)}%", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(fmt(g.total), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = if (g.cat == null) color else MaterialTheme.colorScheme.onSurface)
+                            Text(if (g.cat != null) "${Math.round(share * 100)}%" else if (g.list.size == 1) "1 entry" else "${g.list.size} entries",
+                                fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Icon(
                             if (isOpen) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown, contentDescription = null,
@@ -552,11 +574,11 @@ fun MoneyScreen(
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
                 }
-                // A category's own entries open right under it.
-                if (isOpen) items(list.filter { it.category == c }, key = { it.id }) { e ->
+                // A group's own entries open right under it.
+                if (isOpen) items(g.list, key = { it.id }) { e ->
                     Row(
                         Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).clickable { onEdit(e) }
-                            .padding(start = 62.dp, end = 14.dp, top = 8.dp, bottom = 8.dp),
+                            .padding(start = 58.dp, end = 14.dp, top = 7.dp, bottom = 7.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(Modifier.weight(1f)) {
@@ -566,7 +588,7 @@ fun MoneyScreen(
                         }
                         Text(fmt(e.amount), color = color, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
-                    HorizontalDivider(Modifier.padding(start = 62.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                    HorizontalDivider(Modifier.padding(start = 58.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
                 }
             }
             if (list.isEmpty()) item {
@@ -577,9 +599,22 @@ fun MoneyScreen(
     }
 }
 
+/** A row on the Expense / Income page: a category, or for income the one who paid. */
+private class Group(val name: String, val cat: Cat?, val list: List<Entry>) {
+    val total = list.sumOf { it.amount }
+}
+
+/** Who an income came from: the payer's name, or "From X" read from a bank alert's note. */
+internal fun source(e: Entry): String {
+    val generic = e.item.isBlank() || e.item.equals("Transfer", true) || e.item.equals("Income", true)
+    if (!generic) return e.item.trim()
+    Regex("""(?i)\bfrom\s+([^.,\d]+)""").find(e.note)?.let { return it.groupValues[1].trim() }
+    return e.person.ifBlank { e.item.ifBlank { "Income" } }
+}
+
 @Composable
 private fun Heading(left: String, right: String) {
-    Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 6.dp)) {
+    Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 6.dp)) {
         Text(left, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
         Text(right, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
