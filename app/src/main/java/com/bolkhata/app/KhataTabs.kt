@@ -335,16 +335,26 @@ private fun ColLine() = VerticalDivider(Modifier.fillMaxHeight(), color = Materi
 
 /** One entry: optional title, date or time, a Bal. tag, and the amount in the Out (tinted) or In column. */
 @Composable
-private fun RegRow(title: String?, whenText: String, bal: Double, out: Boolean, amount: Double, currency: String, note: String = "", onClick: () -> Unit) {
+private fun RegRow(
+    title: String?, whenText: String, bal: Double, out: Boolean, amount: Double, currency: String, note: String = "",
+    dateAt: Long? = null, onClick: () -> Unit
+) {
     val sub = MaterialTheme.colorScheme.onSurfaceVariant
     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).background(MaterialTheme.colorScheme.surface).clickable { onClick() }) {
-        Column(Modifier.weight(1f).padding(horizontal = 14.dp, vertical = 3.dp)) {
+        // Party khata: date and time in their own small column on the left, like the Expense entries.
+        if (dateAt != null) Column(Modifier.width(62.dp).padding(start = 14.dp, top = 3.dp, bottom = 3.dp), verticalArrangement = Arrangement.Center) {
+            Text(shortDay.format(Date(dateAt)), fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            Text(timeFmt.format(Date(dateAt)), fontSize = 9.sp, color = sub, maxLines = 1)
+        }
+        Column(Modifier.weight(1f).padding(start = if (dateAt != null) 0.dp else 14.dp, end = 14.dp, top = 3.dp, bottom = 3.dp)) {
             if (title != null) Text(title, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             // The time stays small; the note after it is a little larger so it reads easily.
-            Text(
+            if (whenText.isNotEmpty() || note.isNotBlank()) Text(
                 buildAnnotatedString {
                     append(whenText)
-                    if (note.isNotBlank()) withStyle(SpanStyle(fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface)) { append(" · $note") }
+                    if (note.isNotBlank()) withStyle(SpanStyle(fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface)) {
+                        append((if (whenText.isNotEmpty()) " · " else "") + note)
+                    }
                 },
                 fontSize = 10.sp, lineHeight = 14.sp, color = sub, maxLines = 1, overflow = TextOverflow.Ellipsis
             )
@@ -511,8 +521,7 @@ fun PartyKhataScreen(
             items(list, key = { it.first.id }) { (e, b) ->
                 val note = e.note.ifBlank { e.item.takeIf { it != "Loans" } ?: "" }
                 RegRow(
-                    null, dayFmt.format(Date(e.date)) + " • " + timeFmt.format(Date(e.date)),
-                    b, personHistoryIsOutflow(e), e.amount, currency, note
+                    null, "", b, personHistoryIsOutflow(e), e.amount, currency, note, dateAt = e.date
                 ) { onEdit(e) }
             }
             if (list.isEmpty()) item {
