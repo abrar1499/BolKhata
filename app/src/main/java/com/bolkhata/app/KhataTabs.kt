@@ -318,7 +318,7 @@ private fun RegHead(left: String, out: String, inn: String, outSub: String = "",
         listOf(Triple(out, outSub, RedSpend), Triple(inn, inSub, GreenIn)).forEach { (t, s, c) ->
             ColLine()
             Column(Modifier.width(ColW).padding(end = 12.dp, top = 6.dp, bottom = 6.dp), horizontalAlignment = Alignment.End) {
-                Text(t, fontSize = 11.sp, color = sub, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                Text(t, fontSize = 10.sp, color = sub, fontWeight = FontWeight.SemiBold, maxLines = 1)
                 if (s.isNotEmpty()) Text(s, fontSize = 12.sp, color = c, fontWeight = FontWeight.Bold, maxLines = 1)
             }
         }
@@ -493,7 +493,11 @@ fun PartyKhataScreen(
             }
             item { SearchBox(q, "Search") { q = it } }
             if (q.isBlank() && months.size > 1) stickyHeader { MonthChips(months, month) { month = it } }
-            item { RegHead("Entries", "YOU PAID", "YOU RECEIVED") }
+            item {
+                val paid = list.filter { personHistoryIsOutflow(it.first) }.sumOf { it.first.amount }
+                val got = list.filter { !personHistoryIsOutflow(it.first) }.sumOf { it.first.amount }
+                RegHead("Entries", "You paid", "You received", "↑ " + fmt(paid), "↓ " + fmt(got))
+            }
             items(list, key = { it.first.id }) { (e, b) ->
                 val note = e.note.ifBlank { e.item.takeIf { it != "Loans" } ?: "" }
                 RegRow(
