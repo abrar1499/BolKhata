@@ -33,7 +33,7 @@ jobs:
       - name: Build
         run: |
           set -o pipefail
-          gradle testDebugUnitTest assembleRelease --no-daemon 2>&1 | tee build.log || {
+          gradle testReleaseUnitTest assembleRelease --no-daemon 2>&1 | tee build.log || {
             grep -E "^e: |What went wrong" -A2 build.log | head -40 | while IFS= read -r l; do echo "::error::$l"; done
             exit 1
           }
