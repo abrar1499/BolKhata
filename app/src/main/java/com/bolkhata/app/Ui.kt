@@ -197,7 +197,7 @@ fun BolTheme(dark: Boolean, content: @Composable () -> Unit) {
         onPrimaryContainer = Color(0xFF065F46),
         secondaryContainer = Color(0xFFD1FAE5),
         onSecondaryContainer = Color(0xFF065F46),
-        background = Color(0xFFECECEC), // ChatGPT-like grey page, white cards stand out on it
+        background = Color(0xFFF9F9F9),
         onBackground = Color(0xFF0D0D0D),
         surface = Color.White,
         onSurface = Color(0xFF0D0D0D),
@@ -241,6 +241,9 @@ fun dayLabel(d: Long): String {
         else -> SimpleDateFormat("d MMM yyyy", Locale.US).format(Date(d))
     }
 }
+
+/** "31 Oct 2026", always the date (home's day rows add "Today" / "Yesterday" beside it). */
+fun dayDate(d: Long): String = SimpleDateFormat("d MMM yyyy", Locale.US).format(Date(d))
 
 /** Time the entry was added, e.g. "7:51 AM". */
 fun timeLabel(ms: Long): String = SimpleDateFormat("h:mm a", Locale.US).format(Date(ms))

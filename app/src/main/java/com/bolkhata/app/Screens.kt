@@ -31,7 +31,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -247,11 +246,7 @@ fun HomeScreen(
             item {
                 Box(Modifier.padding(horizontal = 16.dp)) {
                     val s = dailyCashSummary(entries, todayList)
-                    val restOfMonth = d.monthGroups.entries.firstOrNull()?.let { (k, l) ->
-                        if (cal(l.first().date).get(Calendar.MONTH) == Calendar.getInstance().get(Calendar.MONTH) &&
-                            cal(l.first().date).get(Calendar.YEAR) == Calendar.getInstance().get(Calendar.YEAR)) d.monthDays[k].orEmpty().size else 0
-                    } ?: 0
-                    DayLine(todayList.first().date, todayList, "today" in open, s.cashIn, s.cashOut, first = true, last = restOfMonth == 0) { toggle("today") }
+                    DayLine(dayDate(todayList.first().date), todayList.size, "today" in open, s.cashIn, s.cashOut, "Today") { toggle("today") }
                 }
             }
             if ("today" in open) {
@@ -290,15 +285,13 @@ fun HomeScreen(
                 }
             }
             if (thisMonth || key in open) {
-                val days = (d.monthDays[key] ?: emptyMap()).toList()
-                days.forEachIndexed { i, (day, dayList) ->
+                (d.monthDays[key] ?: emptyMap()).forEach { (day, dayList) ->
                     val dKey = "day-$day"
                     item(key = "md-$key-$day") {
                         Box(Modifier.padding(horizontal = 16.dp)) {
                             val s = dailyCashSummary(entries, dayList)
-                            // This month's first day opens the card (unless Today is above it); a past month's days hang under its row.
-                            val first = i == 0 && thisMonth && todayList.isEmpty()
-                            DayLine(dayList.first().date, dayList, dKey in open, s.cashIn, s.cashOut, first, last = i == days.lastIndex) { toggle(dKey) }
+                            val day0 = dayList.first().date
+                            DayLine(dayDate(day0), dayList.size, dKey in open, s.cashIn, s.cashOut, if (dayLabel(day0) == "Yesterday") "Yesterday" else "") { toggle(dKey) }
                         }
                     }
                     if (dKey in open) dayEntries(dayList, currency, onEdit)
@@ -437,23 +430,35 @@ private fun YearHeader(title: String, income: Double, expense: Double, expanded:
 /** A month: a premium card with a colour edge, the month's name, entry count, income and expense. */
 @Composable
 private fun MonthHeader(title: String, count: Int, income: Double, expense: Double, expanded: Boolean, onToggle: () -> Unit) {
-    // A past month: a soft green band (its name in dark green, out / in as plain numbers); open, its days hang under it.
-    val sub = MaterialTheme.colorScheme.onSurfaceVariant
-    val shape = if (expanded) RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp) else RoundedCornerShape(16.dp)
+    val primary = MaterialTheme.colorScheme.primary
+    val tertiary = MaterialTheme.colorScheme.tertiary
     Row(
-        Modifier.padding(top = 10.dp).fillMaxWidth().clip(shape).background(MaterialTheme.colorScheme.surface)
-            .background(GreenDeep.copy(alpha = 0.10f)).clickable { onToggle() }
-            .padding(start = 14.dp, end = 8.dp, top = 11.dp, bottom = 11.dp),
+        Modifier
+            .padding(top = 10.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .background(Brush.horizontalGradient(listOf(primary.copy(alpha = 0.10f), tertiary.copy(alpha = 0.04f))))
+            .border(1.dp, primary.copy(alpha = if (expanded) 0.35f else 0.15f), RoundedCornerShape(14.dp))
+            .clickable { onToggle() }
+            .height(IntrinsicSize.Min),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(title, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, color = GreenDeep, maxLines = 1)
+        Box(Modifier.width(5.dp).fillMaxHeight().background(Brush.verticalGradient(listOf(primary, tertiary))))
+        // One line: name, count, in / out — slim but still stands out from the days.
+        Text(title, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, maxLines = 1,
+            modifier = Modifier.padding(start = 12.dp, top = 9.dp, bottom = 9.dp))
         Spacer(Modifier.width(6.dp))
-        Text("$count", fontSize = 10.sp, color = sub, maxLines = 1)
+        Text("$count", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
         Spacer(Modifier.weight(1f))
-        if (expense > 0) Text("↑ " + fmt(expense), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = RedSpend)
-        if (expense > 0 && income > 0) Spacer(Modifier.width(8.dp))
-        if (income > 0) Text("↓ " + fmt(income), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = GreenIn)
-        SoftChevron(expanded)
+        if (expense > 0) MiniFlowChip(fmt(expense), RedSpend, Icons.Filled.ArrowUpward, 13)
+        if (expense > 0 && income > 0) Spacer(Modifier.width(5.dp))
+        if (income > 0) MiniFlowChip(fmt(income), GreenIn, Icons.Filled.ArrowDownward, 13)
+        Icon(
+            if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+            contentDescription = if (expanded) "Close" else "Open",
+            tint = primary, modifier = Modifier.padding(start = 4.dp, end = 8.dp).size(20.dp)
+        )
     }
 }
 
@@ -472,63 +477,36 @@ private fun MiniFlowChip(text: String, color: Color, icon: ImageVector, size: In
 
 /** A day inside a month: one slim line (date, count, small in / out), opens on tap. */
 @Composable
-private fun DayLine(date: Long, list: List<Entry>, expanded: Boolean, cashIn: Double, cashOut: Double, first: Boolean, last: Boolean, onToggle: () -> Unit) {
-    // A slim white row: a small date box (31 / FRI), the day's name with "3 entries · Food, Bills" under it, then in / out.
-    val sub = MaterialTheme.colorScheme.onSurfaceVariant
-    // The days of a month sit in one white card: only the first and last row round off, thin lines between.
-    val top = if (first) 14.dp else 0.dp
-    val bottom = if (last && !expanded) 14.dp else 0.dp
-    val shape = RoundedCornerShape(topStart = top, topEnd = top, bottomStart = bottom, bottomEnd = bottom)
-    val c = cal(date)
-    val name = dayLabel(date).takeIf { it == "Today" || it == "Yesterday" } ?: SimpleDateFormat("EEEE", Locale.US).format(Date(date))
-    val kinds = list.map { it.category.label }.distinct().take(2).joinToString(", ")
-    if (!first) Box(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface)) {
-        HorizontalDivider(Modifier.padding(start = 52.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-    }
+private fun DayLine(title: String, count: Int, expanded: Boolean, cashIn: Double, cashOut: Double, tag: String = "", onToggle: () -> Unit) {
+    val (bar, ink, sub) = slateColors()
+    val shape = if (expanded) RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp) else RoundedCornerShape(12.dp)
     Row(
         Modifier
+            .padding(top = 6.dp)
             .fillMaxWidth()
             .clip(shape)
-            .background(MaterialTheme.colorScheme.surface)
-            .background(Color.Transparent)
+            .background(bar.copy(alpha = 0.7f))
             .clickable { onToggle() }
-            .padding(start = 8.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+            .padding(start = 12.dp, end = 6.dp, top = 7.dp, bottom = 7.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(
-            Modifier.size(34.dp).clip(RoundedCornerShape(10.dp))
-                .background(if (expanded) GreenDeep else MaterialTheme.colorScheme.surfaceVariant),
-            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
-        ) {
-            val on = if (expanded) Color.White else MaterialTheme.colorScheme.onSurface
-            Text("${c.get(Calendar.DAY_OF_MONTH)}", fontSize = 13.sp, lineHeight = 14.sp, fontWeight = FontWeight.Bold, color = on)
-            Text(SimpleDateFormat("MMM", Locale.US).format(Date(date)).uppercase(), fontSize = 8.sp, lineHeight = 9.sp, color = if (expanded) Color.White else sub)
+        Text(title, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = ink, maxLines = 1)
+        // "31 Oct 2026  Today": the date in line with the other days, today / yesterday small after it.
+        if (tag.isNotEmpty()) {
+            Spacer(Modifier.width(6.dp))
+            Text(tag, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = GreenDeep, maxLines = 1)
         }
-        Spacer(Modifier.width(10.dp))
-        Column(Modifier.weight(1f)) {
-            Text(name, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, lineHeight = 15.sp, maxLines = 1)
-            Text(
-                (if (list.size == 1) "1 entry" else "${list.size} entries") + if (kinds.isEmpty()) "" else " · $kinds",
-                fontSize = 10.sp, lineHeight = 12.sp, color = sub, maxLines = 1, overflow = TextOverflow.Ellipsis
-            )
-        }
-        // Plain coloured numbers (no pills), so only the month band carries colour.
-        Column(horizontalAlignment = Alignment.End) {
-            if (cashOut > 0) Text("−" + fmt(cashOut), fontSize = 13.sp, lineHeight = 15.sp, fontWeight = FontWeight.Bold, color = RedSpend)
-            if (cashIn > 0) Text("+" + fmt(cashIn), fontSize = 13.sp, lineHeight = 15.sp, fontWeight = FontWeight.Bold, color = GreenIn)
-        }
-        SoftChevron(expanded)
+        Spacer(Modifier.width(6.dp))
+        Text(if (count == 1) "1 entry" else "$count entries", fontSize = 9.sp, color = sub, maxLines = 1)
+        Spacer(Modifier.weight(1f))
+        if (cashOut > 0) MiniFlowChip(fmt(cashOut), RedSpend, Icons.Filled.ArrowUpward, 12)
+        if (cashOut > 0 && cashIn > 0) Spacer(Modifier.width(5.dp))
+        if (cashIn > 0) MiniFlowChip(fmt(cashIn), GreenIn, Icons.Filled.ArrowDownward, 12)
+        Icon(
+            if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+            contentDescription = if (expanded) "Close" else "Open", tint = sub, modifier = Modifier.size(18.dp).padding(start = 2.dp)
+        )
     }
-}
-
-/** A thin, faint ">" that turns down when the row is open. */
-@Composable
-private fun SoftChevron(open: Boolean) {
-    Icon(
-        Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = if (open) "Close" else "Open",
-        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
-        modifier = Modifier.padding(start = 4.dp).size(18.dp).rotate(if (open) 90f else 0f)
-    )
 }
 
 /** Income (green, in) and expense (red, out) chips; a zero side is left out. */
@@ -584,18 +562,16 @@ private fun GroupedTxRow(e: Entry, currency: String, first: Boolean, last: Boole
             .fillMaxWidth()
             .clip(shape)
             .background(MaterialTheme.colorScheme.surface)
-            // The open day's entries sit on soft grey, a little indented, so they read as inside the day.
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
             .entryTap(e, onClick)
     ) {
         if (!first) {
             HorizontalDivider(
-                Modifier.padding(start = 79.dp),
+                Modifier.padding(start = 59.dp),
                 thickness = 1.dp,
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
             )
         }
-        Box(Modifier.padding(start = 20.dp)) { TxRowContent(e, currency, showDate = false) }
+        TxRowContent(e, currency, showDate = false)
     }
 }
 
