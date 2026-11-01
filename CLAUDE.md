@@ -3,7 +3,8 @@
 Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Package `com.bolkhata.app`.
 
 ## Talking to the owner
-- Reply in short, simple Hinglish (Roman Urdu). No long explanations unless asked.
+- Reply in short, simple Hinglish (Roman Urdu): 2-4 short lines, the point first. No long explanations, tables or
+  lists of every detail unless asked.
 - Ask before every release. Never release without a clear "haan/release kar do" (or "build kar do").
 - Once the owner said release/build: finish it. If the release build fails, fix it on the branch and release
   again without asking a second time; report only the final result (link) or what still can't be fixed.
