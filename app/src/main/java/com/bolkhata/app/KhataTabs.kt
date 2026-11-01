@@ -337,7 +337,7 @@ private fun RegRow(title: String?, whenText: String, bal: Double, out: Boolean, 
     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).background(MaterialTheme.colorScheme.surface).clickable { onClick() }) {
         Column(Modifier.weight(1f).padding(horizontal = 14.dp, vertical = 5.dp)) {
             if (title != null) Text(title, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(whenText, fontSize = 10.sp, color = sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(whenText, fontSize = 11.sp, color = sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
                 "Bal. " + money(currency, kotlin.math.abs(bal)), fontSize = 10.sp, color = sub,
                 modifier = Modifier.padding(top = 2.dp).clip(RoundedCornerShape(4.dp))
@@ -596,7 +596,7 @@ fun MoneyScreen(
                         }
                         Column(Modifier.weight(1f).padding(end = 8.dp, top = 5.dp, bottom = 5.dp)) {
                             Text(title(e), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            if (e.note.isNotBlank()) Text(e.note, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            if (e.note.isNotBlank()) Text(e.note, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                         ColLine()
                         Box(
