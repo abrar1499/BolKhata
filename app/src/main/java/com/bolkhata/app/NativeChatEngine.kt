@@ -360,6 +360,8 @@ object NativeChatEngine {
      * name or note has those words move into the named category (Food). Null when no category is named as the target.
      */
     private fun moveToCategory(lower: String, entries: List<Entry>): Fixed? {
+        // "chai 50 food me daal do" is a new entry, not a move.
+        if (lower.any(Char::isDigit)) return null
         val m = intoCategory.findAll(lower).lastOrNull() ?: return null
         val word = m.groupValues[1]
         val target = Query.catWords[word]?.takeIf { it != Cat.UDHAAR } ?: return null
