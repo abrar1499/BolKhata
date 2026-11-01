@@ -119,7 +119,7 @@ private fun KhataTop(title: String, subtitle: String, onMenu: () -> Unit, back: 
                 IconButton(onClick = onMenu) {
                     Icon(if (back) Icons.AutoMirrored.Filled.ArrowBack else Icons.Filled.Menu, contentDescription = if (back) "Back" else "Menu", tint = Color.White)
                 }
-                Column {
+                if (title.isNotEmpty()) Column {
                     Text(title, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (subtitle.isNotEmpty()) Text(subtitle, color = Color.White.copy(alpha = 0.85f), fontSize = 11.sp)
                 }
@@ -236,7 +236,7 @@ fun PartiesScreen(
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
             item {
-                KhataTop("Parties", if (accts.size == 1) "1 party" else "${accts.size} parties", onMenu) {
+                KhataTop("", "", onMenu) {
                     SumCard(Triple(money(currency, pay), "Payable", RedSpend), Triple(money(currency, rec), "Receivable", GreenIn), "Report ›", onReport)
                 }
             }
