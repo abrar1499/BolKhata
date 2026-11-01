@@ -501,3 +501,23 @@ class NativeChatEngineNameAnswerTest {
         assertTrue(r.text.contains("Shahbaz"))
     }
 }
+
+class NativeChatEngineAfterEntryTest {
+    private val contacts = listOf("Shahbaz", "Qaisar Shahbaz Ghulam")
+    private val back = Entry("b1", Type.WAPIS_MILA, 315.0, Cat.UDHAAR, "Loans", "Shahbaz", "Shahbaz returned", 1_000_000L, 1_000_000L)
+    private val other = Entry("o1", Type.KHARCHA, 40.0, Cat.KHANA, "Lunch", "", "lunch", 2_000_000L, 2_000_000L)
+
+    @Test fun newEntriesGoRightAfterTheNamedOne() {
+        val r = NativeChatEngine.interpret("315 wali entry k bad 170 riyal ka food mess ar 15 riyal ka wifi bill dal do", listOf(back, other), contacts)
+        assertEquals("entry_after", r.kind)
+        assertEquals(setOf("b1"), r.filter.ids)
+        assertTrue(r.text.startsWith("170"))
+    }
+
+    @Test fun englishAfterWithAPerson() {
+        val r = NativeChatEngine.interpret("170 riyal food mess after shabaz return 315 on the same day", listOf(back, other), contacts)
+        assertEquals("entry_after", r.kind)
+        assertEquals(setOf("b1"), r.filter.ids)
+        assertEquals("170 riyal food mess", r.text)
+    }
+}
