@@ -58,6 +58,8 @@ import kotlinx.coroutines.launch
 // (Parties, Cash book, Expense, Income) next to Home. Every number comes from the saved entries.
 
 private val Ember = Color(0xFFE3342F)
+/** Colour at the top of the orange header, also used for the status bar. */
+internal val EmberTop = Color(0xFFF0572E)
 internal val EmberBrush = Brush.linearGradient(listOf(Color(0xFFF0572E), Color(0xFFE3342F)))
 private val OutBrush = Brush.horizontalGradient(listOf(Color(0xFF8E1414), Color(0xFFD13A33)))
 private val InBrush = Brush.horizontalGradient(listOf(Color(0xFF0F7A3A), Color(0xFF3FB46B)))

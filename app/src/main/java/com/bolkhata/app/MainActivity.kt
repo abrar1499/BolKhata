@@ -58,8 +58,9 @@ class MainActivity : ComponentActivity() {
             val header = headerTheme(themeName, dark)
             LaunchedEffect(header) {
                 @Suppress("DEPRECATION")
-                window.statusBarColor = header.c1.toArgb()
-                WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = header.light
+                // The orange khata header runs up under the status bar.
+                window.statusBarColor = EmberTop.toArgb()
+                WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = false
             }
             CompositionLocalProvider(LocalHeader provides header) {
                 BolTheme(dark) {
