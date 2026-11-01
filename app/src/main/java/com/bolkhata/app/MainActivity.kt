@@ -1838,15 +1838,15 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             Updater.openPermissionSettings(context)
             return
         }
-        scope.launch {
-            updateMsg = null
-            progress = 0
-            val file = Updater.download(context, info) { progress = it }
-            progress = -1
-            if (file != null) {
-                Updater.install(context, file)
-            } else {
-                updateMsg = "Download failed. Check your internet and tap Update now again."
+        // Runs outside this screen, so going back or the network dropping for a while doesn't stop it.
+        val app = context.applicationContext
+        Updater.scope.launch {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { updateMsg = null; progress = 0 }
+            val file = Updater.download(app, info) { progress = it }
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                progress = -1
+                if (file != null) Updater.install(app, file)
+                else updateMsg = "Download couldn't finish. Check your internet and tap Update now again; it goes on from where it stopped."
             }
         }
     }

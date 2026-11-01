@@ -6,7 +6,10 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.core.content.FileProvider
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
@@ -76,48 +79,73 @@ object Updater {
         }
     }
 
-    /** Downloads the APK. Returns the file, or null if it failed. */
+    /** Keeps a download going when the person leaves the screen (it isn't tied to what's on screen). */
+    val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /**
+     * Downloads the APK. A dropped connection doesn't fail it: it waits and goes on from where it stopped (the part
+     * already saved is kept), for about 10 minutes. Returns the file, or null if it still couldn't finish.
+     */
     suspend fun download(context: Context, info: UpdateInfo, onProgress: (Int) -> Unit): File? =
         withContext(Dispatchers.IO) {
-            try {
-                val dir = File(context.cacheDir, "updates").apply { mkdirs() }
-                val out = File(dir, "BolKhata.apk")
-                var url = URL(info.apkUrl)
-                var conn = open(url)
-                var hops = 0
-                while (conn.responseCode in 300..399 && hops < 5) {
-                    val location = conn.getHeaderField("Location")
-                    conn.disconnect()
-                    url = URL(url, location)
-                    conn = open(url)
-                    hops++
-                }
-                if (conn.responseCode != 200) return@withContext null
-                val total = conn.contentLengthLong
-                conn.inputStream.use { input ->
-                    out.outputStream().use { output ->
-                        val buf = ByteArray(16 * 1024)
-                        var read = 0
-                        var done = 0L
-                        while (input.read(buf).also { read = it } > 0) {
-                            output.write(buf, 0, read)
-                            done += read
-                            if (total > 0) {
-                                val pct = (done * 100 / total).toInt()
-                                withContext(Dispatchers.Main) { onProgress(pct) }
+            val dir = File(context.cacheDir, "updates").apply { mkdirs() }
+            val out = File(dir, "BolKhata.apk")
+            val part = File(dir, "BolKhata.apk.part")
+            // A part left from another version is thrown away.
+            val tag = File(dir, "part.version")
+            if (runCatching { tag.readText() }.getOrNull() != info.version.toString()) { part.delete(); tag.writeText(info.version.toString()) }
+            repeat(40) { attempt ->
+                try {
+                    var url = URL(info.apkUrl)
+                    var conn = open(url, part.length())
+                    var hops = 0
+                    while (conn.responseCode in 300..399 && hops < 5) {
+                        val location = conn.getHeaderField("Location")
+                        conn.disconnect()
+                        url = URL(url, location)
+                        conn = open(url, part.length())
+                        hops++
+                    }
+                    val code = conn.responseCode
+                    if (code == 416 && part.length() > 0) return@withContext finish(part, out)
+                    if (code != 200 && code != 206) error("HTTP $code")
+                    // 200: the server sent the whole file again, so start over; 206: carry on after the saved part.
+                    val resume = code == 206
+                    val total = (if (resume) part.length() else 0L) + conn.contentLengthLong
+                    var done = if (resume) part.length() else 0L
+                    conn.inputStream.use { input ->
+                        java.io.FileOutputStream(part, resume).use { output ->
+                            val buf = ByteArray(16 * 1024)
+                            var read: Int
+                            while (input.read(buf).also { read = it } > 0) {
+                                output.write(buf, 0, read)
+                                done += read
+                                if (total > 0) {
+                                    val pct = (done * 100 / total).toInt()
+                                    withContext(Dispatchers.Main) { onProgress(pct) }
+                                }
                             }
                         }
                     }
+                    if (total <= 0 || done >= total) return@withContext finish(part, out)
+                } catch (e: Exception) {
+                    // No network or a broken connection: wait a little and try again from the saved part.
                 }
-                out
-            } catch (e: Exception) {
-                null
+                delay(minOf(30_000L, 3_000L * (attempt + 1)))
             }
+            null
         }
 
-    private fun open(url: URL): HttpURLConnection {
+    private fun finish(part: File, out: File): File {
+        out.delete()
+        part.renameTo(out)
+        return out
+    }
+
+    private fun open(url: URL, from: Long = 0): HttpURLConnection {
         val c = url.openConnection() as HttpURLConnection
         c.instanceFollowRedirects = false
+        if (from > 0) c.setRequestProperty("Range", "bytes=$from-")
         c.connectTimeout = 15_000
         c.readTimeout = 30_000
         return c
