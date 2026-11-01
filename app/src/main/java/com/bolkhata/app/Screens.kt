@@ -246,7 +246,7 @@ fun HomeScreen(
             item {
                 Box(Modifier.padding(horizontal = 16.dp)) {
                     val s = dailyCashSummary(entries, todayList)
-                    val restOfMonth = d.monthGroups.firstOrNull()?.let { (k, l) ->
+                    val restOfMonth = d.monthGroups.entries.firstOrNull()?.let { (k, l) ->
                         if (cal(l.first().date).get(Calendar.MONTH) == Calendar.getInstance().get(Calendar.MONTH) &&
                             cal(l.first().date).get(Calendar.YEAR) == Calendar.getInstance().get(Calendar.YEAR)) d.monthDays[k].orEmpty().size else 0
                     } ?: 0
