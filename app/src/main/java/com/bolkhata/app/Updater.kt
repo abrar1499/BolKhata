@@ -163,12 +163,49 @@ object Updater {
         }
     }
 
+    /**
+     * Installs the downloaded APK through a package-installer session. On Android 12+ an update of an app this app
+     * installed itself goes in without the "Install?" question; otherwise Android shows its confirmation once.
+     * Falls back to the plain installer screen if the session can't be used.
+     */
     fun install(context: Context, apk: File) {
+        runCatching {
+            val installer = context.packageManager.packageInstaller
+            val params = android.content.pm.PackageInstaller.SessionParams(android.content.pm.PackageInstaller.SessionParams.MODE_FULL_INSTALL)
+            if (Build.VERSION.SDK_INT >= 31) params.setRequireUserAction(android.content.pm.PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
+            val id = installer.createSession(params)
+            installer.openSession(id).use { session ->
+                session.openWrite("app", 0, apk.length()).use { out ->
+                    apk.inputStream().use { it.copyTo(out) }
+                    session.fsync(out)
+                }
+                val flags = android.app.PendingIntent.FLAG_UPDATE_CURRENT or
+                    (if (Build.VERSION.SDK_INT >= 31) android.app.PendingIntent.FLAG_MUTABLE else 0)
+                val done = android.app.PendingIntent.getBroadcast(context, id, Intent(context, InstallResult::class.java), flags)
+                session.commit(done.intentSender)
+            }
+        }.onFailure { installWithScreen(context, apk) }
+    }
+
+    private fun installWithScreen(context: Context, apk: File) {
         val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", apk)
         val i = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(uri, "application/vnd.android.package-archive")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         context.startActivity(i)
+    }
+
+    /** The install session's answer: when Android wants the person to confirm, its screen is shown. */
+    class InstallResult : android.content.BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            val status = intent.getIntExtra(android.content.pm.PackageInstaller.EXTRA_STATUS, -1)
+            if (status == android.content.pm.PackageInstaller.STATUS_PENDING_USER_ACTION) {
+                @Suppress("DEPRECATION")
+                val confirm = (if (Build.VERSION.SDK_INT >= 33) intent.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java)
+                    else intent.getParcelableExtra(Intent.EXTRA_INTENT)) ?: return
+                context.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
+        }
     }
 }

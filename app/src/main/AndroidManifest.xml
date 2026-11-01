@@ -30,6 +30,8 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+        <!-- Hears how a self-update went; asks the person only when Android insists. -->
+        <receiver android:name=".Updater$InstallResult" android:exported="false" />
         <service
             android:name=".BankListener"
             android:exported="true"
