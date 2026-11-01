@@ -14,7 +14,7 @@ Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Packa
 ## Build and release (no Android SDK in the cloud container)
 - Code cannot be compiled locally. GitHub Actions (`.github/workflows/build.yml`) is the compiler and test runner.
 - Work on the session branch. Do NOT run a separate test build before release: the release build runs
-  `testDebugUnitTest assembleRelease` and publishes nothing if anything fails.
+  `testReleaseUnitTest assembleRelease` and publishes nothing if anything fails.
 - Release = put the branch tree on `main` in one commit whose message contains `[build-apk]`:
   ```
   git fetch origin main <branch>
