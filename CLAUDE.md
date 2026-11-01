@@ -4,7 +4,9 @@ Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Packa
 
 ## Talking to the owner
 - Reply in short, simple Hinglish (Roman Urdu). No long explanations unless asked.
-- Ask before every release. Never release without a clear "haan/release kar do".
+- Ask before every release. Never release without a clear "haan/release kar do" (or "build kar do").
+- Once the owner said release/build: finish it. If the release build fails, fix it on the branch and release
+  again without asking a second time; report only the final result (link) or what still can't be fixed.
 - Screenshots/mock-ups only when asked; they are expensive. When the owner asks to see a design, show it as an
   HTML mock-up Artifact (quick, no build); use the screenshots workflow only if they ask for real screenshots.
 
