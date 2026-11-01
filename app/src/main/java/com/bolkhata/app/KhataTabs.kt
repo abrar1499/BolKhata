@@ -18,6 +18,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
@@ -514,6 +515,7 @@ fun MoneyScreen(
     val lastMonth = list.filter { it.date in lastStart until thisStart }.sumOf { it.amount }
     val total = list.sumOf { it.amount }
     val byCat = list.groupBy { it.category }.map { (c, l) -> c to l.sumOf { it.amount } }.sortedByDescending { it.second }
+    val open = remember(income) { mutableStateListOf<Cat>() }
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
             item {
@@ -522,40 +524,50 @@ fun MoneyScreen(
                 }
             }
             if (byCat.isNotEmpty()) item { Heading("By category", "Total " + money(currency, total)) }
-            items(byCat, key = { "c" + it.first.name }) { (c, v) ->
-                val share = if (total > 0) (v / total).toFloat() else 0f
-                Row(
-                    Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).padding(horizontal = 14.dp, vertical = 9.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    CatBubble(c, 36.dp)
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(c.label, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                        Box(Modifier.padding(top = 5.dp).fillMaxWidth().height(6.dp).clip(CircleShape).background(MaterialTheme.colorScheme.outlineVariant)) {
-                            Box(Modifier.fillMaxWidth(share).fillMaxHeight().clip(CircleShape).background(catColor(c)))
+            byCat.forEach { (c, v) ->
+                val isOpen = c in open
+                item(key = "c" + c.name) {
+                    val share = if (total > 0) (v / total).toFloat() else 0f
+                    Row(
+                        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface)
+                            .clickable { if (isOpen) open.remove(c) else open.add(c) }.padding(start = 14.dp, end = 8.dp, top = 9.dp, bottom = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        CatBubble(c, 36.dp)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(c.label, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                            Box(Modifier.padding(top = 5.dp).fillMaxWidth().height(6.dp).clip(CircleShape).background(MaterialTheme.colorScheme.outlineVariant)) {
+                                Box(Modifier.fillMaxWidth(share).fillMaxHeight().clip(CircleShape).background(catColor(c)))
+                            }
                         }
+                        Column(Modifier.padding(start = 12.dp), horizontalAlignment = Alignment.End) {
+                            Text(fmt(v), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            Text("${Math.round(share * 100)}%", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Icon(
+                            if (isOpen) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown, contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f), modifier = Modifier.padding(start = 4.dp).size(20.dp)
+                        )
                     }
-                    Column(Modifier.padding(start = 12.dp), horizontalAlignment = Alignment.End) {
-                        Text(fmt(v), fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                        Text("${Math.round(share * 100)}%", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
                 }
-            }
-            if (list.isNotEmpty()) item { Heading("Entries", "Newest first") }
-            items(list, key = { it.id }) { e ->
-                Row(
-                    Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).clickable { onEdit(e) }.padding(horizontal = 14.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(title(e), fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(lastSeen(e.date) + if (e.note.isNotBlank()) " · " + e.note else "", fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                // A category's own entries open right under it.
+                if (isOpen) items(list.filter { it.category == c }, key = { it.id }) { e ->
+                    Row(
+                        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).clickable { onEdit(e) }
+                            .padding(start = 62.dp, end = 14.dp, top = 8.dp, bottom = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(title(e), fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(lastSeen(e.date) + if (e.note.isNotBlank()) " · " + e.note else "", fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        Text(fmt(e.amount), color = color, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
-                    Text(fmt(e.amount), color = color, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    HorizontalDivider(Modifier.padding(start = 62.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
                 }
-                HorizontalDivider(Modifier.padding(horizontal = 14.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
             }
             if (list.isEmpty()) item {
                 Text(if (income) "No income yet." else "No expenses yet.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp, modifier = Modifier.padding(24.dp))
