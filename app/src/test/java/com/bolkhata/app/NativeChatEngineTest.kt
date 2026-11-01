@@ -481,3 +481,43 @@ class NativeChatEngineMoveShownTest {
         assertEquals(emptyList<Int>(), NativeChatEngine.rowNumbers("50 wali entry"))
     }
 }
+
+class NativeChatEngineNameAnswerTest {
+    private val contacts = listOf("Shahbaz", "Qaisar Shahbaz Ghulam")
+
+    @Test fun exactSavedNameOpensThatKhata() {
+        val r = NativeChatEngine.interpret("Shahbaz ka khata", emptyList(), contacts)
+        assertEquals("open", r.kind)
+        assertEquals(listOf("Shahbaz"), r.filter.persons)
+    }
+
+    @Test fun pickingTheNameFinishesTheEntryThatAsked() {
+        val history = listOf(
+            ChatMessage("u1", true, "170 riyal food mess after shabaz return 315 on the same day"),
+            ChatMessage("a1", false, "Which Shahbaz or Qaisar Shahbaz Ghulam do you mean?")
+        )
+        val r = NativeChatEngine.interpret("Shahbaz ka khata", emptyList(), contacts, history = history)
+        assertEquals("entry", r.kind)
+        assertTrue(r.text.contains("Shahbaz"))
+    }
+}
+
+class NativeChatEngineAfterEntryTest {
+    private val contacts = listOf("Shahbaz", "Qaisar Shahbaz Ghulam")
+    private val back = Entry("b1", Type.WAPIS_MILA, 315.0, Cat.UDHAAR, "Loans", "Shahbaz", "Shahbaz returned", 1_000_000L, 1_000_000L)
+    private val other = Entry("o1", Type.KHARCHA, 40.0, Cat.KHANA, "Lunch", "", "lunch", 2_000_000L, 2_000_000L)
+
+    @Test fun newEntriesGoRightAfterTheNamedOne() {
+        val r = NativeChatEngine.interpret("315 wali entry k bad 170 riyal ka food mess ar 15 riyal ka wifi bill dal do", listOf(back, other), contacts)
+        assertEquals("entry_after", r.kind)
+        assertEquals(setOf("b1"), r.filter.ids)
+        assertTrue(r.text.startsWith("170"))
+    }
+
+    @Test fun englishAfterWithAPerson() {
+        val r = NativeChatEngine.interpret("170 riyal food mess after shabaz return 315 on the same day", listOf(back, other), contacts)
+        assertEquals("entry_after", r.kind)
+        assertEquals(setOf("b1"), r.filter.ids)
+        assertTrue(r.text.startsWith("170") && "after" !in r.text && "315" !in r.text)
+    }
+}

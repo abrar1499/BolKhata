@@ -85,19 +85,30 @@ object NativeChatEngine {
                 .distinctBy { it.lowercase(Locale.ROOT) }
             // Use the user's literal answer before contact-name normalization can expand or rewrite it.
             val answerWords = tokens(prepared.lowercase(Locale.ROOT))
-                .filter { it !in setOf("yes", "yeah", "yep", "haan", "han", "ji", "please", "plz") }
-            val chosen = candidates.filter { candidate ->
+                .filter { it !in setOf("yes", "yeah", "yep", "haan", "han", "ji", "please", "plz", "ka", "ki", "ke", "khata", "account", "wala", "wali", "wale") }
+            // The answer is exactly one saved name ("Shahbaz" for "Shahbaz or Qaisar Shahbaz Ghulam"): that one.
+            val exact = candidates.filter { tokens(it) == answerWords }
+            val chosen = exact.ifEmpty { candidates.filter { candidate ->
                 val nameWords = tokens(candidate)
                 answerWords.isNotEmpty() && answerWords.all { answer ->
                     nameWords.any { name -> name == answer || (answer.length >= 3 && name.startsWith(answer)) }
                 }
-            }
+            } }
             // "Salim Rashid" for "Nargis Salim Mazhar or Nargis Salim Rashid": the name matching most words.
             val best = if (chosen.size == 1) chosen else Understand.mostWordsMatched(answerWords, candidates)
                 .takeIf { b -> b.size == 1 && answerWords.any { w -> tokens(b.single()).any { Understand.closeName(w, it) } } }
                 .orEmpty()
             if (best.size == 1 && previousUser != null) {
-                return Fixed("", "open", "", filter = Query.Filter(persons = listOf(best.single())))
+                val name = best.single()
+                // The question came from an entry ("170 food, shabaz returned 315"): finish that entry with the full name.
+                if (previousUser.any { it.isDigit() }) {
+                    val said = tokens(previousUser).firstOrNull { w -> tokens(name).any { Understand.closeName(w, it) } }
+                    if (said != null) {
+                        val fixed = Regex("""(?i)(?<![\p{L}])${Regex.escape(said)}(?![\p{L}])""").replaceFirst(previousUser, name)
+                        return interpret(fixed, entries, contacts, wordFixes, emptyList(), currency, now)
+                    }
+                }
+                return Fixed("", "open", "", filter = Query.Filter(persons = listOf(name)))
             }
             // Insist only when the answer is about these names; anything else is a new request ("<other name> ka khata").
             val aboutCandidates = answerWords.any { w -> candidates.any { c -> tokens(c).any { Understand.closeName(w, it) || (w.length >= 3 && it.startsWith(w)) } } }
@@ -153,6 +164,8 @@ object NativeChatEngine {
         // "Ye entry Ashiq ke khata me bhej do", "3 no entry Haji Ashiq me daal do": entries the chat just showed.
         // Read from the words as said: number reading would turn "3 no" (number 3) into "3 9".
         moveShown(text, roman.lowercase(Locale.ROOT), words, contacts, history)?.let { return it }
+        // "170 food mess after Shahbaz's 315", "315 wali entry ke baad 170 food aur 15 wifi bill daal do".
+        afterEntry(text, entries, contacts)?.let { return it }
 
         if (Recat.isCommand(lower) || (words.contains("other") && has(words, setOf("sort", "fix", "categorize", "category", "theek"))))
             return Fixed("", "sort_other", "I'll group uncategorized expenses for you to review.")
@@ -331,6 +344,29 @@ object NativeChatEngine {
             }
             ?: return chat("Which khata should get it? Say the person's saved name.")
         return Fixed("", "to_khata", "", filter = Query.Filter(ids = ids.toSet()), set = mapOf("person" to destination))
+    }
+
+    private val afterEnglish = Regex("""^(.+?)\s+after\s+(.+)$""", RegexOption.IGNORE_CASE)
+    private val afterUrdu = Regex("""^(.+?)\s+(?:(?:wali|wala|wale)\s+)?(?:entry\s+)?(?:ke|k|kay|ky|ki|se)\s+ba+d\s+(.+)$""", RegexOption.IGNORE_CASE)
+
+    /**
+     * New entries to be put right after an existing one: the existing one is found by its amount and, when said, its
+     * person; the new ones go on its day, just after it. Null when the sentence isn't that or no such entry exists.
+     */
+    private fun afterEntry(text: String, entries: List<Entry>, contacts: List<String>): Fixed? {
+        val (fresh, anchor) = afterUrdu.find(text)?.let { it.groupValues[2] to it.groupValues[1] }
+            ?: afterEnglish.find(text)?.let { it.groupValues[1] to it.groupValues[2] }
+            ?: return null
+        val amounts = Regex("""\d[\d,]*(?:\.\d+)?""").findAll(anchor).mapNotNull { it.value.replace(",", "").toDoubleOrNull() }.toList()
+        if (amounts.isEmpty() || fresh.none { it.isDigit() }) return null
+        val (one, choices, _) = Understand.matchContact(tokens(anchor), contacts)
+        val names = listOfNotNull(one).ifEmpty { choices }
+        val hit = entries.filter { e ->
+            amounts.any { kotlin.math.abs(it - e.amount) < 0.005 } &&
+                (names.isEmpty() || names.any { n -> e.person.equals(n, true) || e.note.contains(n, true) })
+        }.maxByOrNull { it.date } ?: return null
+        val clean = fresh.replace(Regex("""(?i)\b(on the same day|same day|usi din|ussi din|isi din)\b"""), " ").trim()
+        return Fixed(clean, "entry_after", "", filter = Query.Filter(ids = setOf(hit.id)))
     }
 
     /** The saved names offered in "Which A or B do you mean?" / "Please choose one saved name: A or B." */

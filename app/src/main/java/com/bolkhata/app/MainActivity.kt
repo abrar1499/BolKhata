@@ -529,6 +529,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
 
     // chatViaReader is written further down too.
     var chatRead: (String) -> Unit = { }
+    // "315 wali entry ke baad …": the next entries read are put on that entry's day, a minute apart right after it.
+    val placeAfter = remember { arrayOf<Long?>(null) }
 
     fun handleTextSafely(text: String, clock: Understand.Clock? = null, original: String? = null) {
         // "Other wali entries theek karo": the app sorts them itself (the local engine only fixed the wording).
@@ -582,8 +584,15 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             flash = Flash("Which entry? e.g. \"last entry 400 karo\" or \"aaj ki sari entries delete karo\"", Flash.Kind.ANSWER)
             return
         }
+        val after = placeAfter[0].also { placeAfter[0] = null }
         val r = Parser.parse(text).let { p ->
             if (clock == null) p else Parser.Result(p.entries.map { Understand.at(it, clock) }, p.unclear.map { Understand.at(it, clock) })
+        }.let { p ->
+            if (after == null) p
+            else Parser.Result(
+                p.entries.mapIndexed { i, e -> e.copy(date = after + (i + 1) * 60_000L) },
+                p.unclear.mapIndexed { i, e -> e.copy(date = after + (p.entries.size + i + 1) * 60_000L) }
+            )
         }
         // Goods said without a price are asked about here (the rate), not sent to the local engine.
         val askRate = r.unclear.isNotEmpty() && r.unclear.all { it.qty > 0 }
@@ -765,6 +774,12 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         return when (f.kind) {
             "entry" -> {
                 if (f.text.none { it.isDigit() }) return f.reply.ifBlank { "How much? e.g. \"${f.text.ifBlank { "petrol" }} 50\"" }
+                if (inChat) chatRead(f.text) else handleText(f.text, original = said)
+                null
+            }
+            "entry_after" -> {
+                val anchor = entries.firstOrNull { it.id in f.filter.ids }
+                if (anchor != null) placeAfter[0] = anchor.date
                 if (inChat) chatRead(f.text) else handleText(f.text, original = said)
                 null
             }
