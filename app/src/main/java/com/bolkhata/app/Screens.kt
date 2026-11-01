@@ -179,7 +179,8 @@ fun HomeScreen(
                         onIncome = { openMain?.invoke(MainAcct.INCOME) ?: onReports(ReportKind.CASH_IN) },
                         onCash = { onReports(ReportKind.CASH_BALANCE) },
                         onPay = { openMain?.invoke(MainAcct.TO_PAY) ?: onPeople(false) },
-                        onReceive = { openMain?.invoke(MainAcct.TO_RECEIVE) ?: onPeople(true) }
+                        onReceive = { openMain?.invoke(MainAcct.TO_RECEIVE) ?: onPeople(true) },
+                        onReport = { onReports(ReportKind.CASH_OUT) }
                     ) }
                 }
             }
@@ -923,50 +924,71 @@ private fun DepthRow(name: String, count: Int, total: Double, currency: String, 
 }
 
 /**
- * The month at a glance: what was spent (red) in medium-large figures, then income and cash in hand on one line,
- * and what is owed each way. Every figure opens its account or report.
+ * The month at a glance: what was spent (red, big) with a small Report button, a bar of how much of the income it
+ * took, Income and Balance in tinted pills, then Payable / Receivable. Every figure opens its account or report.
  */
 @Composable
 private fun OverviewSummary(
     monthName: String, currency: String, spent: Double, income: Double, cash: Double, pay: Double, receive: Double,
-    onExpense: () -> Unit, onIncome: () -> Unit, onCash: () -> Unit, onPay: () -> Unit, onReceive: () -> Unit
+    onExpense: () -> Unit, onIncome: () -> Unit, onCash: () -> Unit, onPay: () -> Unit, onReceive: () -> Unit,
+    onReport: () -> Unit
 ) {
     val faint = MaterialTheme.colorScheme.onSurfaceVariant
+    val blue = Color(0xFF3B82F6)
+    val share = if (income > 0) (spent / income).coerceIn(0.0, 1.0) else 0.0
     Column(Modifier.fillMaxWidth()) {
-        Column(Modifier.clip(RoundedCornerShape(14.dp)).clickable(onClick = onExpense).padding(vertical = 4.dp, horizontal = 2.dp)) {
-            Text("$monthName spent", fontSize = 13.sp, color = faint)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("$monthName spent", fontSize = 13.sp, color = faint, modifier = Modifier.weight(1f))
             Text(
-                buildAnnotatedString {
-                    append(fmt(spent))
-                    withStyle(SpanStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium, color = faint)) { append(" $currency") }
-                },
-                fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.Bold, color = RedSpend, maxLines = 1
+                "📊 Report ›", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = GreenDeep,
+                modifier = Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)
+                    .clickable(onClick = onReport).padding(horizontal = 8.dp, vertical = 1.dp)
             )
         }
-        Row(Modifier.padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Income " + fmt(income), fontSize = 13.sp, color = GreenIn, fontWeight = FontWeight.Medium,
-                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onIncome).padding(2.dp))
-            Text("  ·  ", fontSize = 13.sp, color = faint)
-            Text("Cash in hand " + fmt(cash), fontSize = 13.sp, color = if (cash < 0) RedSpend else faint,
-                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onCash).padding(2.dp))
+        Text(
+            buildAnnotatedString {
+                append(fmt(spent))
+                withStyle(SpanStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium, color = faint)) { append(" $currency") }
+            },
+            fontSize = 28.sp, lineHeight = 32.sp, fontWeight = FontWeight.ExtraBold, color = RedSpend, maxLines = 1,
+            modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable(onClick = onExpense)
+        )
+        // How much of this month's income the spending took.
+        Box(Modifier.padding(top = 10.dp, bottom = 8.dp).fillMaxWidth().height(8.dp).clip(RoundedCornerShape(5.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)) {
+            Box(Modifier.fillMaxWidth(share.toFloat()).fillMaxHeight().clip(RoundedCornerShape(5.dp)).background(RedSpend))
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                buildAnnotatedString {
+                    append("Income " + fmt(income))
+                    if (income > 0) withStyle(SpanStyle(fontWeight = FontWeight.Medium)) { append(" · ${(share * 100).roundToLong()}% spent") }
+                },
+                fontSize = 12.sp, fontWeight = FontWeight.Bold, color = GreenIn,
+                modifier = Modifier.clip(CircleShape).background(GreenIn.copy(alpha = 0.12f)).clickable(onClick = onIncome)
+                    .padding(horizontal = 10.dp, vertical = 4.dp)
+            )
+            Spacer(Modifier.weight(1f))
+            Text(
+                "Balance " + fmt(cash), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (cash < 0) RedSpend else blue,
+                modifier = Modifier.clip(CircleShape).background((if (cash < 0) RedSpend else blue).copy(alpha = 0.12f))
+                    .clickable(onClick = onCash).padding(horizontal = 10.dp, vertical = 4.dp)
+            )
         }
         Spacer(Modifier.height(12.dp))
-        Row(
-            Modifier.fillMaxWidth().height(IntrinsicSize.Min).clip(RoundedCornerShape(16.dp))
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp))
-        ) {
-            OweCell("To pay", pay, OrangeOwe, Modifier.weight(1f), onPay)
-            Box(Modifier.width(1.dp).fillMaxHeight().background(MaterialTheme.colorScheme.outlineVariant))
-            OweCell("To receive", receive, GreenIn, Modifier.weight(1f), onReceive)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OweCell("Payable", pay, OrangeOwe, Modifier.weight(1f), onPay)
+            OweCell("Receivable", receive, GreenIn, Modifier.weight(1f), onReceive)
         }
     }
 }
 
 @Composable
 private fun OweCell(label: String, amount: Double, color: Color, modifier: Modifier, onClick: () -> Unit) {
-    Column(modifier.clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 10.dp)) {
+    Column(modifier.clip(RoundedCornerShape(14.dp)).background(color.copy(alpha = 0.12f)).clickable(onClick = onClick)
+        .padding(horizontal = 11.dp, vertical = 9.dp)) {
         Text(label, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(fmt(amount), fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(fmt(amount), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
