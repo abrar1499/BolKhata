@@ -190,7 +190,11 @@ fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: (
     PartyPicker(
         people, e.person, if (count == 1) "Move entry" else "Move $count entries",
         confirm = { creating -> if (creating) "Create & move" else if (count == 1) "Move" else "Move $count" },
-        onPick = { onMove(movedTo(e, all, null, false, it)) }, onDismiss = onDismiss
+        onPick = { onMove(movedTo(e, all, null, false, it)) }, onDismiss = onDismiss,
+        // Or into an expense category ("Other" -> Food, or a party's entry -> a plain expense).
+        categories = Cat.entries.filter { it !in setOf(Cat.UDHAAR, Cat.TANKHWAH, Cat.SALES, Cat.STOCK) },
+        currentCat = e.category.takeIf { e.type == Type.KHARCHA },
+        onCategory = { onMove(movedTo(e, all, it, false, null)) }
     )
 }
 
@@ -209,8 +213,12 @@ fun partyNames(all: List<Entry>): List<String> =
 @Composable
 fun PartyPicker(
     people: List<String>, current: String, title: String,
-    confirm: (creating: Boolean) -> String, onPick: (String) -> Unit, onDismiss: () -> Unit
+    confirm: (creating: Boolean) -> String, onPick: (String) -> Unit, onDismiss: () -> Unit,
+    /** When given, a "Party | Expense" switch: the entry can go to an expense category instead of a party. */
+    categories: List<Cat> = emptyList(), currentCat: Cat? = null, onCategory: (Cat) -> Unit = {}
 ) {
+    var toCats by remember { mutableStateOf(false) }
+    var pickedCat by remember { mutableStateOf<Cat?>(null) }
     var searchQuery by remember { mutableStateOf("") }
     var selectedPerson by remember { mutableStateOf<String?>(null) }
     // "+" beside the search box: the box then takes a new khata's name.
@@ -240,6 +248,23 @@ fun PartyPicker(
         },
         text = {
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (categories.isNotEmpty()) Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant).padding(3.dp)
+                ) {
+                    listOf(false to "Party", true to "Expense").forEach { (cats, label) ->
+                        Box(
+                            Modifier.weight(1f).clip(RoundedCornerShape(10.dp))
+                                .background(if (toCats == cats) MaterialTheme.colorScheme.surface else Color.Transparent)
+                                .clickable { toCats = cats }.padding(vertical = 7.dp),
+                            contentAlignment = Alignment.Center
+                        ) { Text(label, fontSize = 13.sp, fontWeight = if (toCats == cats) FontWeight.SemiBold else FontWeight.Normal) }
+                    }
+                }
+                if (toCats) LazyColumn(Modifier.fillMaxWidth().heightIn(max = 300.dp)) {
+                    items(categories, key = { it.name }) { c ->
+                        KhataChoice(c.icon, c.label, c == pickedCat, c == currentCat) { if (c != currentCat) pickedCat = c }
+                    }
+                } else {
                 val taken = creating && exactMatch
                 // Looks like the chat's message bar, a little lower: a white pill, "+" on the left (here: new khata).
                 val ink = MaterialTheme.colorScheme.onSurface
@@ -296,12 +321,13 @@ fun PartyPicker(
                         Text("No parties yet. Tap + or type a name to add one.", fontSize = 13.sp, color = sub, modifier = Modifier.padding(8.dp))
                     }
                 }
+                }
             }
         },
         confirmButton = {
-            Button(enabled = selectedPerson != null, onClick = {
-                onPick(selectedPerson ?: return@Button)
-            }) { Text(confirm(creating)) }
+            Button(enabled = if (toCats) pickedCat != null else selectedPerson != null, onClick = {
+                if (toCats) onCategory(pickedCat ?: return@Button) else onPick(selectedPerson ?: return@Button)
+            }) { Text(confirm(creating && !toCats)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
