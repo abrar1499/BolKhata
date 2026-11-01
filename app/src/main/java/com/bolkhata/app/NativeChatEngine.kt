@@ -85,19 +85,30 @@ object NativeChatEngine {
                 .distinctBy { it.lowercase(Locale.ROOT) }
             // Use the user's literal answer before contact-name normalization can expand or rewrite it.
             val answerWords = tokens(prepared.lowercase(Locale.ROOT))
-                .filter { it !in setOf("yes", "yeah", "yep", "haan", "han", "ji", "please", "plz") }
-            val chosen = candidates.filter { candidate ->
+                .filter { it !in setOf("yes", "yeah", "yep", "haan", "han", "ji", "please", "plz", "ka", "ki", "ke", "khata", "account", "wala", "wali", "wale") }
+            // The answer is exactly one saved name ("Shahbaz" for "Shahbaz or Qaisar Shahbaz Ghulam"): that one.
+            val exact = candidates.filter { tokens(it) == answerWords }
+            val chosen = exact.ifEmpty { candidates.filter { candidate ->
                 val nameWords = tokens(candidate)
                 answerWords.isNotEmpty() && answerWords.all { answer ->
                     nameWords.any { name -> name == answer || (answer.length >= 3 && name.startsWith(answer)) }
                 }
-            }
+            } }
             // "Salim Rashid" for "Nargis Salim Mazhar or Nargis Salim Rashid": the name matching most words.
             val best = if (chosen.size == 1) chosen else Understand.mostWordsMatched(answerWords, candidates)
                 .takeIf { b -> b.size == 1 && answerWords.any { w -> tokens(b.single()).any { Understand.closeName(w, it) } } }
                 .orEmpty()
             if (best.size == 1 && previousUser != null) {
-                return Fixed("", "open", "", filter = Query.Filter(persons = listOf(best.single())))
+                val name = best.single()
+                // The question came from an entry ("170 food, shabaz returned 315"): finish that entry with the full name.
+                if (previousUser.any { it.isDigit() }) {
+                    val said = tokens(previousUser).firstOrNull { w -> tokens(name).any { Understand.closeName(w, it) } }
+                    if (said != null) {
+                        val fixed = Regex("""(?i)(?<![\p{L}])${Regex.escape(said)}(?![\p{L}])""").replaceFirst(previousUser, name)
+                        return interpret(fixed, entries, contacts, wordFixes, emptyList(), currency, now)
+                    }
+                }
+                return Fixed("", "open", "", filter = Query.Filter(persons = listOf(name)))
             }
             // Insist only when the answer is about these names; anything else is a new request ("<other name> ka khata").
             val aboutCandidates = answerWords.any { w -> candidates.any { c -> tokens(c).any { Understand.closeName(w, it) || (w.length >= 3 && it.startsWith(w)) } } }

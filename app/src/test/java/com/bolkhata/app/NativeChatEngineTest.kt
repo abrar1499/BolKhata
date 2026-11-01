@@ -481,3 +481,23 @@ class NativeChatEngineMoveShownTest {
         assertEquals(emptyList<Int>(), NativeChatEngine.rowNumbers("50 wali entry"))
     }
 }
+
+class NativeChatEngineNameAnswerTest {
+    private val contacts = listOf("Shahbaz", "Qaisar Shahbaz Ghulam")
+
+    @Test fun exactSavedNameOpensThatKhata() {
+        val r = NativeChatEngine.interpret("Shahbaz ka khata", emptyList(), contacts)
+        assertEquals("open", r.kind)
+        assertEquals(listOf("Shahbaz"), r.filter.persons)
+    }
+
+    @Test fun pickingTheNameFinishesTheEntryThatAsked() {
+        val history = listOf(
+            ChatMessage("u1", true, "170 riyal food mess after shabaz return 315 on the same day"),
+            ChatMessage("a1", false, "Which Shahbaz or Qaisar Shahbaz Ghulam do you mean?")
+        )
+        val r = NativeChatEngine.interpret("Shahbaz ka khata", emptyList(), contacts, history = history)
+        assertEquals("entry", r.kind)
+        assertTrue(r.text.contains("Shahbaz"))
+    }
+}
