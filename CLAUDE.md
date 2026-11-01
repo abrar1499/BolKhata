@@ -57,3 +57,14 @@ Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Packa
 - Few tool calls, short terminal output (`head`, `-q`). No subagents for simple tasks.
 - Replies: short, list only changed files and important errors, don't repeat earlier explanations.
 - When compacting keep: current task, files changed, decisions, remaining work, build/test results.
+- Read only the lines needed (`grep -n`, `sed -n a,bp`); edit with small exact replacements, not whole-file rewrites.
+- Batch related edits into one commit and one push; release only once per "release kar do".
+- Build wait: one background loop on `git ls-remote --tags origin vN`, then one release lookup. No polling.
+- Mock-ups: one small HTML file; for changes republish the same artifact with `edits`, never rebuild it.
+
+## Quality (do it right the first time)
+- Do exactly what the owner named, nothing more: "text size" means only font sizes, "background" only the
+  background. If the ask is unclear, ask in one line before changing.
+- Before pushing, check by eye: imports added, names exist (grep), no clashes, Compose opt-ins, string escapes.
+- Logic changes (money, balances, parsing) get a small unit test; totals always from saved entries.
+- Keep the look consistent: reuse KhataTabs.kt / Ui.kt helpers (KhataTop, SumCard, RegRow, Pills, colours).
