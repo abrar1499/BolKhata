@@ -2643,8 +2643,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     t.type == Type.PURCHASE -> "Bought " + t.item
                     t.person.isNotBlank() -> t.person
                     t.type == Type.DIYA -> "New party entry"
-                    t.type == Type.AAMDANI -> "Cash in"
-                    else -> "Cash out"
+                    else -> "New entry"
                 },
                 question = null,
                 askType = false,

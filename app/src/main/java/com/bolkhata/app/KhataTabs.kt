@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
@@ -360,13 +361,23 @@ private fun DayLine(day: String, list: List<Entry>, open: Boolean, onClick: () -
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 }
 
+/** One round + button above the chat bar; the form itself has the Cash out / Cash in switch. */
+@Composable
+private fun BoxScope.PlusButton(onClick: () -> Unit) {
+    Box(
+        Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = (LocalBarSpace.current - 30.dp).coerceAtLeast(8.dp))
+            .size(52.dp).shadow(6.dp, CircleShape).clip(CircleShape).background(EmberBrush).clickable { onClick() },
+        contentAlignment = Alignment.Center
+    ) { Icon(Icons.Filled.Add, contentDescription = "Add entry", tint = Color.White, modifier = Modifier.size(28.dp)) }
+}
+
 /** Round ↑ button that appears once the list is scrolled down. */
 @Composable
 private fun BoxScope.UpButton(state: LazyListState) {
     val scope = rememberCoroutineScope()
     val show by remember { derivedStateOf { state.firstVisibleItemIndex > 4 } }
     if (show) Box(
-        Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = (LocalBarSpace.current - 30.dp).coerceAtLeast(8.dp) + 52.dp)
+        Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = (LocalBarSpace.current - 30.dp).coerceAtLeast(8.dp) + 62.dp)
             .size(40.dp).shadow(4.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.onSurface)
             .clickable { scope.launch { state.animateScrollToItem(0) } },
         contentAlignment = Alignment.Center
@@ -431,7 +442,7 @@ fun CashBookScreen(
             }
         }
         UpButton(state)
-        Pills(Pill("CASH OUT", OutBrush) { onAdd(false) }, Pill("CASH IN", InBrush) { onAdd(true) })
+        PlusButton { onAdd(false) }
     }
 }
 
