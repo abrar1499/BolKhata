@@ -68,3 +68,22 @@ Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Packa
 - Before pushing, check by eye: imports added, names exist (grep), no clashes, Compose opt-ins, string escapes.
 - Logic changes (money, balances, parsing) get a small unit test; totals always from saved entries.
 - Keep the look consistent: reuse KhataTabs.kt / Ui.kt helpers (KhataTop, SumCard, RegRow, Pills, colours).
+
+## Fixing what the owner points at ("ye theek kar do")
+- Find the exact thing in the screenshot or comment (anchored element), change only that, then say in one line
+  what changed. "Pehle jaisa" / "pichay jao" means undo the last step(s) exactly, nothing new.
+- Design asks: change the mock-up first (same Artifact, `edits`), check its script with `node --check` and look at
+  it once with a Playwright screenshot (columns fit, nothing overflows) before sending the link. After "ok/apply",
+  copy the mock 1:1 into Compose (1 CSS px ≈ 1 sp/dp), commit, then ask "release kar doon?".
+- Artifact comments arrive as notifications: read the thread, apply, reply in one Hinglish line, resolve it.
+- A push to main is blocked unless the owner's latest words approve the release; if blocked, ask once, plainly.
+
+## Look the owner likes (keep it)
+- Orange header up to the status bar (`EmberTop` / `EmberBrush`), white summary card over it, bottom tabs
+  Chat · Parties · Cash · Expense · Income, chat bar on every screen, "Entry" add button (`PlusButton`).
+- Lists are compact ledger pages (`ledger()` in KhataTabs.kt): month chips, a tinted total line with each total
+  above its column, Date | Detail | Out | In | Balance, faint grey lines, small text, amounts centred.
+- Small text: Compose's theme line height is tall, so compact lists must use `Tight { }` (no extra line height),
+  and phones enlarge tiny text, so give columns room instead of shrinking fonts further.
+- Red = money out, green = money in, arrows ↑ out / ↓ in on totals. No pill buttons, no extra headings.
+
