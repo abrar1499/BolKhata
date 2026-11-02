@@ -384,10 +384,10 @@ private fun LedgerHead(cols: List<LCol>) = Tight {
         cols.forEach { c ->
             Box(
                 Modifier.width(w).fillMaxHeight().background(if (c.kind == LKind.BAL) Color(0x12786C6C) else cellTint(c.kind, 0.12f)),
-                contentAlignment = if (c.kind == LKind.BAL) Alignment.CenterEnd else Alignment.Center
+                contentAlignment = Alignment.Center
             ) {
                 // Column name, with its total right under it.
-                Column(Modifier.padding(horizontal = 3.dp, vertical = 5.dp), horizontalAlignment = if (c.kind == LKind.BAL) Alignment.End else Alignment.CenterHorizontally) {
+                Column(Modifier.padding(horizontal = 3.dp, vertical = 5.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(c.label.uppercase(), fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.4.sp, maxLines = 1,
                         color = if (c.kind == LKind.BAL) sub else kindColor(c.kind, sub))
                     Text(c.total, fontSize = 10.sp, fontWeight = FontWeight.Black, maxLines = 1, softWrap = false,
@@ -435,7 +435,7 @@ private fun LedgerRow(r: LRow, cols: List<LCol>, last: Boolean) = Tight {
             val v = r.values.getOrElse(i) { "" }
             Box(
                 Modifier.width(w).fillMaxHeight().background(cellTint(c.kind, 0.05f)),
-                contentAlignment = if (c.kind == LKind.BAL) Alignment.CenterEnd else Alignment.Center
+                contentAlignment = Alignment.Center
             ) {
                 Text(
                     v, fontFamily = FontFamily.Monospace, maxLines = 1, softWrap = false,
