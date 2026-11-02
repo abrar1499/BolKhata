@@ -341,8 +341,10 @@ private fun colW(cols: List<LCol>) = if (cols.size == 1) 70.dp else 60.dp
 @Composable
 private fun Tight(content: @Composable () -> Unit) =
     ProvideTextStyle(LocalTextStyle.current.copy(lineHeight = TextUnit.Unspecified), content)
-private fun kindColor(k: LKind, base: Color) = when (k) { LKind.OUT -> RedSpend; LKind.IN -> GreenIn; LKind.BAL -> base }
-private fun cellTint(k: LKind, a: Float) = when (k) { LKind.OUT -> RedSpend.copy(alpha = a); LKind.IN -> GreenIn.copy(alpha = a); LKind.BAL -> Color.Transparent }
+/** Balance is blue, so it never reads as money in or out. */
+private val BalBlue = Color(0xFF2563EB)
+private fun kindColor(k: LKind, base: Color) = when (k) { LKind.OUT -> RedSpend; LKind.IN -> GreenIn; LKind.BAL -> BalBlue }
+private fun cellTint(k: LKind, a: Float) = when (k) { LKind.OUT -> RedSpend.copy(alpha = a); LKind.IN -> GreenIn.copy(alpha = a); LKind.BAL -> BalBlue.copy(alpha = a) }
 
 /**
  * A white ledger page: a tinted line with the title and each column's total, the column names, then one small line
@@ -383,13 +385,13 @@ private fun LedgerHead(cols: List<LCol>) = Tight {
         HeadText("DETAIL", sub, Modifier.weight(1f).padding(start = 8.dp))
         cols.forEach { c ->
             Box(
-                Modifier.width(w).fillMaxHeight().background(if (c.kind == LKind.BAL) Color(0x12786C6C) else cellTint(c.kind, 0.12f)),
+                Modifier.width(w).fillMaxHeight().background(cellTint(c.kind, 0.12f)),
                 contentAlignment = Alignment.Center
             ) {
                 // Column name, with its total right under it.
                 Column(Modifier.padding(horizontal = 3.dp, vertical = 5.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(c.label.uppercase(), fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.4.sp, maxLines = 1,
-                        color = if (c.kind == LKind.BAL) sub else kindColor(c.kind, sub))
+                        color = kindColor(c.kind, sub))
                     Text(c.total, fontSize = 10.sp, fontWeight = FontWeight.Black, maxLines = 1, softWrap = false,
                         color = kindColor(c.kind, MaterialTheme.colorScheme.onSurface))
                 }
@@ -441,7 +443,7 @@ private fun LedgerRow(r: LRow, cols: List<LCol>, last: Boolean) = Tight {
                     v, fontFamily = FontFamily.Monospace, maxLines = 1, softWrap = false,
                     fontSize = if (c.kind == LKind.BAL) 9.sp else 10.sp,
                     fontWeight = if (c.kind == LKind.BAL) FontWeight.Normal else FontWeight.Bold,
-                    color = if (c.kind == LKind.BAL) sub else kindColor(c.kind, sub),
+                    color = kindColor(c.kind, sub),
                     modifier = Modifier.padding(horizontal = 4.dp)
                 )
             }
