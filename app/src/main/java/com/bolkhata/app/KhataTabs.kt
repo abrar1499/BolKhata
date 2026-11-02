@@ -6,6 +6,8 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
@@ -587,6 +589,95 @@ fun PartyKhataScreen(
     }
 }
 
+
+// ---------------------------------------------------------------- All entries
+
+/** Every entry on the ledger page, a month at a time, with chips for expense, income, loans and trade. */
+@Composable
+fun TransactionsScreen(entries: List<Entry>, currency: String, onEdit: (Entry) -> Unit, onAdd: () -> Unit, onMenu: () -> Unit) {
+    val kinds = listOf("All", "Expense", "Income", "Loans", "Trade")
+    var filter by rememberSaveable { mutableIntStateOf(0) }
+    var q by rememberSaveable { mutableStateOf("") }
+    val newest = remember(entries, filter) {
+        entries.filter {
+            when (filter) { 1 -> it.type == Type.KHARCHA; 2 -> it.type == Type.AAMDANI; 3 -> isLoan(it.type); 4 -> isTrade(it.type); else -> true }
+        }.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt })
+    }
+    val months = remember(newest) { monthsOf(newest) }
+    var month by rememberSaveable(months.firstOrNull()?.first) { mutableIntStateOf(months.firstOrNull()?.first ?: 0) }
+    val list = if (q.isBlank()) newest.filter { monthKey(it.date) == month } else newest.filter { matches(it, q) }
+    // Money that left you (or a purchase) goes in Out; everything else in In.
+    fun out(e: Entry) = cashOut(e) || e.type == Type.PURCHASE
+    val outT = list.filter(::out).sumOf { it.amount }
+    val inT = list.filterNot(::out).sumOf { it.amount }
+    val state = rememberLazyListState()
+    Box(Modifier.fillMaxSize()) {
+        LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
+            item {
+                KhataTop("All entries", if (entries.size == 1) "1 entry" else "${entries.size} entries", onMenu) {
+                    SumCard(Triple(money(currency, outT), "Out", RedSpend), Triple(money(currency, inT), "In", GreenIn), "Add", onAdd)
+                }
+            }
+            item {
+                Row(Modifier.horizontalScroll(rememberScrollState()).padding(start = 14.dp, end = 14.dp, top = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    kinds.forEachIndexed { i, t -> SmallChip(t, filter == i) { filter = i } }
+                }
+            }
+            item { SearchBox(q, "Search") { q = it } }
+            if (q.isBlank() && months.isNotEmpty()) stickyHeader { MonthChips(months, month) { month = it } }
+            val label = if (q.isNotBlank()) "Found" else months.firstOrNull { it.first == month }?.let { monthFmt.format(Date(it.second)) } ?: ""
+            ledger(
+                label, listOf(LCol("Out", fmt(outT), LKind.OUT), LCol("In", fmt(inT), LKind.IN)),
+                list.map { e -> LRow(e.id, e.date, title(e), e.note, listOf(if (out(e)) fmt(e.amount) else "", if (!out(e)) fmt(e.amount) else "")) { onEdit(e) } }
+            )
+        }
+        UpButton(state)
+        PlusButton(onAdd)
+    }
+}
+
+// ---------------------------------------------------------------- Trash
+
+/** Deleted entries (kept 30 days) on the ledger page; tap one to restore it. */
+@Composable
+fun TrashScreen(
+    trash: List<Entry>, currency: String, onMenu: () -> Unit,
+    onRestore: (Entry) -> Unit, onRestoreAll: () -> Unit, onEmpty: () -> Unit
+) {
+    var askEmpty by remember { mutableStateOf(false) }
+    val list = remember(trash) { trash.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt }) }
+    fun out(e: Entry) = cashOut(e) || e.type == Type.PURCHASE
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = barSpace(24.dp))) {
+        item {
+            KhataTop("Trash", "Deleted entries stay here for 30 days", onMenu) {
+                SumCard(
+                    Triple("${trash.size}", if (trash.size == 1) "Entry" else "Entries", MaterialTheme.colorScheme.onSurface),
+                    Triple(money(currency, trash.sumOf { it.amount }), "Total", RedSpend),
+                    "Restore all", onRestoreAll
+                )
+            }
+        }
+        if (trash.isNotEmpty()) item {
+            TextButton(onClick = { askEmpty = true }, modifier = Modifier.padding(start = 6.dp, top = 6.dp)) { Text("Empty trash", color = RedSpend) }
+        }
+        ledger(
+            "Tap an entry to restore it",
+            listOf(LCol("Out", fmt(list.filter(::out).sumOf { it.amount }), LKind.OUT), LCol("In", fmt(list.filterNot(::out).sumOf { it.amount }), LKind.IN)),
+            list.map { e -> LRow(e.id, e.date, title(e), e.note, listOf(if (out(e)) fmt(e.amount) else "", if (!out(e)) fmt(e.amount) else "")) { onRestore(e) } }
+        )
+    }
+    if (askEmpty) {
+        AlertDialog(
+            onDismissRequest = { askEmpty = false },
+            title = { Text("Empty trash?") },
+            text = { Text("${trash.size} entries will be deleted forever. This cannot be undone.") },
+            confirmButton = {
+                Button(onClick = { askEmpty = false; onEmpty() }, colors = ButtonDefaults.buttonColors(containerColor = RedSpend)) { Text("Delete forever") }
+            },
+            dismissButton = { TextButton(onClick = { askEmpty = false }) { Text("Cancel") } }
+        )
+    }
+}
 
 // ---------------------------------------------------------------- Expense / Income
 
