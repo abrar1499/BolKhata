@@ -522,8 +522,8 @@ fun CashBookScreen(
             ledger(
                 label,
                 listOf(
-                    LCol("Out", "↑ " + fmt(list.filter(::cashOut).sumOf { it.amount }), LKind.OUT),
-                    LCol("In", "↓ " + fmt(list.filter(::cashIn).sumOf { it.amount }), LKind.IN),
+                    LCol("Out", fmt(list.filter(::cashOut).sumOf { it.amount }), LKind.OUT),
+                    LCol("In", fmt(list.filter(::cashIn).sumOf { it.amount }), LKind.IN),
                     LCol("Balance", list.firstOrNull()?.let { fmt(bal[it.id] ?: 0.0) } ?: "", LKind.BAL)
                 ),
                 list.map { e ->
@@ -568,8 +568,8 @@ fun PartyKhataScreen(
             ledger(
                 label,
                 listOf(
-                    LCol("Paid", "↑ " + fmt(list.filter { personHistoryIsOutflow(it.first) }.sumOf { it.first.amount }), LKind.OUT),
-                    LCol("Received", "↓ " + fmt(list.filter { !personHistoryIsOutflow(it.first) }.sumOf { it.first.amount }), LKind.IN),
+                    LCol("Paid", fmt(list.filter { personHistoryIsOutflow(it.first) }.sumOf { it.first.amount }), LKind.OUT),
+                    LCol("Received", fmt(list.filter { !personHistoryIsOutflow(it.first) }.sumOf { it.first.amount }), LKind.IN),
                     LCol("Balance", list.firstOrNull()?.let { fmt(it.second) } ?: "", LKind.BAL)
                 ),
                 list.map { (e, b) ->
@@ -660,7 +660,7 @@ fun MoneyScreen(
                 // A group's own entries open right under it, on the same ledger page.
                 if (isOpen) {
                     ledger(
-                        g.name, listOf(LCol("Amount", (if (income) "↓ " else "↑ ") + fmt(g.total), if (income) LKind.IN else LKind.OUT)),
+                        g.name, listOf(LCol("Amount", fmt(g.total), if (income) LKind.IN else LKind.OUT)),
                         g.list.map { e -> LRow(e.id, e.date, title(e), e.note, listOf(fmt(e.amount))) { onEdit(e) } },
                         keyPrefix = "g${g.name}:"
                     )
