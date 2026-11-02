@@ -344,7 +344,7 @@ private fun colW(cols: List<LCol>) = if (cols.size == 1) 70.dp else 60.dp
 private fun Tight(content: @Composable () -> Unit) =
     ProvideTextStyle(LocalTextStyle.current.copy(lineHeight = TextUnit.Unspecified), content)
 /** Balance is blue, so it never reads as money in or out. */
-private val BalBlue = Color(0xFF0EA5E9)
+private val BalBlue = Color(0xFF0284C7)
 private fun kindColor(k: LKind, base: Color) = when (k) { LKind.OUT -> RedSpend; LKind.IN -> GreenIn; LKind.BAL -> BalBlue }
 private fun cellTint(k: LKind, a: Float) = when (k) { LKind.OUT -> RedSpend.copy(alpha = a); LKind.IN -> GreenIn.copy(alpha = a); LKind.BAL -> BalBlue.copy(alpha = a) }
 
