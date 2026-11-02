@@ -536,19 +536,22 @@ fun TxRowContent(e: Entry, currency: String, showDate: Boolean) {
 
 @Composable
 fun ScreenTitle(title: String, onBack: (() -> Unit)? = null, onMenu: (() -> Unit)? = null) {
+    // An orange title card, matching the khata screens' header.
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(top = 8.dp, bottom = 4.dp),
+            .clip(RoundedCornerShape(16.dp))
+            .background(EmberBrush)
+            .padding(start = 4.dp, end = 14.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (onBack != null) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White) }
         }
         if (onMenu != null) {
-            IconButton(onClick = onMenu) { Icon(Icons.Filled.Menu, contentDescription = "Menu") }
+            IconButton(onClick = onMenu) { Icon(Icons.Filled.Menu, contentDescription = "Menu", tint = Color.White) }
         }
-        Text(title, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text(title, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
