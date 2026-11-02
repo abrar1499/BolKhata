@@ -8,6 +8,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -45,6 +46,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -301,13 +303,10 @@ private fun PartyRow(p: PersonAcct, currency: String, onClick: () -> Unit) {
     HorizontalDivider(Modifier.padding(start = 66.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
 }
 
-// ---------------------------------------------------------------- Cash book and party khata (one register look)
+// ---------------------------------------------------------------- Cash book and party khata
 
-private val dayFmt = SimpleDateFormat("EEE, dd MMM yy", Locale.US)
-private val timeFmt = SimpleDateFormat("h:mm a", Locale.US)
 private val shortDay = SimpleDateFormat("d MMM", Locale.US)
 private val monthFmt = SimpleDateFormat("MMM yyyy", Locale.US)
-private val OutTint = Color(0xFFE5484D).copy(alpha = 0.06f)
 private val ColW = 88.dp
 
 private fun title(e: Entry) = e.person.ifBlank { e.item.ifBlank { e.category.label } }
@@ -336,91 +335,135 @@ private fun MonthChips(months: List<Pair<Int, Long>>, current: Int, onPick: (Int
     }
 }
 
-/** Column titles: Entries | Out | In (or You paid | You received). */
-@Composable
-private fun RegHead(left: String, out: String, inn: String, outSub: String = "", inSub: String = "") {
-    val sub = MaterialTheme.colorScheme.onSurfaceVariant
-    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).background(MaterialTheme.colorScheme.background), verticalAlignment = Alignment.CenterVertically) {
-        Text(left, fontSize = 12.sp, color = sub, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).padding(start = 14.dp))
-        listOf(Triple(out, outSub, RedSpend), Triple(inn, inSub, GreenIn)).forEach { (t, s, c) ->
-            ColLine()
-            Column(Modifier.width(ColW).padding(top = 6.dp, bottom = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(t, fontSize = 9.sp, color = sub, fontWeight = FontWeight.Medium, maxLines = 1)
-                if (s.isNotEmpty()) Text(s, fontSize = 12.sp, color = c, fontWeight = FontWeight.Bold, maxLines = 1)
-            }
-        }
-    }
-    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-}
-
-/** Faint line between the Entries, Out and In columns. */
+/** Faint line between columns. */
 @Composable
 private fun ColLine() = VerticalDivider(Modifier.fillMaxHeight(), color = MaterialTheme.colorScheme.outlineVariant)
 
-/** One entry: optional title, date or time, a Bal. tag, and the amount in the Out (tinted) or In column. */
-@Composable
-private fun RegRow(
-    title: String?, whenText: String, bal: Double, out: Boolean, amount: Double, currency: String, note: String = "",
-    dateAt: Long? = null, onClick: () -> Unit
-) {
-    val sub = MaterialTheme.colorScheme.onSurfaceVariant
-    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).background(MaterialTheme.colorScheme.surface).clickable { onClick() }) {
-        // Party khata: date and time in their own small column on the left, like the Expense entries.
-        if (dateAt != null) Column(Modifier.width(62.dp).padding(start = 14.dp, top = 3.dp, bottom = 3.dp), verticalArrangement = Arrangement.Center) {
-            Text(shortDay.format(Date(dateAt)), fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-            Text(timeFmt.format(Date(dateAt)), fontSize = 9.sp, color = sub, maxLines = 1)
-        }
-        Column(Modifier.weight(1f).padding(start = if (dateAt != null) 0.dp else 14.dp, end = 14.dp, top = 3.dp, bottom = 3.dp)) {
-            if (title != null) Text(title, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            // The time stays small; the note after it is a little larger so it reads easily.
-            if (whenText.isNotEmpty() || note.isNotBlank()) Text(
-                buildAnnotatedString {
-                    append(whenText)
-                    if (note.isNotBlank()) withStyle(SpanStyle(fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface)) {
-                        append((if (whenText.isNotEmpty()) " · " else "") + note)
-                    }
-                },
-                fontSize = 10.sp, lineHeight = 14.sp, color = sub, maxLines = 1, overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                "Bal. " + money(currency, kotlin.math.abs(bal)), fontSize = 10.sp, color = sub,
-                modifier = Modifier.padding(top = 1.dp).clip(RoundedCornerShape(4.dp))
-                    .background((if (out) RedSpend else GreenIn).copy(alpha = 0.12f)).padding(horizontal = 6.dp, vertical = 1.dp)
-            )
-        }
-        ColLine()
-        Box(Modifier.width(ColW).fillMaxHeight().background(OutTint), contentAlignment = Alignment.Center) {
-            if (out) Text(fmt(amount), color = RedSpend, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-        }
-        ColLine()
-        Box(Modifier.width(ColW).fillMaxHeight(), contentAlignment = Alignment.Center) {
-            if (!out) Text(fmt(amount), color = GreenIn, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+// ---------------------------------------------------------------- the ledger page (Cash book, party khata, Expense / Income)
+
+internal enum class LKind { OUT, IN, BAL }
+
+/** One amount column: its title, the total shown above it, and whether it is money out, in or a balance. */
+internal class LCol(val label: String, val total: String, val kind: LKind)
+
+/** One line: date and time on the left, title and note, then one value per column. */
+internal class LRow(val key: String, val date: Long, val title: String, val note: String, val values: List<String>, val onClick: () -> Unit)
+
+private val weekFmt = SimpleDateFormat("EEE", Locale.US)
+private val clockFmt = SimpleDateFormat("h:mma", Locale.US)
+private val Faint = Color(0x14786C6C)
+private const val DateW = 56
+
+private fun colW(cols: List<LCol>) = if (cols.size == 1) 66.dp else 52.dp
+private fun kindColor(k: LKind, base: Color) = when (k) { LKind.OUT -> RedSpend; LKind.IN -> GreenIn; LKind.BAL -> base }
+private fun cellTint(k: LKind, a: Float) = when (k) { LKind.OUT -> RedSpend.copy(alpha = a); LKind.IN -> GreenIn.copy(alpha = a); LKind.BAL -> Color.Transparent }
+
+/**
+ * A white ledger page: a tinted line with the title and each column's total, the column names, then one small line
+ * per entry. Out / In columns are softly tinted; lines are faint grey.
+ */
+internal fun LazyListScope.ledger(title: String, cols: List<LCol>, rows: List<LRow>, keyPrefix: String = "") {
+    item(key = keyPrefix + "lt") { LedgerTop(title, rows.size, cols) }
+    item(key = keyPrefix + "lh") { LedgerHead(cols) }
+    items(rows, key = { keyPrefix + it.key }) { r -> LedgerRow(r, cols, r === rows.last()) }
+    if (rows.isEmpty()) item(key = keyPrefix + "le") {
+        Box(Modifier.padding(horizontal = 10.dp).fillMaxWidth().clip(RoundedCornerShape(bottomStart = 14.dp, bottomEnd = 14.dp))
+            .background(MaterialTheme.colorScheme.surface).padding(20.dp), contentAlignment = Alignment.Center) {
+            Text("No entries this month", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
-    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f))
 }
 
-/** A day's line in the cash book: tap to fold or open its entries. */
 @Composable
-private fun DayLine(day: String, list: List<Entry>, open: Boolean, onClick: () -> Unit) {
+private fun LedgerTop(title: String, count: Int, cols: List<LCol>) {
+    val w = colW(cols)
     Row(
-        Modifier.fillMaxWidth().height(IntrinsicSize.Min).background(MaterialTheme.colorScheme.background).clickable { onClick() },
-        verticalAlignment = Alignment.CenterVertically
+        Modifier.padding(start = 10.dp, end = 10.dp, top = 6.dp).fillMaxWidth().height(IntrinsicSize.Min)
+            .clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp))
+            .background(Brush.horizontalGradient(listOf(EmberTop.copy(alpha = 0.20f), Ember.copy(alpha = 0.08f))))
     ) {
-        Column(Modifier.weight(1f).padding(start = 14.dp, top = 7.dp, bottom = 7.dp)) {
-            Text(day.uppercase(), fontSize = 12.sp, fontWeight = FontWeight.ExtraBold)
-            Text((if (list.size == 1) "1 entry" else "${list.size} entries") + if (open) "" else " · tap to open",
-                fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column(Modifier.weight(1f).padding(start = 10.dp, top = 8.dp, bottom = 8.dp)) {
+            Text(title, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+            Text(if (count == 1) "1 entry" else "$count entries", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        val o = list.filter(::cashOut).sumOf { it.amount }
-        val i = list.filter(::cashIn).sumOf { it.amount }
-        ColLine()
-        Text(if (o > 0) "↑ " + fmt(o) else "", Modifier.width(ColW), fontSize = 12.sp, color = RedSpend, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-        ColLine()
-        Text(if (i > 0) "↓ " + fmt(i) else "", Modifier.width(ColW), fontSize = 12.sp, color = GreenIn, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        cols.forEach { c ->
+            Box(
+                Modifier.width(w).fillMaxHeight().background(if (c.kind == LKind.BAL) MaterialTheme.colorScheme.surface else cellTint(c.kind, 0.05f)),
+                contentAlignment = if (c.kind == LKind.BAL) Alignment.CenterEnd else Alignment.Center
+            ) {
+                Text(c.total, fontSize = 11.sp, fontWeight = FontWeight.Black, color = kindColor(c.kind, MaterialTheme.colorScheme.onSurface),
+                    maxLines = 1, softWrap = false, modifier = Modifier.padding(horizontal = 3.dp))
+            }
+        }
     }
-    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+}
+
+@Composable
+private fun LedgerHead(cols: List<LCol>) {
+    val sub = MaterialTheme.colorScheme.onSurfaceVariant
+    val w = colW(cols)
+    Row(Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(IntrinsicSize.Min).background(MaterialTheme.colorScheme.background)) {
+        HeadText("DATE", sub, Modifier.width(DateW.dp).padding(start = 6.dp))
+        HeadText("DETAIL", sub, Modifier.weight(1f).padding(start = 8.dp))
+        cols.forEach { c ->
+            Box(
+                Modifier.width(w).fillMaxHeight().background(if (c.kind == LKind.BAL) Color(0x12786C6C) else cellTint(c.kind, 0.12f)),
+                contentAlignment = if (c.kind == LKind.BAL) Alignment.CenterEnd else Alignment.Center
+            ) { HeadText(c.label.uppercase(), if (c.kind == LKind.BAL) sub else kindColor(c.kind, sub), Modifier.padding(horizontal = 3.dp), center = true) }
+        }
+    }
+    HorizontalDivider(Modifier.padding(horizontal = 10.dp), color = MaterialTheme.colorScheme.outlineVariant)
+}
+
+@Composable
+private fun HeadText(t: String, color: Color, modifier: Modifier, center: Boolean = false) =
+    Text(t, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.4.sp, color = color, maxLines = 1,
+        textAlign = if (center) TextAlign.Center else TextAlign.Start, modifier = modifier.padding(vertical = 6.dp))
+
+@Composable
+private fun LedgerRow(r: LRow, cols: List<LCol>, last: Boolean) {
+    val sub = MaterialTheme.colorScheme.onSurfaceVariant
+    val w = colW(cols)
+    val d = Date(r.date)
+    Row(
+        Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(IntrinsicSize.Min)
+            .clip(if (last) RoundedCornerShape(bottomStart = 14.dp, bottomEnd = 14.dp) else RoundedCornerShape(0.dp))
+            .background(MaterialTheme.colorScheme.surface).clickable { r.onClick() }
+    ) {
+        // "31 Oct Sat" with the time small under it.
+        Column(Modifier.width(DateW.dp).padding(start = 6.dp, top = 4.dp, bottom = 4.dp), verticalArrangement = Arrangement.Center) {
+            Text(
+                buildAnnotatedString {
+                    withStyle(SpanStyle(color = Ember)) { append(shortDay.format(d)) }
+                    withStyle(SpanStyle(fontSize = 8.sp, fontWeight = FontWeight.SemiBold, color = sub)) { append(" " + weekFmt.format(d)) }
+                },
+                fontSize = 10.sp, maxLines = 1, softWrap = false
+            )
+            Text(clockFmt.format(d).lowercase(), fontSize = 5.sp, lineHeight = 6.sp, color = sub, maxLines = 1)
+        }
+        VerticalDivider(Modifier.fillMaxHeight(), color = Faint)
+        Column(Modifier.weight(1f).padding(start = 8.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalArrangement = Arrangement.Center) {
+            Text(r.title, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (r.note.isNotBlank() && !r.note.equals(r.title, true))
+                Text(r.note, fontSize = 9.sp, color = sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        cols.forEachIndexed { i, c ->
+            val v = r.values.getOrElse(i) { "" }
+            Box(
+                Modifier.width(w).fillMaxHeight().background(cellTint(c.kind, 0.05f)),
+                contentAlignment = if (c.kind == LKind.BAL) Alignment.CenterEnd else Alignment.Center
+            ) {
+                Text(
+                    v, fontFamily = FontFamily.Monospace, maxLines = 1, softWrap = false,
+                    fontSize = if (c.kind == LKind.BAL) 9.sp else 10.sp,
+                    fontWeight = if (c.kind == LKind.BAL) FontWeight.Normal else FontWeight.Bold,
+                    color = if (c.kind == LKind.BAL) sub else kindColor(c.kind, sub),
+                    modifier = Modifier.padding(horizontal = 4.dp)
+                )
+            }
+        }
+    }
+    if (!last) HorizontalDivider(Modifier.padding(horizontal = 10.dp), color = Faint)
 }
 
 /** One round + button above the chat bar; the form itself has the Cash out / Cash in switch. */
@@ -469,10 +512,8 @@ fun CashBookScreen(
     val months = remember(newest) { monthsOf(newest) }
     var month by rememberSaveable(months.firstOrNull()?.first) { mutableIntStateOf(months.firstOrNull()?.first ?: 0) }
     var q by rememberSaveable { mutableStateOf("") }
-    val shut = remember { mutableStateListOf<String>() }
     // A search looks through every month; otherwise only the picked month is listed.
     val list = if (q.isBlank()) newest.filter { monthKey(it.date) == month } else newest.filter { matches(it, q) }
-    val days = list.groupBy { dayFmt.format(Date(it.date)) }
     val state = rememberLazyListState()
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
@@ -487,23 +528,18 @@ fun CashBookScreen(
             }
             item { SearchBox(q, "Search") { q = it } }
             if (q.isBlank() && months.isNotEmpty()) stickyHeader { MonthChips(months, month) { month = it } }
-            item {
-                val label = if (q.isNotBlank()) "Found" else months.firstOrNull { it.first == month }?.let { monthFmt.format(Date(it.second)) } ?: ""
-                RegHead(
-                    "$label · " + (if (list.size == 1) "1 entry" else "${list.size} entries"), "Total out", "Total in",
-                    "↑ " + fmt(list.filter(::cashOut).sumOf { it.amount }), "↓ " + fmt(list.filter(::cashIn).sumOf { it.amount })
-                )
-            }
-            days.forEach { (day, l) ->
-                val open = day !in shut
-                item(key = "d$day") { DayLine(day, l, open) { if (open) shut.add(day) else shut.remove(day) } }
-                if (open) items(l, key = { it.id }) { e ->
-                    RegRow(title(e), timeFmt.format(Date(e.date)), bal[e.id] ?: 0.0, cashOut(e), e.amount, currency, e.note) { onEdit(e) }
+            val label = if (q.isNotBlank()) "Found" else months.firstOrNull { it.first == month }?.let { monthFmt.format(Date(it.second)) } ?: ""
+            ledger(
+                label,
+                listOf(
+                    LCol("Out", "↑ " + fmt(list.filter(::cashOut).sumOf { it.amount }), LKind.OUT),
+                    LCol("In", "↓ " + fmt(list.filter(::cashIn).sumOf { it.amount }), LKind.IN),
+                    LCol("Balance", list.firstOrNull()?.let { fmt(bal[it.id] ?: 0.0) } ?: "", LKind.BAL)
+                ),
+                list.map { e ->
+                    LRow(e.id, e.date, title(e), e.note, listOf(if (cashOut(e)) fmt(e.amount) else "", if (cashIn(e)) fmt(e.amount) else "", fmt(bal[e.id] ?: 0.0))) { onEdit(e) }
                 }
-            }
-            if (list.isEmpty()) item {
-                Text("No cash entries here.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp, modifier = Modifier.padding(24.dp))
-            }
+            )
         }
         UpButton(state)
         PlusButton { onAdd(false) }
@@ -538,20 +574,21 @@ fun PartyKhataScreen(
             }
             item { SearchBox(q, "Search") { q = it } }
             if (q.isBlank() && months.size > 1) stickyHeader { MonthChips(months, month) { month = it } }
-            item {
-                val paid = list.filter { personHistoryIsOutflow(it.first) }.sumOf { it.first.amount }
-                val got = list.filter { !personHistoryIsOutflow(it.first) }.sumOf { it.first.amount }
-                RegHead("Entries", "You paid", "You received", "↑ " + fmt(paid), "↓ " + fmt(got))
-            }
-            items(list, key = { it.first.id }) { (e, b) ->
-                val note = e.note.ifBlank { e.item.takeIf { it != "Loans" } ?: "" }
-                RegRow(
-                    null, "", b, personHistoryIsOutflow(e), e.amount, currency, note, dateAt = e.date
-                ) { onEdit(e) }
-            }
-            if (list.isEmpty()) item {
-                Text("No entries with $name yet.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp, modifier = Modifier.padding(24.dp))
-            }
+            val label = if (q.isNotBlank()) "Found" else months.firstOrNull { it.first == month }?.let { monthFmt.format(Date(it.second)) } ?: name
+            ledger(
+                label,
+                listOf(
+                    LCol("You paid", "↑ " + fmt(list.filter { personHistoryIsOutflow(it.first) }.sumOf { it.first.amount }), LKind.OUT),
+                    LCol("You got", "↓ " + fmt(list.filter { !personHistoryIsOutflow(it.first) }.sumOf { it.first.amount }), LKind.IN),
+                    LCol("Balance", list.firstOrNull()?.let { fmt(it.second) } ?: "", LKind.BAL)
+                ),
+                list.map { (e, b) ->
+                    val out = personHistoryIsOutflow(e)
+                    val note = e.item.takeIf { it != "Loans" && !it.equals(e.note, true) } ?: ""
+                    LRow(e.id, e.date, e.note.ifBlank { if (out) "Cash given" else "Cash received" }, note,
+                        listOf(if (out) fmt(e.amount) else "", if (!out) fmt(e.amount) else "", fmt(b))) { onEdit(e) }
+                }
+            )
         }
         UpButton(state)
         Pills(Pill("YOU PAID", OutBrush) { onAdd(true) }, Pill("YOU RECEIVED", InBrush) { onAdd(false) })
@@ -630,25 +667,14 @@ fun MoneyScreen(
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
                 }
-                // A group's own entries open right under it.
-                if (isOpen) items(g.list, key = { it.id }) { e ->
-                    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).background(MaterialTheme.colorScheme.surface).clickable { onEdit(e) }) {
-                        // Date and time in the left space, under the category icon.
-                        Column(Modifier.width(62.dp).padding(start = 14.dp, top = 5.dp, bottom = 5.dp)) {
-                            Text(shortDay.format(Date(e.date)), fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                            Text(timeFmt.format(Date(e.date)), fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-                        }
-                        Column(Modifier.weight(1f).padding(end = 8.dp, top = 5.dp, bottom = 5.dp)) {
-                            Text(title(e), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            if (e.note.isNotBlank()) Text(e.note, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                        ColLine()
-                        Box(
-                            Modifier.width(ColW).fillMaxHeight().background(if (income) GreenIn.copy(alpha = 0.06f) else OutTint),
-                            contentAlignment = Alignment.Center
-                        ) { Text(fmt(e.amount), color = color, fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1) }
-                    }
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f))
+                // A group's own entries open right under it, on the same ledger page.
+                if (isOpen) {
+                    ledger(
+                        g.name, listOf(LCol("Amount", (if (income) "↓ " else "↑ ") + fmt(g.total), if (income) LKind.IN else LKind.OUT)),
+                        g.list.map { e -> LRow(e.id, e.date, title(e), e.note, listOf(fmt(e.amount))) { onEdit(e) } },
+                        keyPrefix = "g${g.name}:"
+                    )
+                    item(key = "g${g.name}:end") { Spacer(Modifier.height(8.dp)) }
                 }
             }
             if (list.isEmpty()) item {
