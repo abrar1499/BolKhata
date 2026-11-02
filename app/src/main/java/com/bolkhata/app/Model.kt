@@ -123,7 +123,50 @@ class Store(context: Context) {
             .apply()
     }
 
-    fun load(): List<Entry> = read("entries")
+    fun load(): List<Entry> = read(scoped("entries"))
+
+    // ---------- Businesses: each has its own entries and trash ----------
+
+    /** The open business; "" is the first one, whose data keeps the original keys. */
+    var business: String
+        get() = prefs.getString("business", "") ?: ""
+        set(v) = prefs.edit().putString("business", v).apply()
+
+    private fun scoped(key: String, id: String = business) = if (id.isEmpty()) key else "$key@$id"
+
+    private fun businessNames(): JSONObject = try {
+        JSONObject(prefs.getString("businessNames", "{}") ?: "{}")
+    } catch (_: Exception) {
+        JSONObject()
+    }
+
+    /** Every business as (id, name), the first one first. */
+    fun businesses(): List<Pair<String, String>> {
+        val o = businessNames()
+        val ids = listOf("") + o.keys().asSequence().filter { it.isNotEmpty() }.sorted().toList()
+        return ids.map { it to o.optString(it, "").ifBlank { "My business" } }
+    }
+
+    /** Entries of any business, for counts on the business list. */
+    fun loadFor(id: String): List<Entry> = read(scoped("entries", id))
+
+    fun addBusiness(name: String): String {
+        val id = "b" + System.currentTimeMillis()
+        prefs.edit().putString("businessNames", businessNames().put(id, name.trim()).toString()).apply()
+        return id
+    }
+
+    fun renameBusiness(id: String, name: String) {
+        prefs.edit().putString("businessNames", businessNames().put(id, name.trim()).toString()).apply()
+    }
+
+    /** Deletes a business and its data. The first business can't be deleted. */
+    fun deleteBusiness(id: String) {
+        if (id.isEmpty()) return
+        val o = businessNames().apply { remove(id) }
+        prefs.edit().putString("businessNames", o.toString()).remove(scoped("entries", id)).remove(scoped("trash", id)).apply()
+        if (business == id) business = ""
+    }
 
     // ---------- Backup: everything the app keeps, in one file ----------
 
@@ -191,10 +234,10 @@ class Store(context: Context) {
     fun loadTrash(): List<Entry> {
         val cutoff = System.currentTimeMillis() - 30L * 86_400_000L
         val times = trashTimes
-        return read("trash").filter { (times[it.id] ?: now()) > cutoff }
+        return read(scoped("trash")).filter { (times[it.id] ?: now()) > cutoff }
     }
 
-    fun saveTrash(list: List<Entry>) = write("trash", list)
+    fun saveTrash(list: List<Entry>) = write(scoped("trash"), list)
 
     private val trashTimes: Map<String, Long>
         get() = try {
@@ -380,7 +423,7 @@ class Store(context: Context) {
         prefs.edit().putString("moveHistory", next.toString()).apply()
     }
 
-    fun save(list: List<Entry>) = write("entries", list)
+    fun save(list: List<Entry>) = write(scoped("entries"), list)
 
     /** Saving happens on one background thread, in order, so the screen never waits for it. */
     private val saver = java.util.concurrent.Executors.newSingleThreadExecutor()

@@ -24,11 +24,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.outlined.BarChart
-import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.FormatListBulleted
 import androidx.compose.material.icons.outlined.Payments
-import androidx.compose.material.icons.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.*
@@ -223,31 +221,34 @@ internal fun DrawerMenu(tab: Tab, name: String, currency: String, onCurrency: (S
     ModalDrawerSheet(
         modifier = Modifier.width(280.dp),
         drawerContainerColor = MaterialTheme.colorScheme.background,
-        drawerShape = RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp)
+        drawerShape = RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp),
+        windowInsets = WindowInsets(0, 0, 0, 0)
     ) {
-        Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant),
-                contentAlignment = Alignment.Center
-            ) { Text(name.trim().take(1).uppercase().ifEmpty { "B" }, fontWeight = FontWeight.SemiBold, fontSize = 17.sp) }
+        // Orange header like the khata screens.
+        Row(
+            Modifier.fillMaxWidth().background(EmberBrush).statusBarsPadding().padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 18.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(Modifier.size(44.dp).clip(CircleShape).background(Color.White), contentAlignment = Alignment.Center) {
+                Text(name.trim().take(1).uppercase().ifEmpty { "B" }, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = EmberTop)
+            }
             Spacer(Modifier.width(12.dp))
             Column {
-                Text("BolKhata", fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
+                Text("BolKhata", fontWeight = FontWeight.Bold, fontSize = 17.sp, color = Color.White)
                 Text(
                     if (name.isBlank()) "Speak it. Track it." else "Hello, ${name.trim()}",
-                    fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+                    fontSize = 12.sp, color = Color.White.copy(alpha = 0.85f)
                 )
             }
         }
-        DrawerRow("Home", Icons.Outlined.Home, tab == Tab.HOME) { onPick(Tab.HOME) }
-        DrawerRow("Chat", Icons.Outlined.ChatBubbleOutline, tab == Tab.CHAT) { onPick(Tab.CHAT) }
-        DrawerRow("Entries", Icons.Outlined.ReceiptLong, tab == Tab.ENTRIES) { onPick(Tab.ENTRIES) }
-        DrawerRow("Reports", Icons.Outlined.BarChart, tab == Tab.REPORTS) { onPick(Tab.REPORTS) }
-        DrawerRow("Trash", Icons.Outlined.Delete, tab == Tab.TRASH) { onPick(Tab.TRASH) }
-        DrawerRow("Settings", Icons.Outlined.Settings, tab == Tab.SETTINGS) { onPick(Tab.SETTINGS) }
+        Spacer(Modifier.height(8.dp))
+        DrawerRow("All entries", Icons.Outlined.FormatListBulleted, tab == Tab.ENTRIES, Color(0xFF8B5CF6)) { onPick(Tab.ENTRIES) }
+        DrawerRow("Reports", Icons.Outlined.BarChart, tab == Tab.REPORTS, Color(0xFF0EA5E9)) { onPick(Tab.REPORTS) }
+        DrawerRow("Trash", Icons.Outlined.Delete, tab == Tab.TRASH, Color(0xFF64748B)) { onPick(Tab.TRASH) }
+        DrawerRow("Settings", Icons.Outlined.Settings, tab == Tab.SETTINGS, Color(0xFF64748B)) { onPick(Tab.SETTINGS) }
         HorizontalDivider(Modifier.padding(horizontal = 20.dp, vertical = 10.dp), color = MaterialTheme.colorScheme.outlineVariant)
         Box {
-            DrawerRow("Currency", Icons.Outlined.Payments, false, value = "$currency ▾") { currencyOpen = true }
+            DrawerRow("Currency", Icons.Outlined.Payments, false, Color(0xFFF59E0B), value = "$currency ▾") { currencyOpen = true }
             PickMenu(currencyOpen, { currencyOpen = false }) {
                 CURRENCIES.forEach { c ->
                     DropdownMenuItem(
@@ -260,23 +261,23 @@ internal fun DrawerMenu(tab: Tab, name: String, currency: String, onCurrency: (S
     }
 }
 
-/** One side-menu row: line icon and label; the open screen sits on a white rounded highlight. */
+/** One side-menu row: coloured line icon and label; the open screen sits on a soft orange highlight. */
 @Composable
-private fun DrawerRow(label: String, icon: ImageVector, selected: Boolean, value: String? = null, onClick: () -> Unit) {
+private fun DrawerRow(label: String, icon: ImageVector, selected: Boolean, tint: Color, value: String? = null, onClick: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 2.dp)
             .clip(RoundedCornerShape(14.dp))
-            .background(if (selected) MaterialTheme.colorScheme.surface else Color.Transparent)
+            .background(if (selected) EmberTop.copy(alpha = 0.12f) else Color.Transparent)
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 13.dp),
+            .padding(horizontal = 14.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(21.dp),
-            tint = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant)
+        Icon(icon, contentDescription = null, modifier = Modifier.size(21.dp), tint = tint)
         Spacer(Modifier.width(14.dp))
-        Text(label, fontSize = 15.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.weight(1f))
+        Text(label, fontSize = 15.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            color = if (selected) EmberTop else MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
         if (value != null) Text(value, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

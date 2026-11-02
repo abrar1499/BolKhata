@@ -58,8 +58,9 @@ class MainActivity : ComponentActivity() {
             val header = headerTheme(themeName, dark)
             LaunchedEffect(header) {
                 @Suppress("DEPRECATION")
-                window.statusBarColor = header.c1.toArgb()
-                WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = header.light
+                // The orange khata header runs up under the status bar.
+                window.statusBarColor = EmberTop.toArgb()
+                WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = false
             }
             CompositionLocalProvider(LocalHeader provides header) {
                 BolTheme(dark) {
@@ -77,17 +78,17 @@ class MainActivity : ComponentActivity() {
 
 enum class Tab { HOME, STOCK, CHAT, ENTRIES, REPORTS, TRASH, SETTINGS, PARTIES, CASHBOOK, EXPENSE, INCOME }
 
-/** The open tab and the tabs it was reached from, so Back returns the same way. Home starts over. */
+/** The open tab and the tabs it was reached from, so Back returns the same way. Chat (the first tab) starts over. */
 class TabNav {
-    private val now = mutableStateOf(Tab.HOME)
+    private val now = mutableStateOf(Tab.CHAT)
     private val past = mutableStateListOf<Tab>()
     operator fun getValue(thisRef: Any?, property: KProperty<*>): Tab = now.value
     operator fun setValue(thisRef: Any?, property: KProperty<*>, t: Tab) {
         if (t == now.value) return
-        if (t == Tab.HOME) past.clear() else { past.remove(t); past.add(now.value) }
+        if (t == Tab.CHAT) past.clear() else { past.remove(t); past.add(now.value) }
         now.value = t
     }
-    fun back() { now.value = past.removeLastOrNull() ?: Tab.HOME }
+    fun back() { now.value = past.removeLastOrNull() ?: Tab.CHAT }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -146,6 +147,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var activeLedgerPerson by remember { mutableStateOf<String?>(null) }
     /** The party khata open from the Parties tab. */
     var partyOpen by remember { mutableStateOf<String?>(null) }
+    /** The open business's name, and whether the business list is showing. */
+    var businessName by remember { mutableStateOf(store.businesses().firstOrNull { it.first == store.business }?.second ?: "My business") }
+    var pickingBusiness by remember { mutableStateOf(false) }
+    var businessTick by remember { mutableIntStateOf(0) }
     // Smart understanding: entries the local engine read (shown before saving), a name to pick, what was just added (Undo),
     // the entry being edited from the card (to learn from), and words the person corrected before.
     var confirmNew by remember { mutableStateOf<Pair<List<Entry>, String>?>(null) }
@@ -1861,7 +1866,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     }
 
     // Back closes whatever is on top first (an account opens over a khata), then walks back through the tabs.
-    BackHandler(enabled = ledger != null || account != null || results != null || people != null || partyOpen != null || tab != Tab.HOME) {
+    BackHandler(enabled = ledger != null || account != null || results != null || people != null || partyOpen != null || tab != Tab.CHAT) {
         if (account != null) {
             account = null
         } else if (ledger != null) {
@@ -1902,12 +1907,16 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         bottomBar = {
             val main = results == null && people == null && account == null && ledger == null
             if (main && tab == Tab.CHAT) {
-                InputBar(
-                    onSend = { chatInput(it) }, onMic = { startVoice(forChat = true) }, placeholder = "Speak, type or ask…",
-                    onAttach = { pickFile.launch(arrayOf("image/*", "application/pdf")) },
-                    busy = chatLoading,
-                    voice = if (recorder != null) VoiceState(true, "Listening…", "sends when you stop", level = voiceLevel) { finishRecording() } else null
-                )
+                Column {
+                    InputBar(
+                        onSend = { chatInput(it) }, onMic = { startVoice(forChat = true) }, placeholder = "Speak, type or ask…",
+                        onAttach = { pickFile.launch(arrayOf("image/*", "application/pdf")) },
+                        busy = chatLoading,
+                        voice = if (recorder != null) VoiceState(true, "Listening…", "sends when you stop", level = voiceLevel) { finishRecording() } else null,
+                        navPad = false
+                    )
+                    KhataNav(tab) { tab = it }
+                }
             } else {
                 // The khata tabs sit under the chat bar on the main screens.
                 val nav = main && tab in KHATA_TABS && partyOpen == null
@@ -1963,7 +1972,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     )
                 }
                 tab == Tab.PARTIES -> PartiesScreen(
-                    entries, currency, onMenu = { openMenu() },
+                    entries, currency, onMenu = { openMenu() }, business = businessName, onBusiness = { pickingBusiness = true },
                     onOpen = { p -> partyOpen = p.name; activeLedgerPerson = p.name },
                     onReport = { reportStart = ReportKind.TO_RECEIVE; tab = Tab.REPORTS },
                     onAdd = { trade = template(Type.DIYA, "") }
@@ -2038,8 +2047,6 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         currency = currency,
                         subtitle = "$monthName · ${fmt(monthSpent)} $currency spent",
                         suggestions = suggestions,
-                        showStock = entries.any { isTrade(it.type) },
-                        onTab = { tab = it },
                         onMenu = { openMenu() },
                         onSend = { chatInput(it) },
                         onClear = {
@@ -2146,7 +2153,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                             } else if (newVersion == null) {
                                 toast("You have the latest version")
                             } else {
-                                tab = Tab.HOME
+                                tab = Tab.CHAT
                             }
                         }
                     },
@@ -2631,6 +2638,24 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 ) { Text("Delete") }
             },
             dismissButton = { TextButton(onClick = { confirm = null }) { Text("Cancel") } }
+        )
+    }
+
+    if (pickingBusiness) {
+        fun open(id: String) {
+            store.business = id
+            entries = store.load()
+            trash = store.loadTrash()
+            businessName = store.businesses().firstOrNull { it.first == id }?.second ?: "My business"
+            partyOpen = null
+            pickingBusiness = false
+        }
+        BusinessPicker(
+            list = remember(businessTick, entries) { store.businesses().map { (id, n) -> Triple(id, n, personAccounts(store.loadFor(id)).size) } },
+            current = store.business, onBack = { pickingBusiness = false }, onPick = { open(it) },
+            onAdd = { open(store.addBusiness(it)) },
+            onRename = { id, n -> store.renameBusiness(id, n); if (id == store.business) businessName = n; businessTick++ },
+            onDelete = { id -> val wasOpen = id == store.business; store.deleteBusiness(id); if (wasOpen) open("") else businessTick++ }
         )
     }
 
