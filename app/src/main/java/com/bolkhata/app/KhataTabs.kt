@@ -66,8 +66,6 @@ private val Ember = Color(0xFFE3342F)
 /** Colour at the top of the orange header, also used for the status bar. */
 internal val EmberTop = Color(0xFFF0572E)
 internal val EmberBrush = Brush.linearGradient(listOf(Color(0xFFF0572E), Color(0xFFE3342F)))
-private val OutBrush = Brush.horizontalGradient(listOf(Color(0xFF8E1414), Color(0xFFD13A33)))
-private val InBrush = Brush.horizontalGradient(listOf(Color(0xFF0F7A3A), Color(0xFF3FB46B)))
 
 /** Money that left your hand. A sale or purchase on credit with a party moves no cash. */
 fun cashOut(e: Entry) = when (e.type) {
@@ -219,24 +217,6 @@ private fun SmallChip(label: String, on: Boolean, onClick: () -> Unit) {
     )
 }
 
-/** One small gradient pill button. */
-private class Pill(val label: String, val brush: Brush, val onClick: () -> Unit)
-
-/** Compact pill buttons at the bottom right, just above the chat bar. */
-@Composable
-private fun BoxScope.Pills(vararg pills: Pill) {
-    Row(
-        Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = (LocalBarSpace.current - 30.dp).coerceAtLeast(8.dp)),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        pills.forEach { p ->
-            Box(
-                Modifier.shadow(4.dp, CircleShape).clip(CircleShape).background(p.brush).clickable { p.onClick() }
-                    .padding(horizontal = 18.dp, vertical = 9.dp)
-            ) { Text(p.label, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.3.sp) }
-        }
-    }
-}
 
 private fun lastSeen(ms: Long): String {
     val day = if (sameDay(ms, System.currentTimeMillis())) "Today" else SimpleDateFormat("d MMM", Locale.US).format(Date(ms))
@@ -277,7 +257,7 @@ fun PartiesScreen(
                     fontSize = 14.sp, modifier = Modifier.padding(24.dp))
             }
         }
-        Pills(Pill("+ ADD PARTY", EmberBrush, onAdd))
+        PlusButton(onAdd)
     }
 }
 
@@ -591,7 +571,7 @@ fun PartyKhataScreen(
             )
         }
         UpButton(state)
-        Pills(Pill("YOU PAID", OutBrush) { onAdd(true) }, Pill("YOU RECEIVED", InBrush) { onAdd(false) })
+        PlusButton { onAdd(true) }
     }
 }
 
@@ -681,7 +661,7 @@ fun MoneyScreen(
                 Text(if (income) "No income yet." else "No expenses yet.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp, modifier = Modifier.padding(24.dp))
             }
         }
-        Pills(Pill(if (income) "+ ADD INCOME" else "+ ADD EXPENSE", if (income) InBrush else OutBrush, onAdd))
+        PlusButton(onAdd)
     }
 }
 
