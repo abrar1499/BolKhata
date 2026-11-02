@@ -81,7 +81,7 @@ Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Packa
 ## Look the owner likes (keep it)
 - Orange header up to the status bar (`EmberTop` / `EmberBrush`), white summary card over it, bottom tabs
   Chat · Parties · Cash · Expense · Income, chat bar on every screen, "Entry" add button (`PlusButton`).
-- Lists are compact ledger pages (`ledger()` in KhataTabs.kt): month chips, a tinted total line with each total
+- Lists are compact ledger pages (`ledger()` in KhataTabs.kt): month chips, a tinted title line, each total under its column name,
   above its column, Date | Detail | Out | In | Balance, faint grey lines, small text, amounts centred.
 - Small text: Compose's theme line height is tall, so compact lists must use `Tight { }` (no extra line height),
   and phones enlarge tiny text, so give columns room instead of shrinking fonts further.

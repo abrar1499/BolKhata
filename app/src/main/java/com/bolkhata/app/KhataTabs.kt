@@ -349,7 +349,7 @@ private fun cellTint(k: LKind, a: Float) = when (k) { LKind.OUT -> RedSpend.copy
  * per entry. Out / In columns are softly tinted; lines are faint grey.
  */
 internal fun LazyListScope.ledger(title: String, cols: List<LCol>, rows: List<LRow>, keyPrefix: String = "") {
-    item(key = keyPrefix + "lt") { LedgerTop(title, rows.size, cols) }
+    item(key = keyPrefix + "lt") { LedgerTop(title, rows.size) }
     item(key = keyPrefix + "lh") { LedgerHead(cols) }
     items(rows, key = { keyPrefix + it.key }) { r -> LedgerRow(r, cols, r === rows.last()) }
     if (rows.isEmpty()) item(key = keyPrefix + "le") {
@@ -361,25 +361,15 @@ internal fun LazyListScope.ledger(title: String, cols: List<LCol>, rows: List<LR
 }
 
 @Composable
-private fun LedgerTop(title: String, count: Int, cols: List<LCol>) = Tight {
-    val w = colW(cols)
+private fun LedgerTop(title: String, count: Int) = Tight {
     Row(
-        Modifier.padding(start = 10.dp, end = 10.dp, top = 6.dp).fillMaxWidth().height(IntrinsicSize.Min)
+        Modifier.padding(start = 10.dp, end = 10.dp, top = 6.dp).fillMaxWidth()
             .clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp))
             .background(Brush.horizontalGradient(listOf(EmberTop.copy(alpha = 0.20f), Ember.copy(alpha = 0.08f))))
     ) {
         Column(Modifier.weight(1f).padding(start = 10.dp, top = 8.dp, bottom = 8.dp)) {
             Text(title, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
             Text(if (count == 1) "1 entry" else "$count entries", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        cols.forEach { c ->
-            Box(
-                Modifier.width(w).fillMaxHeight().background(if (c.kind == LKind.BAL) MaterialTheme.colorScheme.surface else cellTint(c.kind, 0.05f)),
-                contentAlignment = if (c.kind == LKind.BAL) Alignment.CenterEnd else Alignment.Center
-            ) {
-                Text(c.total, fontSize = 10.sp, fontWeight = FontWeight.Black, color = kindColor(c.kind, MaterialTheme.colorScheme.onSurface),
-                    maxLines = 1, softWrap = false, modifier = Modifier.padding(horizontal = 3.dp))
-            }
         }
     }
 }
@@ -395,7 +385,15 @@ private fun LedgerHead(cols: List<LCol>) = Tight {
             Box(
                 Modifier.width(w).fillMaxHeight().background(if (c.kind == LKind.BAL) Color(0x12786C6C) else cellTint(c.kind, 0.12f)),
                 contentAlignment = if (c.kind == LKind.BAL) Alignment.CenterEnd else Alignment.Center
-            ) { HeadText(c.label.uppercase(), if (c.kind == LKind.BAL) sub else kindColor(c.kind, sub), Modifier.padding(horizontal = 3.dp), center = true) }
+            ) {
+                // Column name, with its total right under it.
+                Column(Modifier.padding(horizontal = 3.dp, vertical = 5.dp), horizontalAlignment = if (c.kind == LKind.BAL) Alignment.End else Alignment.CenterHorizontally) {
+                    Text(c.label.uppercase(), fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.4.sp, maxLines = 1,
+                        color = if (c.kind == LKind.BAL) sub else kindColor(c.kind, sub))
+                    Text(c.total, fontSize = 10.sp, fontWeight = FontWeight.Black, maxLines = 1, softWrap = false,
+                        color = kindColor(c.kind, MaterialTheme.colorScheme.onSurface))
+                }
+            }
         }
     }
     HorizontalDivider(Modifier.padding(horizontal = 10.dp), color = MaterialTheme.colorScheme.outlineVariant)
@@ -570,8 +568,8 @@ fun PartyKhataScreen(
             ledger(
                 label,
                 listOf(
-                    LCol("You paid", "↑ " + fmt(list.filter { personHistoryIsOutflow(it.first) }.sumOf { it.first.amount }), LKind.OUT),
-                    LCol("You got", "↓ " + fmt(list.filter { !personHistoryIsOutflow(it.first) }.sumOf { it.first.amount }), LKind.IN),
+                    LCol("Paid", "↑ " + fmt(list.filter { personHistoryIsOutflow(it.first) }.sumOf { it.first.amount }), LKind.OUT),
+                    LCol("Received", "↓ " + fmt(list.filter { !personHistoryIsOutflow(it.first) }.sumOf { it.first.amount }), LKind.IN),
                     LCol("Balance", list.firstOrNull()?.let { fmt(it.second) } ?: "", LKind.BAL)
                 ),
                 list.map { (e, b) ->
