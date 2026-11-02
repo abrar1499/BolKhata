@@ -6,6 +6,8 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
@@ -341,15 +343,17 @@ private fun colW(cols: List<LCol>) = if (cols.size == 1) 70.dp else 60.dp
 @Composable
 private fun Tight(content: @Composable () -> Unit) =
     ProvideTextStyle(LocalTextStyle.current.copy(lineHeight = TextUnit.Unspecified), content)
-private fun kindColor(k: LKind, base: Color) = when (k) { LKind.OUT -> RedSpend; LKind.IN -> GreenIn; LKind.BAL -> base }
-private fun cellTint(k: LKind, a: Float) = when (k) { LKind.OUT -> RedSpend.copy(alpha = a); LKind.IN -> GreenIn.copy(alpha = a); LKind.BAL -> Color.Transparent }
+/** Balance is blue, so it never reads as money in or out. */
+private val BalBlue = Color(0xFF0284C7)
+private fun kindColor(k: LKind, base: Color) = when (k) { LKind.OUT -> RedSpend; LKind.IN -> GreenIn; LKind.BAL -> BalBlue }
+private fun cellTint(k: LKind, a: Float) = when (k) { LKind.OUT -> RedSpend.copy(alpha = a); LKind.IN -> GreenIn.copy(alpha = a); LKind.BAL -> BalBlue.copy(alpha = a) }
 
 /**
  * A white ledger page: a tinted line with the title and each column's total, the column names, then one small line
  * per entry. Out / In columns are softly tinted; lines are faint grey.
  */
 internal fun LazyListScope.ledger(title: String, cols: List<LCol>, rows: List<LRow>, keyPrefix: String = "") {
-    item(key = keyPrefix + "lt") { LedgerTop(title, rows.size, cols) }
+    item(key = keyPrefix + "lt") { LedgerTop(title, rows.size) }
     item(key = keyPrefix + "lh") { LedgerHead(cols) }
     items(rows, key = { keyPrefix + it.key }) { r -> LedgerRow(r, cols, r === rows.last()) }
     if (rows.isEmpty()) item(key = keyPrefix + "le") {
@@ -361,25 +365,15 @@ internal fun LazyListScope.ledger(title: String, cols: List<LCol>, rows: List<LR
 }
 
 @Composable
-private fun LedgerTop(title: String, count: Int, cols: List<LCol>) = Tight {
-    val w = colW(cols)
+private fun LedgerTop(title: String, count: Int) = Tight {
     Row(
-        Modifier.padding(start = 10.dp, end = 10.dp, top = 6.dp).fillMaxWidth().height(IntrinsicSize.Min)
+        Modifier.padding(start = 10.dp, end = 10.dp, top = 6.dp).fillMaxWidth()
             .clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp))
             .background(Brush.horizontalGradient(listOf(EmberTop.copy(alpha = 0.20f), Ember.copy(alpha = 0.08f))))
     ) {
         Column(Modifier.weight(1f).padding(start = 10.dp, top = 8.dp, bottom = 8.dp)) {
             Text(title, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
             Text(if (count == 1) "1 entry" else "$count entries", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        cols.forEach { c ->
-            Box(
-                Modifier.width(w).fillMaxHeight().background(if (c.kind == LKind.BAL) MaterialTheme.colorScheme.surface else cellTint(c.kind, 0.05f)),
-                contentAlignment = if (c.kind == LKind.BAL) Alignment.CenterEnd else Alignment.Center
-            ) {
-                Text(c.total, fontSize = 10.sp, fontWeight = FontWeight.Black, color = kindColor(c.kind, MaterialTheme.colorScheme.onSurface),
-                    maxLines = 1, softWrap = false, modifier = Modifier.padding(horizontal = 3.dp))
-            }
         }
     }
 }
@@ -393,9 +387,17 @@ private fun LedgerHead(cols: List<LCol>) = Tight {
         HeadText("DETAIL", sub, Modifier.weight(1f).padding(start = 8.dp))
         cols.forEach { c ->
             Box(
-                Modifier.width(w).fillMaxHeight().background(if (c.kind == LKind.BAL) Color(0x12786C6C) else cellTint(c.kind, 0.12f)),
-                contentAlignment = if (c.kind == LKind.BAL) Alignment.CenterEnd else Alignment.Center
-            ) { HeadText(c.label.uppercase(), if (c.kind == LKind.BAL) sub else kindColor(c.kind, sub), Modifier.padding(horizontal = 3.dp), center = true) }
+                Modifier.width(w).fillMaxHeight().background(cellTint(c.kind, 0.12f)),
+                contentAlignment = Alignment.Center
+            ) {
+                // Column name, with its total right under it.
+                Column(Modifier.padding(horizontal = 3.dp, vertical = 5.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(c.label.uppercase(), fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.4.sp, maxLines = 1,
+                        color = kindColor(c.kind, sub))
+                    Text(c.total, fontSize = 10.sp, fontWeight = FontWeight.Black, maxLines = 1, softWrap = false,
+                        color = kindColor(c.kind, MaterialTheme.colorScheme.onSurface))
+                }
+            }
         }
     }
     HorizontalDivider(Modifier.padding(horizontal = 10.dp), color = MaterialTheme.colorScheme.outlineVariant)
@@ -437,13 +439,13 @@ private fun LedgerRow(r: LRow, cols: List<LCol>, last: Boolean) = Tight {
             val v = r.values.getOrElse(i) { "" }
             Box(
                 Modifier.width(w).fillMaxHeight().background(cellTint(c.kind, 0.05f)),
-                contentAlignment = if (c.kind == LKind.BAL) Alignment.CenterEnd else Alignment.Center
+                contentAlignment = Alignment.Center
             ) {
                 Text(
                     v, fontFamily = FontFamily.Monospace, maxLines = 1, softWrap = false,
                     fontSize = if (c.kind == LKind.BAL) 9.sp else 10.sp,
                     fontWeight = if (c.kind == LKind.BAL) FontWeight.Normal else FontWeight.Bold,
-                    color = if (c.kind == LKind.BAL) sub else kindColor(c.kind, sub),
+                    color = kindColor(c.kind, sub),
                     modifier = Modifier.padding(horizontal = 4.dp)
                 )
             }
@@ -524,8 +526,8 @@ fun CashBookScreen(
             ledger(
                 label,
                 listOf(
-                    LCol("Out", "↑ " + fmt(list.filter(::cashOut).sumOf { it.amount }), LKind.OUT),
-                    LCol("In", "↓ " + fmt(list.filter(::cashIn).sumOf { it.amount }), LKind.IN),
+                    LCol("Out", fmt(list.filter(::cashOut).sumOf { it.amount }), LKind.OUT),
+                    LCol("In", fmt(list.filter(::cashIn).sumOf { it.amount }), LKind.IN),
                     LCol("Balance", list.firstOrNull()?.let { fmt(bal[it.id] ?: 0.0) } ?: "", LKind.BAL)
                 ),
                 list.map { e ->
@@ -570,8 +572,8 @@ fun PartyKhataScreen(
             ledger(
                 label,
                 listOf(
-                    LCol("You paid", "↑ " + fmt(list.filter { personHistoryIsOutflow(it.first) }.sumOf { it.first.amount }), LKind.OUT),
-                    LCol("You got", "↓ " + fmt(list.filter { !personHistoryIsOutflow(it.first) }.sumOf { it.first.amount }), LKind.IN),
+                    LCol("Paid", fmt(list.filter { personHistoryIsOutflow(it.first) }.sumOf { it.first.amount }), LKind.OUT),
+                    LCol("Received", fmt(list.filter { !personHistoryIsOutflow(it.first) }.sumOf { it.first.amount }), LKind.IN),
                     LCol("Balance", list.firstOrNull()?.let { fmt(it.second) } ?: "", LKind.BAL)
                 ),
                 list.map { (e, b) ->
@@ -587,6 +589,95 @@ fun PartyKhataScreen(
     }
 }
 
+
+// ---------------------------------------------------------------- All entries
+
+/** Every entry on the ledger page, a month at a time, with chips for expense, income, loans and trade. */
+@Composable
+fun TransactionsScreen(entries: List<Entry>, currency: String, onEdit: (Entry) -> Unit, onAdd: () -> Unit, onMenu: () -> Unit) {
+    val kinds = listOf("All", "Expense", "Income", "Loans", "Trade")
+    var filter by rememberSaveable { mutableIntStateOf(0) }
+    var q by rememberSaveable { mutableStateOf("") }
+    val newest = remember(entries, filter) {
+        entries.filter {
+            when (filter) { 1 -> it.type == Type.KHARCHA; 2 -> it.type == Type.AAMDANI; 3 -> isLoan(it.type); 4 -> isTrade(it.type); else -> true }
+        }.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt })
+    }
+    val months = remember(newest) { monthsOf(newest) }
+    var month by rememberSaveable(months.firstOrNull()?.first) { mutableIntStateOf(months.firstOrNull()?.first ?: 0) }
+    val list = if (q.isBlank()) newest.filter { monthKey(it.date) == month } else newest.filter { matches(it, q) }
+    // Money that left you (or a purchase) goes in Out; everything else in In.
+    fun out(e: Entry) = cashOut(e) || e.type == Type.PURCHASE
+    val outT = list.filter(::out).sumOf { it.amount }
+    val inT = list.filterNot(::out).sumOf { it.amount }
+    val state = rememberLazyListState()
+    Box(Modifier.fillMaxSize()) {
+        LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
+            item {
+                KhataTop("All entries", if (entries.size == 1) "1 entry" else "${entries.size} entries", onMenu) {
+                    SumCard(Triple(money(currency, outT), "Out", RedSpend), Triple(money(currency, inT), "In", GreenIn), "Add", onAdd)
+                }
+            }
+            item {
+                Row(Modifier.horizontalScroll(rememberScrollState()).padding(start = 14.dp, end = 14.dp, top = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    kinds.forEachIndexed { i, t -> SmallChip(t, filter == i) { filter = i } }
+                }
+            }
+            item { SearchBox(q, "Search") { q = it } }
+            if (q.isBlank() && months.isNotEmpty()) stickyHeader { MonthChips(months, month) { month = it } }
+            val label = if (q.isNotBlank()) "Found" else months.firstOrNull { it.first == month }?.let { monthFmt.format(Date(it.second)) } ?: ""
+            ledger(
+                label, listOf(LCol("Out", fmt(outT), LKind.OUT), LCol("In", fmt(inT), LKind.IN)),
+                list.map { e -> LRow(e.id, e.date, title(e), e.note, listOf(if (out(e)) fmt(e.amount) else "", if (!out(e)) fmt(e.amount) else "")) { onEdit(e) } }
+            )
+        }
+        UpButton(state)
+        PlusButton(onAdd)
+    }
+}
+
+// ---------------------------------------------------------------- Trash
+
+/** Deleted entries (kept 30 days) on the ledger page; tap one to restore it. */
+@Composable
+fun TrashScreen(
+    trash: List<Entry>, currency: String, onMenu: () -> Unit,
+    onRestore: (Entry) -> Unit, onRestoreAll: () -> Unit, onEmpty: () -> Unit
+) {
+    var askEmpty by remember { mutableStateOf(false) }
+    val list = remember(trash) { trash.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt }) }
+    fun out(e: Entry) = cashOut(e) || e.type == Type.PURCHASE
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = barSpace(24.dp))) {
+        item {
+            KhataTop("Trash", "Deleted entries stay here for 30 days", onMenu) {
+                SumCard(
+                    Triple("${trash.size}", if (trash.size == 1) "Entry" else "Entries", MaterialTheme.colorScheme.onSurface),
+                    Triple(money(currency, trash.sumOf { it.amount }), "Total", RedSpend),
+                    "Restore all", onRestoreAll
+                )
+            }
+        }
+        if (trash.isNotEmpty()) item {
+            TextButton(onClick = { askEmpty = true }, modifier = Modifier.padding(start = 6.dp, top = 6.dp)) { Text("Empty trash", color = RedSpend) }
+        }
+        ledger(
+            "Tap an entry to restore it",
+            listOf(LCol("Out", fmt(list.filter(::out).sumOf { it.amount }), LKind.OUT), LCol("In", fmt(list.filterNot(::out).sumOf { it.amount }), LKind.IN)),
+            list.map { e -> LRow(e.id, e.date, title(e), e.note, listOf(if (out(e)) fmt(e.amount) else "", if (!out(e)) fmt(e.amount) else "")) { onRestore(e) } }
+        )
+    }
+    if (askEmpty) {
+        AlertDialog(
+            onDismissRequest = { askEmpty = false },
+            title = { Text("Empty trash?") },
+            text = { Text("${trash.size} entries will be deleted forever. This cannot be undone.") },
+            confirmButton = {
+                Button(onClick = { askEmpty = false; onEmpty() }, colors = ButtonDefaults.buttonColors(containerColor = RedSpend)) { Text("Delete forever") }
+            },
+            dismissButton = { TextButton(onClick = { askEmpty = false }) { Text("Cancel") } }
+        )
+    }
+}
 
 // ---------------------------------------------------------------- Expense / Income
 
@@ -662,7 +753,7 @@ fun MoneyScreen(
                 // A group's own entries open right under it, on the same ledger page.
                 if (isOpen) {
                     ledger(
-                        g.name, listOf(LCol("Amount", (if (income) "↓ " else "↑ ") + fmt(g.total), if (income) LKind.IN else LKind.OUT)),
+                        g.name, listOf(LCol("Amount", fmt(g.total), if (income) LKind.IN else LKind.OUT)),
                         g.list.map { e -> LRow(e.id, e.date, title(e), e.note, listOf(fmt(e.amount))) { onEdit(e) } },
                         keyPrefix = "g${g.name}:"
                     )

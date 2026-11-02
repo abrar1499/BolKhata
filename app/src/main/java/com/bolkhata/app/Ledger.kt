@@ -446,11 +446,15 @@ fun LedgerScreen(
 
 @Composable
 private fun Header(title: String, subtitle: String, onBack: () -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+    // Same orange band as the khata screens.
+    Row(
+        Modifier.fillMaxWidth().background(EmberBrush).statusBarsPadding().padding(start = 4.dp, end = 16.dp, top = 6.dp, bottom = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White) }
         Column(Modifier.weight(1f)) {
-            Text(title, fontWeight = FontWeight.ExtraBold, fontSize = 20.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (subtitle.isNotBlank()) Text(subtitle, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(title, fontWeight = FontWeight.Bold, fontSize = 17.sp, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (subtitle.isNotBlank()) Text(subtitle, fontSize = 11.sp, color = Color.White.copy(alpha = 0.85f))
         }
     }
 }
