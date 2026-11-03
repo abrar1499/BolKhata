@@ -82,11 +82,12 @@ Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Packa
 - A push to main is blocked unless the owner's latest words approve the release; if blocked, ask once, plainly.
 
 ## Look the owner likes (keep it)
-- Orange header up to the status bar (`EmberTop` / `EmberBrush`), white summary card over it, bottom tabs
-  Chat · Parties · Cash · Expense · Income, chat bar on every screen, "Entry" add button (`PlusButton`).
-- Lists are compact ledger pages (`ledger()` in KhataTabs.kt): month chips, a tinted title line, each total under its column name,
-  Date | Detail | Out | In | Balance, faint grey lines, small text, amounts centred.
-- Small text: Compose's theme line height is tall, so compact lists must use `Tight { }` (no extra line height),
-  and phones enlarge tiny text, so give columns room instead of shrinking fonts further.
-- Red = money out, green = money in, arrows ↑ out / ↓ in on totals. No pill buttons, no extra headings.
-
+- Glass orange header up to the status bar (`GlassHeader`) with the frosted business pill (`BusinessPill`: menu,
+  name ▾) on every tab incl. Chat; white summary card over it; bottom tabs Chat · Parties · Cash · Expense · Income;
+  chat bar on every screen; "Entry" add button (`PlusButton`).
+- Lists sit in white rounded sheets: `SheetTitle` (red-white tint, title + count), compact rows, faint lines.
+- Ledgers (`ledger()` in KhataTabs.kt): head cell "Month / N entries", each total under its column name;
+  slim day line per date with signed day totals, auto faint green (plus) / red (minus) tint; rows show detail with
+  "time · note" below, signed amounts (−out / +in) centred in Out | In. No Balance column, no arrows.
+- Small text: compact lists use `Tight { }` (no extra line height); give columns room instead of shrinking fonts.
+- Red = money out, green = money in. No pill buttons, no extra headings.

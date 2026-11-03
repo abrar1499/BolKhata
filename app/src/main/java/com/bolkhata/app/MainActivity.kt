@@ -1978,13 +1978,14 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     onAdd = { trade = template(Type.DIYA, "") }
                 )
                 tab == Tab.CASHBOOK -> CashBookScreen(
-                    entries, currency, onMenu = { openMenu() }, onEdit = { editing = it }, onHistory = { tab = Tab.ENTRIES },
+                    entries, currency, onMenu = { openMenu() }, business = businessName, onBusiness = { pickingBusiness = true },
+                    onEdit = { editing = it }, onHistory = { tab = Tab.ENTRIES },
                     onAdd = { inc -> trade = cashTemplate(inc) }
                 )
                 tab == Tab.EXPENSE || tab == Tab.INCOME -> {
                     val inc = tab == Tab.INCOME
                     MoneyScreen(
-                        inc, entries, currency, onMenu = { openMenu() }, onEdit = { editing = it },
+                        inc, entries, currency, onMenu = { openMenu() }, business = businessName, onBusiness = { pickingBusiness = true }, onEdit = { editing = it },
                         onReport = { reportStart = if (inc) ReportKind.CASH_IN else ReportKind.CASH_OUT; tab = Tab.REPORTS },
                         onAdd = { trade = cashTemplate(inc) }
                     )
@@ -2048,6 +2049,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         subtitle = "$monthName · ${fmt(monthSpent)} $currency spent",
                         suggestions = suggestions,
                         onMenu = { openMenu() },
+                        business = businessName, onBusiness = { pickingBusiness = true },
                         onSend = { chatInput(it) },
                         onClear = {
                             chatMessages = emptyList()
