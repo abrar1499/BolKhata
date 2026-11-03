@@ -757,7 +757,7 @@ fun MoneyScreen(
                     SumCard(Triple(money(currency, lastMonth), "Last month", color), Triple(money(currency, thisMonth), "This month", color), "Report ›", onReport)
                 }
             }
-            if (groups.isNotEmpty()) item { SheetTitle(if (income) "By who paid" else "By category", "Total " + fmt(total)) }
+            if (groups.isNotEmpty()) item { SheetTitle(if (income) "Income" else "Expense", "Total " + fmt(total)) }
             groups.forEach { g ->
                 val isOpen = g.name in open
                 val lastGroup = g === groups.last()
