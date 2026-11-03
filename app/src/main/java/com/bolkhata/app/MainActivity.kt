@@ -58,9 +58,10 @@ class MainActivity : ComponentActivity() {
             var dark by remember { mutableStateOf(store.dark) }
             var themeName by remember { mutableStateOf(store.theme) }
             val header = headerTheme(themeName, dark)
-            // Text keeps the designed size: the phone's font-size setting would make the compact ledgers overflow.
-            val density = LocalDensity.current
-            CompositionLocalProvider(LocalHeader provides header, LocalDensity provides Density(density.density, 1f)) {
+            // Every phone shows the design 1:1: the screen is 390 units wide (like the mock-up) and the phone's
+            // font-size and display-size settings don't blow the compact ledgers up.
+            val m = resources.displayMetrics
+            CompositionLocalProvider(LocalHeader provides header, LocalDensity provides Density(minOf(m.widthPixels, m.heightPixels) / 390f, 1f)) {
                 BolTheme(dark) {
                     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                         App(

@@ -163,9 +163,12 @@ val Inter = FontFamily(
     Font(R.font.inter_bold, FontWeight.Bold)
 )
 
-/** Every Material text style in Inter with tight letter spacing, for a cleaner, more modern look. */
+/**
+ * Every Material text style in Inter with tight letter spacing. Line height follows the text size (1.25×): the Material
+ * default is a fixed 24sp, which made small text in cards and rows far taller than the design.
+ */
 val AppTypography: Typography = Typography().run {
-    fun TextStyle.clean() = copy(fontFamily = Inter, letterSpacing = 0.sp)
+    fun TextStyle.clean() = copy(fontFamily = Inter, letterSpacing = 0.sp, lineHeight = 1.25.em)
     copy(
         displayLarge = displayLarge.clean(), displayMedium = displayMedium.clean(), displaySmall = displaySmall.clean(),
         headlineLarge = headlineLarge.clean(), headlineMedium = headlineMedium.clean(), headlineSmall = headlineSmall.clean(),
