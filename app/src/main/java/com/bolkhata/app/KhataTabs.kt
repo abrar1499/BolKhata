@@ -115,7 +115,7 @@ fun KhataNav(tab: Tab, onTab: (Tab) -> Unit) {
 
 private fun navItem(t: Tab): Pair<String, ImageVector> = when (t) {
     Tab.PARTIES -> "Parties" to Icons.Outlined.People
-    Tab.CASHBOOK -> "Cash" to Icons.Outlined.AccountBalanceWallet
+    Tab.CASHBOOK -> "Cashbook" to Icons.Outlined.AccountBalanceWallet
     Tab.EXPENSE -> "Expense" to Icons.Outlined.ReceiptLong
     Tab.INCOME -> "Income" to Icons.Outlined.Payments
     else -> "Chat" to Icons.Outlined.ChatBubbleOutline
