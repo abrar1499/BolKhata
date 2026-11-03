@@ -122,7 +122,7 @@ private fun navItem(t: Tab): Pair<String, ImageVector> = when (t) {
     else -> "Chat" to Icons.Outlined.ChatBubbleOutline
 }
 
-/** Glassy orange header: a warm gradient with a soft white sheen and two faint light circles. */
+/** Glassy orange header: a warm gradient with a soft white sheen and two faint light circles, flowing out of the status bar. */
 @Composable
 internal fun GlassHeader(modifier: Modifier) {
     Canvas(modifier.background(Brush.linearGradient(listOf(Color(0xFFF46B42), Color(0xFFEC4C35), Color(0xFFE3342F))))) {
@@ -137,6 +137,8 @@ internal fun GlassHeader(modifier: Modifier) {
             radius = w * 0.35f, center = Offset(w * 0.95f, 0f))
         drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = 0.14f), Color.Transparent), center = Offset(0f, h), radius = w * 0.25f),
             radius = w * 0.25f, center = Offset(0f, h))
+        // Starts in the status bar's own colour, so the bar and the header read as one piece.
+        drawRect(Brush.verticalGradient(listOf(EmberTop, EmberTop.copy(alpha = 0f)), endY = 30.dp.toPx()))
     }
 }
 
