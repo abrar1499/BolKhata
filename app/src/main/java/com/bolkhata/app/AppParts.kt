@@ -53,7 +53,7 @@ import androidx.compose.ui.unit.sp
 
 /**
  * The message bar at the bottom of Home and Chat, in the style of ChatGPT: a floating white pill with a thin +,
- * the text, a thin mic, and a round green button that sends what is typed (or starts speaking when empty) and
+ * the text, a thin mic, and a round blue button that sends what is typed (or starts speaking when empty) and
  * shows a spinner while the app is answering. A soft fade above it keeps the list from being cut off sharply.
  */
 @Composable
@@ -116,7 +116,7 @@ internal fun InputBar(
                         Modifier
                             .size(36.dp)
                             .clip(CircleShape)
-                            .background(GreenDeep)
+                            .background(MicBlue)
                             .clickable(enabled = talking || !busy) {
                                 when {
                                     talking -> voice!!.toggle()
@@ -197,6 +197,9 @@ fun ThinPlus(color: Color) {
         drawLine(color, Offset(1.dp.toPx(), size.height / 2), Offset(size.width - 1.dp.toPx(), size.height / 2), w, StrokeCap.Round)
     }
 }
+
+/** Blue of the round mic / send button in the chat bar. */
+private val MicBlue = Color(0xFF0284C7)
 
 /** An outlined microphone drawn with thin strokes. */
 @Composable
