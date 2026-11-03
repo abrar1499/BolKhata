@@ -357,6 +357,12 @@ private fun monthKey(ms: Long): Int = cal(ms).let { it.get(Calendar.YEAR) * 12 +
 /** Months that have entries, newest first, as (key, a date in that month). [newest] must be sorted newest first. */
 private fun monthsOf(newest: List<Entry>) = newest.distinctBy { monthKey(it.date) }.map { monthKey(it.date) to it.date }
 
+/** The "All" month chip: every month listed together. */
+private const val ALL_MONTHS = -1
+private fun inMonth(ms: Long, month: Int) = month == ALL_MONTHS || monthKey(ms) == month
+private fun monthLabel(months: List<Pair<Int, Long>>, month: Int) =
+    if (month == ALL_MONTHS) "All" else months.firstOrNull { it.first == month }?.let { monthFmt.format(Date(it.second)) }
+
 /** Month chips; only one month is listed at a time so the page stays short. */
 @Composable
 private fun MonthChips(months: List<Pair<Int, Long>>, current: Int, onPick: (Int) -> Unit) {
@@ -364,6 +370,7 @@ private fun MonthChips(months: List<Pair<Int, Long>>, current: Int, onPick: (Int
         Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
+        item(key = ALL_MONTHS) { SmallChip("All", current == ALL_MONTHS) { onPick(ALL_MONTHS) } }
         items(months, key = { it.first }) { (k, ms) ->
             val on = k == current
             Text(
@@ -555,7 +562,7 @@ fun CashBookScreen(
     var month by rememberSaveable(months.firstOrNull()?.first) { mutableIntStateOf(months.firstOrNull()?.first ?: 0) }
     var q by rememberSaveable { mutableStateOf("") }
     // A search looks through every month; otherwise only the picked month is listed.
-    val list = if (q.isBlank()) newest.filter { monthKey(it.date) == month } else newest.filter { matches(it, q) }
+    val list = if (q.isBlank()) newest.filter { inMonth(it.date, month) } else newest.filter { matches(it, q) }
     val state = rememberLazyListState()
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
@@ -570,7 +577,7 @@ fun CashBookScreen(
             }
             item { SearchBox(q, "Search") { q = it } }
             if (q.isBlank() && months.isNotEmpty()) stickyHeader { MonthChips(months, month) { month = it } }
-            val label = if (q.isNotBlank()) "Found" else months.firstOrNull { it.first == month }?.let { monthFmt.format(Date(it.second)) } ?: ""
+            val label = if (q.isNotBlank()) "Found" else monthLabel(months, month) ?: ""
             ledger(
                 label,
                 listOf(
@@ -598,7 +605,7 @@ fun PartyKhataScreen(
     val months = remember(hist) { monthsOf(hist.map { it.first }) }
     var month by rememberSaveable(name, months.firstOrNull()?.first) { mutableIntStateOf(months.firstOrNull()?.first ?: 0) }
     var q by rememberSaveable(name) { mutableStateOf("") }
-    val list = if (q.isBlank()) hist.filter { monthKey(it.first.date) == month } else hist.filter { matches(it.first, q) }
+    val list = if (q.isBlank()) hist.filter { inMonth(it.first.date, month) } else hist.filter { matches(it.first, q) }
     val bal = p?.balance ?: 0.0
     val state = rememberLazyListState()
     Box(Modifier.fillMaxSize()) {
@@ -615,7 +622,7 @@ fun PartyKhataScreen(
             }
             item { SearchBox(q, "Search") { q = it } }
             if (q.isBlank() && months.size > 1) stickyHeader { MonthChips(months, month) { month = it } }
-            val label = if (q.isNotBlank()) "Found" else months.firstOrNull { it.first == month }?.let { monthFmt.format(Date(it.second)) } ?: name
+            val label = if (q.isNotBlank()) "Found" else if (month == ALL_MONTHS) name else monthLabel(months, month) ?: name
             ledger(
                 label,
                 listOf(
@@ -651,7 +658,7 @@ fun TransactionsScreen(entries: List<Entry>, currency: String, onEdit: (Entry) -
     }
     val months = remember(newest) { monthsOf(newest) }
     var month by rememberSaveable(months.firstOrNull()?.first) { mutableIntStateOf(months.firstOrNull()?.first ?: 0) }
-    val list = if (q.isBlank()) newest.filter { monthKey(it.date) == month } else newest.filter { matches(it, q) }
+    val list = if (q.isBlank()) newest.filter { inMonth(it.date, month) } else newest.filter { matches(it, q) }
     // Money that left you (or a purchase) goes in Out; everything else in In.
     fun out(e: Entry) = cashOut(e) || e.type == Type.PURCHASE
     val outT = list.filter(::out).sumOf { it.amount }
@@ -671,7 +678,7 @@ fun TransactionsScreen(entries: List<Entry>, currency: String, onEdit: (Entry) -
             }
             item { SearchBox(q, "Search") { q = it } }
             if (q.isBlank() && months.isNotEmpty()) stickyHeader { MonthChips(months, month) { month = it } }
-            val label = if (q.isNotBlank()) "Found" else months.firstOrNull { it.first == month }?.let { monthFmt.format(Date(it.second)) } ?: ""
+            val label = if (q.isNotBlank()) "Found" else monthLabel(months, month) ?: ""
             ledger(
                 label, listOf(LCol("Out", fmt(outT), LKind.OUT), LCol("In", fmt(inT), LKind.IN)),
                 list.map { e -> LRow(e.id, e.date, title(e), e.note, listOf(if (out(e)) e.amount else 0.0, if (!out(e)) e.amount else 0.0)) { onEdit(e) } }
@@ -746,10 +753,10 @@ fun MoneyScreen(
     val yearStart = start.apply { set(java.util.Calendar.MONTH, java.util.Calendar.JANUARY) }.timeInMillis
     val thisMonth = list.filter { it.date >= thisStart }.sumOf { it.amount }
     val thisYear = list.filter { it.date >= yearStart }.sumOf { it.amount }
-    // Year chips: All, then every year that has entries, newest first. 0 = All.
-    val years = remember(list) { list.map { cal(it.date).get(java.util.Calendar.YEAR) }.distinct().sortedDescending() }
-    var pick by rememberSaveable(income) { mutableIntStateOf(0) }
-    val shown = if (pick == 0) list else list.filter { cal(it.date).get(java.util.Calendar.YEAR) == pick }
+    // Month chips like the Cash book, with All first (the default here).
+    val months = remember(list) { monthsOf(list) }
+    var pick by rememberSaveable(income) { mutableIntStateOf(ALL_MONTHS) }
+    val shown = list.filter { inMonth(it.date, pick) }
     val total = shown.sumOf { it.amount }
     // Expense by category; income by who paid (like the party list).
     val groups = (if (income) shown.groupBy { source(it).lowercase() }.map { (_, l) -> Group(source(l.first()), null, l) }
@@ -762,12 +769,7 @@ fun MoneyScreen(
                     SumCard(Triple(money(currency, thisYear), "Year $year", color), Triple(money(currency, thisMonth), "This month", color), "Report ›", onReport)
                 }
             }
-            if (years.isNotEmpty()) item {
-                LazyRow(contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    item { SmallChip("All", pick == 0) { pick = 0 } }
-                    items(years) { y -> SmallChip(y.toString(), pick == y) { pick = y } }
-                }
-            }
+            if (months.isNotEmpty()) item { MonthChips(months, pick) { pick = it } }
             if (groups.isNotEmpty()) item { SheetTitle(if (income) "Income" else "Expense", "Total " + fmt(total)) }
             groups.forEach { g ->
                 val isOpen = g.name in open
