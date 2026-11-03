@@ -73,6 +73,10 @@ Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Packa
 - Keep the look consistent: reuse KhataTabs.kt / Ui.kt helpers (KhataTop, SumCard, RegRow, Pills, colours).
 
 ## Fixing what the owner points at ("ye theek kar do")
+- Think before doing: if an ask looks wrong or clashes with how the app works (e.g. "Parties like Cash" when the
+  opened party khata already has those columns), say so plainly in one line and suggest the right place first.
+- Get it right in one go: check fit, widths, colours and every affected screen yourself before showing, so the owner
+  never has to ask for the same adjustment twice.
 - Find the exact thing in the screenshot or comment (anchored element), change only that, then say in one line
   what changed. "Pehle jaisa" / "pichay jao" means undo the last step(s) exactly, nothing new.
 - Design asks: change the mock-up first (same Artifact, `edits`), check its script with `node --check` and look at
