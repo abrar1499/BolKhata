@@ -927,7 +927,8 @@ fun MoneyScreen(
     // Month chips like the Cash book, with All first (the default here).
     val months = remember(list) { monthsOf(list) }
     var pick by rememberSaveable(income) { mutableIntStateOf(ALL_MONTHS) }
-    val shown = list.filter { inMonth(it.date, pick) }
+    var q by rememberSaveable(income) { mutableStateOf("") }
+    val shown = list.filter { inMonth(it.date, pick) && (q.isBlank() || matches(it, q)) }
     val total = shown.sumOf { it.amount }
     // Expense by category; income by who paid (like the party list).
     val groups = (if (income) shown.groupBy { source(it).lowercase() }.map { (_, l) -> Group(source(l.first()), null, l) }
@@ -940,6 +941,7 @@ fun MoneyScreen(
                     SumCard(Triple(money(currency, thisYear), "Year $year", color), Triple(money(currency, thisMonth), "This month", color), "Report ›", onReport)
                 }
             }
+            item { SearchBox(q, "Search") { q = it } }
             if (months.isNotEmpty()) item { MonthChips(months, pick) { pick = it } }
             if (groups.isNotEmpty()) item { SheetTitle(if (income) "Income" else "Expense", "Total " + fmt(total)) }
             groups.forEach { g ->

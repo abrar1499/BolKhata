@@ -38,8 +38,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -62,7 +64,9 @@ class MainActivity : ComponentActivity() {
                 window.statusBarColor = EmberTop.toArgb()
                 WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = false
             }
-            CompositionLocalProvider(LocalHeader provides header) {
+            // Text keeps the designed size: the phone's font-size setting would make the compact ledgers overflow.
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalHeader provides header, LocalDensity provides Density(density.density, 1f)) {
                 BolTheme(dark) {
                     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                         App(
