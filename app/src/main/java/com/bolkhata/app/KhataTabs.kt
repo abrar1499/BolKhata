@@ -746,16 +746,26 @@ fun MoneyScreen(
     val yearStart = start.apply { set(java.util.Calendar.MONTH, java.util.Calendar.JANUARY) }.timeInMillis
     val thisMonth = list.filter { it.date >= thisStart }.sumOf { it.amount }
     val thisYear = list.filter { it.date >= yearStart }.sumOf { it.amount }
-    val total = list.sumOf { it.amount }
+    // Year chips: All, then every year that has entries, newest first. 0 = All.
+    val years = remember(list) { list.map { cal(it.date).get(java.util.Calendar.YEAR) }.distinct().sortedDescending() }
+    var pick by rememberSaveable(income) { mutableIntStateOf(0) }
+    val shown = if (pick == 0) list else list.filter { cal(it.date).get(java.util.Calendar.YEAR) == pick }
+    val total = shown.sumOf { it.amount }
     // Expense by category; income by who paid (like the party list).
-    val groups = (if (income) list.groupBy { source(it).lowercase() }.map { (_, l) -> Group(source(l.first()), null, l) }
-    else list.groupBy { it.category }.map { (c, l) -> Group(c.label, c, l) }).sortedByDescending { it.total }
+    val groups = (if (income) shown.groupBy { source(it).lowercase() }.map { (_, l) -> Group(source(l.first()), null, l) }
+    else shown.groupBy { it.category }.map { (c, l) -> Group(c.label, c, l) }).sortedByDescending { it.total }
     val open = remember(income) { mutableStateListOf<String>() }
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
             item {
                 KhataTop("", "", onMenu, business = business, onBusiness = onBusiness) {
                     SumCard(Triple(money(currency, thisYear), "Year $year", color), Triple(money(currency, thisMonth), "This month", color), "Report ›", onReport)
+                }
+            }
+            if (years.isNotEmpty()) item {
+                LazyRow(contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    item { SmallChip("All", pick == 0) { pick = 0 } }
+                    items(years) { y -> SmallChip(y.toString(), pick == y) { pick = y } }
                 }
             }
             if (groups.isNotEmpty()) item { SheetTitle(if (income) "Income" else "Expense", "Total " + fmt(total)) }
