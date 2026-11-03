@@ -103,14 +103,13 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var lang by remember { mutableStateOf(store.language) }
     val tabNav = remember { TabNav() }
     var tab by tabNav
-    // The status bar is orange like the headers; on Chat it takes the page colour, so the chat runs up to the top.
+    // The status bar takes the page colour, so every tab runs up to the top with no coloured band.
     val pageColor = MaterialTheme.colorScheme.background
-    LaunchedEffect(tab, pageColor, dark) {
+    LaunchedEffect(pageColor, dark) {
         (context as? Activity)?.window?.let { w ->
-            val chat = tab == Tab.CHAT
             @Suppress("DEPRECATION")
-            w.statusBarColor = (if (chat) pageColor else EmberTop).toArgb()
-            WindowCompat.getInsetsController(w, w.decorView).isAppearanceLightStatusBars = chat && !dark
+            w.statusBarColor = pageColor.toArgb()
+            WindowCompat.getInsetsController(w, w.decorView).isAppearanceLightStatusBars = !dark
         }
     }
     var chatMessages by remember { mutableStateOf(store.loadChatMessages()) }
