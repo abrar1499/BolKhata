@@ -48,6 +48,8 @@ fun ChatScreen(
     subtitle: String,
     suggestions: List<Entry>,
     onMenu: () -> Unit,
+    business: String = "",
+    onBusiness: () -> Unit = {},
     onSend: (String) -> Unit,
     onClear: () -> Unit,
     onShareDiagnostics: () -> Unit = {},
@@ -81,16 +83,13 @@ fun ChatScreen(
 
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.fillMaxWidth()) {
-            // Same orange header as Parties and Cash book.
-            Box(Modifier.matchParentSize().background(EmberBrush))
-            Column(Modifier.statusBarsPadding().padding(horizontal = 14.dp).padding(top = 8.dp, bottom = 12.dp)) {
+            // Same glass header and business pill as every other tab.
+            GlassHeader(Modifier.matchParentSize())
+            Column(Modifier.statusBarsPadding().padding(horizontal = 12.dp).padding(top = 8.dp, bottom = 12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onMenu) {
-                        Icon(Icons.Filled.Menu, contentDescription = "Open menu", tint = Color.White)
-                    }
                     Column(Modifier.weight(1f)) {
-                        Text("Chat", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                        Text(subtitle, color = Color.White.copy(alpha = 0.85f), fontSize = 11.sp, maxLines = 1)
+                        BusinessPill(business.ifBlank { "Chat" }, onMenu, onBusiness)
+                        Text(subtitle, color = Color.White.copy(alpha = 0.85f), fontSize = 11.sp, maxLines = 1, modifier = Modifier.padding(start = 4.dp, top = 6.dp))
                     }
                     Box {
                         var more by remember { mutableStateOf(false) }

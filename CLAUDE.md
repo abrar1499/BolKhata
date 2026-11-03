@@ -63,6 +63,9 @@ Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Packa
 - Mock-ups: one small HTML file; for changes republish the same artifact with `edits`, never rebuild it.
 
 ## Quality (do it right the first time)
+- Work like a careful senior designer-developer: the owner wants the best result, not the quickest. Think about
+  the whole app, not one screen: every tab must share the same header, card, search, chips, list sheet, row
+  size and colours. Before saying "done", look at the result (mock screenshot) and fix anything uneven yourself.
 - Do exactly what the owner named, nothing more: "text size" means only font sizes, "background" only the
   background. If the ask is unclear, ask in one line before changing.
 - Before pushing, check by eye: imports added, names exist (grep), no clashes, Compose opt-ins, string escapes.
@@ -70,6 +73,10 @@ Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Packa
 - Keep the look consistent: reuse KhataTabs.kt / Ui.kt helpers (KhataTop, SumCard, RegRow, Pills, colours).
 
 ## Fixing what the owner points at ("ye theek kar do")
+- Think before doing: if an ask looks wrong or clashes with how the app works (e.g. "Parties like Cash" when the
+  opened party khata already has those columns), say so plainly in one line and suggest the right place first.
+- Get it right in one go: check fit, widths, colours and every affected screen yourself before showing, so the owner
+  never has to ask for the same adjustment twice.
 - Find the exact thing in the screenshot or comment (anchored element), change only that, then say in one line
   what changed. "Pehle jaisa" / "pichay jao" means undo the last step(s) exactly, nothing new.
 - Design asks: change the mock-up first (same Artifact, `edits`), check its script with `node --check` and look at
@@ -79,11 +86,14 @@ Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Packa
 - A push to main is blocked unless the owner's latest words approve the release; if blocked, ask once, plainly.
 
 ## Look the owner likes (keep it)
-- Orange header up to the status bar (`EmberTop` / `EmberBrush`), white summary card over it, bottom tabs
-  Chat · Parties · Cash · Expense · Income, chat bar on every screen, "Entry" add button (`PlusButton`).
-- Lists are compact ledger pages (`ledger()` in KhataTabs.kt): month chips, a tinted title line, each total under its column name,
-  Date | Detail | Out | In | Balance, faint grey lines, small text, amounts centred.
-- Small text: Compose's theme line height is tall, so compact lists must use `Tight { }` (no extra line height),
-  and phones enlarge tiny text, so give columns room instead of shrinking fonts further.
-- Red = money out, green = money in, arrows ↑ out / ↓ in on totals. No pill buttons, no extra headings.
-
+- Glass orange header up to the status bar (`GlassHeader`) with the frosted business pill (`BusinessPill`: menu,
+  name ▾) on every tab incl. Chat; white summary card over it; bottom tabs Chat · Business · Cashbook · Expense · Income;
+  chat bar on every screen; "Entry" add button (`PlusButton`).
+- Lists sit in white rounded sheets with faint lines. Business tab chips Parties · Stock · Sale · Purchase · Profit,
+  each with month chips (All first). Parties list = ledger columns Party | Payable | Receivable
+  (totals in the head, same tints as Cash) so dues show at a glance; tapping a party opens its Paid | Received khata.
+- Ledgers (`ledger()` in KhataTabs.kt): head cell "Month / N entries", each total under its column name;
+  slim day line per date with signed day totals, same light blue tint on every date; rows show detail with
+  "time · note" below, signed amounts (−out / +in) centred in Out | In. No Balance column, no arrows.
+- Small text: compact lists use `Tight { }` (no extra line height); give columns room instead of shrinking fonts.
+- Red = money out, green = money in. No pill buttons, no extra headings.
