@@ -63,6 +63,9 @@ Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Packa
 - Mock-ups: one small HTML file; for changes republish the same artifact with `edits`, never rebuild it.
 
 ## Quality (do it right the first time)
+- Work like a careful senior designer-developer: the owner wants the best result, not the quickest. Think about
+  the whole app, not one screen: every tab must share the same header, card, search, chips, list sheet, row
+  size and colours. Before saying "done", look at the result (mock screenshot) and fix anything uneven yourself.
 - Do exactly what the owner named, nothing more: "text size" means only font sizes, "background" only the
   background. If the ask is unclear, ask in one line before changing.
 - Before pushing, check by eye: imports added, names exist (grep), no clashes, Compose opt-ins, string escapes.
