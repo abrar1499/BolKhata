@@ -56,6 +56,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.coerceAtLeast
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
@@ -286,7 +287,10 @@ fun PartiesScreen(
                     listOf("All", "Receivable", "Payable").forEachIndexed { i, t -> SmallChip(t, filter == i) { filter = i } }
                 }
             }
-            item { SheetTitle("Parties", "${shown.size} · A–Z") }
+            item {
+                LedgerHead("Parties", "${shown.size} · A–Z",
+                    listOf(LCol("Payable", fmt(pay), LKind.OUT), LCol("Receivable", fmt(rec), LKind.IN)), shown.isEmpty(), PartyColW)
+            }
             items(shown, key = { it.name.lowercase() }) { p -> PartyRow(p, p === shown.last()) { onOpen(p) } }
             if (shown.isEmpty()) item {
                 Text("No parties yet. Say \"Hamid ko 500 diye\" in the chat, or tap ADD PARTY.", color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -316,24 +320,26 @@ private fun SheetTitle(title: String, count: String) = Tight {
 /** Shape of a row inside a white sheet: the last row rounds the sheet's bottom corners. */
 private fun sheetShape(last: Boolean) = if (last) RoundedCornerShape(bottomStart = 14.dp, bottomEnd = 14.dp) else RoundedCornerShape(0.dp)
 
+/** One party as a ledger line: name and last entry, then what you owe (Payable) or will get (Receivable). */
 @Composable
 private fun PartyRow(p: PersonAcct, last: Boolean, onClick: () -> Unit) = Tight {
     val bal = p.balance
-    val color = if (bal > 0.005) GreenIn else if (bal < -0.005) RedSpend else MaterialTheme.colorScheme.onSurfaceVariant
     Row(
-        Modifier.padding(horizontal = 10.dp).fillMaxWidth().clip(sheetShape(last)).background(MaterialTheme.colorScheme.surface)
-            .clickable { onClick() }.padding(horizontal = 10.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
+        Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(IntrinsicSize.Min).clip(sheetShape(last))
+            .background(MaterialTheme.colorScheme.surface).clickable { onClick() }
     ) {
-        Initial(p.name)
-        Spacer(Modifier.width(10.dp))
-        Column(Modifier.weight(1f)) {
-            Text(p.name, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            p.history.lastOrNull()?.let { Text(lastSeen(it.first.date), fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        Column(Modifier.weight(1f).padding(start = 10.dp, end = 4.dp, top = 5.dp, bottom = 5.dp), verticalArrangement = Arrangement.Center) {
+            Text(p.name, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            p.history.lastOrNull()?.let { Text("Last " + lastSeen(it.first.date), fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1) }
         }
-        Column(horizontalAlignment = Alignment.End) {
-            Text(fmt(kotlin.math.abs(bal)), color = color, fontWeight = FontWeight.ExtraBold, fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp))
-            Text(if (bal > 0.005) "Receivable" else if (bal < -0.005) "Payable" else "Settled", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        listOf(LKind.OUT to (if (bal < -0.005) -bal else 0.0), LKind.IN to (if (bal > 0.005) bal else 0.0)).forEach { (k, v) ->
+            VerticalDivider(Modifier.fillMaxHeight(), color = Faint)
+            Box(
+                Modifier.width(PartyColW).fillMaxHeight().background(if (k == LKind.OUT) RedSpend.copy(alpha = 0.025f) else Color.Transparent),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(signed(k, v), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = AmountInk, maxLines = 1, softWrap = false)
+            }
         }
     }
     if (!last) HorizontalDivider(Modifier.padding(horizontal = 10.dp), color = Faint)
@@ -392,6 +398,9 @@ private val Faint = Color(0x14786C6C)
 private val AmountInk = Color(0xFF3F3A36)
 
 private fun colW(cols: List<LCol>) = if (cols.size == 1) 70.dp else 62.dp
+/** Party columns are a little wider: "Receivable" and big totals must fit. */
+private val PartyColW = 74.dp
+private fun entryCount(n: Int) = if (n == 0) "No entries" else if (n == 1) "1 entry" else "$n entries"
 
 /** Ledger text uses the font's own line height, not the theme's tall one, so lines stay compact. */
 @Composable
@@ -408,7 +417,7 @@ private fun signed(k: LKind, v: Double) = if (v == 0.0) "" else (if (k == LKind.
  * line per entry. Lines are faint grey; amounts sit in the middle of their column.
  */
 internal fun LazyListScope.ledger(title: String, cols: List<LCol>, rows: List<LRow>, keyPrefix: String = "") {
-    item(key = keyPrefix + "lh") { LedgerHead(title, rows.size, cols, rows.isEmpty()) }
+    item(key = keyPrefix + "lh") { LedgerHead(title, entryCount(rows.size), cols, rows.isEmpty()) }
     rows.forEachIndexed { i, r ->
         if (i == 0 || !sameDay(rows[i - 1].date, r.date)) {
             val day = rows.filter { sameDay(it.date, r.date) }
@@ -419,9 +428,8 @@ internal fun LazyListScope.ledger(title: String, cols: List<LCol>, rows: List<LR
 }
 
 @Composable
-private fun LedgerHead(title: String, count: Int, cols: List<LCol>, empty: Boolean) = Tight {
+private fun LedgerHead(title: String, count: String, cols: List<LCol>, empty: Boolean, w: Dp = colW(cols)) = Tight {
     val sub = MaterialTheme.colorScheme.onSurfaceVariant
-    val w = colW(cols)
     Row(
         Modifier.padding(start = 10.dp, end = 10.dp, top = 8.dp).fillMaxWidth().height(IntrinsicSize.Min)
             .clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp, bottomStart = if (empty) 14.dp else 0.dp, bottomEnd = if (empty) 14.dp else 0.dp))
@@ -429,7 +437,7 @@ private fun LedgerHead(title: String, count: Int, cols: List<LCol>, empty: Boole
     ) {
         Column(Modifier.weight(1f).padding(start = 10.dp, top = 7.dp, bottom = 7.dp), verticalArrangement = Arrangement.Center) {
             Text(title, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
-            Text(if (empty) "No entries" else if (count == 1) "1 entry" else "$count entries", fontSize = 9.sp, color = sub)
+            Text(count, fontSize = 9.sp, color = sub)
         }
         cols.forEach { c ->
             VerticalDivider(Modifier.fillMaxHeight(), color = Faint)
