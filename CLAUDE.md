@@ -87,9 +87,10 @@ Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Packa
 
 ## Look the owner likes (keep it)
 - Glass orange header up to the status bar (`GlassHeader`) with the frosted business pill (`BusinessPill`: menu,
-  name ▾) on every tab incl. Chat; white summary card over it; bottom tabs Chat · Parties · Cashbook · Expense · Income;
+  name ▾) on every tab incl. Chat; white summary card over it; bottom tabs Chat · Business · Cashbook · Expense · Income;
   chat bar on every screen; "Entry" add button (`PlusButton`).
-- Lists sit in white rounded sheets with faint lines. Parties list = ledger columns Party | Payable | Receivable
+- Lists sit in white rounded sheets with faint lines. Business tab chips Parties · Stock · Sale · Purchase · Profit,
+  each with month chips (All first). Parties list = ledger columns Party | Payable | Receivable
   (totals in the head, same tints as Cash) so dues show at a glance; tapping a party opens its Paid | Received khata.
 - Ledgers (`ledger()` in KhataTabs.kt): head cell "Month / N entries", each total under its column name;
   slim day line per date with signed day totals, same light blue tint on every date; rows show detail with

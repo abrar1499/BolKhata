@@ -1974,8 +1974,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 tab == Tab.PARTIES -> PartiesScreen(
                     entries, currency, onMenu = { openMenu() }, business = businessName, onBusiness = { pickingBusiness = true },
                     onOpen = { p -> partyOpen = p.name; activeLedgerPerson = p.name },
-                    onReport = { reportStart = ReportKind.TO_RECEIVE; tab = Tab.REPORTS },
-                    onAdd = { trade = template(Type.DIYA, "") }
+                    onReport = { reportStart = it; tab = Tab.REPORTS },
+                    onAdd = { trade = it }, onEdit = { editing = it }
                 )
                 tab == Tab.CASHBOOK -> CashBookScreen(
                     entries, currency, onMenu = { openMenu() }, business = businessName, onBusiness = { pickingBusiness = true },
