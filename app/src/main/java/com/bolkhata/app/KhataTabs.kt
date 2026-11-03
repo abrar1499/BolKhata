@@ -400,6 +400,8 @@ internal class LRow(val key: String, val date: Long, val title: String, val note
 
 private val clockFmt = SimpleDateFormat("h:mma", Locale.US)
 private val dayLineFmt = SimpleDateFormat("EEE, d MMM", Locale.US)
+/** Same light blue behind every day line. */
+private val DayTint = Color(0x0F0284C7)
 private val Faint = Color(0x14786C6C)
 /** Colour of an entry's own amount: dark grey, so red / green stay for the totals. */
 private val AmountInk = Color(0xFF3F3A36)
@@ -420,7 +422,7 @@ private fun signed(k: LKind, v: Double) = if (v == 0.0) "" else (if (k == LKind.
 
 /**
  * A white ledger sheet: the head line (month and entry count, then each column's name with its total), and for every
- * day a slim line with that day's totals, lightly red when the day is in minus and green when in plus, then one small
+ * day a slim light-blue line with that day's totals, then one small
  * line per entry. Lines are faint grey; amounts sit in the middle of their column.
  */
 internal fun LazyListScope.ledger(title: String, cols: List<LCol>, rows: List<LRow>, keyPrefix: String = "") {
@@ -466,10 +468,9 @@ private fun LedgerHead(title: String, count: String, cols: List<LCol>, empty: Bo
 private fun DayLine(date: Long, cols: List<LCol>, day: List<LRow>) = Tight {
     val w = colW(cols)
     val totals = cols.indices.map { k -> day.sumOf { it.amounts.getOrElse(k) { 0.0 } } }
-    val net = cols.indices.sumOf { k -> if (cols[k].kind == LKind.OUT) -totals[k] else totals[k] }
     Row(
         Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(IntrinsicSize.Min)
-            .background(MaterialTheme.colorScheme.surface).background(if (net < 0) RedSpend.copy(alpha = 0.035f) else GreenIn.copy(alpha = 0.04f))
+            .background(MaterialTheme.colorScheme.surface).background(DayTint)
     ) {
         Text(dayLineFmt.format(Date(date)), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(1f).padding(start = 10.dp, top = 5.dp, bottom = 4.dp))

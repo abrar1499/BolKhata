@@ -92,7 +92,7 @@ Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Packa
 - Lists sit in white rounded sheets with faint lines. Parties list = ledger columns Party | Payable | Receivable
   (totals in the head, same tints as Cash) so dues show at a glance; tapping a party opens its Paid | Received khata.
 - Ledgers (`ledger()` in KhataTabs.kt): head cell "Month / N entries", each total under its column name;
-  slim day line per date with signed day totals, auto faint green (plus) / red (minus) tint; rows show detail with
+  slim day line per date with signed day totals, same light blue tint on every date; rows show detail with
   "time · note" below, signed amounts (−out / +in) centred in Out | In. No Balance column, no arrows.
 - Small text: compact lists use `Tight { }` (no extra line height); give columns room instead of shrinking fonts.
 - Red = money out, green = money in. No pill buttons, no extra headings.
