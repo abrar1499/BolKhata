@@ -401,7 +401,7 @@ internal class LRow(val key: String, val date: Long, val title: String, val note
 private val clockFmt = SimpleDateFormat("h:mma", Locale.US)
 private val dayLineFmt = SimpleDateFormat("EEE, d MMM", Locale.US)
 /** Same light blue behind every day line. */
-private val DayTint = Color(0x0F0284C7)
+private val DayTint = Color(0x090284C7)
 private val Faint = Color(0x14786C6C)
 /** Colour of an entry's own amount: dark grey, so red / green stay for the totals. */
 private val AmountInk = Color(0xFF3F3A36)
