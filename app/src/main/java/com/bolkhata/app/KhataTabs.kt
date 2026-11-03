@@ -122,7 +122,7 @@ private fun navItem(t: Tab): Pair<String, ImageVector> = when (t) {
     else -> "Chat" to Icons.Outlined.ChatBubbleOutline
 }
 
-/** Glassy orange header: a warm gradient with a soft white sheen and two faint light circles. */
+/** Glassy orange header: a warm gradient with a soft white sheen and two faint light circles, flowing out of the status bar. */
 @Composable
 internal fun GlassHeader(modifier: Modifier) {
     Canvas(modifier.background(Brush.linearGradient(listOf(Color(0xFFF46B42), Color(0xFFEC4C35), Color(0xFFE3342F))))) {
@@ -137,6 +137,8 @@ internal fun GlassHeader(modifier: Modifier) {
             radius = w * 0.35f, center = Offset(w * 0.95f, 0f))
         drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = 0.14f), Color.Transparent), center = Offset(0f, h), radius = w * 0.25f),
             radius = w * 0.25f, center = Offset(0f, h))
+        // Starts in the status bar's own colour, so the bar and the header read as one piece.
+        drawRect(Brush.verticalGradient(listOf(EmberTop, EmberTop.copy(alpha = 0f)), endY = 30.dp.toPx()))
     }
 }
 
@@ -149,17 +151,17 @@ private fun KhataTop(
     title: String, subtitle: String, onMenu: () -> Unit, back: Boolean = false,
     business: String? = null, onBusiness: () -> Unit = {}, card: @Composable () -> Unit
 ) {
+    // No coloured band: the page colour runs up to the status bar, with the pill and the card on it.
     Box(Modifier.fillMaxWidth()) {
-        GlassHeader(Modifier.matchParentSize().padding(bottom = 34.dp))
         Column(Modifier.statusBarsPadding().padding(horizontal = 12.dp)) {
             if (business != null) BusinessPill(business, onMenu, onBusiness) else
             Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onMenu) {
-                    Icon(if (back) Icons.AutoMirrored.Filled.ArrowBack else Icons.Filled.Menu, contentDescription = if (back) "Back" else "Menu", tint = Color.White)
+                    Icon(if (back) Icons.AutoMirrored.Filled.ArrowBack else Icons.Filled.Menu, contentDescription = if (back) "Back" else "Menu", tint = MaterialTheme.colorScheme.onSurface)
                 }
                 if (title.isNotEmpty()) Column {
-                    Text(title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    if (subtitle.isNotEmpty()) Text(subtitle, color = Color.White.copy(alpha = 0.85f), fontSize = 11.sp)
+                    Text(title, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (subtitle.isNotEmpty()) Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                 }
             }
             Spacer(Modifier.height(10.dp))
@@ -172,8 +174,8 @@ private fun KhataTop(
 @Composable
 internal fun BusinessPill(name: String, onMenu: () -> Unit, onBusiness: () -> Unit) {
     Row(
-        Modifier.padding(top = 10.dp).shadow(6.dp, CircleShape).clip(CircleShape).background(Color.White.copy(alpha = 0.92f))
-            .border(1.dp, Color.White.copy(alpha = 0.75f), CircleShape).padding(end = 11.dp),
+        Modifier.padding(top = 10.dp).shadow(2.dp, CircleShape).clip(CircleShape).background(Color.White)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape).padding(end = 11.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(Modifier.size(32.dp).clip(CircleShape).clickable { onMenu() }, contentAlignment = Alignment.Center) {
@@ -191,8 +193,8 @@ internal fun BusinessPill(name: String, onMenu: () -> Unit, onBusiness: () -> Un
 @Composable
 private fun SumCard(a: Triple<String, String, Color>, b: Triple<String, String, Color>, link: String, onLink: () -> Unit) {
     Surface(
-        shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 6.dp,
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.9f))
+        shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 2.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
             listOf(a, b).forEachIndexed { i, (value, label, color) ->
@@ -518,7 +520,6 @@ private fun sheetShape(last: Boolean) = if (last) RoundedCornerShape(bottomStart
 
 private val shortDay = SimpleDateFormat("d MMM", Locale.US)
 private val monthFmt = SimpleDateFormat("MMM yyyy", Locale.US)
-private val ColW = 72.dp
 
 private fun title(e: Entry) = e.person.ifBlank { e.item.ifBlank { e.category.label } }
 private fun monthKey(ms: Long): Int = cal(ms).let { it.get(Calendar.YEAR) * 12 + it.get(Calendar.MONTH) }
@@ -552,10 +553,6 @@ private fun MonthChips(months: List<Pair<Int, Long>>, current: Int, onPick: (Int
         }
     }
 }
-
-/** Faint line between columns. */
-@Composable
-private fun ColLine() = VerticalDivider(Modifier.fillMaxHeight(), color = Faint)
 
 // ---------------------------------------------------------------- the ledger page (Cash book, party khata, Expense / Income)
 
@@ -949,36 +946,30 @@ fun MoneyScreen(
                 val lastGroup = g === groups.last()
                 item(key = "g" + g.name) {
                     val share = if (total > 0) (g.total / total).toFloat() else 0f
+                    // Icon, name with a share bar (expense) or last date and count (income), amount on the right.
                     Row(
-                        Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(IntrinsicSize.Min).clip(sheetShape(lastGroup && !isOpen))
+                        Modifier.padding(horizontal = 10.dp).fillMaxWidth().clip(sheetShape(lastGroup && !isOpen))
                             .background(MaterialTheme.colorScheme.surface)
-                            .clickable { if (isOpen) open.remove(g.name) else open.add(g.name) }.padding(start = 10.dp),
+                            .clickable { if (isOpen) open.remove(g.name) else open.add(g.name) }.padding(horizontal = 10.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         if (g.cat != null) CatBubble(g.cat, 28.dp) else Initial(g.name)
                         Spacer(Modifier.width(10.dp))
-                        Column(Modifier.weight(1f).padding(vertical = 7.dp)) {
+                        Column(Modifier.weight(1f)) {
                             Text(g.name, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             if (g.cat != null) {
                                 Box(Modifier.padding(top = 4.dp).fillMaxWidth().height(4.dp).clip(CircleShape).background(MaterialTheme.colorScheme.outlineVariant)) {
                                     Box(Modifier.fillMaxWidth(share).fillMaxHeight().clip(CircleShape).background(catColor(g.cat)))
                                 }
                             } else {
-                                Text(lastSeen(g.list.maxOf { it.date }), fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(shortDay.format(Date(g.list.maxOf { it.date })) + " · " + (if (g.list.size == 1) "1 entry" else "${g.list.size} entries"),
+                                    fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
                             }
                         }
-                        Icon(
-                            if (isOpen) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown, contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 4.dp).size(20.dp)
-                        )
-                        // Total and share in the same column as the entries' amounts.
-                        ColLine()
-                        Column(
-                            Modifier.width(ColW).fillMaxHeight(),
-                            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
-                        ) {
+                        Spacer(Modifier.width(10.dp))
+                        Column(horizontalAlignment = Alignment.End) {
                             Text(fmt(g.total), fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, color = if (g.cat == null) color else MaterialTheme.colorScheme.onSurface)
-                            Text(if (g.cat != null) "${Math.round(share * 100)}%" else if (g.list.size == 1) "1 entry" else "${g.list.size} entries",
+                            Text(if (g.cat != null) "${Math.round(share * 100)}%" else if (isOpen) "⌄" else "›",
                                 fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }

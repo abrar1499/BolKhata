@@ -58,15 +58,10 @@ class MainActivity : ComponentActivity() {
             var dark by remember { mutableStateOf(store.dark) }
             var themeName by remember { mutableStateOf(store.theme) }
             val header = headerTheme(themeName, dark)
-            LaunchedEffect(header) {
-                @Suppress("DEPRECATION")
-                // The orange khata header runs up under the status bar.
-                window.statusBarColor = EmberTop.toArgb()
-                WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = false
-            }
-            // Text keeps the designed size: the phone's font-size setting would make the compact ledgers overflow.
-            val density = LocalDensity.current
-            CompositionLocalProvider(LocalHeader provides header, LocalDensity provides Density(density.density, 1f)) {
+            // Every phone shows the design 1:1: the screen is 390 units wide (like the mock-up) and the phone's
+            // font-size and display-size settings don't blow the compact ledgers up.
+            val m = resources.displayMetrics
+            CompositionLocalProvider(LocalHeader provides header, LocalDensity provides Density(minOf(m.widthPixels, m.heightPixels) / 390f, 1f)) {
                 BolTheme(dark) {
                     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                         App(
@@ -108,6 +103,15 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var lang by remember { mutableStateOf(store.language) }
     val tabNav = remember { TabNav() }
     var tab by tabNav
+    // The status bar takes the page colour, so every tab runs up to the top with no coloured band.
+    val pageColor = MaterialTheme.colorScheme.background
+    LaunchedEffect(pageColor, dark) {
+        (context as? Activity)?.window?.let { w ->
+            @Suppress("DEPRECATION")
+            w.statusBarColor = pageColor.toArgb()
+            WindowCompat.getInsetsController(w, w.decorView).isAppearanceLightStatusBars = !dark
+        }
+    }
     var chatMessages by remember { mutableStateOf(store.loadChatMessages()) }
     // Chats from before the log existed are copied in once, so they can be reviewed too.
     val chatLog = remember { ChatLog(context).also { log -> if (log.isEmpty()) chatMessages.forEach(log::record) } }

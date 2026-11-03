@@ -86,14 +86,15 @@ Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Packa
 - A push to main is blocked unless the owner's latest words approve the release; if blocked, ask once, plainly.
 
 ## Look the owner likes (keep it)
-- Glass orange header up to the status bar (`GlassHeader`) with the frosted business pill (`BusinessPill`: menu,
-  name ▾) on every tab incl. Chat; white summary card over it; bottom tabs Chat · Business · Cashbook · Expense · Income;
-  chat bar on every screen; "Entry" add button (`PlusButton`).
+- No coloured header band: page colour up to the status bar (status bar = page colour), white business pill
+  (`BusinessPill`: menu, name ▾) and the white summary card on the page; bottom tabs Chat · Business · Cashbook ·
+  Expense · Income; chat bar on every screen; "Entry" add button (`PlusButton`).
 - Lists sit in white rounded sheets with faint lines. Business tab chips Parties · Stock · Sale · Purchase · Profit,
   each with month chips (All first). Parties list = ledger columns Party | Payable | Receivable
   (totals in the head, same tints as Cash) so dues show at a glance; tapping a party opens its Paid | Received khata.
 - Ledgers (`ledger()` in KhataTabs.kt): head cell "Month / N entries", each total under its column name;
   slim day line per date with signed day totals, same light blue tint on every date; rows show detail with
   "time · note" below, signed amounts (−out / +in) centred in Out | In. No Balance column, no arrows.
-- Small text: compact lists use `Tight { }` (no extra line height); the app pins fontScale to 1 (MainActivity) so phones show the designed sizes 1:1.
+- Small text: compact lists use `Tight { }` (no extra line height); the app pins the screen to 390 dp wide and fontScale 1 (MainActivity), and text line height is 1.25em
+  (AppTypography), so phones show the mock-up 1:1 (1 CSS px = 1 dp/sp).
 - Red = money out, green = money in. No pill buttons, no extra headings.

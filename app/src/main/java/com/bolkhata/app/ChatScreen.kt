@@ -83,18 +83,16 @@ fun ChatScreen(
 
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.fillMaxWidth()) {
-            // Same glass header and business pill as every other tab.
-            GlassHeader(Modifier.matchParentSize())
-            Column(Modifier.statusBarsPadding().padding(horizontal = 12.dp).padding(top = 8.dp, bottom = 12.dp)) {
+            // No coloured header here: one slim line with the business pill, so the chat starts near the top.
+            Column(Modifier.statusBarsPadding().padding(horizontal = 12.dp).padding(bottom = 4.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        BusinessPill(business.ifBlank { "Chat" }, onMenu, onBusiness)
-                        Text(subtitle, color = Color.White.copy(alpha = 0.85f), fontSize = 11.sp, maxLines = 1, modifier = Modifier.padding(start = 4.dp, top = 6.dp))
-                    }
+                    BusinessPill(business.ifBlank { "Chat" }, onMenu, onBusiness)
+                    Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 10.dp, top = 10.dp))
                     Box {
                         var more by remember { mutableStateOf(false) }
                         IconButton(onClick = { more = true }) {
-                            Icon(Icons.Filled.MoreVert, contentDescription = "More options", tint = Color.White)
+                            Icon(Icons.Filled.MoreVert, contentDescription = "More options", tint = MaterialTheme.colorScheme.onSurface)
                         }
                         DropdownMenu(expanded = more, onDismissRequest = { more = false }) {
                             DropdownMenuItem(
@@ -118,7 +116,7 @@ fun ChatScreen(
         LazyColumn(
             modifier = Modifier.weight(1f).fillMaxWidth(),
             state = listState,
-            contentPadding = PaddingValues(start = 12.dp, top = 14.dp, end = 12.dp, bottom = barSpace(14.dp)),
+            contentPadding = PaddingValues(start = 12.dp, top = 6.dp, end = 12.dp, bottom = barSpace(14.dp)),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             if (messages.isEmpty()) {
