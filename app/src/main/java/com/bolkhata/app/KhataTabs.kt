@@ -29,7 +29,7 @@ import androidx.compose.material.icons.outlined.Storefront
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.outlined.AccountBalanceWallet
+import androidx.compose.material.icons.outlined.Book
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material.icons.outlined.NoteAdd
@@ -115,7 +115,7 @@ fun KhataNav(tab: Tab, onTab: (Tab) -> Unit) {
 
 private fun navItem(t: Tab): Pair<String, ImageVector> = when (t) {
     Tab.PARTIES -> "Parties" to Icons.Outlined.People
-    Tab.CASHBOOK -> "Cashbook" to Icons.Outlined.AccountBalanceWallet
+    Tab.CASHBOOK -> "Cashbook" to Icons.Outlined.Book
     Tab.EXPENSE -> "Expense" to Icons.Outlined.ReceiptLong
     Tab.INCOME -> "Income" to Icons.Outlined.Payments
     else -> "Chat" to Icons.Outlined.ChatBubbleOutline
