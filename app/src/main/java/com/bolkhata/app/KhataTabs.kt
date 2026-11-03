@@ -399,7 +399,10 @@ internal class LCol(val label: String, val total: String, val kind: LKind)
 internal class LRow(val key: String, val date: Long, val title: String, val note: String, val amounts: List<Double>, val onClick: () -> Unit)
 
 private val clockFmt = SimpleDateFormat("h:mma", Locale.US)
-private val dayLineFmt = SimpleDateFormat("EEE, d MMM", Locale.US)
+private val weekdayFmt = SimpleDateFormat("EEE", Locale.US)
+private val calMonthFmt = SimpleDateFormat("MMM", Locale.US)
+private val calDayFmt = SimpleDateFormat("d", Locale.US)
+private val CalBlue = Color(0xFF0284C7)
 /** Same light blue behind every day line. */
 private val DayTint = Color(0x090284C7)
 private val Faint = Color(0x14786C6C)
@@ -463,6 +466,20 @@ private fun LedgerHead(title: String, count: String, cols: List<LCol>, empty: Bo
     if (!empty) HorizontalDivider(Modifier.padding(horizontal = 10.dp), color = MaterialTheme.colorScheme.outlineVariant)
 }
 
+/** A tiny calendar page: month on a blue strip, the day number under it. */
+@Composable
+private fun CalendarDay(date: Long) {
+    val shape = RoundedCornerShape(4.dp)
+    Column(
+        Modifier.width(22.dp).clip(shape).background(Color.White).border(1.dp, CalBlue.copy(alpha = 0.3f), shape),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(calMonthFmt.format(Date(date)).uppercase(), fontSize = 6.sp, fontWeight = FontWeight.ExtraBold, color = Color.White,
+            textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().background(CalBlue))
+        Text(calDayFmt.format(Date(date)), fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1C1917))
+    }
+}
+
 /** The slim line above each day: the day's name and its totals in their columns. */
 @Composable
 private fun DayLine(date: Long, cols: List<LCol>, day: List<LRow>) = Tight {
@@ -472,8 +489,11 @@ private fun DayLine(date: Long, cols: List<LCol>, day: List<LRow>) = Tight {
         Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(IntrinsicSize.Min)
             .background(MaterialTheme.colorScheme.surface).background(DayTint)
     ) {
-        Text(dayLineFmt.format(Date(date)), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f).padding(start = 10.dp, top = 5.dp, bottom = 4.dp))
+        Row(Modifier.weight(1f).padding(start = 10.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            CalendarDay(date)
+            Text(weekdayFmt.format(Date(date)), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 6.dp))
+        }
         cols.forEachIndexed { k, c ->
             VerticalDivider(Modifier.fillMaxHeight(), color = Faint)
             Box(Modifier.width(w).fillMaxHeight(), contentAlignment = Alignment.Center) {
