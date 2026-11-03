@@ -28,6 +28,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.FormatListBulleted
 import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -53,7 +54,7 @@ import androidx.compose.ui.unit.sp
 
 /**
  * The message bar at the bottom of Home and Chat, in the style of ChatGPT: a floating white pill with a thin +,
- * the text, a thin mic, and a round black button that sends what is typed (or starts speaking when empty) and
+ * the text and a round green button with a mic that sends what is typed (or starts speaking when empty) and
  * shows a spinner while the app is answering. A soft fade above it keeps the list from being cut off sharply.
  */
 @Composable
@@ -116,7 +117,7 @@ internal fun InputBar(
                         Modifier
                             .size(36.dp)
                             .clip(CircleShape)
-                            .background(MicInk)
+                            .background(GreenDeep)
                             .clickable(enabled = talking || !busy) {
                                 when {
                                     talking -> voice!!.toggle()
@@ -130,7 +131,7 @@ internal fun InputBar(
                             talking -> Box(Modifier.size(12.dp).clip(RoundedCornerShape(3.dp)).background(Color.White))
                             busy -> CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
                             text.isNotBlank() -> Icon(Icons.Filled.ArrowUpward, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(20.dp))
-                            else -> ThinMic(Color.White)
+                            else -> Icon(Icons.Rounded.Mic, contentDescription = "Speak", tint = Color.White, modifier = Modifier.size(21.dp))
                         }
                     }
                 }
@@ -195,25 +196,6 @@ fun ThinPlus(color: Color) {
         val w = 1.8.dp.toPx()
         drawLine(color, Offset(size.width / 2, 1.dp.toPx()), Offset(size.width / 2, size.height - 1.dp.toPx()), w, StrokeCap.Round)
         drawLine(color, Offset(1.dp.toPx(), size.height / 2), Offset(size.width - 1.dp.toPx(), size.height / 2), w, StrokeCap.Round)
-    }
-}
-
-/** Near-black round mic / send button in the chat bar, like ChatGPT. */
-private val MicInk = Color(0xFF0D0D0D)
-
-/** An outlined microphone drawn with thin strokes. */
-@Composable
-private fun ThinMic(color: Color) {
-    Canvas(Modifier.size(20.dp)) {
-        val w = 1.8.dp.toPx()
-        val cx = size.width / 2
-        val capW = size.width * 0.34f
-        val top = 1.dp.toPx()
-        val capH = size.height * 0.56f
-        drawRoundRect(color, Offset(cx - capW / 2, top), Size(capW, capH), CornerRadius(capW / 2), style = Stroke(w))
-        val arcW = size.width * 0.66f
-        drawArc(color, 0f, 180f, false, Offset(cx - arcW / 2, top + capH * 0.35f), Size(arcW, capH * 0.95f), style = Stroke(w, cap = StrokeCap.Round))
-        drawLine(color, Offset(cx, top + capH * 0.35f + capH * 0.95f), Offset(cx, size.height - 1.dp.toPx()), w, StrokeCap.Round)
     }
 }
 
