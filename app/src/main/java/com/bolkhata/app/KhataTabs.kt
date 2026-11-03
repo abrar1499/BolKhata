@@ -742,9 +742,10 @@ fun MoneyScreen(
         set(java.util.Calendar.MINUTE, 0); set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
     }
     val thisStart = start.timeInMillis
-    val lastStart = start.apply { add(java.util.Calendar.MONTH, -1) }.timeInMillis
+    val year = start.get(java.util.Calendar.YEAR)
+    val yearStart = start.apply { set(java.util.Calendar.MONTH, java.util.Calendar.JANUARY) }.timeInMillis
     val thisMonth = list.filter { it.date >= thisStart }.sumOf { it.amount }
-    val lastMonth = list.filter { it.date in lastStart until thisStart }.sumOf { it.amount }
+    val thisYear = list.filter { it.date >= yearStart }.sumOf { it.amount }
     val total = list.sumOf { it.amount }
     // Expense by category; income by who paid (like the party list).
     val groups = (if (income) list.groupBy { source(it).lowercase() }.map { (_, l) -> Group(source(l.first()), null, l) }
@@ -754,7 +755,7 @@ fun MoneyScreen(
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
             item {
                 KhataTop("", "", onMenu, business = business, onBusiness = onBusiness) {
-                    SumCard(Triple(money(currency, lastMonth), "Last month", color), Triple(money(currency, thisMonth), "This month", color), "Report ›", onReport)
+                    SumCard(Triple(money(currency, thisYear), "Year $year", color), Triple(money(currency, thisMonth), "This month", color), "Report ›", onReport)
                 }
             }
             if (groups.isNotEmpty()) item { SheetTitle(if (income) "Income" else "Expense", "Total " + fmt(total)) }
