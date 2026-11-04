@@ -264,7 +264,7 @@ internal fun Initial(name: String) {
 
 /** Small filter chip (All / Receivable / Payable). */
 @Composable
-private fun SmallChip(label: String, on: Boolean, onClick: () -> Unit) {
+internal fun SmallChip(label: String, on: Boolean, onClick: () -> Unit) {
     Text(
         label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = if (on) Color.White else MaterialTheme.colorScheme.onSurface,
         modifier = Modifier.clip(CircleShape).background(if (on) Ember else MaterialTheme.colorScheme.surface)
