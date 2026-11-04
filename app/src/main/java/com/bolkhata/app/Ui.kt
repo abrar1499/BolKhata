@@ -291,13 +291,10 @@ fun creditTag(e: Entry) = if (isTrade(e.type) && e.person.isNotBlank()) (if (e.p
 fun balances(entries: List<Entry>): Map<String, Double> {
     val map = linkedMapOf<String, Double>()
     for (e in entries) {
-        if (!withPerson(e) || e.paid || isTransfer(e.type)) continue
+        if (!withPerson(e) || e.paid) continue
         val p = e.person.trim()
-        val v = map[p] ?: 0.0
-        map[p] = when (e.type) {
-            Type.DIYA, Type.WAPIS_DIYA, Type.SALE -> v + e.amount
-            else -> v - e.amount
-        }
+        // Same rule as the khata: loans, credit trade and bank transfers to / from the person.
+        map[p] = (map[p] ?: 0.0) + personEffect(e)
     }
     return map
 }
