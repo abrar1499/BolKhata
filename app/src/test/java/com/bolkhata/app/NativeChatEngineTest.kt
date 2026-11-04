@@ -38,6 +38,29 @@ class NativeChatEngineTest {
         assertTrue(r.filter.items.isEmpty())
     }
 
+    @Test fun howManyEntriesInACategoryIsACount() {
+        val r = read("other me kitni entry parri hain")
+        assertEquals("ask", r.kind)
+        assertEquals("count", r.what)
+        assertEquals(setOf(Cat.OTHER), r.filter.cats)
+        assertTrue(r.filter.items.isEmpty())
+    }
+
+    @Test fun todaysDateIsAnsweredInOneLine() {
+        val r = read("aj kya date hai")
+        assertEquals("chat", r.kind)
+        assertTrue(r.reply.startsWith("Aaj "))
+    }
+
+    @Test fun aReportWithItsOwnDatesAsksOverThoseDates() {
+        val r = read("expense reports from 19 aug 2026 to today")
+        assertEquals("ask", r.kind)
+        assertEquals(setOf(Type.KHARCHA), r.filter.types)
+        assertEquals(Query.day("2026-08-19"), r.filter.from)
+        assertTrue(r.filter.to!! >= now)
+        assertTrue(r.filter.items.isEmpty())
+    }
+
     @Test fun searchingAnAmountListsThoseEntriesAndNeverEdits() {
         val r = read("2800 wal entry search karo")
         assertEquals("ask", r.kind)

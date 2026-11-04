@@ -727,10 +727,10 @@ private fun ReportDonut(
     centerLabel: String,
     groups: List<ReportGroup>
 ) {
-    Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+    Box(Modifier.fillMaxWidth().padding(vertical = 2.dp), contentAlignment = Alignment.Center) {
         val ring = MaterialTheme.colorScheme.surfaceVariant
-        Canvas(Modifier.size(210.dp)) {
-            val stroke = 34.dp.toPx()
+        Canvas(Modifier.size(150.dp)) {
+            val stroke = 22.dp.toPx()
             val inset = stroke / 2
             val arcSize = androidx.compose.ui.geometry.Size(size.width - stroke, size.height - stroke)
             val topLeft = androidx.compose.ui.geometry.Offset(inset, inset)
@@ -747,8 +747,8 @@ private fun ReportDonut(
             }
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(moneyA(currency, centerValue), fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
-            Text(centerLabel, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(moneyA(currency, centerValue), fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
+            Text(centerLabel, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -762,23 +762,24 @@ private fun ReportGroupCard(
     onClick: () -> Unit
 ) {
     val share = if (total > 0.0) (group.amount / total).coerceIn(0.0, 1.0) else 0.0
-    Panel(Modifier.fillMaxWidth(), onClick = onClick, padding = 12.dp) {
+    Panel(Modifier.fillMaxWidth(), onClick = onClick, padding = 10.dp) {
+        // One compact line: dot, name with its entry count, share, amount; a thin bar under it.
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(12.dp).clip(CircleShape).background(group.color))
-            Spacer(Modifier.width(10.dp))
-            Text("${group.icon} ${group.title}", Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
-            Text("${(share * 100).roundToLong()}%", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.width(10.dp))
-            Text(moneyA(currency, group.amount), fontWeight = FontWeight.Bold)
+            Box(Modifier.size(8.dp).clip(CircleShape).background(group.color))
+            Spacer(Modifier.width(8.dp))
+            Text("${group.icon} ${group.title}", Modifier.weight(1f), fontWeight = FontWeight.SemiBold, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("${group.entries.size}× · ${(share * 100).roundToLong()}%", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.width(8.dp))
+            Text(moneyA(currency, group.amount), fontWeight = FontWeight.Bold, fontSize = 13.sp)
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(6.dp))
         LinearProgressIndicator(
             progress = { share.toFloat() },
-            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp)),
+            modifier = Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp)),
             color = group.color,
-            trackColor = MaterialTheme.colorScheme.surfaceVariant
+            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+            drawStopIndicator = {}
         )
-        Text("${group.entries.size} entries", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
         if (expanded) {
             HorizontalDivider(Modifier.padding(vertical = 6.dp))
             fun detail(e: Entry): String {
@@ -813,8 +814,6 @@ private fun ReportGroupCard(
                     }
                 }
             }
-        } else {
-            Text("Tap to see every entry", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -1054,32 +1053,32 @@ fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit, st
     val toReceive = rd.toReceive
     val toPay = rd.toPay
 
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = barSpace(16.dp)), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = barSpace(16.dp)), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item { ScreenTitle("Reports", onMenu = onMenu) }
         item {
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 ReportKind.entries.filter { it.tab || it == reportKind }.forEach { kind ->
-                    FilterChip(selected = reportKind == kind, onClick = { reportKind = kind; openGroups = emptySet() }, label = { Text(kind.label) })
+                    SmallChip(kind.label, reportKind == kind) { reportKind = kind; openGroups = emptySet() }
                 }
             }
         }
         item {
-            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surfaceVariant).padding(4.dp)) {
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant).padding(3.dp)) {
                 Span.entries.forEach { s ->
                     val selected = s == span
                     Box(Modifier.weight(1f).clip(RoundedCornerShape(10.dp))
                         .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent)
-                        .clickable { span = s; offset = 0 }.padding(vertical = 9.dp), contentAlignment = Alignment.Center) {
-                        Text(s.label, color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
+                        .clickable { span = s; offset = 0 }.padding(vertical = 5.dp), contentAlignment = Alignment.Center) {
+                        Text(s.label, color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
                     }
                 }
             }
         }
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { offset-- }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous") }
-                Text(label, Modifier.weight(1f), fontWeight = FontWeight.SemiBold, fontSize = 16.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                IconButton(onClick = { offset++ }, enabled = offset < 0) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next") }
+                IconButton(onClick = { offset-- }, Modifier.size(32.dp)) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous") }
+                Text(label, Modifier.weight(1f), fontWeight = FontWeight.SemiBold, fontSize = 13.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                IconButton(onClick = { offset++ }, Modifier.size(32.dp), enabled = offset < 0) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next") }
             }
         }
 
@@ -1087,9 +1086,9 @@ fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit, st
             ReportKind.CASH_OUT -> {
                 item { ReportDonut(currency, expenseTotal, expenseTotal, "Total Expense", expenseGroups) }
                 item {
-                    Panel(Modifier.fillMaxWidth(), padding = 14.dp) {
-                        Text("Expense · $label", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
-                        Text(moneyA(currency, expenseTotal), fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = RedSpend)
+                    Panel(Modifier.fillMaxWidth(), padding = 12.dp) {
+                        Text("Expense · $label", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                        Text(moneyA(currency, expenseTotal), fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = RedSpend)
                         Text("${expenseEntries.size} entries", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
@@ -1103,9 +1102,9 @@ fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit, st
             ReportKind.CASH_IN -> {
                 item { ReportDonut(currency, incomeTotal, incomeTotal, "Total Income", incomeGroups) }
                 item {
-                    Panel(Modifier.fillMaxWidth(), padding = 14.dp) {
-                        Text("Income · $label", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
-                        Text(moneyA(currency, incomeTotal), fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = GreenIn)
+                    Panel(Modifier.fillMaxWidth(), padding = 12.dp) {
+                        Text("Income · $label", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                        Text(moneyA(currency, incomeTotal), fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = GreenIn)
                         Text("${incomeEntries.size} entries", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
@@ -1119,9 +1118,9 @@ fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit, st
             ReportKind.SALES -> {
                 item { ReportDonut(currency, totalSales, totalSales, "Total Sales", salesGroups) }
                 item {
-                    Panel(Modifier.fillMaxWidth(), padding = 14.dp) {
-                        Text("Sales · $label", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
-                        Text(moneyA(currency, totalSales), fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = GreenIn)
+                    Panel(Modifier.fillMaxWidth(), padding = 12.dp) {
+                        Text("Sales · $label", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                        Text(moneyA(currency, totalSales), fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = GreenIn)
                         Text("${sales.size} sales entries · ${fmt(sales.sumOf { it.qty })} units sold", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
@@ -1135,9 +1134,9 @@ fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit, st
             ReportKind.PURCHASES -> {
                 item { ReportDonut(currency, totalPurchases, totalPurchases, "Total Purchases", purchaseGroups) }
                 item {
-                    Panel(Modifier.fillMaxWidth(), padding = 14.dp) {
-                        Text("Purchases · $label", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
-                        Text(moneyA(currency, totalPurchases), fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = catColor(Cat.STOCK))
+                    Panel(Modifier.fillMaxWidth(), padding = 12.dp) {
+                        Text("Purchases · $label", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                        Text(moneyA(currency, totalPurchases), fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = catColor(Cat.STOCK))
                         Text("${purchases.size} purchase entries · ${fmt(purchases.sumOf { it.qty })} units bought", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
@@ -1150,7 +1149,7 @@ fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit, st
             }
             ReportKind.STOCK -> {
                 item {
-                    Panel(Modifier.fillMaxWidth(), padding = 14.dp) {
+                    Panel(Modifier.fillMaxWidth(), padding = 12.dp) {
                         Text("Stock movement · $label", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             Column(Modifier.weight(1f)) {
@@ -1210,13 +1209,13 @@ fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit, st
                 item {
                     Panel(Modifier.fillMaxWidth(), padding = 16.dp) {
                         Text("Estimated net profit · $label", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(moneyA(currency, profit.netProfit), fontSize = 22.sp, fontWeight = FontWeight.ExtraBold,
+                        Text(moneyA(currency, profit.netProfit), fontSize = 18.sp, fontWeight = FontWeight.ExtraBold,
                             color = if (profit.netProfit >= 0) GreenIn else RedSpend)
                         Text("Costed sales margin − Cash Out expenses (Cash In excluded)", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 item {
-                    Panel(Modifier.fillMaxWidth(), padding = 14.dp) {
+                    Panel(Modifier.fillMaxWidth(), padding = 12.dp) {
                         ProfitSummaryRow("Total sales", profit.salesAmount, currency, GreenIn)
                         ProfitSummaryRow("Sales with known cost", profit.costedSalesAmount, currency, MaterialTheme.colorScheme.onSurface)
                         ProfitSummaryRow("Estimated cost of sold items", -profit.costOfGoods, currency, RedSpend)
@@ -1277,7 +1276,7 @@ fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit, st
                 item {
                     Panel(Modifier.fillMaxWidth(), padding = 16.dp) {
                         Text("Current cash balance · all recorded entries", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(moneyA(currency, cashBalance), fontSize = 22.sp, fontWeight = FontWeight.ExtraBold,
+                        Text(moneyA(currency, cashBalance), fontSize = 18.sp, fontWeight = FontWeight.ExtraBold,
                             color = if (cashBalance >= 0) GreenIn else RedSpend)
                         HorizontalDivider(Modifier.padding(vertical = 10.dp))
                         ProfitSummaryRow("Cash In (all time)", allCashIn, currency, GreenIn)
@@ -1304,9 +1303,9 @@ fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit, st
                 val receive = reportKind == ReportKind.TO_RECEIVE
                 val owed = outstanding.filter { if (receive) it.second > 0 else it.second < 0 }
                 item {
-                    Panel(Modifier.fillMaxWidth(), padding = 14.dp) {
+                    Panel(Modifier.fillMaxWidth(), padding = 12.dp) {
                         Text((if (receive) "To receive" else "To pay") + " · all time", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(moneyA(currency, if (receive) toReceive else toPay), fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = if (receive) GreenIn else OrangeOwe)
+                        Text(moneyA(currency, if (receive) toReceive else toPay), fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = if (receive) GreenIn else OrangeOwe)
                         Text("${owed.size} people", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }

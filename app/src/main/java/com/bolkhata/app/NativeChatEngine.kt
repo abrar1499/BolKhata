@@ -37,8 +37,8 @@ object NativeChatEngine {
         "it", "that", "this", "those", "these", "isko", "usko", "ye", "yeh", "inko",
         "open", "kholo", "khol", "kholen", "kholein", "karein", "karen", "kren", "tum", "aap", "es", "poora", "pura", "poore",
         "check", "hisab", "hisaab", "cashbook", "book", "name", "naam", "tak", "tk", "wal", "dhoondo", "dhundo", "talash",
-        "jitni", "jitne", "jitny", "jitna", "bhi", "b", "hui", "hoi", "hoti", "hote", "huin", "hoin", "bheje", "bhejy", "bhejay", "bhejey", "bheja", "bheji", "bhijwaye", "bhijwaya",
-        "total", "report", "summary", "overview", "yearly", "annual", "annually", "alltime", "overall", "lifetime", "ever", "time", "day", "days",
+        "jitni", "jitne", "jitny", "jitna", "parri", "pari", "padi", "pari", "parre", "pare", "pade", "parhi", "bhi", "b", "hui", "hoi", "hoti", "hote", "huin", "hoin", "bheje", "bhejy", "bhejay", "bhejey", "bheja", "bheji", "bhijwaye", "bhijwaya",
+        "total", "report", "reports", "summary", "overview", "yearly", "annual", "annually", "alltime", "overall", "lifetime", "ever", "time", "day", "days",
         "delete", "delet", "del", "dlt", "remove", "hatao", "hata", "mitao", "clear", "wipe",
         "change", "edit", "update", "badlo", "correct", "fix", "move", "shift", "transfer", "send", "bhejo",
         "khata", "account", "paid", "pay", "by", "kiya", "kya", "khaya", "pese", "paise", "paisa", "diye", "diya", "us"
@@ -157,7 +157,7 @@ object NativeChatEngine {
             val date = dateBounds(lower, now)
             if (date != null) return Fixed("", "ask", "", "list", Query.Filter(from = date.from, to = date.to))
         }
-        if (repeatSearch) return chat("I don't have a previous search in this conversation. What should I search for?")
+        if (repeatSearch) return chat("Kya dhoondun?")
 
         // Pronouns can only refer to stable IDs explicitly attached to the last assistant result.
         val ids = history.lastOrNull { !it.isUser && it.entryIds.isNotEmpty() }?.entryIds.orEmpty().toSet()
@@ -233,7 +233,7 @@ object NativeChatEngine {
         val moveWords = setOf("move", "shift", "transfer", "send", "bhejo", "dal", "daal")
         if (has(words, moveWords) && has(words, setOf("khata", "account"))) {
             val destination = Accounts.khataNameMentionedIn(text, "", contacts)
-            if (destination == null) return chat("Which saved khata should receive these entries? Please use its full name.")
+            if (destination == null) return chat("Kis khata me daalun? Poora naam batayein.")
             val selectionText = text.replace(destination, " ", ignoreCase = true)
             val selectionWords = tokens(selectionText)
             val screenSelection = has(selectionWords, setOf("all", "every", "sab", "sari", "saari", "these", "this", "inko", "ye", "yeh"))
@@ -293,17 +293,18 @@ object NativeChatEngine {
         if ((delete || clear) && !has(words, setOf("nahi", "nahin", "nhi", "not", "mat"))) {
             val f = buildFilter(text, contacts, now, false)
             if ((all || clear) && f.isEmpty) return Fixed("", "clear_all", "")
-            return if (f.isEmpty) chat("Which entries should I delete? Give an item, person, date, or say 'delete all' to review everything.")
+            return if (f.isEmpty) chat("Kaun si entries delete karun? Naam, cheez ya date batayein.")
             else Fixed("", "delete", "", filter = f)
         }
 
         if (lower.contains("how are you") || lower.contains("what can you do") ||
             has(words, setOf("hello", "hi", "hey", "salam", "assalam", "thanks", "thank", "bye", "goodbye"))) {
-            return talk(lower)
+            return talk(lower, now)
         }
 
-        // Reports use the requested period instead of silently defaulting yearly reports to this month.
-        if (has(words, setOf("report", "summary", "overview"))) {
+        // Reports use the requested period instead of silently defaulting yearly reports to this month;
+        // a report with its own dates ("from 19 aug to today") is a normal question over those dates.
+        if (has(words, setOf("report", "reports", "summary", "overview")) && dateBounds(lower, now) == null) {
             val periodQuery = when {
                 has(words, setOf("last", "previous", "pichle", "pichhle")) && has(words, setOf("year", "yearly", "annual", "annually", "saal")) -> "last year spent"
                 has(words, setOf("year", "yearly", "annual", "annually", "saal")) -> "this year spent"
@@ -351,7 +352,7 @@ object NativeChatEngine {
                 "khata", "qarz", "udhar", "udhaar", "report", "summary", "overview", "total", "hisab", "hisaab", "cashbook"
             )) || words.any { token -> categories.values.any { token in it } } || dateBounds(lower, now) != null
             if (!knownDomain)
-                return Fixed("", "chat", "I can answer from your saved transactions. Try 'food this month', 'last 5 entries', or 'Ali ka balance'.", unsure = true)
+                return Fixed("", "chat", "Samajh nahi aaya. Jaise: 'food is mahine', 'last 5 entries'.", unsure = true)
             val periodWords = setOf("today", "yesterday", "aaj", "aj", "kal", "this", "last", "month", "week", "year",
                 "mahina", "mahine", "saal", "all", "time", "overall", "lifetime", "ever", "alltime")
             val simpleLookup = (words.any { token -> categories.values.any { token in it } } || has(words, expense + income)) &&
@@ -383,7 +384,7 @@ object NativeChatEngine {
         if (terms.isNotEmpty() && words.size <= 4 && lower.none(Char::isDigit) && smallTalk(lower) == NOT_UNDERSTOOD &&
             entries.any { e -> val hay = (e.item + e.note).lowercase(Locale.ROOT).replace(" ", ""); terms.all { hay.contains(it) } })
             return Fixed("", "ask", "", "list", Query.Filter(items = terms))
-        return talk(lower)
+        return talk(lower, now)
     }
 
     private val renameUrdu = Regex("""^(.+?)\s+(?:ka|ki|ke)\s+(?:khata\s+(?:ka\s+)?)?(?:naam|name)\s+(?:badal\s+(?:ke|kar|k)\s+)?(.+?)\s+(?:kar|kr|karo|kro|rakh|rakho|rakhdo)\b""")
@@ -559,24 +560,28 @@ object NativeChatEngine {
 
     private fun chat(reply: String) = Fixed("", "chat", reply)
 
-    private const val NOT_UNDERSTOOD = "I can help with your saved khata, transactions, balances, searches and edits. Try 'chai 5', 'food this month' or 'Ali ka khata'."
+    private const val NOT_UNDERSTOOD = "Samajh nahi aaya. Jaise: 'chai 5', 'food is mahine', 'Ali ka khata'."
 
     /** Small talk, or the not-understood reply marked [Fixed.unsure]. */
-    private fun talk(text: String): Fixed = smallTalk(text).let { Fixed("", "chat", it, unsure = it == NOT_UNDERSTOOD) }
+    private fun talk(text: String, now: Long): Fixed = smallTalk(text, now).let { Fixed("", "chat", it, unsure = it == NOT_UNDERSTOOD) }
 
-    private fun smallTalk(text: String): String {
+    private fun smallTalk(text: String, now: Long): String {
         val w = tokens(text)
         return when {
             has(w, setOf("hi", "hello", "hey", "good", "morning", "evening", "salam", "assalam", "assalamualaikum", "aoa")) ->
-                "Wa alaikum assalam! I'm your offline khata assistant. Add expenses, ask about your money, or manage saved entries."
+                "Wa alaikum assalam! Batayein?"
+            has(w, setOf("date", "tareekh", "tarikh", "din", "day")) && has(w, setOf("aaj", "aj", "today", "kya", "kia", "what", "konsa", "kaunsa")) ->
+                java.text.SimpleDateFormat("'Aaj' d MMM yyyy, EEEE.", Locale.ENGLISH).format(java.util.Date(now))
+            has(w, setOf("time", "waqt", "baje", "bje")) && has(w, setOf("kya", "kia", "what", "kitne", "kitny")) ->
+                java.text.SimpleDateFormat("h:mm a", Locale.ENGLISH).format(java.util.Date(now))
             has(w, setOf("hal", "haal", "kaise", "kaisa", "kaisi")) || (has(w, setOf("kya", "kia")) && has(w, setOf("hal", "haal"))) ->
-                "Main theek hoon, shukriya! Batayein, aaj kya likhna ya dekhna hai?"
-            has(w, setOf("how", "are", "you")) -> "I'm ready to help with your khata. I work locally on this phone."
-            has(w, setOf("what", "can", "you", "do")) -> "I can record money, search transactions, calculate balances, correct entries, move khatas, read receipts, and remember facts you explicitly save."
-            has(w, setOf("thanks", "thank", "shukriya", "shukria", "jazakallah")) -> "You're welcome. Your khata stays on this device."
-            has(w, setOf("bye", "goodbye", "allahhafiz", "khuda")) -> "Take care. Your saved khata will be here when you return."
+                "Theek hoon, shukriya! Batayein?"
+            has(w, setOf("how", "are", "you")) -> "Theek hoon! Batayein?"
+            has(w, setOf("what", "can", "you", "do")) -> "Entry likhna, hisaab, search, edit aur khata move."
+            has(w, setOf("thanks", "thank", "shukriya", "shukria", "jazakallah")) -> "Koi baat nahi!"
+            has(w, setOf("bye", "goodbye", "allahhafiz", "khuda")) -> "Allah Hafiz!"
             has(w, setOf("help", "commands", "examples", "madad")) ->
-                "Try: 'chai 5', 'Ali ko 100 diye', 'food this month kitna', 'last 5 transactions', or 'petrol 50 nahi 40 tha'."
+                "Jaise: 'chai 5', 'Ali ko 100 diye', 'food kitna'."
             else -> NOT_UNDERSTOOD
         }
     }
@@ -596,6 +601,8 @@ object NativeChatEngine {
         val howMuch = has(w, setOf("kitna", "kitne", "kitni", "kitnay", "kitny"))
         return text.endsWith("?") || has(w, setOf("report", "summary", "overview")) ||
             (howMuch && has(w, periods + dayBeforeYesterday + "aj")) ||
+            // "other me kitni entry hain", "food kitna": a count or sum over a category or kind, all time.
+            (howMuch && (categoryMentioned || broadTypeMentioned || has(w, setOf("entry", "entries")))) ||
             has(w, setOf("show", "find", "search", "list", "total", "sum", "count", "highest", "largest", "biggest", "dikhao", "dikha", "cashbook")) ||
             (has(w, expense + income) && has(w, periods)) ||
             (categoryMentioned && has(w, periods)) || simpleLedgerLookup ||

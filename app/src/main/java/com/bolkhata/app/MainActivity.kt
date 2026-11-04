@@ -654,7 +654,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 }
                 return
             }
-            flash = Flash("I couldn't match that question to saved records. Try 'food this month', 'last 5 transactions', or 'Ali ka balance'.", Flash.Kind.ANSWER)
+            flash = Flash("Samajh nahi aaya. Jaise: 'food is mahine'.", Flash.Kind.ANSWER)
             return
         }
         // Simple changes (date, amount) are done offline straight away, with Undo.
@@ -798,9 +798,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         if (sourceEntries.isEmpty()) return "No entries found in $source's khata. Nothing was moved."
         val changes = sourceEntries.map { old -> old to old.copy(person = destination) }
         if (!applyPlan(EditPlan(changes, emptyList(), "Moved ${changes.size} entries from $source to $destination"))) {
-            return "The khata entries changed before I could move them. Nothing was moved; please try again."
+            return "Entries badal gayi thi, kuch move nahi hua. Dobara try karein."
         }
-        return "Moved ${changes.size} entries from $source to $destination. Amounts, dates, notes and entry types are unchanged. You can Undo or restore this move from Move history."
+        return "${changes.size} entries $source se $destination me move ho gayi."
     }
 
     /**
@@ -821,7 +821,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         if (changed.isEmpty()) return "No transfer entries found to convert in " + person + "'s khata."
         val message = "Converted " + changed.size + " transfer entries in " + person + "'s khata to gave/received entries"
         if (!applyPlan(EditPlan(changed, emptyList(), message))) {
-            return "The khata changed before I could apply the conversion. Nothing was changed; please try again."
+            return "Khata badal gaya tha, kuch nahi badla. Dobara try karein."
         }
         return "Done. Converted " + changed.size + " transfer entries in " + person + "'s khata. The khata stays open."
     }
@@ -852,7 +852,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 shortDate(e.date) + " · " + entryTitle(e) + " · " + fmt(e.amount) + " " + currency
             }
             listedRows[0] = hits.take(4).map { it.id }
-            return "I found ${hits.size} matching entries for $action:\n$preview\nWhich one do you mean? Give the date or amount, or say 'all entries' when you want a bulk action."
+            return "${hits.size} matching entries for $action:\n$preview\nWhich one do you mean? Date/amount ya 'all entries'."
         }
         return when (f.kind) {
             "entry" -> {
@@ -869,7 +869,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             "plan" -> {
                 val plan = f.plan ?: return "I couldn't build a safe change plan. Nothing was changed."
                 pendingPlan = plan
-                "I prepared a change for review. Check the proposed entry details and tap Apply or Cancel. Nothing has changed yet."
+                "Check karke Apply ya Cancel dabayein."
             }
             "clear_all" -> {
                 val targets = scoped(entries)
@@ -921,7 +921,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 val changed = hits.map { it to Query.change(it, f.set) }.filter { (a, b) -> a != b }
                 if (changed.isEmpty()) return "Already like that."
                 if (!applyPlan(EditPlan(changed, emptyList(), "Changed ${changed.size} " + (if (changed.size == 1) "entry" else "entries")))) {
-                    return "Those entries changed before I could update them. Nothing was changed; please search again."
+                    return "Entries badal gayi thi, kuch nahi badla. Dobara search karein."
                 }
                 changed.take(3).joinToString("; ") { (a, b) -> entryTitle(a) + " " + fmt(a.amount) + " → " + entryTitle(b) + " " + fmt(b.amount) } +
                     if (changed.size > 3) " +${changed.size - 3} more" else ""
@@ -966,7 +966,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     e to moved
                 }
                 if (!applyPlan(EditPlan(changed, emptyList(), "Moved ${changed.size} to $name"))) {
-                    return "Those entries changed before I could move them. Nothing was moved; please search again."
+                    return "Entries badal gayi thi, kuch move nahi hua. Dobara search karein."
                 }
                 val bal = personAccounts(work).firstOrNull { it.name.equals(name, true) }?.balance ?: 0.0
                 "${changed.size} entries → $name khata · " + when {
@@ -1195,7 +1195,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             )
         ) {
             postChat(text, isUser = true)
-            postChat("That exact request was just completed, so I didn't run it twice. If you meant another identical transaction, say 'add another'.", isUser = false)
+            postChat("Ye abhi ho chuka hai. Dobara chahiye to 'add another' kahein.", isUser = false)
             return
         }
         val roman = runCatching { Translit.toRoman(text) }.getOrDefault(text)
@@ -1245,7 +1245,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 val reply = runCatching { runFixed(intent, text, inChat = true) }
                     .onFailure { executionStatus = "exception:" + it.javaClass.simpleName }
                     .getOrElse {
-                        "I couldn't safely complete that action. Nothing was changed. Please add the date, amount, item, or person's name."
+                        "Kuch nahi badla. Date, amount ya naam batayein."
                     }
                 if (reply == null && executionStatus == "returned") executionStatus = "awaiting_confirmation"
                 val matchCount = if (intent.kind in setOf("ask", "open", "delete", "change", "to_khata", "paid_by", "reread")) {
@@ -1259,7 +1259,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     postChat(reply, isUser = false, meta = trace, listIds = listedRows[0])
                 }
             } catch (e: Exception) {
-                val safe = "I couldn't safely understand that. Nothing was changed. Try 'chai 5', 'food this month', or 'last 5 transactions'."
+                val safe = "Samajh nahi aaya. Jaise: 'chai 5', 'food is mahine'."
                 lastSpeech = safe
                 postChat(safe, isUser = false, meta = "engine=NativeChatEngine; stage=interpret; failure=" + e.javaClass.simpleName)
             } finally {
@@ -1478,18 +1478,25 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         var lastSound = start
         // Background noise level, learnt while recording, so a noisy room still counts as a pause. Speech only has to
         // be a little above it, so a soft voice is heard too; steady noise slowly becomes the new level.
+        // The floor is capped, so a soft voice or a headset mic never raises it above speech.
         var floor = 300f
+        var peak = 0
         while (recorder === r) {
             kotlinx.coroutines.delay(150)
             val now = System.currentTimeMillis()
             val amp = runCatching { r.maxAmplitude }.getOrDefault(0)
+            peak = maxOf(peak, amp)
             voiceLevel = (amp / 6_000f).coerceAtMost(1f)
-            val loud = maxOf(700f, floor * 2.2f)
-            if (amp > loud) { spoke = true; lastSound = now; floor = floor * 0.98f + amp * 0.02f }
-            else floor = floor * 0.9f + amp * 0.1f
+            val loud = maxOf(450f, floor * 1.8f)
+            if (amp > loud) { spoke = true; lastSound = now }
+            else floor = (floor * 0.9f + amp * 0.1f).coerceAtMost(1_200f)
             // A call answers sooner after a pause than the mic, so it feels live.
             if (spoke && now - lastSound > (if (voiceOn) 900 else 1200)) { finishRecording(); break }
-            if (!spoke && now - start > 8000) { finishRecording(send = false); recordMissed(); break }
+            // No clear start heard: anything above a whisper still goes to Whisper (its noise filter drops silence).
+            if (!spoke && now - start > 8000) {
+                if (peak > 350) finishRecording() else { finishRecording(send = false); recordMissed() }
+                break
+            }
         }
     }
 

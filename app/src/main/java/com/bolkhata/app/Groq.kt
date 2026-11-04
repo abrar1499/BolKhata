@@ -205,7 +205,8 @@ object Groq {
             val segments = o.optJSONArray("segments")
             val heard = if (segments == null || segments.length() == 0) o.optString("text") else
                 (0 until segments.length()).map { segments.getJSONObject(it) }
-                    .filter { it.optDouble("no_speech_prob", 0.0) < 0.6 && it.optDouble("avg_logprob", 0.0) > -1.0 }
+                    // Whisper's own rule: a part is silence only when it says so AND is unsure; mixed Urdu/English speech is often unsure.
+                    .filterNot { it.optDouble("no_speech_prob", 0.0) > 0.6 && it.optDouble("avg_logprob", 0.0) < -1.0 }
                     .joinToString(" ") { it.optString("text").trim() }
             // Urdu or Hindi script is written in English letters, the way the app and the owner type.
             heard.trim().let { runCatching { Translit.toRoman(it) }.getOrDefault(it).trim() }
