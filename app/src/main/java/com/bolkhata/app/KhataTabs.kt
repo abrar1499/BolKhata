@@ -473,7 +473,7 @@ private fun GridRow(title: String, sub: String, cells: List<GCell>, w: Dp, last:
     val shape = if (card) RectangleShape else sheetShape(last)
     Row(
         Modifier.padding(start = 10.dp, end = 10.dp, top = if (card) 2.dp else 0.dp).fillMaxWidth().height(IntrinsicSize.Min).shadow(1.dp, shape).clip(shape)
-            .background(MaterialTheme.colorScheme.surface).clickable { onClick() }
+            .background(MaterialTheme.colorScheme.surface).then(if (card) Modifier.background(CardShade) else Modifier).clickable { onClick() }
     ) {
         Column(Modifier.weight(1f).padding(start = 10.dp, end = 4.dp, top = 5.dp, bottom = 5.dp), verticalArrangement = Arrangement.Center) {
             Text(title, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -491,6 +491,9 @@ private fun GridRow(title: String, sub: String, cells: List<GCell>, w: Dp, last:
     }
     if (!last && !card) HorizontalDivider(Modifier.padding(horizontal = 10.dp), color = Faint)
 }
+
+/** Soft red at the start of a card, fading to white (party, income and expense cards). */
+private val CardShade = Brush.horizontalGradient(listOf(Ember.copy(alpha = 0.06f), Color.Transparent))
 
 /** Shape of a row inside a white sheet (each row casts a soft shadow so the sheet looks raised): the last row rounds the bottom corners. */
 private fun sheetShape(last: Boolean) = if (last) RoundedCornerShape(bottomStart = 14.dp, bottomEnd = 14.dp) else RoundedCornerShape(0.dp)
@@ -608,13 +611,17 @@ private fun DayLine(date: Long, cols: List<LCol>, day: List<LRow>, card: Boolean
     Row(
         Modifier.padding(start = 10.dp, end = 10.dp, top = if (card) 2.dp else 0.dp).fillMaxWidth().height(IntrinsicSize.Min)
             .shadow(1.dp).background(MaterialTheme.colorScheme.surface)
-            .background(Brush.horizontalGradient(listOf(Ember.copy(alpha = 0.10f), Color.Transparent)))
     ) {
+        // The red-to-white shade stays on the date; the amount columns keep the same tint as the entries under them.
         Text(dayLineFmt.format(Date(date)), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f).padding(start = 10.dp, top = 5.dp, bottom = 4.dp))
+            modifier = Modifier.weight(1f).fillMaxHeight().background(Brush.horizontalGradient(listOf(Ember.copy(alpha = 0.10f), Color.Transparent)))
+                .padding(start = 10.dp, top = 5.dp, bottom = 4.dp))
         cols.forEachIndexed { k, c ->
             VerticalDivider(Modifier.fillMaxHeight(), color = Faint)
-            Box(Modifier.width(w).fillMaxHeight(), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier.width(w).fillMaxHeight().background(if (c.kind == LKind.OUT) RedSpend.copy(alpha = 0.025f) else Color.Transparent),
+                contentAlignment = Alignment.Center
+            ) {
                 Text(signed(c.kind, totals[k]), fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = kindColor(c.kind), maxLines = 1, softWrap = false)
             }
         }
@@ -924,10 +931,10 @@ fun MoneyScreen(
                 item(key = "g" + g.name) {
                     val share = if (total > 0) (g.total / total).toFloat() else 0f
                     // Its own square raised card: icon, name with a share bar (expense) or last date and count (income), then the
-                    // amount in a tinted column right under the head's Total, like the Parties cards.
+                    // amount in dark ink (only the head's Total is red / green), in a column with the party cards' light tint (red for expense, green for income).
                     Row(
                         Modifier.padding(start = 10.dp, end = 10.dp, top = 2.dp).fillMaxWidth().height(IntrinsicSize.Min).shadow(1.dp)
-                            .background(MaterialTheme.colorScheme.surface)
+                            .background(MaterialTheme.colorScheme.surface).background(CardShade)
                             .clickable { if (isOpen) open.remove(g.name) else open.add(g.name) }.padding(start = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -947,10 +954,10 @@ fun MoneyScreen(
                         Spacer(Modifier.width(10.dp))
                         VerticalDivider(Modifier.fillMaxHeight(), color = Faint)
                         Column(
-                            Modifier.width(WideColW).fillMaxHeight().background(cellTint(kind, 0.04f)),
+                            Modifier.width(WideColW).fillMaxHeight().background(cellTint(kind, 0.025f)),
                             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
                         ) {
-                            Text(fmt(g.total), fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, color = color)
+                            Text(fmt(g.total), fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, color = AmountInk)
                             Text(if (g.cat != null) "${Math.round(share * 100)}%" else if (isOpen) "⌄" else "›",
                                 fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
