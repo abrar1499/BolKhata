@@ -130,8 +130,8 @@ val LocalBarSpace = compositionLocalOf { 0.dp }
 fun barSpace(extra: Dp = 24.dp): Dp = LocalBarSpace.current + extra
 
 val Green = Color(0xFF10B981)
-val RedSpend = Color(0xFFE5484D)
-val GreenIn = Color(0xFF1FA463)
+val RedSpend = Color(0xFFE3342F)
+val GreenIn = Color(0xFF1E9654)
 val OrangeOwe = Color(0xFFE8892B)
 
 fun catColor(c: Cat): Color = when (c) {
@@ -200,14 +200,14 @@ fun BolTheme(dark: Boolean, content: @Composable () -> Unit) {
         onPrimaryContainer = Color(0xFF065F46),
         secondaryContainer = Color(0xFFD1FAE5),
         onSecondaryContainer = Color(0xFF065F46),
-        background = Color(0xFFF9F9F9),
+        background = Color(0xFFF2F1EF),
         onBackground = Color(0xFF0D0D0D),
         surface = Color.White,
         onSurface = Color(0xFF0D0D0D),
-        surfaceVariant = Color(0xFFF2F2F2),
-        onSurfaceVariant = Color(0xFF6B6B6B),
-        outline = Color(0xFFE5E5E5),
-        outlineVariant = Color(0xFFECECEC)
+        surfaceVariant = Color(0xFFF2EFEC),
+        onSurfaceVariant = Color(0xFF6B6560),
+        outline = Color(0xFFE6E3DF),
+        outlineVariant = Color(0xFFEAE7E3)
     )
     MaterialTheme(colorScheme = scheme, typography = AppTypography, content = content)
 }
