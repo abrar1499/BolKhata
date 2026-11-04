@@ -311,14 +311,15 @@ private fun UserBubble(text: String, attachment: String = "") {
         Text(
             text,
             color = MaterialTheme.colorScheme.onSurface,
-            lineHeight = 21.sp,
+            fontSize = 14.sp,
+            lineHeight = 18.sp,
             modifier = Modifier
                 .widthIn(max = 300.dp)
                 .shadow(1.dp, MeShape)
                 .clip(MeShape)
                 .copyable(text)
                 .background(MaterialTheme.colorScheme.surface)
-                .padding(horizontal = 14.dp, vertical = 10.dp)
+                .padding(horizontal = 12.dp, vertical = 8.dp)
         )
     }
 }
@@ -381,7 +382,8 @@ private fun AssistantBubble(text: String) {
     Text(
         text,
         color = MaterialTheme.colorScheme.onSurface,
-        lineHeight = 21.sp,
+        fontSize = 14.sp,
+        lineHeight = 18.sp,
         modifier = Modifier
             .padding(start = 8.dp)
             .widthIn(max = 320.dp)
@@ -389,7 +391,7 @@ private fun AssistantBubble(text: String) {
             .clip(BotShape)
             .copyable(text)
             .background(MaterialTheme.colorScheme.surface)
-            .padding(horizontal = 14.dp, vertical = 10.dp)
+            .padding(horizontal = 12.dp, vertical = 8.dp)
     )
 }
 
@@ -409,17 +411,17 @@ private fun ReportCard(r: Report, text: String) {
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(5.dp)
     ) {
-        if (r.title.isNotBlank() && r.title != hero?.label) Text(r.title, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+        if (r.title.isNotBlank() && r.title != hero?.label) Text(r.title, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
         if (hero != null) {
-            Text(hero.label, fontSize = 13.sp, color = grey)
-            Text(hero.amount, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = color(hero.tone))
+            Text(hero.label, fontSize = 12.sp, color = grey)
+            Text(hero.amount, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = color(hero.tone))
         }
         val others = r.stats.filter { it !== hero }
         if (others.isNotEmpty()) HorizontalDivider(Modifier.padding(vertical = 4.dp), color = grey.copy(alpha = 0.15f))
         others.forEach { s ->
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(s.label, Modifier.weight(1f), fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
-                Text(s.amount, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = color(s.tone))
+                Text(s.label, Modifier.weight(1f), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
+                Text(s.amount, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = color(s.tone))
             }
         }
         r.rows.forEachIndexed { i, l ->
@@ -441,12 +443,12 @@ private fun ReportCard(r: Report, text: String) {
             HorizontalDivider(Modifier.padding(vertical = 2.dp), color = grey.copy(alpha = 0.3f))
             r.total.forEach { s ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (s.label == "Total") "Total" else "Total · " + s.label, Modifier.weight(1f), fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                    Text(s.amount, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = color(s.tone))
+                    Text(if (s.label == "Total") "Total" else "Total · " + s.label, Modifier.weight(1f), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Text(s.amount, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = color(s.tone))
                 }
             }
         }
-        if (r.notes.isNotEmpty()) Text(r.notes.joinToString(" · "), fontSize = 12.sp, color = grey, lineHeight = 16.sp)
+        if (r.notes.isNotEmpty()) Text(r.notes.joinToString(" · "), fontSize = 11.sp, color = grey, lineHeight = 14.sp)
     }
 }
 
