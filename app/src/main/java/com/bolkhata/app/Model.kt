@@ -123,21 +123,7 @@ class Store(context: Context) {
             .apply()
     }
 
-    fun load(): List<Entry> {
-        val list = read(scoped("entries"))
-        if (prefs.getBoolean("bankNamesV1", false)) return list
-        // One-time fix of the bank statement import: traffic fines are Transport, the Jawazat fee is the Iqama fee.
-        val fixed = list.map { e ->
-            when {
-                e.category == Cat.FEES && e.item == "Traffic fine" -> e.copy(category = Cat.TRANSPORT)
-                e.category == Cat.FEES && e.item == "Jawazat fee" -> e.copy(item = "Iqama fee", note = if (e.note == "Jawazat fee") "Iqama fee" else e.note)
-                else -> e
-            }
-        }
-        prefs.edit().putBoolean("bankNamesV1", true).apply()
-        if (fixed != list) write(scoped("entries"), fixed)
-        return fixed
-    }
+    fun load(): List<Entry> = read(scoped("entries"))
 
     // ---------- Businesses: each has its own entries and trash ----------
 
@@ -400,7 +386,7 @@ class Store(context: Context) {
         val originals = before.associateBy { it.id }
         val changes = after.mapNotNull { a ->
             val b = originals[a.id] ?: return@mapNotNull null
-            if (a.person == b.person && a.type == b.type && a.category == b.category && a.item == b.item && a.paid == b.paid) return@mapNotNull null
+            if (a.person == b.person) return@mapNotNull null
             MoveChange(b.id, b.person, b.type, b.category, b.item, b.paid,
                 a.person, a.type, a.category, a.item, a.paid)
         }
@@ -579,9 +565,9 @@ class Store(context: Context) {
 
     var theme: String
         get() {
-            // The red band look is given to everyone once; any theme picked afterwards (Clean too) is kept.
-            if (!prefs.getBoolean("redBandV1", false)) prefs.edit().putBoolean("redBandV1", true).putString("theme", "Red").apply()
-            return prefs.getString("theme", "Red") ?: "Red"
+            // The redesign moves everyone to the plain "Clean" look once; any theme picked afterwards is kept.
+            if (!prefs.getBoolean("cleanLookV1", false)) prefs.edit().putBoolean("cleanLookV1", true).putString("theme", "Clean").apply()
+            return prefs.getString("theme", "Clean") ?: "Clean"
         }
         set(v) = prefs.edit().putString("theme", v).apply()
 

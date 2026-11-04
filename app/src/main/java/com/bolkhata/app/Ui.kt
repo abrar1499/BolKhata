@@ -91,17 +91,13 @@ data class HeaderTheme(val name: String, val c1: Color, val c2: Color, val c3: C
 
     /** The plain "Clean" look: one flat colour, no gradient or circles. */
     val flat: Boolean get() = c1 == c2 && c2 == c3
-
-    /** Colour at the very top of the band (its first colour under the glossy sheen), also used for the status bar. */
-    val top: Color get() = androidx.compose.ui.graphics.lerp(c1, Color.White, 0.12f)
 }
 
 private fun h(name: String, a: Long, b: Long, c: Long, light: Boolean) = HeaderTheme(name, Color(a), Color(b), Color(c), light)
 
 /** All themes the person can pick in Settings. The first one is the default. */
 val HEADER_THEMES = listOf(
-    h("Red", 0xFFE3342F, 0xFFE3342F, 0xFFDC2F2A, false),
-    h("Clean", 0xFFF3F1EF, 0xFFF3F1EF, 0xFFF3F1EF, true),
+    h("Clean", 0xFFF9F9F9, 0xFFF9F9F9, 0xFFF9F9F9, true),
     h("Sand", 0xFFFED7AA, 0xFFFDE7CC, 0xFFFFF5EA, true),
     h("Mint", 0xFFA7F3D0, 0xFFC6F6E0, 0xFFE3FBF1, true),
     h("Sky", 0xFFBAE6FD, 0xFFD6EFFE, 0xFFEEF8FF, true),
@@ -134,8 +130,8 @@ val LocalBarSpace = compositionLocalOf { 0.dp }
 fun barSpace(extra: Dp = 24.dp): Dp = LocalBarSpace.current + extra
 
 val Green = Color(0xFF10B981)
-val RedSpend = Color(0xFFD6403A)
-val GreenIn = Color(0xFF1F9A54)
+val RedSpend = Color(0xFFE5484D)
+val GreenIn = Color(0xFF1FA463)
 val OrangeOwe = Color(0xFFE8892B)
 
 fun catColor(c: Cat): Color = when (c) {
@@ -204,14 +200,14 @@ fun BolTheme(dark: Boolean, content: @Composable () -> Unit) {
         onPrimaryContainer = Color(0xFF065F46),
         secondaryContainer = Color(0xFFD1FAE5),
         onSecondaryContainer = Color(0xFF065F46),
-        background = Color(0xFFF3F1EF),
+        background = Color(0xFFF9F9F9),
         onBackground = Color(0xFF0D0D0D),
         surface = Color.White,
         onSurface = Color(0xFF0D0D0D),
-        surfaceVariant = Color(0xFFF7F5F3),
-        onSurfaceVariant = Color(0xFF6B6560),
-        outline = Color(0xFFE6E3DF),
-        outlineVariant = Color(0xFFECE7E3)
+        surfaceVariant = Color(0xFFF2F2F2),
+        onSurfaceVariant = Color(0xFF6B6B6B),
+        outline = Color(0xFFE5E5E5),
+        outlineVariant = Color(0xFFECECEC)
     )
     MaterialTheme(colorScheme = scheme, typography = AppTypography, content = content)
 }

@@ -62,8 +62,7 @@ fun FormPopup(onDismiss: () -> Unit, content: @Composable () -> Unit) {
  * One compact form for adding, editing and answering "what is this?". The owner only picks Cash out or Cash in
  * (none picked when [askType]); the app works out the rest: no party means an expense (its category read from the
  * note and goods) or income; a party means a loan or a repayment, from that party's balance. An edit that keeps the
- * direction and the party keeps the entry's own kind (sale, purchase, transfer…). The khata list also offers
- * Business (a stock item: sale or purchase), Income (who paid) and Expense (a category).
+ * direction and the party keeps the entry's own kind (sale, purchase, transfer…).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -83,13 +82,6 @@ fun EntryForm(
 ) {
     var out by remember(initial.id) { mutableStateOf<Boolean?>(if (askType) null else isOut(initial.type)) }
     val people = remember(all) { partyNames(all) }
-    // The other khatas the entry can go to: stock items (sale / purchase), who paid income, expense categories.
-    val stockNames = remember(all) { stock(all).map { it.name.trim() }.filter { it.isNotBlank() }.distinctBy { it.lowercase() } }
-    val incomeNames = remember(all) { all.filter { it.type == Type.AAMDANI }.map { source(it).trim() }.filter { it.isNotBlank() }.distinctBy { it.lowercase() } }
-    val expenseCats = remember { Cat.entries.filter { it !in setOf(Cat.UDHAAR, Cat.TANKHWAH, Cat.SALES, Cat.STOCK) } }
-    /** A non-party khata picked in the list: "stock" / "income" (name in [item]) or "expense" (in [pickCat]); null = party. */
-    var khata by remember(initial.id) { mutableStateOf<String?>(null) }
-    var pickCat by remember(initial.id) { mutableStateOf<Cat?>(null) }
     var amount by remember(initial.id) { mutableStateOf(if (initial.amount > 0) plain(initial.amount) else "") }
     var item by remember(initial.id) { mutableStateOf(if (initial.item == "Loans") "" else initial.item) }
     var qty by remember(initial.id) { mutableStateOf(if (initial.qty > 0) plain(initial.qty) else "") }
@@ -105,10 +97,6 @@ fun EntryForm(
 
     /** The entry's kind from Cash out / in and the party (see the class comment). */
     fun kind(o: Boolean): Type {
-        when (khata) {
-            "stock" -> return if (o) Type.PURCHASE else Type.SALE
-            "income", "expense" -> return if (o) Type.KHARCHA else Type.AAMDANI
-        }
         val p = person.trim()
         if (!askType && o == isOut(initial.type) && p.equals(initial.person.trim(), true)) return initial.type
         if (p.isEmpty()) return if (o) Type.KHARCHA else Type.AAMDANI
@@ -180,32 +168,23 @@ fun EntryForm(
         }
 
         var picking by remember { mutableStateOf(false) }
-        val shown = when (khata) {
-            "stock" -> "Business · $item"
-            "income" -> "Income · $item"
-            "expense" -> "Expense · " + (pickCat?.label ?: "")
-            else -> person
-        }
         Box {
             Field(
-                shown, { person = it }, "Khata (optional) · party, business, income, expense",
-                Modifier.fillMaxWidth(), readOnly = true
+                person, { person = it }, if (people.isNotEmpty()) "Person (optional) · select party" else "Person (optional)",
+                Modifier.fillMaxWidth(), readOnly = people.isNotEmpty()
             ) {
-                if (shown.isNotBlank()) IconButton(onClick = { person = ""; if (khata != null) item = ""; khata = null; pickCat = null }, modifier = Modifier.size(36.dp)) {
-                    Icon(Icons.Filled.Close, contentDescription = "No khata", modifier = Modifier.size(18.dp))
+                if (person.isNotBlank()) IconButton(onClick = { person = "" }, modifier = Modifier.size(36.dp)) {
+                    Icon(Icons.Filled.Close, contentDescription = "No party", modifier = Modifier.size(18.dp))
                 }
-                else Icon(Icons.Filled.ArrowDropDown, contentDescription = null, modifier = Modifier.padding(end = 6.dp))
+                else if (people.isNotEmpty()) Icon(Icons.Filled.ArrowDropDown, contentDescription = null, modifier = Modifier.padding(end = 6.dp))
             }
-            // The field (not its × button) opens the khata list.
-            Box(Modifier.matchParentSize().padding(end = 40.dp).clip(RoundedCornerShape(12.dp)).clickable { picking = true })
+            // The field (not its × button) opens the party list.
+            if (people.isNotEmpty()) Box(Modifier.matchParentSize().padding(end = 40.dp).clip(RoundedCornerShape(12.dp)).clickable { picking = true })
         }
         if (picking) PartyPicker(
-            people, "", "Select khata",
+            people, "", "Select party",
             confirm = { creating -> if (creating) "Create & select" else "Select" },
-            onPick = { person = it; khata = null; pickCat = null; picking = false }, onDismiss = { picking = false },
-            categories = expenseCats, onCategory = { pickCat = it; khata = "expense"; person = ""; out = true; picking = false },
-            stockNames = stockNames, onStock = { item = it; khata = "stock"; person = ""; picking = false },
-            incomeNames = incomeNames, onIncome = { item = it; khata = "income"; person = ""; out = false; picking = false }
+            onPick = { person = it; picking = false }, onDismiss = { picking = false }
         )
         if (chosen != null && isTrade(chosen) && person.isNotBlank()) {
             // On credit: the amount goes in To pay / To receive. Paid: settled in cash, khata unchanged.
@@ -236,7 +215,7 @@ fun EntryForm(
                     chosen?.let { t ->
                         // An expense's category comes from what the note and goods say ("nashta" -> Food).
                         val guess = Parser.guessCategory((item + " " + note).trim())
-                        val cat = pickCat ?: guess?.first
+                        val cat = guess?.first
                             ?: initial.category.takeIf { initial.type == Type.KHARCHA && it != Cat.UDHAAR } ?: Cat.OTHER
                         val finalCat = when {
                             t == Type.SALE -> Cat.SALES

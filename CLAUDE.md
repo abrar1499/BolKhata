@@ -49,8 +49,6 @@ Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Packa
 - Floating ChatGPT-style message bar (`AppParts.kt` `InputBar`); screens scroll under it, lists end with
   `barSpace()`.
 - Match the surrounding code: short KDoc comments, no dead code, reuse helpers in `Ui.kt`.
-- When the owner changes the size/look of a common part (chips, search, business pill, cards), change it everywhere it
-  appears (one shared composable), not just on the screen in the screenshot.
 
 ## Token saving
 - Read only the files the task needs; search with grep/rg first. Never read build/, .gradle/ or big logs.

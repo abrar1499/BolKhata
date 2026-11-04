@@ -25,7 +25,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
@@ -294,10 +293,6 @@ private fun Modifier.copyable(text: String): Modifier {
     )
 }
 
-/** Chat bubbles like the mock-up: white cards with one small corner pointing at the speaker. */
-private val MeShape = RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp, bottomStart = 14.dp, bottomEnd = 4.dp)
-private val BotShape = RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp, bottomStart = 4.dp, bottomEnd = 14.dp)
-
 @Composable
 private fun UserBubble(text: String, attachment: String = "") {
     if (attachment.isNotBlank()) {
@@ -311,10 +306,9 @@ private fun UserBubble(text: String, attachment: String = "") {
             lineHeight = 21.sp,
             modifier = Modifier
                 .widthIn(max = 300.dp)
-                .shadow(1.dp, MeShape)
-                .clip(MeShape)
+                .clip(RoundedCornerShape(20.dp))
                 .copyable(text)
-                .background(MaterialTheme.colorScheme.surface)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
                 .padding(horizontal = 14.dp, vertical = 10.dp)
         )
     }
@@ -374,19 +368,15 @@ private fun NameChoices(names: List<String>, onPick: (String) -> Unit) {
 
 @Composable
 private fun AssistantBubble(text: String) {
-    // A white raised card like the mock-up; the engine trace is kept in the chat log for review, not shown here.
+    // Plain text like ChatGPT; the engine trace is kept in the chat log for review, not shown here.
     Text(
         text,
         color = MaterialTheme.colorScheme.onSurface,
         lineHeight = 21.sp,
         modifier = Modifier
-            .padding(start = 8.dp)
-            .widthIn(max = 320.dp)
-            .shadow(1.dp, BotShape)
-            .clip(BotShape)
+            .widthIn(max = 340.dp)
             .copyable(text)
-            .background(MaterialTheme.colorScheme.surface)
-            .padding(horizontal = 14.dp, vertical = 10.dp)
+            .padding(horizontal = 14.dp, vertical = 8.dp)
     )
 }
 
