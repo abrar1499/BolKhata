@@ -2,7 +2,6 @@
 
 package com.bolkhata.app
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -175,8 +174,7 @@ private fun KhataTop(
 @Composable
 internal fun BusinessPill(name: String, onMenu: () -> Unit, onBusiness: () -> Unit) {
     Row(
-        Modifier.padding(top = 10.dp).shadow(2.dp, CircleShape).clip(CircleShape).background(Color.White)
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape).padding(end = 11.dp),
+        Modifier.padding(top = 10.dp).shadow(1.dp, CircleShape).clip(CircleShape).background(Color.White).padding(end = 11.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(Modifier.size(32.dp).clip(CircleShape).clickable { onMenu() }, contentAlignment = Alignment.Center) {
@@ -194,8 +192,7 @@ internal fun BusinessPill(name: String, onMenu: () -> Unit, onBusiness: () -> Un
 @Composable
 private fun SumCard(a: Triple<String, String, Color>, b: Triple<String, String, Color>, link: String, onLink: () -> Unit) {
     Surface(
-        shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 2.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 1.dp
     ) {
         Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
             listOf(a, b).forEachIndexed { i, (value, label, color) ->
