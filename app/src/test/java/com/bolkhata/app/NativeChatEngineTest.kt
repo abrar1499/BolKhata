@@ -473,6 +473,45 @@ class NativeChatEngineUnsureTest {
     }
 }
 
+class NativeChatEngineKhataCommandsTest {
+    private val contacts = listOf("Hamid Akram", "Nargis Salim Rashid", "Haji Kamran Saeed", "Kamran Aslam")
+    private fun read(text: String) = NativeChatEngine.interpret(text, emptyList(), contacts)
+
+    @Test fun renamesAKhataByItsSavedName() {
+        val r = read("Hamid Akram ka naam Hamid Akram Khan kar do")
+        assertEquals("rename_khata", r.kind)
+        assertEquals("party", r.set["kind"])
+        assertEquals("Hamid Akram", r.set["from"])
+        assertEquals("Hamid Akram Khan", r.set["to"])
+    }
+
+    @Test fun mergesAWholeKhataIntoAnother() {
+        val r = read("Hamid Akram ka khata Nargis Salim Rashid me merge kar do")
+        assertEquals("move_khata", r.kind)
+        assertEquals("Hamid Akram", r.set["from"])
+        assertEquals("party", r.set["toKind"])
+        assertEquals("Nargis Salim Rashid", r.set["to"])
+    }
+
+    @Test fun aBareNameOpensItsKhataOrAsksWhichOne() {
+        val one = read("kamran saeed")
+        assertEquals("open", one.kind)
+        assertEquals(listOf("Haji Kamran Saeed"), one.filter.persons)
+        assertTrue(read("kamran").reply.startsWith("Which "))
+    }
+
+    @Test fun plainSumsAreAnswered() {
+        assertTrue(read("2 aur 2 kitna hota hai").reply.endsWith("= 4"))
+        assertEquals("chat", read("5 x 12").kind)
+    }
+
+    @Test fun esMahinyIsThisMonth() {
+        val r = read("es mahiny")
+        assertEquals("ask", r.kind)
+        assertTrue(r.filter.from != null)
+    }
+}
+
 class NativeChatEngineMoveByAmountTest {
     private val entries = listOf(
         Entry("t1", Type.TRANSFER_IN, 2000.0, Cat.OTHER, "Transfer", "Hamid Akram", "From Hamid Akram", 1L, 1L),

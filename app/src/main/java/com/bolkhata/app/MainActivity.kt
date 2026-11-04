@@ -922,6 +922,20 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 changed.take(3).joinToString("; ") { (a, b) -> entryTitle(a) + " " + fmt(a.amount) + " → " + entryTitle(b) + " " + fmt(b.amount) } +
                     if (changed.size > 3) " +${changed.size - 3} more" else ""
             }
+            "rename_khata" -> {
+                val (kind, from, to) = Triple(f.set["kind"].orEmpty(), f.set["from"].orEmpty(), f.set["to"].orEmpty())
+                if (kind == "expense") return "Expense categories keep their names. Say which entries should move instead."
+                if (kind == "party") renameOrMergeKhata(from, to, merge = false) else moveKhata(kind, from, kind, to)
+                "Renamed $from → $to"
+            }
+            "move_khata" -> {
+                val from = f.set["from"].orEmpty()
+                val to = f.set["to"].orEmpty()
+                val n = khataEntries(f.set["kind"].orEmpty(), from).size
+                if (n == 0) return "No entries in $from."
+                moveKhata(f.set["kind"].orEmpty(), from, f.set["toKind"].orEmpty(), to)
+                "All of $from ($n " + (if (n == 1) "entry" else "entries") + ") → $to"
+            }
             "to_khata" -> {
                 // "2000 aur 5000 wali entry Al Falah Contracting me": an income or business khata, not a party.
                 f.set["kind"]?.let { kind ->

@@ -180,6 +180,21 @@ object NativeChatEngine {
         if (understood?.kind == Understand.Kind.OPEN_KHATA && !understood.contact.isNullOrBlank())
             return Fixed("", "open", "", filter = Query.Filter(persons = listOf(understood.contact)))
 
+        // "Hamid ka naam Hamid Akram kar do", "rename Hamid to Hamid Akram": the khata gets the new name.
+        // ("X wali entry ka naam Y kar do" renames one entry; that is an edit, below.)
+        if (!has(words, setOf("entry", "entries", "wali", "wala", "wale"))) (renameUrdu.find(lower) ?: renameEnglish.find(lower))?.let { m ->
+            val from = findKhata(m.groupValues[1], contacts, entries) ?: return chat("Which khata should I rename? Say its saved name.")
+            val to = tokens(m.groupValues[2]).filter { it !in khataFiller }.joinToString(" ") { it.replaceFirstChar(Char::uppercase) }
+            if (to.isBlank()) return chat("What should the new name be?")
+            return Fixed("", "rename_khata", "", set = mapOf("kind" to from.first, "from" to from.second, "to" to to))
+        }
+        // "Hamid ka khata Nargis me merge kar do": every entry of the first khata goes into the second.
+        mergeKhata.find(lower)?.let { m ->
+            val from = findKhata(m.groupValues[1], contacts, entries) ?: return chat("Which khata should I move? Say its saved name.")
+            val to = findKhata(m.groupValues[2], contacts, entries) ?: return chat("Move it into which khata? Say its saved name.")
+            return Fixed("", "move_khata", "", set = mapOf("kind" to from.first, "from" to from.second, "toKind" to to.first, "to" to to.second))
+        }
+
         // "Bank fee ka alag expense khata bana ke us me dal do": the entries just shown get that name, so Expense
         // shows them as their own group inside the category.
         if (has(words, setOf("expense", "alag", "alehda", "alahda", "alehdah", "new", "naya", "nya")))
@@ -276,6 +291,19 @@ object NativeChatEngine {
             return Fixed("", "chat", Questions.answer(periodQuery, entries, currency)?.text ?: "No saved transactions for that period.")
         }
 
+        // "Do aur do kitna hota hai", "5 x 12": plain sums are answered, not saved.
+        sum.find(NumberWords.convert(lower))?.let { m ->
+            val a = m.groupValues[1].replace(",", "").toDouble()
+            val b = m.groupValues[3].replace(",", "").toDouble()
+            val v = when (m.groupValues[2]) {
+                "+", "plus", "aur", "or", "and" -> a + b
+                "-", "minus" -> a - b
+                "x", "*", "into", "guna" -> a * b
+                else -> if (b == 0.0) Double.NaN else a / b
+            }
+            if (!v.isNaN()) return Fixed("", "chat", "${fmt(a)} ${m.groupValues[2]} ${fmt(b)} = ${fmt(v)}")
+        }
+
         // "Kal shaam ka 10 riyal khana likho", "add expense 15 riyal dinner", "kal hum ne 10 ka khana khaya":
         // an amount said with a write word (or done in the past, not asked about) is a new entry, never a search.
         val writes = has(words, setOf("likh", "likho", "likhdo", "likhna", "likhen", "likhein", "add", "save", "darj")) ||
@@ -326,7 +354,36 @@ object NativeChatEngine {
         val parsed = if (split == null) runCatching { Parser.parse(text, now) }.getOrNull() else null
         if (split != null || (parsed != null && (parsed.entries.isNotEmpty() || parsed.unclear.isNotEmpty())))
             return Fixed(text, "entry", "")
+        // Just a name ("kamran saeed", "andleeb"): that khata, or a choice when several share it. Only whole words or
+        // clear starts of a saved name count, so small talk never turns into a name.
+        if (smallTalk(lower) == NOT_UNDERSTOOD) {
+            val said = words.filter { it !in setOf("ka", "ki", "ke", "khata", "account", "kholo", "open", "yar", "yaar", "plz") }
+            if (said.size in 1..3 && words.size <= 5 && said.all { it.length >= 3 }) {
+                val hits = contacts.filter { c -> val parts = tokens(c); said.all { w -> parts.any { it == w || (w.length >= 4 && it.startsWith(w)) } } }
+                    .distinctBy { it.lowercase(Locale.ROOT) }
+                if (hits.size == 1) return Fixed("", "open", "", filter = Query.Filter(persons = hits))
+                if (hits.size in 2..4) return chat("Which " + hits.joinToString(" or ") + " do you mean?")
+            }
+        }
         return talk(lower)
+    }
+
+    private val renameUrdu = Regex("""^(.+?)\s+(?:ka|ki|ke)\s+(?:khata\s+(?:ka\s+)?)?(?:naam|name)\s+(?:badal\s+(?:ke|kar|k)\s+)?(.+?)\s+(?:kar|kr|karo|kro|rakh|rakho|rakhdo)\b""")
+    private val renameEnglish = Regex("""^rename\s+(?:khata\s+)?(.+?)\s+(?:to|as)\s+(.+)$""")
+    private val mergeKhata = Regex("""^(.+?)\s+(?:ka|ki|ke)\s+(?:poora|pura|sara|saara)?\s*khata\s+(.+?)\s+(?:me|mein|main|men|mai|into|in)\s+(?:merge|move|dal|daal|shift|mila|milao|bhej|bhejo)""")
+    private val sum = Regex("""^\s*(\d[\d,]*(?:\.\d+)?)\s*(\+|plus|aur|or|and|-|minus|x|\*|into|guna|/|divided)\s*(?:by\s+)?(\d[\d,]*(?:\.\d+)?)\s*(?:=|kitna|kitne|kitni|hota|hote|hai|\?|$)""")
+
+    /**
+     * A saved khata named in [said]: a party (by its contact name), an income source or stock item (by its first
+     * words), or an expense category, as kind to name.
+     */
+    private fun findKhata(said: String, contacts: List<String>, entries: List<Entry>): Pair<String, String>? {
+        val w = tokens(said).filter { it !in khataFiller }
+        if (w.isEmpty()) return null
+        contacts.firstOrNull { tokens(it) == w }?.let { return "party" to it }
+        Understand.matchContact(w, contacts).first?.let { return "party" to it }
+        otherKhata(w, entries)?.let { return it }
+        return w.firstNotNullOfOrNull { Query.catWords[it] }?.let { "expense" to it.label }
     }
 
     private val newKhataName = Regex("""^(.+?)\s+(?:ka|ki|ke)?\s*(?:ek\s+)?(?:alag|alehda|alahda|alehdah|new|naya|nya)?\s*(?:expense\s+)?(?:khata|khaata|group)\s+(?:bana|banao|banado|bnao|bna)""")
@@ -600,10 +657,10 @@ object NativeChatEngine {
             "tomorrow" in w -> return day(1)
             "last" in w && "week" in w -> return weekBounds(now, -1)
             "this" in w && "week" in w -> return weekBounds(now, 0)
-            "last" in w && w.any { it in setOf("month", "mahina", "mahine") } -> return monthBounds(now, -1)
-            w.any { it in setOf("this", "is", "iss") } && w.any { it in setOf("month", "mahina", "mahine") } -> return monthBounds(now, 0)
+            "last" in w && w.any { it in monthNames } -> return monthBounds(now, -1)
+            w.any { it in thisWords } && w.any { it in monthNames } -> return monthBounds(now, 0)
             "last" in w && w.any { it in setOf("year", "saal") } -> return yearBounds(now, -1)
-            w.any { it in setOf("this", "is", "iss") } && w.any { it in setOf("year", "saal") } -> return yearBounds(now, 0)
+            w.any { it in thisWords } && w.any { it in setOf("year", "saal") } -> return yearBounds(now, 0)
         }
         val lastDays = Regex("""\b(?:last|past)\s+(\d{1,3})\s+days?\b""").find(text)?.groupValues?.get(1)?.toIntOrNull()
         if (lastDays != null) return Bounds(now - lastDays.coerceAtMost(365) * 86_400_000L, now)
@@ -715,10 +772,14 @@ object NativeChatEngine {
         "jul", "july", "aug", "august", "sep", "sept", "september", "oct", "october", "nov", "november", "dec", "december"
     )
 
+    /** "This" and "month" as people write them: "es mahiny", "iss mahinay". */
+    private val thisWords = setOf("this", "is", "iss", "es", "ess")
+    private val monthNames = setOf("month", "mahina", "mahine", "mahiny", "mahinay", "mahene")
+
     private fun isDateFollowUp(text: String): Boolean {
         val w = tokens(text)
-        val relative = dayBeforeYesterday + setOf("yesterday", "today", "aaj", "aj", "kal", "tomorrow", "month", "week", "year", "mahina", "mahine", "saal")
-        val allowed = relative + monthWords + setOf(
+        val relative = dayBeforeYesterday + monthNames + setOf("yesterday", "today", "aaj", "aj", "kal", "tomorrow", "week", "year", "saal")
+        val allowed = relative + monthWords + thisWords + setOf(
             "what", "about", "and", "how", "much", "this", "last", "day", "then", "phir", "on", "the", "of", "st", "nd", "rd", "th"
         )
         val hasCalendarDate = w.any { it in relative || it in monthWords } &&
