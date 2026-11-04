@@ -77,6 +77,9 @@ class MainActivity : ComponentActivity() {
 
 enum class Tab { HOME, STOCK, CHAT, ENTRIES, REPORTS, TRASH, SETTINGS, PARTIES, CASHBOOK, EXPENSE, INCOME }
 
+/** Tabs whose top (KhataTop) sits on the theme's coloured band. */
+val BAND_TABS = setOf(Tab.PARTIES, Tab.CASHBOOK, Tab.EXPENSE, Tab.INCOME, Tab.ENTRIES, Tab.TRASH)
+
 /** The open tab and the tabs it was reached from, so Back returns the same way. Chat (the first tab) starts over. */
 class TabNav {
     private val now = mutableStateOf(Tab.CHAT)
@@ -103,13 +106,15 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var lang by remember { mutableStateOf(store.language) }
     val tabNav = remember { TabNav() }
     var tab by tabNav
-    // The status bar takes the page colour, so every tab runs up to the top with no coloured band.
+    // The status bar takes the colour right under it: the theme band's top on the khata tabs, else the page colour.
     val pageColor = MaterialTheme.colorScheme.background
-    LaunchedEffect(pageColor, dark) {
+    val header = LocalHeader.current
+    val banded = header.name != "Clean" && tab in BAND_TABS
+    LaunchedEffect(pageColor, dark, banded, header) {
         (context as? Activity)?.window?.let { w ->
             @Suppress("DEPRECATION")
-            w.statusBarColor = pageColor.toArgb()
-            WindowCompat.getInsetsController(w, w.decorView).isAppearanceLightStatusBars = !dark
+            w.statusBarColor = (if (banded) header.top else pageColor).toArgb()
+            WindowCompat.getInsetsController(w, w.decorView).isAppearanceLightStatusBars = if (banded) header.light else !dark
         }
     }
     var chatMessages by remember { mutableStateOf(store.loadChatMessages()) }
