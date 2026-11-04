@@ -523,6 +523,9 @@ private val shortDay = SimpleDateFormat("d MMM", Locale.US)
 private val monthFmt = SimpleDateFormat("MMM yyyy", Locale.US)
 
 private fun title(e: Entry) = e.person.ifBlank { e.item.ifBlank { e.category.label } }
+
+/** The name khata an expense sits in under its category (Muhammad Bin Saeed, Bank fee…), as a lowercase key. */
+internal fun nameKey(e: Entry) = title(e).trim().lowercase()
 private fun monthKey(ms: Long): Int = cal(ms).let { it.get(Calendar.YEAR) * 12 + it.get(Calendar.MONTH) }
 
 /** Months that have entries, newest first, as (key, a date in that month). [newest] must be sorted newest first. */
@@ -557,22 +560,14 @@ internal class LCol(val label: String, val total: String, val kind: LKind)
 /** One line: title, time and note, and one amount per column (0 = empty cell). */
 internal class LRow(
     val key: String, val date: Long, val title: String, val note: String, val amounts: List<Double>, val entry: Entry? = null,
-    /** The khata the entry sits in, shown small beside the time (Cash book only). */
+    /** The khata the entry sits in (party or category), shown small after the time; blank to leave it out. */
     val khata: String = "", val onClick: () -> Unit
 )
 
-/** The khata an entry sits in: its party, expense category, "Income", sale / purchase, or a transfer. */
-internal fun khataOf(e: Entry): String = when {
-    e.person.isNotBlank() -> e.person
-    e.type == Type.KHARCHA -> e.category.label
-    e.type == Type.AAMDANI -> "Income"
-    e.type == Type.SALE -> "Sale"
-    e.type == Type.PURCHASE -> "Purchase"
-    else -> "Transfer"
-}
-
 private val clockFmt = SimpleDateFormat("h:mma", Locale.US)
-private val dayLineFmt = SimpleDateFormat("EEE, d MMM", Locale.US)
+private val dayLineFmt = SimpleDateFormat("EEE, d MMM yyyy", Locale.US)
+/** Blue of the small khata name in ledger rows: red and green stay for money. */
+private val KhataBlue = Color(0xFF0369A1)
 private val Faint = Color(0x14786C6C)
 /** Colour of an entry's own amount: plain text ink (dark grey, light in dark mode), so red / green stay for the totals. */
 private val AmountInk: Color
@@ -597,8 +592,10 @@ private fun signed(k: LKind, v: Double) = if (v == 0.0) "" else (when (k) { LKin
  * day a slim line (soft red fading to white) with that day's totals, then one small
  * line per entry. Lines are faint grey; amounts sit in the middle of their column.
  */
-internal fun LazyListScope.ledger(title: String, cols: List<LCol>, rows: List<LRow>, keyPrefix: String = "", cards: Boolean = false) {
-    item(key = keyPrefix + "lh") { LedgerHead(title, entryCount(rows.size), cols, rows.isEmpty(), ids = rows.mapNotNull { it.entry?.id }) }
+internal fun LazyListScope.ledger(
+    title: String, cols: List<LCol>, rows: List<LRow>, keyPrefix: String = "", cards: Boolean = false, onHold: (() -> Unit)? = null
+) {
+    item(key = keyPrefix + "lh") { LedgerHead(title, entryCount(rows.size), cols, rows.isEmpty(), ids = rows.mapNotNull { it.entry?.id }, onHold = onHold) }
     rows.forEachIndexed { i, r ->
         if (i == 0 || !sameDay(rows[i - 1].date, r.date)) {
             val day = rows.filter { sameDay(it.date, r.date) }
@@ -611,13 +608,17 @@ internal fun LazyListScope.ledger(title: String, cols: List<LCol>, rows: List<LR
 }
 
 @Composable
-private fun LedgerHead(title: String, count: String, cols: List<LCol>, empty: Boolean, w: Dp = colW(cols), ids: List<String> = emptyList()) = Tight {
+/** [onHold]: a long press on the head opens the khata menu (move all its entries). */
+private fun LedgerHead(
+    title: String, count: String, cols: List<LCol>, empty: Boolean, w: Dp = colW(cols), ids: List<String> = emptyList(), onHold: (() -> Unit)? = null
+) = Tight {
     val sub = MaterialTheme.colorScheme.onSurfaceVariant
     val sel = LocalSelection.current
     Row(
         Modifier.padding(start = 10.dp, end = 10.dp, top = 8.dp).fillMaxWidth().height(IntrinsicSize.Min)
             .then(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp, bottomStart = if (empty) 14.dp else 0.dp, bottomEnd = if (empty) 14.dp else 0.dp).let { Modifier.shadow(1.dp, it).clip(it) })
             .background(MaterialTheme.colorScheme.surface)
+            .then(if (onHold != null) Modifier.combinedClickable(onLongClick = onHold) {} else Modifier)
     ) {
         Column(Modifier.weight(1f).padding(start = 10.dp, top = 7.dp, bottom = 7.dp), verticalArrangement = Arrangement.Center) {
             Text(title, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
@@ -695,9 +696,10 @@ private fun LedgerRow(r: LRow, cols: List<LCol>, last: Boolean, card: Boolean = 
             Text(r.title, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
                 buildAnnotatedString {
-                    withStyle(SpanStyle(fontSize = 8.sp)) {
-                        append(clockFmt.format(Date(r.date)).lowercase())
-                        if (r.khata.isNotBlank()) append(" · " + r.khata)
+                    withStyle(SpanStyle(fontSize = 8.sp)) { append(clockFmt.format(Date(r.date)).lowercase()) }
+                    if (r.khata.isNotBlank() && !r.khata.equals(r.title, true)) {
+                        append(" · ")
+                        withStyle(SpanStyle(fontSize = 8.sp, fontWeight = FontWeight.SemiBold, color = KhataBlue)) { append(r.khata) }
                     }
                     if (r.note.isNotBlank() && !r.note.equals(r.title, true)) append(" · " + r.note)
                 },
@@ -788,7 +790,8 @@ fun CashBookScreen(
                     LCol("In", fmt(list.filter(::cashIn).sumOf { it.amount }), LKind.IN)
                 ),
                 list.map { e ->
-                    LRow(e.id, e.date, title(e), e.note, listOf(if (cashOut(e)) e.amount else 0.0, if (cashIn(e)) e.amount else 0.0), e, khataOf(e)) { onEdit(e) }
+                    LRow(e.id, e.date, title(e), e.note, listOf(if (cashOut(e)) e.amount else 0.0, if (cashIn(e)) e.amount else 0.0), e,
+                        khata = e.person.trim().ifBlank { e.category.label }) { onEdit(e) }
                 },
                 cards = true
             )
@@ -965,7 +968,9 @@ fun MoneyScreen(
     val total = shown.sumOf { it.amount }
     // Expense by category; income by who paid (like the party list).
     val groups = (if (income) shown.groupBy { source(it).lowercase() }.map { (_, l) -> Group(source(l.first()), null, l) }
-    else shown.groupBy { it.category }.map { (c, l) -> Group(c.label, c, l) }).sortedByDescending { it.total }
+    else shown.groupBy { it.category }.map { (c, l) -> Group(c.label, c, l) })
+        // Categories biggest first (they show a share); payers newest first, like every dated list.
+        .sortedByDescending { if (income) it.list.maxOf { e -> e.date }.toDouble() else it.total }
     val open = remember(income) { mutableStateListOf<String>() }
     val khataMenu = LocalKhataMenu.current
     Box(Modifier.fillMaxSize()) {
@@ -1022,14 +1027,18 @@ fun MoneyScreen(
                     }
                 }
                 // A group's own entries open right under it, on the same ledger page; an expense category with
-                // several names (Bank fee, Iqama fee…) shows one ledger per name, biggest first.
+                // several names (Bank fee, Iqama fee…) shows one ledger per name, newest first.
                 if (isOpen) {
-                    val subs = if (g.cat == null) listOf(g.list) else g.list.groupBy { title(it).trim().lowercase() }.values.sortedByDescending { l -> l.sumOf { it.amount } }
+                    val subs = if (g.cat == null) listOf(g.list) else g.list.groupBy { nameKey(it) }.values.sortedByDescending { l -> l.maxOf { it.date } }
                     subs.forEach { list ->
                         ledger(
                             if (subs.size == 1) g.name else title(list.first()), listOf(LCol("Amount", fmt(list.sumOf { it.amount }), kind)),
                             list.map { e -> LRow(e.id, e.date, title(e), e.note, listOf(e.amount), e) { onEdit(e) } },
-                            keyPrefix = "g${g.name}:${title(list.first()).lowercase()}:"
+                            keyPrefix = "g${g.name}:${title(list.first()).lowercase()}:",
+                            // Hold the head to move the whole name khata (all of Muhammad Bin Saeed) to another category.
+                            onHold = khataMenu?.let { m ->
+                                { if (subs.size == 1) m(if (income) "income" else "expense", g.name) else m("expense-name", title(list.first()).trim()) }
+                            }
                         )
                     }
                     item(key = "g${g.name}:end") { Spacer(Modifier.height(8.dp)) }

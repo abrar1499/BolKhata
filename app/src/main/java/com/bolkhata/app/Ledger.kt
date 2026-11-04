@@ -79,15 +79,17 @@ class PersonAcct(
     val got: Double
 )
 
-/** What an entry does to a person's balance (+ = they owe me more). */
+/**
+ * What an entry does to a person's balance (+ = they owe me more). A bank transfer to a person counts like money
+ * given and one from them like money received, so the khata's balance matches its Paid / Received columns.
+ */
 fun personEffect(e: Entry): Double = when (e.type) {
-    Type.DIYA, Type.WAPIS_DIYA, Type.SALE -> e.amount
-    Type.LIYA, Type.WAPIS_MILA, Type.PURCHASE -> -e.amount
-    Type.TRANSFER_IN, Type.TRANSFER_OUT -> 0.0
+    Type.DIYA, Type.WAPIS_DIYA, Type.SALE, Type.TRANSFER_OUT -> e.amount
+    Type.LIYA, Type.WAPIS_MILA, Type.PURCHASE, Type.TRANSFER_IN -> -e.amount
     else -> 0.0
 }
 
-/** Direction shown for a transaction in a person's history; transfer direction is independent of debt balance. */
+/** Direction shown for a transaction in a person's history. */
 fun personHistoryIsOutflow(e: Entry): Boolean = when (e.type) {
     Type.TRANSFER_OUT -> true
     Type.TRANSFER_IN -> false
@@ -196,6 +198,38 @@ private fun cleanMoveKhataName(value: String): String {
     return name.trim().trim('.', '-', '/', ' ')
 }
 
+/** Ready sub-categories (an expense's item) offered under each category when moving or filling an entry. */
+val defaultSubs: Map<Cat, List<String>> = mapOf(
+    Cat.TRANSPORT to listOf("Petrol", "Car repair", "Oil change", "Tyres", "Car wash", "Parking", "Taxi", "Bus"),
+    Cat.KHANA to listOf("Groceries", "Restaurant", "Bread", "Tea", "Fruit & veg", "Water"),
+    Cat.BIJLI to listOf("Electricity", "Water bill", "Gas"),
+    Cat.MOBILE to listOf("Recharge", "Internet"),
+    Cat.SEHAT to listOf("Medicine", "Doctor"),
+    Cat.PERSONAL to listOf("Haircut", "Soap & shampoo"),
+    Cat.FEES to listOf("Iqama", "Bank fee", "Visa"),
+    Cat.SHOPPING to listOf("Clothes", "Electronics"),
+    Cat.EDU to listOf("School fees", "Books"),
+    Cat.RENT to listOf("House rent")
+)
+
+/** A category's sub-categories: the ready ones first, then names already used there at least twice. */
+fun subsFor(cat: Cat, all: List<Entry>): List<String> {
+    val used = all.filter { it.type == Type.KHARCHA && it.category == cat }.groupingBy { it.item.trim() }.eachCount()
+        .filter { (n, c) -> c >= 2 && n.length in 2..24 && !n.equals(cat.label, true) && !n.equals("Other", true) }
+        .entries.sortedByDescending { it.value }.map { it.key }
+    return (defaultSubs[cat].orEmpty() + used).distinctBy { it.lowercase() }
+}
+
+/** An entry put under sub-category [sub]: that becomes its item; the old name (a shop) stays at the front of the note. */
+fun withSub(e: Entry, sub: String): Entry {
+    val old = e.item.trim()
+    val keep = old.isNotBlank() && !old.equals(sub, true) && !old.equals(e.category.label, true) && !e.note.contains(old, true)
+    return e.copy(item = sub, note = if (keep) listOf(old, e.note.trim()).filter { it.isNotBlank() }.joinToString(" · ") else e.note)
+}
+
+/** "Transport › Petrol" to (category label, sub-category); the sub is blank for a plain category. */
+fun splitSub(to: String): Pair<String, String> = to.substringBefore(" › ").trim() to to.substringAfter(" › ", "").trim()
+
 /** Every khata to move into, by kind: "party", "business" (stock item), "income" (who paid), "expense" (category label). */
 @Composable
 fun MoveToKhata(subtitle: String, all: List<Entry>, except: String, onMove: (kind: String, name: String) -> Unit, onDismiss: () -> Unit) {
@@ -207,6 +241,7 @@ fun MoveToKhata(subtitle: String, all: List<Entry>, except: String, onMove: (kin
         confirm = { creating -> if (creating) "Create & move" else "Move" },
         onPick = { onMove("party", it) }, onDismiss = onDismiss,
         categories = expenseCats, onCategory = { onMove("expense", it.label) },
+        subs = { subsFor(it, all) }, onSub = { c, s -> onMove("expense", c.label + " › " + s) },
         stockNames = stockNames.filterNot { it.equals(except, true) }, onStock = { onMove("business", it) },
         incomeNames = incomeNames.filterNot { it.equals(except, true) }, onIncome = { onMove("income", it) },
         subtitle = subtitle
@@ -224,7 +259,8 @@ fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: (
         // Or into an expense category ("Other" -> Food, or a party's entry -> a plain expense).
         categories = Cat.entries.filter { it !in setOf(Cat.UDHAAR, Cat.TANKHWAH, Cat.SALES, Cat.STOCK) },
         currentCat = e.category.takeIf { e.type == Type.KHARCHA },
-        onCategory = { onMove(movedTo(e, all, it, false, null)) }
+        onCategory = { onMove(movedTo(e, all, it, false, null)) },
+        subs = { subsFor(it, all) }, onSub = { c, s -> onMove(withSub(movedTo(e, all, c, false, null), s)) }
     )
 }
 
@@ -247,6 +283,8 @@ fun PartyPicker(
     confirm: (creating: Boolean) -> String, onPick: (String) -> Unit, onDismiss: () -> Unit,
     /** When given, an Expense tab: the entry can go to an expense category instead of a party. */
     categories: List<Cat> = emptyList(), currentCat: Cat? = null, onCategory: (Cat) -> Unit = {},
+    /** Sub-categories shown under the picked category (Transport: Petrol, Car repair…); picking one moves into it. */
+    subs: (Cat) -> List<String> = { emptyList() }, onSub: (Cat, String) -> Unit = { c, _ -> onCategory(c) },
     /** When given, Business (stock items) and Income (who paid) tabs too, so one picker reaches every khata. */
     stockNames: List<String> = emptyList(), onStock: (String) -> Unit = {},
     incomeNames: List<String> = emptyList(), onIncome: (String) -> Unit = {},
@@ -256,6 +294,7 @@ fun PartyPicker(
         "Expense".takeIf { categories.isNotEmpty() })
     var tab by remember { mutableStateOf("Party") }
     var pickedCat by remember { mutableStateOf<Cat?>(null) }
+    var pickedSub by remember(pickedCat) { mutableStateOf<String?>(null) }
     var picked by remember(tab) { mutableStateOf<String?>(null) }
     var query by remember(tab) { mutableStateOf("") }
     val q = query.trim()
@@ -289,8 +328,14 @@ fun PartyPicker(
                     }
                 }
                 if (tab == "Expense") LazyColumn(Modifier.padding(top = 6.dp).fillMaxWidth().heightIn(max = 260.dp)) {
-                    items(categories, key = { it.name }) { c ->
-                        KhataChoice(c.icon, c.label, c == pickedCat, c == currentCat) { if (c != currentCat) pickedCat = c }
+                    categories.forEach { c ->
+                        item(key = c.name) {
+                            KhataChoice(c.icon, c.label, c == pickedCat && pickedSub == null, c == currentCat && subs(c).isEmpty()) { pickedCat = c }
+                        }
+                        // The picked category opens its sub-categories right under it.
+                        if (c == pickedCat) items(subs(c), key = { c.name + "/" + it }) { s ->
+                            Box(Modifier.padding(start = 26.dp)) { KhataChoice("·", s, pickedSub == s, false) { pickedSub = s } }
+                        }
                     }
                 } else {
                     // One box: search the list, or type a new name (Party only; Business and Income too).
@@ -331,7 +376,7 @@ fun PartyPicker(
                         colors = ButtonDefaults.buttonColors(containerColor = RedSpend), modifier = Modifier.weight(1f).height(40.dp),
                         onClick = {
                             when (tab) {
-                                "Expense" -> onCategory(pickedCat ?: return@Button)
+                                "Expense" -> { val c = pickedCat ?: return@Button; pickedSub?.let { onSub(c, it) } ?: onCategory(c) }
                                 "Business" -> onStock(picked ?: return@Button)
                                 "Income" -> onIncome(picked ?: return@Button)
                                 else -> onPick(picked ?: return@Button)

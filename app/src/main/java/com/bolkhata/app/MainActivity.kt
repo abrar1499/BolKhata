@@ -354,6 +354,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     fun khataEntries(kind: String, name: String) = when (kind) {
         "party" -> entries.filter { it.person.equals(name, true) }
         "expense" -> entries.filter { it.type == Type.KHARCHA && it.category.label.equals(name, true) }
+        "expense-name" -> entries.filter { it.type == Type.KHARCHA && nameKey(it) == name.trim().lowercase() }
         else -> entries.filter { it.type == Type.AAMDANI && source(it).equals(name, true) }
     }
 
@@ -364,14 +365,16 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     fun moveEntries(ids: Set<String>, kind: String, to: String): Int {
         val t = to.trim()
         if (ids.isEmpty() || t.isEmpty()) return 0
-        val cat = if (kind == "expense") Cat.entries.firstOrNull { it.label.equals(t, true) } ?: return 0 else null
+        // "Transport › Petrol": the category, and the sub-category that becomes the entry's item.
+        val (catLabel, sub) = if (kind == "expense") splitSub(t) else t to ""
+        val cat = if (kind == "expense") Cat.entries.firstOrNull { it.label.equals(catLabel, true) } ?: return 0 else null
         var skipped = 0
         val after = entries.map { e ->
             if (e.id !in ids) return@map e
             val out = isOutflow(e)
             when (kind) {
                 "party" -> movedTo(e, entries, null, false, t)
-                "expense" -> if (out) movedTo(e, entries, cat, false, null) else e.also { skipped++ }
+                "expense" -> if (out) movedTo(e, entries, cat, false, null).let { if (sub.isNotBlank()) withSub(it, sub) else it } else e.also { skipped++ }
                 "income" -> if (!out) e.copy(type = Type.AAMDANI, category = Cat.TANKHWAH, person = "", item = t, paid = false) else e.also { skipped++ }
                 else -> e.copy(type = if (out) Type.PURCHASE else Type.SALE, category = if (out) Cat.STOCK else Cat.SALES, person = "", item = t, paid = false)
             }
@@ -444,8 +447,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         applyKhataContext(list, if (ledger != null) ledgerPerson ?: activeLedgerPerson else account?.takeIf { it.main == PEOPLE }?.sub)
 
     fun addOffline(r: Parser.Result) {
-        val contextualEntries = contextualizeCurrentKhata(r.entries)
-        val contextualUnclear = contextualizeCurrentKhata(r.unclear)
+        // A pasted bank SMS takes the shop's full name, category and note from its earlier entries.
+        val contextualEntries = contextualizeCurrentKhata(r.entries).map { Recat.fromHistory(it, entries) }
+        val contextualUnclear = contextualizeCurrentKhata(r.unclear).map { Recat.fromHistory(it, entries) }
         if (contextualEntries.isEmpty() && contextualUnclear.isEmpty()) {
             flash = Flash("How much? e.g. \"petrol 70\"", Flash.Kind.ANSWER)
             return
@@ -2394,7 +2398,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             khataFor?.let { (kind, n) ->
                 GroupMenu(
                     n, khataEntries(kind, n).size,
-                    onRename = if (kind == "expense") null else ({ khataFor = null; khataRename = kind to n }),
+                    onRename = if (kind == "expense" || kind == "expense-name") null else ({ khataFor = null; khataRename = kind to n }),
                     onMove = { khataFor = null; khataMove = kind to n },
                     onDismiss = { khataFor = null }
                 )
@@ -2845,9 +2849,13 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 saveLabel = "Save",
                 onSave = { changed ->
                     learnFrom(e, changed)
-                    save(entries.map { if (it.id == changed.id) changed else it })
+                    val updated = entries.map { if (it.id == changed.id) changed else it }
+                    // Moving one shop's expense out of Other moves that shop's other Other expenses too.
+                    val moved = Recat.sameShop(updated, e, changed)
+                    val more = moved.indices.count { moved[it] !== updated[it] }
+                    save(moved)
                     editing = null
-                    toast("✓ Saved")
+                    toast(if (more > 0) "✓ Saved · $more more from this shop moved to ${changed.category.label}" else "✓ Saved")
                 },
                 onDelete = {
                     editing = null

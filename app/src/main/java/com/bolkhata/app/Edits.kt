@@ -148,7 +148,8 @@ object Edits {
                 val p = cap(swapNew); changed = changed.copy(person = p); what += "person $p"
             } else {
                 val item = cap(swapNew)
-                val guess = if (target.type == Type.KHARCHA) Parser.guessCategory(swapNew) else null
+                // A new name only picks the category for an expense still in Other; a set one (Transport) stays.
+                val guess = if (target.type == Type.KHARCHA && target.category == Cat.OTHER) Parser.guessCategory(swapNew) else null
                 changed = changed.copy(
                     item = item,
                     note = item,

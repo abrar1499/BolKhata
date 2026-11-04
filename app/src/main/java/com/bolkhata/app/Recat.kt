@@ -68,6 +68,47 @@ object Recat {
             }
             .sortedWith(compareBy<Group> { it.guess == Cat.OTHER }.thenByDescending { it.total })
 
+    /**
+     * The shop an expense was paid at: the item (statement lines keep the merchant there), else the note (bank SMS
+     * keep it there). Generic words and "City · card · Bank" notes are not shops, so they never group entries.
+     */
+    internal fun shopOf(e: Entry): String = listOf(e.item, e.note).filterNot { Regex("(?i)\\bcard\\b").containsMatchIn(it) }.map { raw ->
+        raw.substringBefore(" · ").replace(Regex("\\d+"), " ").replace(Regex("[^\\p{L}&' ]+"), " ")
+            .replace(Regex("\\s+"), " ").trim().lowercase()
+    }.firstOrNull { it.length >= 3 && it !in genericShops }.orEmpty()
+
+    private val genericShops = setOf("other", "others", "card payment", "cash", "expense", "money received", "transfer")
+
+    /**
+     * Told once: when one expense is moved out of Other, every other expense from the same shop still in Other
+     * moves to the same category. (Later ones follow on their own through the learned words.)
+     */
+    fun sameShop(all: List<Entry>, before: Entry, after: Entry): List<Entry> {
+        if (before.type != Type.KHARCHA || before.category != Cat.OTHER || after.category == Cat.OTHER || isTransfer(before)) return all
+        val shop = shopOf(before).ifBlank { return all }
+        return all.map { e ->
+            if (e.id != after.id && e.type == Type.KHARCHA && e.category == Cat.OTHER && !isTransfer(e) && shopOf(e) == shop)
+                e.copy(category = after.category) else e
+        }
+    }
+
+    /**
+     * A pasted bank SMS ("At:ESTABLISH", often cut short) is written like the shop's earlier entries: the full shop name,
+     * the category it was sorted into and the same "City · card · Bank" note. Only when one shop clearly matches.
+     */
+    fun fromHistory(e: Entry, all: List<Entry>): Entry {
+        if (e.type != Type.KHARCHA || !e.sourceFingerprint.startsWith("bank:")) return e
+        val key = e.note.trim().uppercase()
+        if (key.length < 4) return e
+        val same = all.filter { it.type == Type.KHARCHA && it.item.trim().uppercase().startsWith(key) }
+        val byShop = same.groupBy { it.item.trim() }
+        val best = byShop.maxByOrNull { it.value.size } ?: return e
+        if (best.value.size * 3 < same.size * 2) return e
+        val latest = best.value.maxBy { it.date }
+        val cat = best.value.sortedByDescending { it.date }.firstOrNull { it.category != Cat.OTHER }?.category ?: e.category
+        return e.copy(item = best.key, category = cat, note = latest.note.ifBlank { e.note })
+    }
+
     /** The categories an expense can be moved to. */
     val expenseCats = Cat.entries.filter { it !in setOf(Cat.TANKHWAH, Cat.UDHAAR, Cat.SALES, Cat.STOCK) }
 
