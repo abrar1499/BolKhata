@@ -361,10 +361,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
      * Moves entries into a khata of any kind: a party (loan or repayment from its balance), an expense category, an
      * income source or a stock item (purchase / sale). Money out can't go to Income, money in can't go to Expense.
      */
-    fun moveEntries(ids: Set<String>, kind: String, to: String) {
+    fun moveEntries(ids: Set<String>, kind: String, to: String): Int {
         val t = to.trim()
-        if (ids.isEmpty() || t.isEmpty()) return
-        val cat = if (kind == "expense") Cat.entries.firstOrNull { it.label.equals(t, true) } ?: return else null
+        if (ids.isEmpty() || t.isEmpty()) return 0
+        val cat = if (kind == "expense") Cat.entries.firstOrNull { it.label.equals(t, true) } ?: return 0 else null
         var skipped = 0
         val after = entries.map { e ->
             if (e.id !in ids) return@map e
@@ -377,7 +377,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             }
         }
         val record = store.recordMove(entries, after)
-        if (record == null) { toast(if (skipped > 0) "Money out can't go to Income, money in can't go to Expense" else "Already there"); return }
+        if (record == null) { toast(if (skipped > 0) "Money out can't go to Income, money in can't go to Expense" else "Already there"); return 0 }
         save(after)
         scope.launch {
             val moved = ids.size - skipped
@@ -387,6 +387,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 if (restored != null) { save(restored); store.forgetMove(record.id) } else toast("Cannot undo: entries were changed after the move.")
             }
         }
+        return ids.size - skipped
     }
 
     /** Moves a whole khata into another (or renames it): party into party merges; otherwise every entry moves. */
@@ -922,6 +923,15 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     if (changed.size > 3) " +${changed.size - 3} more" else ""
             }
             "to_khata" -> {
+                // "2000 aur 5000 wali entry Al Falah Contracting me": an income or business khata, not a party.
+                f.set["kind"]?.let { kind ->
+                    val name = f.set["name"].orEmpty()
+                    val hits = scoped(Query.select(entries, q))
+                    if (hits.isEmpty()) return "Nothing found (${Query.label(q)})."
+                    val moved = moveEntries(hits.map { it.id }.toSet(), kind, name)
+                    return if (moved == 0) "Nothing moved: money out can't go to Income, money in can't go to Expense."
+                    else "$moved " + (if (moved == 1) "entry" else "entries") + " → $name"
+                }
                 // "Ye sari Abrar D360 ka khata bana do": these records become that khata's lene-dene, in date order,
                 // each one a loan or a repayment by the running balance (money out = they owe me, money in = back / I owe).
                 val name = f.set["person"]?.trim()?.takeIf { it.isNotEmpty() } ?: f.payer.ifBlank { return "Which khata? e.g. \"Abrar D360 ka khata\"" }

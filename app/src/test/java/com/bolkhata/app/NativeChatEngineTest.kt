@@ -433,6 +433,28 @@ class NativeChatEngineUnsureTest {
     }
 }
 
+class NativeChatEngineMoveByAmountTest {
+    private val entries = listOf(
+        Entry("t1", Type.TRANSFER_IN, 2000.0, Cat.OTHER, "Transfer", "Hamid Akram", "From Hamid Akram", 1L, 1L),
+        Entry("t2", Type.TRANSFER_IN, 5000.0, Cat.OTHER, "Transfer", "Nargis Salim Rashid", "From Nargis", 2L, 2L),
+        Entry("t3", Type.TRANSFER_IN, 600.0, Cat.OTHER, "From Al Rajhi", "", "Own account", 3L, 3L),
+        Entry("i1", Type.AAMDANI, 3500.0, Cat.TANKHWAH, "Al Falah Contracting Company LTD", "", "Payment", 4L, 4L),
+        Entry("i2", Type.AAMDANI, 1500.0, Cat.TANKHWAH, "Afaq Tuwaiq Contracting Est", "", "Payment", 5L, 5L)
+    )
+    private val history = listOf(
+        ChatMessage("u1", true, "8 jul ki entries"),
+        ChatMessage("a1", false, "Transfer 2,000 · Transfer 5,000 · From Al Rajhi 600", listIds = listOf("t1", "t2", "t3"))
+    )
+
+    @Test fun shownRowsPickedByAmountGoToAnIncomeKhataNamedByItsFirstWords() {
+        val r = NativeChatEngine.interpret("2000 and 5000 wali entry Al falah contracting me move kr do", entries, history = history)
+        assertEquals("to_khata", r.kind)
+        assertEquals(setOf("t1", "t2"), r.filter.ids)
+        assertEquals("income", r.set["kind"])
+        assertEquals("Al Falah Contracting Company LTD", r.set["name"])
+    }
+}
+
 class NativeChatEngineMoveShownTest {
     private val contacts = listOf("Haji Ashiq", "Ali Abrar", "Ali Raza", "Hamid Akram")
     private val history = listOf(

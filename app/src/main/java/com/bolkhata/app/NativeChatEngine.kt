@@ -165,7 +165,7 @@ object NativeChatEngine {
         // Read from the words as said: number reading would turn "3 no" (number 3) into "3 9".
         // "Other me jo Mahnaz Parveen ki entries hain wo food me move karo": those entries change category.
         moveToCategory(roman.lowercase(Locale.ROOT), entries)?.let { return it }
-        moveShown(text, roman.lowercase(Locale.ROOT), words, contacts, history)?.let { return it }
+        moveShown(text, roman.lowercase(Locale.ROOT), words, contacts, history, entries)?.let { return it }
         // "170 food mess after Shahbaz's 315", "315 wali entry ke baad 170 food aur 15 wifi bill daal do".
         afterEntry(text, entries, contacts)?.let { return it }
 
@@ -323,7 +323,9 @@ object NativeChatEngine {
      * the entries the chat last listed or saved go to that person's khata. Null when the message isn't that
      * ("Ali ko 500 bhej diye" is a new entry, so a message with an amount never counts as pointing at entries).
      */
-    private fun moveShown(text: String, lower: String, words: List<String>, contacts: List<String>, history: List<ChatMessage>): Fixed? {
+    private fun moveShown(
+        text: String, lower: String, words: List<String>, contacts: List<String>, history: List<ChatMessage>, entries: List<Entry>
+    ): Fixed? {
         // The words as said: spelling fixes turn "bhej" into "bheja" (money sent), which is a new entry.
         if (!has(tokens(lower), moveVerbs) && !Regex("""\bkhat[ae]y?\s+(?:me|mein|main|men)\s+(?:kar|kr)\s*do\b""").containsMatchIn(lower)) return null
         val shown = history.lastOrNull { !it.isUser && (it.listIds.isNotEmpty() || it.entryIds.isNotEmpty()) } ?: return null
@@ -337,7 +339,19 @@ object NativeChatEngine {
                 if (rows.size > 1 && !has(tokens(rest), plural))
                     return chat("Which one of the ${rows.size}? Say its number, e.g. \"2 no entry\", or say \"sab\".")
                 else rows
-            else -> return null
+            // "2000 aur 5000 wali entry": the shown rows with those amounts.
+            else -> {
+                val amounts = Regex("""\d[\d,]*(?:\.\d+)?""").findAll(rest).mapNotNull { it.value.replace(",", "").toDoubleOrNull() }.toList()
+                val byId = entries.associateBy { it.id }
+                rows.filter { id -> byId[id]?.let { e -> amounts.any { kotlin.math.abs(it - e.amount) < 0.005 } } == true }
+                    .ifEmpty { return null }
+            }
+        }
+        Accounts.khataNameMentionedIn(text, "", contacts)?.let {
+            return Fixed("", "to_khata", "", filter = Query.Filter(ids = ids.toSet()), set = mapOf("person" to it))
+        }
+        otherKhata(tokens(rest), entries)?.let { (kind, name) ->
+            return Fixed("", "to_khata", "", filter = Query.Filter(ids = ids.toSet()), set = mapOf("kind" to kind, "name" to name))
         }
         val destination = Accounts.khataNameMentionedIn(text, "", contacts)
             ?: Understand.matchContact(tokens(rest).filter { it !in moveVerbs }, contacts).let { (name, choices, _) ->
@@ -346,6 +360,22 @@ object NativeChatEngine {
             }
             ?: return chat("Which khata should get it? Say the person's saved name.")
         return Fixed("", "to_khata", "", filter = Query.Filter(ids = ids.toSet()), set = mapOf("person" to destination))
+    }
+
+    /**
+     * An income source or stock item named by its first words ("Al falah contracting" → Al Falah Contracting Company
+     * LTD), as ("income" | "business") to its saved name. Null when none or more than one fits equally.
+     */
+    private fun otherKhata(said: List<String>, entries: List<Entry>): Pair<String, String>? {
+        val words = said.toSet()
+        val names = entries.filter { it.type == Type.AAMDANI }.map { "income" to source(it).trim() } +
+            stock(entries).map { "business" to it.name.trim() }
+        val scored = names.filter { it.second.isNotBlank() }.distinctBy { it.second.lowercase(Locale.ROOT) }.map { c ->
+            val parts = tokens(c.second.lowercase(Locale.ROOT))
+            c to parts.takeWhile { it in words }.size.takeIf { it >= 2 || (it == 1 && parts.size == 1) }
+        }.filter { it.second != null }
+        val best = scored.maxOfOrNull { it.second!! } ?: return null
+        return scored.filter { it.second == best }.singleOrNull()?.first
     }
 
     private val intoCategory = Regex("""\b(\p{L}+)\s+(?:me|mein|main|men|mai|into|to|in)\s+(?:move|shift|dal|daal|dalo|daalo|rakh|rakho|bhej|bhejo|send|transfer|put|kar|kr|karo|kro)\b""")
