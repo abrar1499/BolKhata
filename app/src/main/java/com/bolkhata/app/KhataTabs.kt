@@ -175,10 +175,10 @@ internal fun BusinessPill(name: String, onMenu: () -> Unit, onBusiness: () -> Un
         Modifier.padding(top = 10.dp).shadow(1.dp, CircleShape).clip(CircleShape).background(Color.White).padding(end = 11.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(Modifier.size(32.dp).clip(CircleShape).clickable { onMenu() }, contentAlignment = Alignment.Center) {
+        Box(Modifier.size(38.dp).clip(CircleShape).clickable { onMenu() }, contentAlignment = Alignment.Center) {
             Icon(Icons.Filled.Menu, contentDescription = "Menu", tint = Ember, modifier = Modifier.size(17.dp))
         }
-        Row(Modifier.clickable { onBusiness() }.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.clickable { onBusiness() }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(name, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1C1917), maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.widthIn(max = 170.dp))
             Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Switch business", tint = Ember, modifier = Modifier.padding(start = 3.dp).size(16.dp))
@@ -248,7 +248,7 @@ private fun SmallChip(label: String, on: Boolean, onClick: () -> Unit) {
         label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = if (on) Color.White else MaterialTheme.colorScheme.onSurface,
         modifier = Modifier.clip(CircleShape).background(if (on) Ember else MaterialTheme.colorScheme.surface)
             .border(1.dp, if (on) Ember else MaterialTheme.colorScheme.outlineVariant, CircleShape)
-            .clickable { onClick() }.padding(horizontal = 11.dp, vertical = 4.dp)
+            .clickable { onClick() }.padding(horizontal = 11.dp, vertical = 6.dp)
     )
 }
 
