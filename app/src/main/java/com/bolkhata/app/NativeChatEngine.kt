@@ -175,7 +175,7 @@ object NativeChatEngine {
         moveToCategory(roman.lowercase(Locale.ROOT), entries)?.let { return it }
         moveShown(text, roman.lowercase(Locale.ROOT), words, contacts, history, entries)?.let { return it }
         // "170 food mess after Shahbaz's 315", "315 wali entry ke baad 170 food aur 15 wifi bill daal do".
-        afterEntry(text, entries, contacts)?.let { return it }
+        afterEntry(text, entries, contacts, now)?.let { return it }
 
         if (Recat.isCommand(lower) || (words.contains("other") && has(words, setOf("sort", "fix", "categorize", "category", "theek"))))
             return Fixed("", "sort_other", "I'll group uncategorized expenses for you to review.")
@@ -527,17 +527,22 @@ object NativeChatEngine {
      * New entries to be put right after an existing one: the existing one is found by its amount and, when said, its
      * person; the new ones go on its day, just after it. Null when the sentence isn't that or no such entry exists.
      */
-    private fun afterEntry(text: String, entries: List<Entry>, contacts: List<String>): Fixed? {
+    private fun afterEntry(text: String, entries: List<Entry>, contacts: List<String>, now: Long): Fixed? {
         val (fresh, anchor) = afterUrdu.find(text)?.let { it.groupValues[2] to it.groupValues[1] }
             ?: afterEnglish.find(text)?.let { it.groupValues[1] to it.groupValues[2] }
             ?: return null
-        val amounts = Regex("""\d[\d,]*(?:\.\d+)?""").findAll(anchor).mapNotNull { it.value.replace(",", "").toDoubleOrNull() }.toList()
-        if (amounts.isEmpty() || fresh.none { it.isDigit() }) return null
+        if (fresh.none { it.isDigit() }) return null
+        // "22 oct shahbaz wali entry ke baad": the day is a date, not an amount; the entry is found by date and name.
+        val day = dateBounds(anchor.lowercase(Locale.ROOT), now)
+        val withoutDate = anchor.replace(Regex("""(?i)\b\d{1,2}\s*(?:st|nd|rd|th)?\s+(?:${monthWords.joinToString("|")})\b"""), " ")
+        val amounts = Regex("""\d[\d,]*(?:\.\d+)?""").findAll(withoutDate).mapNotNull { it.value.replace(",", "").toDoubleOrNull() }.toList()
         val (one, choices, _) = Understand.matchContact(tokens(anchor), contacts)
         val names = listOfNotNull(one).ifEmpty { choices }
+        if (amounts.isEmpty() && (names.isEmpty() || day == null)) return null
         val hit = entries.filter { e ->
-            amounts.any { kotlin.math.abs(it - e.amount) < 0.005 } &&
-                (names.isEmpty() || names.any { n -> e.person.equals(n, true) || e.note.contains(n, true) })
+            (amounts.isEmpty() || amounts.any { kotlin.math.abs(it - e.amount) < 0.005 }) &&
+                (names.isEmpty() || names.any { n -> e.person.equals(n, true) || e.note.contains(n, true) }) &&
+                (day == null || e.date in day.from..day.to)
         }.maxByOrNull { it.date } ?: return null
         val clean = fresh.replace(Regex("""(?i)\b(on the same day|same day|usi din|ussi din|isi din)\b"""), " ").trim()
         return Fixed(clean, "entry_after", "", filter = Query.Filter(ids = setOf(hit.id)))

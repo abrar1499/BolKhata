@@ -487,6 +487,17 @@ class NativeChatEngineUnsureTest {
     }
 }
 
+class NativeChatEngineAfterDatedEntryTest {
+    @Test fun aDayAndANameFindTheEntryToPutTheNewOneAfter() {
+        val day = Query.day("2026-10-22")
+        val paid = Entry("k1", Type.DIYA, 315.0, Cat.UDHAAR, "Loans", "Kamran Aslam", "", day + 36_000_000L, day)
+        val r = NativeChatEngine.interpret("22 oct kamran wali entry k bad 170 riyal food mess ka dalo", listOf(paid),
+            listOf("Kamran Aslam"), now = Query.day("2026-11-04"))
+        assertEquals("entry_after", r.kind)
+        assertEquals(setOf("k1"), r.filter.ids)
+    }
+}
+
 class QueryPersonInNoteTest {
     @Test fun aPersonIsFoundInABankEntrysNote() {
         val sent = Entry("s1", Type.KHARCHA, 300.0, Cat.GHAR, "Sent home", "", "To Saleem Butt · D360", 1L, 1L)
