@@ -123,7 +123,21 @@ class Store(context: Context) {
             .apply()
     }
 
-    fun load(): List<Entry> = read(scoped("entries"))
+    fun load(): List<Entry> {
+        val list = read(scoped("entries"))
+        if (prefs.getBoolean("bankNamesV1", false)) return list
+        // One-time fix of the bank statement import: traffic fines are Transport, the Jawazat fee is the Iqama fee.
+        val fixed = list.map { e ->
+            when {
+                e.category == Cat.FEES && e.item == "Traffic fine" -> e.copy(category = Cat.TRANSPORT)
+                e.category == Cat.FEES && e.item == "Jawazat fee" -> e.copy(item = "Iqama fee", note = if (e.note == "Jawazat fee") "Iqama fee" else e.note)
+                else -> e
+            }
+        }
+        prefs.edit().putBoolean("bankNamesV1", true).apply()
+        if (fixed != list) write(scoped("entries"), fixed)
+        return fixed
+    }
 
     // ---------- Businesses: each has its own entries and trash ----------
 
