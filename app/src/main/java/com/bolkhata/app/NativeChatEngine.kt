@@ -37,6 +37,7 @@ object NativeChatEngine {
         "it", "that", "this", "those", "these", "isko", "usko", "ye", "yeh", "inko",
         "open", "kholo", "khol", "kholen", "kholein", "karein", "karen", "kren", "tum", "aap", "es", "poora", "pura", "poore",
         "check", "hisab", "hisaab", "cashbook", "book", "name", "naam",
+        "jitni", "jitne", "jitny", "jitna", "bhi", "b", "hui", "hoi", "hoti", "hote", "huin", "hoin", "bheje", "bhejy", "bhejay", "bhejey",
         "total", "report", "summary", "overview", "yearly", "annual", "annually", "alltime", "overall", "lifetime", "ever", "time", "day", "days",
         "delete", "delet", "del", "dlt", "remove", "hatao", "hata", "mitao", "clear", "wipe",
         "change", "edit", "update", "badlo", "correct", "fix", "move", "shift", "transfer", "send", "bhejo",
@@ -48,7 +49,7 @@ object NativeChatEngine {
         Cat.RENT to setOf("rent", "kiraya", "rental"),
         Cat.BIJLI to setOf("bill", "bills", "bijli", "electricity", "utility", "utilities"),
         Cat.MOBILE to setOf("mobile", "phone", "internet", "recharge", "data", "wifi"),
-        Cat.GHAR to setOf("home", "ghar", "family", "senthome"),
+        Cat.GHAR to setOf("home", "ghar", "family", "senthome", "pakistan"),
         Cat.SHOPPING to setOf("shopping", "clothes", "kapre", "kapray"),
         Cat.SEHAT to setOf("health", "medical", "medicine", "dawai", "doctor", "hospital"),
         Cat.PERSONAL to setOf("personal", "haircut", "salon"),
@@ -377,6 +378,11 @@ object NativeChatEngine {
         val parsed = if (split == null) runCatching { Parser.parse(text, now) }.getOrNull() else null
         if (split != null || (parsed != null && (parsed.entries.isNotEmpty() || parsed.unclear.isNotEmpty())))
             return Fixed(text, "entry", "")
+        // A word that is in saved entries ("easypaisa", "tamara"): those entries.
+        val terms = words.filter { it !in stop && it.length >= 3 }
+        if (terms.isNotEmpty() && words.size <= 4 && lower.none(Char::isDigit) && smallTalk(lower) == NOT_UNDERSTOOD &&
+            entries.any { e -> val hay = (e.item + e.note).lowercase(Locale.ROOT).replace(" ", ""); terms.all { hay.contains(it) } })
+            return Fixed("", "ask", "", "list", Query.Filter(items = terms))
         return talk(lower)
     }
 
