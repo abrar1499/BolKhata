@@ -36,7 +36,7 @@ object NativeChatEngine {
         "less", "except", "excluding", "siwa", "ilawa", "alawa", "people", "log", "logon", "cash", "out", "into",
         "it", "that", "this", "those", "these", "isko", "usko", "ye", "yeh", "inko",
         "open", "kholo", "khol", "kholen", "kholein", "karein", "karen", "kren", "tum", "aap", "es", "poora", "pura", "poore",
-        "check", "hisab", "hisaab", "cashbook", "book", "name", "naam",
+        "check", "hisab", "hisaab", "cashbook", "book", "name", "naam", "tak", "tk", "wal", "dhoondo", "dhundo", "talash",
         "jitni", "jitne", "jitny", "jitna", "bhi", "b", "hui", "hoi", "hoti", "hote", "huin", "hoin", "bheje", "bhejy", "bhejay", "bhejey", "bheja", "bheji", "bhijwaye", "bhijwaya",
         "total", "report", "summary", "overview", "yearly", "annual", "annually", "alltime", "overall", "lifetime", "ever", "time", "day", "days",
         "delete", "delet", "del", "dlt", "remove", "hatao", "hata", "mitao", "clear", "wipe",
@@ -175,7 +175,7 @@ object NativeChatEngine {
         moveToCategory(roman.lowercase(Locale.ROOT), entries)?.let { return it }
         moveShown(text, roman.lowercase(Locale.ROOT), words, contacts, history, entries)?.let { return it }
         // "170 food mess after Shahbaz's 315", "315 wali entry ke baad 170 food aur 15 wifi bill daal do".
-        afterEntry(text, entries, contacts)?.let { return it }
+        afterEntry(text, entries, contacts, now)?.let { return it }
 
         if (Recat.isCommand(lower) || (words.contains("other") && has(words, setOf("sort", "fix", "categorize", "category", "theek"))))
             return Fixed("", "sort_other", "I'll group uncategorized expenses for you to review.")
@@ -265,7 +265,7 @@ object NativeChatEngine {
         }
 
         // "23 oct ki entry dikhao" only shows; it is never an edit.
-        val showOnly = has(words, setOf("dikhao", "dikha", "show", "batao", "btao", "list", "kholo", "open")) &&
+        val showOnly = has(words, setOf("dikhao", "dikha", "show", "batao", "btao", "list", "kholo", "open", "search", "find", "dhoondo", "dhundo", "talash")) &&
             !has(words, setOf("change", "badlo", "edit", "update", "correct", "fix", "theek"))
         val planned = if (showOnly) null else runCatching { Edits.plan(text, entries, now) }.getOrNull()
         if (planned != null) return Fixed("", "plan", "", plan = EditPlan(planned.changed, planned.deleted, planned.message))
@@ -527,17 +527,22 @@ object NativeChatEngine {
      * New entries to be put right after an existing one: the existing one is found by its amount and, when said, its
      * person; the new ones go on its day, just after it. Null when the sentence isn't that or no such entry exists.
      */
-    private fun afterEntry(text: String, entries: List<Entry>, contacts: List<String>): Fixed? {
+    private fun afterEntry(text: String, entries: List<Entry>, contacts: List<String>, now: Long): Fixed? {
         val (fresh, anchor) = afterUrdu.find(text)?.let { it.groupValues[2] to it.groupValues[1] }
             ?: afterEnglish.find(text)?.let { it.groupValues[1] to it.groupValues[2] }
             ?: return null
-        val amounts = Regex("""\d[\d,]*(?:\.\d+)?""").findAll(anchor).mapNotNull { it.value.replace(",", "").toDoubleOrNull() }.toList()
-        if (amounts.isEmpty() || fresh.none { it.isDigit() }) return null
+        if (fresh.none { it.isDigit() }) return null
+        // "22 oct shahbaz wali entry ke baad": the day is a date, not an amount; the entry is found by date and name.
+        val day = dateBounds(anchor.lowercase(Locale.ROOT), now)
+        val withoutDate = anchor.replace(Regex("""(?i)\b\d{1,2}\s*(?:st|nd|rd|th)?\s+(?:${monthWords.joinToString("|")})\b"""), " ")
+        val amounts = Regex("""\d[\d,]*(?:\.\d+)?""").findAll(withoutDate).mapNotNull { it.value.replace(",", "").toDoubleOrNull() }.toList()
         val (one, choices, _) = Understand.matchContact(tokens(anchor), contacts)
         val names = listOfNotNull(one).ifEmpty { choices }
+        if (amounts.isEmpty() && (names.isEmpty() || day == null)) return null
         val hit = entries.filter { e ->
-            amounts.any { kotlin.math.abs(it - e.amount) < 0.005 } &&
-                (names.isEmpty() || names.any { n -> e.person.equals(n, true) || e.note.contains(n, true) })
+            (amounts.isEmpty() || amounts.any { kotlin.math.abs(it - e.amount) < 0.005 }) &&
+                (names.isEmpty() || names.any { n -> e.person.equals(n, true) || e.note.contains(n, true) }) &&
+                (day == null || e.date in day.from..day.to)
         }.maxByOrNull { it.date } ?: return null
         val clean = fresh.replace(Regex("""(?i)\b(on the same day|same day|usi din|ussi din|isi din)\b"""), " ").trim()
         return Fixed(clean, "entry_after", "", filter = Query.Filter(ids = setOf(hit.id)))
@@ -619,7 +624,10 @@ object NativeChatEngine {
         val last = Regex("""\b(?:last|latest|recent)\s+(\d+)\b""").find(lower)?.groupValues?.get(1)?.toIntOrNull()
             ?: if (Regex("""\b(last|latest|recent)\s+(entry|record|transaction)\b""").containsMatchIn(lower)) 1 else 0
         val range = Regex("""\bbetween\s+(\d[\d,]*(?:\.\d{1,2})?)\s+and\s+(\d[\d,]*(?:\.\d{1,2})?)\b""").find(lower)
-        val exact = amountAfter(lower, "exactly|equal\\s+to|amount\\s+is|for")
+        // "2800 wali entry", "2800 riyal wali": that amount (a day before a month name is a date, not an amount).
+        val said = Regex("""\b(\d[\d,]*(?:\.\d+)?)\s*(?:wal|wali|wala|wale|riyal|riyals|sar|rs|rupay|rupees)\b""").find(lower)
+            ?.groupValues?.get(1)?.replace(",", "")?.toDoubleOrNull()
+        val exact = amountAfter(lower, "exactly|equal\\s+to|amount\\s+is|for") ?: said
         val min = exact ?: amountAfter(lower, "above|over|more\\s+than|greater\\s+than")
             ?: range?.groupValues?.get(1)?.replace(",", "")?.toDoubleOrNull()
         val max = exact ?: amountAfter(lower, "below|under|less\\s+than")
@@ -657,6 +665,13 @@ object NativeChatEngine {
     )
 
     private fun dateBounds(text: String, now: Long): Bounds? {
+        // "19 aug se aaj tak", "from 19 aug to today": from the first day to the end of the second.
+        (Regex("""^(.*?)\s+(?:se|sy|say)\s+(.*?)\s+(?:tak|tk|takk|until|till)\b""").find(text)
+            ?: Regex("""\bfrom\s+(.+?)\s+(?:to|till|until)\s+(.+)$""").find(text))?.let { m ->
+            val a = dateBounds(m.groupValues[1], now)
+            val b = dateBounds(m.groupValues[2], now)
+            if (a != null && b != null) return Bounds(minOf(a.from, b.from), maxOf(a.to, b.to))
+        }
         val w = tokens(text)
         fun day(offset: Int): Bounds {
             val c = Calendar.getInstance().apply { timeInMillis = now; add(Calendar.DAY_OF_YEAR, offset) }

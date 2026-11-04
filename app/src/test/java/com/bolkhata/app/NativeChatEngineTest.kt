@@ -29,6 +29,24 @@ class NativeChatEngineTest {
     private fun read(text: String, history: List<ChatMessage> = emptyList()) =
         NativeChatEngine.interpret(text, entries, now = now, history = history)
 
+    @Test fun fromADateTillTodayIsOneRange() {
+        val r = read("19 aug se aj tak expense batao")
+        assertEquals("ask", r.kind)
+        assertEquals(setOf(Type.KHARCHA), r.filter.types)
+        assertEquals(Query.day("2026-08-19"), r.filter.from)
+        assertTrue(r.filter.to!! >= now)
+        assertTrue(r.filter.items.isEmpty())
+    }
+
+    @Test fun searchingAnAmountListsThoseEntriesAndNeverEdits() {
+        val r = read("2800 wal entry search karo")
+        assertEquals("ask", r.kind)
+        assertEquals("list", r.what)
+        assertEquals(2800.0, r.filter.min!!, 0.001)
+        assertEquals(2800.0, r.filter.max!!, 0.001)
+        assertTrue(r.filter.items.isEmpty())
+    }
+
     @Test fun aShortFollowUpNarrowsTheLastSearchEvenManyTurnsLater() {
         val talk = listOf(
             ChatMessage("u1", true, "how much did I spend on food this month?"), ChatMessage("a1", false, "Spent 40 SAR"),
@@ -484,6 +502,17 @@ class NativeChatEngineUnsureTest {
         assertTrue(!read("kya hal hai").unsure)
         assertTrue(!read("hello").unsure)
         assertTrue(!read("aaj kitna kharcha huwa").unsure)
+    }
+}
+
+class NativeChatEngineAfterDatedEntryTest {
+    @Test fun aDayAndANameFindTheEntryToPutTheNewOneAfter() {
+        val day = Query.day("2026-10-22")!!
+        val paid = Entry("k1", Type.DIYA, 315.0, Cat.UDHAAR, "Loans", "Kamran Aslam", "", day + 36_000_000L, day)
+        val r = NativeChatEngine.interpret("22 oct kamran wali entry k bad 170 riyal food mess ka dalo", listOf(paid),
+            listOf("Kamran Aslam"), now = Query.day("2026-11-04")!!)
+        assertEquals("entry_after", r.kind)
+        assertEquals(setOf("k1"), r.filter.ids)
     }
 }
 

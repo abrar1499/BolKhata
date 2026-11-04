@@ -765,6 +765,8 @@ fun CashBookScreen(
     val thisMonth = newest.filter { monthKey(it.date) == nowKey }.sumOf { if (cashIn(it)) it.amount else -it.amount }
     val months = remember(newest) { monthsOf(newest) }
     var month by rememberSaveable(months.firstOrNull()?.first) { mutableIntStateOf(months.firstOrNull()?.first ?: 0) }
+    // A remembered month that no longer has entries (the khata changed since) falls back to the newest month.
+    if (month != ALL_MONTHS && months.none { it.first == month }) month = months.firstOrNull()?.first ?: ALL_MONTHS
     var q by rememberSaveable { mutableStateOf("") }
     // A search looks through every month; otherwise only the picked month is listed.
     val list = if (q.isBlank()) newest.filter { inMonth(it.date, month) } else newest.filter { matches(it, q) }
@@ -811,6 +813,8 @@ fun PartyKhataScreen(
     val hist = remember(p) { p?.history?.asReversed() ?: emptyList() }
     val months = remember(hist) { monthsOf(hist.map { it.first }) }
     var month by rememberSaveable(name, months.firstOrNull()?.first) { mutableIntStateOf(months.firstOrNull()?.first ?: 0) }
+    // A remembered month that no longer has entries (the khata changed since) falls back to the newest month.
+    if (month != ALL_MONTHS && months.none { it.first == month }) month = months.firstOrNull()?.first ?: ALL_MONTHS
     var q by rememberSaveable(name) { mutableStateOf("") }
     val list = if (q.isBlank()) hist.filter { inMonth(it.first.date, month) } else hist.filter { matches(it.first, q) }
     val bal = p?.balance ?: 0.0
@@ -865,6 +869,8 @@ fun TransactionsScreen(entries: List<Entry>, currency: String, onEdit: (Entry) -
     }
     val months = remember(newest) { monthsOf(newest) }
     var month by rememberSaveable(months.firstOrNull()?.first) { mutableIntStateOf(months.firstOrNull()?.first ?: 0) }
+    // A remembered month that no longer has entries (the khata changed since) falls back to the newest month.
+    if (month != ALL_MONTHS && months.none { it.first == month }) month = months.firstOrNull()?.first ?: ALL_MONTHS
     val list = if (q.isBlank()) newest.filter { inMonth(it.date, month) } else newest.filter { matches(it, q) }
     // Money that left you (or a purchase) goes in Out; everything else in In.
     fun out(e: Entry) = cashOut(e) || e.type == Type.PURCHASE
