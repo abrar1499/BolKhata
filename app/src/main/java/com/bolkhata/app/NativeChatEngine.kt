@@ -180,21 +180,34 @@ object NativeChatEngine {
             return Fixed("", "sort_other", "I'll group uncategorized expenses for you to review.")
         if (has(words, setOf("duplicate", "duplicates", "dupes", "dupe"))) return Fixed("", "duplicates", "")
         if (has(words, setOf("undo", "undoe", "undoo"))) return Fixed("", "undo", "")
+        // Just a name ("kamran saeed", "nargis"): that khata, or a choice when several share it. Only whole words or
+        // clear starts of a saved name count, so small talk never turns into a name.
+        if (smallTalk(lower) == NOT_UNDERSTOOD) {
+            val said = words.filter { it !in setOf("ka", "ki", "ke", "khata", "account", "kholo", "open", "yar", "yaar", "plz") }
+            if (said.size in 1..3 && words.size <= 5 && said.all { it.length >= 3 }) {
+                val hits = contacts.filter { c -> val parts = tokens(c); said.all { w -> parts.any { it == w || (w.length >= 4 && it.startsWith(w)) } } }
+                    .distinctBy { it.lowercase(Locale.ROOT) }
+                if (hits.size == 1) return Fixed("", "open", "", filter = Query.Filter(persons = hits))
+                if (hits.size in 2..4) return chat("Which " + hits.joinToString(" or ") + " do you mean?")
+            }
+        }
         if (understood?.choices?.isNotEmpty() == true)
             return chat("Which " + understood.choices.joinToString(" or ") + " do you mean?")
         if (understood?.kind == Understand.Kind.OPEN_KHATA && !understood.contact.isNullOrBlank())
             return Fixed("", "open", "", filter = Query.Filter(persons = listOf(understood.contact)))
 
         // "Hamid ka naam Hamid Akram kar do", "rename Hamid to Hamid Akram": the khata gets the new name.
+        // The words as said: name matching may already have rewritten a new name that looks like a saved one.
+        val said = prepared.lowercase(Locale.ROOT)
         // ("X wali entry ka naam Y kar do" renames one entry; that is an edit, below.)
-        if (!has(words, setOf("entry", "entries", "wali", "wala", "wale"))) (renameUrdu.find(lower) ?: renameEnglish.find(lower))?.let { m ->
+        if (!has(words, setOf("entry", "entries", "wali", "wala", "wale"))) (renameUrdu.find(said) ?: renameEnglish.find(said))?.let { m ->
             val from = findKhata(m.groupValues[1], contacts, entries) ?: return chat("Which khata should I rename? Say its saved name.")
             val to = tokens(m.groupValues[2]).filter { it !in khataFiller }.joinToString(" ") { it.replaceFirstChar(Char::uppercase) }
             if (to.isBlank()) return chat("What should the new name be?")
             return Fixed("", "rename_khata", "", set = mapOf("kind" to from.first, "from" to from.second, "to" to to))
         }
         // "Hamid ka khata Nargis me merge kar do": every entry of the first khata goes into the second.
-        mergeKhata.find(lower)?.let { m ->
+        mergeKhata.find(said)?.let { m ->
             val from = findKhata(m.groupValues[1], contacts, entries) ?: return chat("Which khata should I move? Say its saved name.")
             val to = findKhata(m.groupValues[2], contacts, entries) ?: return chat("Move it into which khata? Say its saved name.")
             return Fixed("", "move_khata", "", set = mapOf("kind" to from.first, "from" to from.second, "toKind" to to.first, "to" to to.second))
@@ -359,17 +372,6 @@ object NativeChatEngine {
         val parsed = if (split == null) runCatching { Parser.parse(text, now) }.getOrNull() else null
         if (split != null || (parsed != null && (parsed.entries.isNotEmpty() || parsed.unclear.isNotEmpty())))
             return Fixed(text, "entry", "")
-        // Just a name ("kamran saeed", "nargis"): that khata, or a choice when several share it. Only whole words or
-        // clear starts of a saved name count, so small talk never turns into a name.
-        if (smallTalk(lower) == NOT_UNDERSTOOD) {
-            val said = words.filter { it !in setOf("ka", "ki", "ke", "khata", "account", "kholo", "open", "yar", "yaar", "plz") }
-            if (said.size in 1..3 && words.size <= 5 && said.all { it.length >= 3 }) {
-                val hits = contacts.filter { c -> val parts = tokens(c); said.all { w -> parts.any { it == w || (w.length >= 4 && it.startsWith(w)) } } }
-                    .distinctBy { it.lowercase(Locale.ROOT) }
-                if (hits.size == 1) return Fixed("", "open", "", filter = Query.Filter(persons = hits))
-                if (hits.size in 2..4) return chat("Which " + hits.joinToString(" or ") + " do you mean?")
-            }
-        }
         return talk(lower)
     }
 
