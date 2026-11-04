@@ -183,7 +183,7 @@ object NativeChatEngine {
         if (has(words, setOf("undo", "undoe", "undoo"))) return Fixed("", "undo", "")
         // Just a name ("kamran saeed", "nargis"): that khata, or a choice when several share it. Only whole words or
         // clear starts of a saved name count, so small talk never turns into a name.
-        if (smallTalk(lower) == NOT_UNDERSTOOD) {
+        if (smallTalk(lower, now) == NOT_UNDERSTOOD) {
             // The words as said, before name matching rewrites them.
             val asSaid = tokens(prepared.lowercase(Locale.ROOT))
             val said = asSaid.filter { it !in setOf("ka", "ki", "ke", "khata", "account", "kholo", "open", "yar", "yaar", "plz") }
@@ -381,7 +381,7 @@ object NativeChatEngine {
             return Fixed(text, "entry", "")
         // A word that is in saved entries ("easypaisa", "tamara"): those entries.
         val terms = words.filter { it !in stop && it.length >= 3 }
-        if (terms.isNotEmpty() && words.size <= 4 && lower.none(Char::isDigit) && smallTalk(lower) == NOT_UNDERSTOOD &&
+        if (terms.isNotEmpty() && words.size <= 4 && lower.none(Char::isDigit) && smallTalk(lower, now) == NOT_UNDERSTOOD &&
             entries.any { e -> val hay = (e.item + e.note).lowercase(Locale.ROOT).replace(" ", ""); terms.all { hay.contains(it) } })
             return Fixed("", "ask", "", "list", Query.Filter(items = terms))
         return talk(lower, now)
