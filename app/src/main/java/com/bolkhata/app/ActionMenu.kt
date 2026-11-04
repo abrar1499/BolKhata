@@ -117,6 +117,23 @@ fun EntryMenu(e: Entry, currency: String, onEdit: () -> Unit, onMove: () -> Unit
     )
 }
 
+/** Long-press menu of a khata on the Business / Expense / Income lists: Rename (not for expense categories) and Move. */
+@Composable
+fun GroupMenu(name: String, entryCount: Int, onRename: (() -> Unit)?, onMove: () -> Unit, onDismiss: () -> Unit) {
+    ActionMenu(
+        title = name,
+        subtitle = if (entryCount == 1) "1 entry" else "$entryCount entries",
+        amount = "",
+        amountColor = Color.Unspecified,
+        badge = { Initial(name) },
+        actions = listOfNotNull(
+            onRename?.let { MenuAction("Rename", Icons.Filled.DriveFileRenameOutline, onClick = it) },
+            MenuAction("Move", Icons.Filled.SwapHoriz, onClick = onMove)
+        ),
+        onDismiss = onDismiss
+    )
+}
+
 /** Long-press menu of one khata: Rename, Merge, Delete. */
 @Composable
 fun KhataMenu(

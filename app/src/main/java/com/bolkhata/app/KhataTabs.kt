@@ -254,7 +254,7 @@ private fun SearchBox(q: String, hint: String, onChange: (String) -> Unit) {
 
 /** Round letter badge for a party or an income source. */
 @Composable
-private fun Initial(name: String) {
+internal fun Initial(name: String) {
     Box(Modifier.size(30.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
         Text(name.trim().take(1).uppercase(), color = Ember, fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
     }
@@ -401,10 +401,11 @@ private fun LazyListScope.partiesView(accts: List<PersonAcct>, picked: List<Entr
     }
     items(shown, key = { "p" + it.name.lowercase() }) { p ->
         val bal = p.balance
+        val khataMenu = LocalKhataMenu.current
         GridRow(
             p.name, p.history.lastOrNull()?.let { "Last " + lastSeen(it.first.date) } ?: "",
             listOf(GCell(if (bal < -0.005) signed(LKind.OUT, -bal) else "", LKind.OUT), GCell(if (bal > 0.005) signed(LKind.IN, bal) else "", LKind.IN)),
-            WideColW, p === shown.last(), card = true
+            WideColW, p === shown.last(), card = true, onLong = khataMenu?.let { { it("party", p.name) } }
         ) { onOpen(p) }
     }
     if (shown.isEmpty()) emptyNote("No parties yet. Say \"Hamid ko 500 diye\" in the chat.")
@@ -449,7 +450,7 @@ private fun LazyListScope.tradeView(sale: Boolean, picked: List<Entry>, months: 
         listOf(LCol(if (sale) "Sale" else "Purchase", fmt(list.sumOf { it.amount }), kind)),
         list.map { e ->
             val what = if (e.item.isNotBlank() && e.qty > 0) e.item + " × " + fmt(e.qty) else title(e)
-            LRow(e.id, e.date, what, e.person.ifBlank { e.note }, listOf(e.amount)) { onEdit(e) }
+            LRow(e.id, e.date, what, e.person.ifBlank { e.note }, listOf(e.amount), e) { onEdit(e) }
         },
         keyPrefix = if (sale) "sa" else "pu"
     )
@@ -488,11 +489,11 @@ private class GCell(val text: String, val kind: LKind, val ink: Color = AmountIn
 
 /** A ledger-style line that is not an entry: name and a small line under it, then one cell per column. As a [card] it stands alone, raised, with square corners. */
 @Composable
-private fun GridRow(title: String, sub: String, cells: List<GCell>, w: Dp, last: Boolean, card: Boolean = false, onClick: () -> Unit) = Tight {
+private fun GridRow(title: String, sub: String, cells: List<GCell>, w: Dp, last: Boolean, card: Boolean = false, onLong: (() -> Unit)? = null, onClick: () -> Unit) = Tight {
     val shape = if (card) RectangleShape else sheetShape(last)
     Row(
         Modifier.padding(start = 10.dp, end = 10.dp, top = if (card) 2.dp else 0.dp).fillMaxWidth().height(IntrinsicSize.Min).shadow(1.dp, shape).clip(shape)
-            .background(MaterialTheme.colorScheme.surface).clickable { onClick() }
+            .background(MaterialTheme.colorScheme.surface).combinedClickable(onLongClick = onLong) { onClick() }
     ) {
         Column(Modifier.weight(1f).padding(start = 10.dp, end = 4.dp, top = 5.dp, bottom = 5.dp), verticalArrangement = Arrangement.Center) {
             Text(title, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -552,7 +553,7 @@ internal enum class LKind { OUT, IN, PLAIN }
 internal class LCol(val label: String, val total: String, val kind: LKind)
 
 /** One line: title, time and note, and one amount per column (0 = empty cell). */
-internal class LRow(val key: String, val date: Long, val title: String, val note: String, val amounts: List<Double>, val onClick: () -> Unit)
+internal class LRow(val key: String, val date: Long, val title: String, val note: String, val amounts: List<Double>, val entry: Entry? = null, val onClick: () -> Unit)
 
 private val clockFmt = SimpleDateFormat("h:mma", Locale.US)
 private val dayLineFmt = SimpleDateFormat("EEE, d MMM", Locale.US)
@@ -651,9 +652,11 @@ private fun LedgerRow(r: LRow, cols: List<LCol>, last: Boolean, card: Boolean = 
     val sub = MaterialTheme.colorScheme.onSurfaceVariant
     val w = colW(cols)
     val shape = if (card) RectangleShape else sheetShape(last)
+    val menu = LocalEntryMenu.current
     Row(
         Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(IntrinsicSize.Min).shadow(1.dp, shape).clip(shape)
-            .background(MaterialTheme.colorScheme.surface).clickable { r.onClick() }
+            .background(MaterialTheme.colorScheme.surface)
+            .combinedClickable(onLongClick = r.entry?.let { e -> menu?.let { { it(e) } } }) { r.onClick() }
     ) {
         Column(Modifier.weight(1f).padding(start = 10.dp, end = 4.dp, top = 5.dp, bottom = 5.dp), verticalArrangement = Arrangement.Center) {
             Text(r.title, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -749,7 +752,7 @@ fun CashBookScreen(
                     LCol("In", fmt(list.filter(::cashIn).sumOf { it.amount }), LKind.IN)
                 ),
                 list.map { e ->
-                    LRow(e.id, e.date, title(e), e.note, listOf(if (cashOut(e)) e.amount else 0.0, if (cashIn(e)) e.amount else 0.0)) { onEdit(e) }
+                    LRow(e.id, e.date, title(e), e.note, listOf(if (cashOut(e)) e.amount else 0.0, if (cashIn(e)) e.amount else 0.0), e) { onEdit(e) }
                 },
                 cards = true
             )
@@ -846,7 +849,7 @@ fun TransactionsScreen(entries: List<Entry>, currency: String, onEdit: (Entry) -
             val label = if (q.isNotBlank()) "Found" else monthLabel(months, month) ?: ""
             ledger(
                 label, listOf(LCol("Out", fmt(outT), LKind.OUT), LCol("In", fmt(inT), LKind.IN)),
-                list.map { e -> LRow(e.id, e.date, title(e), e.note, listOf(if (out(e)) e.amount else 0.0, if (!out(e)) e.amount else 0.0)) { onEdit(e) } }
+                list.map { e -> LRow(e.id, e.date, title(e), e.note, listOf(if (out(e)) e.amount else 0.0, if (!out(e)) e.amount else 0.0), e) { onEdit(e) } }
             )
         }
         UpButton(state)
@@ -928,6 +931,7 @@ fun MoneyScreen(
     val groups = (if (income) shown.groupBy { source(it).lowercase() }.map { (_, l) -> Group(source(l.first()), null, l) }
     else shown.groupBy { it.category }.map { (c, l) -> Group(c.label, c, l) }).sortedByDescending { it.total }
     val open = remember(income) { mutableStateListOf<String>() }
+    val khataMenu = LocalKhataMenu.current
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
             item {
@@ -951,7 +955,9 @@ fun MoneyScreen(
                     Row(
                         Modifier.padding(start = 10.dp, end = 10.dp, top = 2.dp).fillMaxWidth().height(IntrinsicSize.Min).shadow(1.dp)
                             .background(MaterialTheme.colorScheme.surface)
-                            .clickable { if (isOpen) open.remove(g.name) else open.add(g.name) }.padding(start = 10.dp),
+                            .combinedClickable(onLongClick = khataMenu?.let { { it(if (income) "income" else "expense", g.name) } }) {
+                                if (isOpen) open.remove(g.name) else open.add(g.name)
+                            }.padding(start = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         if (g.cat != null) CatBubble(g.cat, 30.dp) else Initial(g.name)
@@ -983,7 +989,7 @@ fun MoneyScreen(
                 if (isOpen) {
                     ledger(
                         g.name, listOf(LCol("Amount", fmt(g.total), kind)),
-                        g.list.map { e -> LRow(e.id, e.date, title(e), e.note, listOf(e.amount)) { onEdit(e) } },
+                        g.list.map { e -> LRow(e.id, e.date, title(e), e.note, listOf(e.amount), e) { onEdit(e) } },
                         keyPrefix = "g${g.name}:"
                     )
                     item(key = "g${g.name}:end") { Spacer(Modifier.height(8.dp)) }
