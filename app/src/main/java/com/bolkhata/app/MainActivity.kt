@@ -354,6 +354,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     fun khataEntries(kind: String, name: String) = when (kind) {
         "party" -> entries.filter { it.person.equals(name, true) }
         "expense" -> entries.filter { it.type == Type.KHARCHA && it.category.label.equals(name, true) }
+        "expense-name" -> entries.filter { it.type == Type.KHARCHA && nameKey(it) == name.trim().lowercase() }
         else -> entries.filter { it.type == Type.AAMDANI && source(it).equals(name, true) }
     }
 
@@ -2395,7 +2396,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             khataFor?.let { (kind, n) ->
                 GroupMenu(
                     n, khataEntries(kind, n).size,
-                    onRename = if (kind == "expense") null else ({ khataFor = null; khataRename = kind to n }),
+                    onRename = if (kind == "expense" || kind == "expense-name") null else ({ khataFor = null; khataRename = kind to n }),
                     onMove = { khataFor = null; khataMove = kind to n },
                     onDismiss = { khataFor = null }
                 )
