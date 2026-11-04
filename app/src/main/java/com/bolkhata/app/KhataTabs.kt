@@ -521,12 +521,12 @@ private fun GridRow(title: String, sub: String, cells: List<GCell>, w: Dp, last:
     if (!last) HorizontalDivider(Modifier.padding(horizontal = 10.dp), color = Faint)
 }
 
-/** Title line of a white sheet: a soft red-to-white strip, the title in deep red and a small count on the right. */
+/** Title card above a list of cards: a soft red-to-white strip, the title in deep red and a small count on the right. */
 @Composable
 private fun SheetTitle(title: String, count: String) = Tight {
     Row(
         Modifier.padding(start = 10.dp, end = 10.dp, top = 8.dp).fillMaxWidth()
-            .clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp)).background(MaterialTheme.colorScheme.surface)
+            .clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surface)
             .background(Brush.horizontalGradient(listOf(Ember.copy(alpha = 0.14f), Color.Transparent)))
             .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -534,7 +534,6 @@ private fun SheetTitle(title: String, count: String) = Tight {
         Text(title, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = DeepRed, modifier = Modifier.weight(1f), maxLines = 1)
         Text(count, fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
-    HorizontalDivider(Modifier.padding(horizontal = 10.dp), color = MaterialTheme.colorScheme.outlineVariant)
 }
 
 /** Shape of a row inside a white sheet: the last row rounds the sheet's bottom corners. */
@@ -967,12 +966,12 @@ fun MoneyScreen(
             if (groups.isNotEmpty()) item { SheetTitle(if (income) "Income" else "Expense", "Total " + fmt(total)) }
             groups.forEach { g ->
                 val isOpen = g.name in open
-                val lastGroup = g === groups.last()
                 item(key = "g" + g.name) {
                     val share = if (total > 0) (g.total / total).toFloat() else 0f
-                    // Icon, name with a share bar (expense) or last date and count (income), amount on the right.
+                    // Its own card: icon, name with a share bar (expense) or last date and count (income), amount on the right.
+                    val shape = RoundedCornerShape(14.dp)
                     Row(
-                        Modifier.padding(horizontal = 10.dp).fillMaxWidth().clip(sheetShape(lastGroup && !isOpen))
+                        Modifier.padding(start = 10.dp, end = 10.dp, top = 6.dp).fillMaxWidth().shadow(1.dp, shape).clip(shape)
                             .background(MaterialTheme.colorScheme.surface)
                             .clickable { if (isOpen) open.remove(g.name) else open.add(g.name) }.padding(horizontal = 10.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -997,7 +996,6 @@ fun MoneyScreen(
                                 fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-                    if (!(lastGroup && !isOpen)) HorizontalDivider(Modifier.padding(horizontal = 10.dp), color = Faint)
                 }
                 // A group's own entries open right under it, on the same ledger page.
                 if (isOpen) {
