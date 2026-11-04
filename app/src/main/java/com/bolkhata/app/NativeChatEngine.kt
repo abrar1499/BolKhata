@@ -569,13 +569,13 @@ object NativeChatEngine {
         val w = tokens(text)
         return when {
             has(w, setOf("hi", "hello", "hey", "good", "morning", "evening", "salam", "assalam", "assalamualaikum", "aoa")) ->
-                "Wa alaikum assalam! I'm your offline khata assistant. Add expenses, ask about your money, or manage saved entries."
+                "Wa alaikum assalam! Batayein?"
             has(w, setOf("hal", "haal", "kaise", "kaisa", "kaisi")) || (has(w, setOf("kya", "kia")) && has(w, setOf("hal", "haal"))) ->
-                "Main theek hoon, shukriya! Batayein, aaj kya likhna ya dekhna hai?"
-            has(w, setOf("how", "are", "you")) -> "I'm ready to help with your khata. I work locally on this phone."
+                "Theek hoon, shukriya! Batayein?"
+            has(w, setOf("how", "are", "you")) -> "Theek hoon! Batayein?"
             has(w, setOf("what", "can", "you", "do")) -> "I can record money, search transactions, calculate balances, correct entries, move khatas, read receipts, and remember facts you explicitly save."
-            has(w, setOf("thanks", "thank", "shukriya", "shukria", "jazakallah")) -> "You're welcome. Your khata stays on this device."
-            has(w, setOf("bye", "goodbye", "allahhafiz", "khuda")) -> "Take care. Your saved khata will be here when you return."
+            has(w, setOf("thanks", "thank", "shukriya", "shukria", "jazakallah")) -> "Koi baat nahi!"
+            has(w, setOf("bye", "goodbye", "allahhafiz", "khuda")) -> "Allah Hafiz!"
             has(w, setOf("help", "commands", "examples", "madad")) ->
                 "Try: 'chai 5', 'Ali ko 100 diye', 'food this month kitna', 'last 5 transactions', or 'petrol 50 nahi 40 tha'."
             else -> NOT_UNDERSTOOD
