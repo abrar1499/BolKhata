@@ -36,7 +36,7 @@ object NativeChatEngine {
         "less", "except", "excluding", "siwa", "ilawa", "alawa", "people", "log", "logon", "cash", "out", "into",
         "it", "that", "this", "those", "these", "isko", "usko", "ye", "yeh", "inko",
         "open", "kholo", "khol", "kholen", "kholein", "karein", "karen", "kren", "tum", "aap", "es", "poora", "pura", "poore",
-        "check", "hisab", "hisaab", "cashbook", "book",
+        "check", "hisab", "hisaab", "cashbook", "book", "name", "naam",
         "total", "report", "summary", "overview", "yearly", "annual", "annually", "alltime", "overall", "lifetime", "ever", "time", "day", "days",
         "delete", "delet", "del", "dlt", "remove", "hatao", "hata", "mitao", "clear", "wipe",
         "change", "edit", "update", "badlo", "correct", "fix", "move", "shift", "transfer", "send", "bhejo",

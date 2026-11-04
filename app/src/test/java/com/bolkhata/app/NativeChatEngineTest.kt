@@ -487,6 +487,22 @@ class NativeChatEngineUnsureTest {
     }
 }
 
+class QueryPersonInNoteTest {
+    @Test fun aPersonIsFoundInABankEntrysNote() {
+        val sent = Entry("s1", Type.KHARCHA, 300.0, Cat.GHAR, "Sent home", "", "To Saleem Butt · D360", 1L, 1L)
+        val other = Entry("s2", Type.KHARCHA, 20.0, Cat.KHANA, "Lunch", "", "Lunch", 2L, 2L)
+        val hits = Query.select(listOf(sent, other), Query.Filter(persons = listOf("Saleem Butt")))
+        assertEquals(listOf("s1"), hits.map { it.id })
+    }
+
+    @Test fun theWordNameIsNotSearchedFor() {
+        val r = NativeChatEngine.interpret("saleem butt name se entry dikhao", emptyList(), listOf("Saleem Butt"))
+        assertEquals("ask", r.kind)
+        assertTrue(r.filter.items.isEmpty())
+        assertEquals(listOf("Saleem Butt"), r.filter.persons)
+    }
+}
+
 class NativeChatEngineKhataCommandsTest {
     private val contacts = listOf("Hamid Akram", "Nargis Salim Rashid", "Haji Kamran Saeed", "Kamran Aslam")
     private fun read(text: String) = NativeChatEngine.interpret(text, emptyList(), contacts)
