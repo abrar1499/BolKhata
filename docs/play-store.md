@@ -25,7 +25,7 @@
   Your data stays on your phone. There is no account and no ads.
 
 - **Category:** Finance
-- **Contact email:** your email (it is shown in the store)
+- **Contact email:** abrarlive14@gmail.com
 
 ## App content (Play Console → Policy → App content)
 - **Ads:** No.
