@@ -45,6 +45,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.SpanStyle
@@ -376,8 +377,8 @@ private fun LazyListScope.partiesView(accts: List<PersonAcct>, picked: List<Entr
     val rec = shown.filter { it.balance > 0.005 }.sumOf { it.balance }
     item(key = "ph") {
         LedgerHead("Parties", if (shown.size == 1) "1 · A–Z" else "${shown.size} · A–Z",
-            // A card of its own (fully rounded): every party below is its own raised card with the same columns.
-            listOf(LCol("Payable", fmt(pay), LKind.OUT), LCol("Receivable", fmt(rec), LKind.IN)), true, WideColW)
+            // Only this head is rounded, at the top; every party below is its own raised square card with the same columns.
+            listOf(LCol("Payable", fmt(pay), LKind.OUT), LCol("Receivable", fmt(rec), LKind.IN)), shown.isEmpty(), WideColW)
     }
     items(shown, key = { "p" + it.name.lowercase() }) { p ->
         val bal = p.balance
@@ -466,10 +467,10 @@ private fun LazyListScope.profitView(all: List<Entry>, sales: List<Entry>, month
 /** One grid cell: its text, the column it sits in (for the tint) and its ink. */
 private class GCell(val text: String, val kind: LKind, val ink: Color = AmountInk)
 
-/** A ledger-style line that is not an entry: name and a small line under it, then one cell per column. As a [card] it stands alone, raised and rounded. */
+/** A ledger-style line that is not an entry: name and a small line under it, then one cell per column. As a [card] it stands alone, raised, with square corners. */
 @Composable
 private fun GridRow(title: String, sub: String, cells: List<GCell>, w: Dp, last: Boolean, card: Boolean = false, onClick: () -> Unit) = Tight {
-    val shape = if (card) RoundedCornerShape(12.dp) else sheetShape(last)
+    val shape = if (card) RectangleShape else sheetShape(last)
     Row(
         Modifier.padding(start = 10.dp, end = 10.dp, top = if (card) 6.dp else 0.dp).fillMaxWidth().height(IntrinsicSize.Min).shadow(1.dp, shape).clip(shape)
             .background(MaterialTheme.colorScheme.surface).clickable { onClick() }
