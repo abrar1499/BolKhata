@@ -215,10 +215,17 @@ fun PartyPicker(
     people: List<String>, current: String, title: String,
     confirm: (creating: Boolean) -> String, onPick: (String) -> Unit, onDismiss: () -> Unit,
     /** When given, a "Party | Expense" switch: the entry can go to an expense category instead of a party. */
-    categories: List<Cat> = emptyList(), currentCat: Cat? = null, onCategory: (Cat) -> Unit = {}
+    categories: List<Cat> = emptyList(), currentCat: Cat? = null, onCategory: (Cat) -> Unit = {},
+    /** When given, Business (stock items) and Income (who paid) tabs too, so one picker reaches every khata. */
+    stockNames: List<String> = emptyList(), onStock: (String) -> Unit = {},
+    incomeNames: List<String> = emptyList(), onIncome: (String) -> Unit = {}
 ) {
-    var toCats by remember { mutableStateOf(false) }
+    val tabs = listOfNotNull("Party", "Business".takeIf { stockNames.isNotEmpty() }, "Income".takeIf { incomeNames.isNotEmpty() },
+        "Expense".takeIf { categories.isNotEmpty() })
+    var tab by remember { mutableStateOf("Party") }
+    val toCats = tab == "Expense"
     var pickedCat by remember { mutableStateOf<Cat?>(null) }
+    var pickedName by remember(tab) { mutableStateOf<String?>(null) }
     var searchQuery by remember { mutableStateOf("") }
     var selectedPerson by remember { mutableStateOf<String?>(null) }
     // "+" beside the search box: the box then takes a new khata's name.
@@ -248,21 +255,25 @@ fun PartyPicker(
         },
         text = {
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (categories.isNotEmpty()) Row(
+                if (tabs.size > 1) Row(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant).padding(3.dp)
                 ) {
-                    listOf(false to "Party", true to "Expense").forEach { (cats, label) ->
+                    tabs.forEach { label ->
                         Box(
                             Modifier.weight(1f).clip(RoundedCornerShape(10.dp))
-                                .background(if (toCats == cats) MaterialTheme.colorScheme.surface else Color.Transparent)
-                                .clickable { toCats = cats }.padding(vertical = 7.dp),
+                                .background(if (tab == label) MaterialTheme.colorScheme.surface else Color.Transparent)
+                                .clickable { tab = label }.padding(vertical = 7.dp),
                             contentAlignment = Alignment.Center
-                        ) { Text(label, fontSize = 13.sp, fontWeight = if (toCats == cats) FontWeight.SemiBold else FontWeight.Normal) }
+                        ) { Text(label, fontSize = 12.sp, maxLines = 1, fontWeight = if (tab == label) FontWeight.SemiBold else FontWeight.Normal) }
                     }
                 }
                 if (toCats) LazyColumn(Modifier.fillMaxWidth().heightIn(max = 300.dp)) {
                     items(categories, key = { it.name }) { c ->
                         KhataChoice(c.icon, c.label, c == pickedCat, c == currentCat) { if (c != currentCat) pickedCat = c }
+                    }
+                } else if (tab != "Party") LazyColumn(Modifier.fillMaxWidth().heightIn(max = 300.dp)) {
+                    items(if (tab == "Business") stockNames else incomeNames, key = { it }) { n ->
+                        KhataChoice(n.take(1).uppercase(), n, n == pickedName, false) { pickedName = n }
                     }
                 } else {
                 val taken = creating && exactMatch
@@ -325,9 +336,14 @@ fun PartyPicker(
             }
         },
         confirmButton = {
-            Button(enabled = if (toCats) pickedCat != null else selectedPerson != null, onClick = {
-                if (toCats) onCategory(pickedCat ?: return@Button) else onPick(selectedPerson ?: return@Button)
-            }) { Text(confirm(creating && !toCats)) }
+            Button(enabled = when (tab) { "Expense" -> pickedCat != null; "Party" -> selectedPerson != null; else -> pickedName != null }, onClick = {
+                when (tab) {
+                    "Expense" -> onCategory(pickedCat ?: return@Button)
+                    "Business" -> onStock(pickedName ?: return@Button)
+                    "Income" -> onIncome(pickedName ?: return@Button)
+                    else -> onPick(selectedPerson ?: return@Button)
+                }
+            }) { Text(confirm(creating && tab == "Party")) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
