@@ -937,7 +937,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 "All of $from ($n " + (if (n == 1) "entry" else "entries") + ") → $to"
             }
             "to_khata" -> {
-                // "2000 aur 5000 wali entry Al Falah Contracting me": an income or business khata, not a party.
+                // "2000 aur 5000 wali entry Noor Building Contracting me": an income or business khata, not a party.
                 f.set["kind"]?.let { kind ->
                     val name = f.set["name"].orEmpty()
                     val hits = scoped(Query.select(entries, q))

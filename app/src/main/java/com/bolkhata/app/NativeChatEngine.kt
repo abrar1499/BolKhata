@@ -359,7 +359,7 @@ object NativeChatEngine {
         val parsed = if (split == null) runCatching { Parser.parse(text, now) }.getOrNull() else null
         if (split != null || (parsed != null && (parsed.entries.isNotEmpty() || parsed.unclear.isNotEmpty())))
             return Fixed(text, "entry", "")
-        // Just a name ("kamran saeed", "andleeb"): that khata, or a choice when several share it. Only whole words or
+        // Just a name ("kamran saeed", "nargis"): that khata, or a choice when several share it. Only whole words or
         // clear starts of a saved name count, so small talk never turns into a name.
         if (smallTalk(lower) == NOT_UNDERSTOOD) {
             val said = words.filter { it !in setOf("ka", "ki", "ke", "khata", "account", "kholo", "open", "yar", "yaar", "plz") }
@@ -463,7 +463,7 @@ object NativeChatEngine {
     }
 
     /**
-     * An income source or stock item named by its first words ("Al falah contracting" → Al Falah Contracting Company
+     * An income source or stock item named by its first words ("Noor building contracting" → Noor Building Contracting Company
      * LTD), as ("income" | "business") to its saved name. Null when none or more than one fits equally.
      */
     private fun otherKhata(said: List<String>, entries: List<Entry>): Pair<String, String>? {
