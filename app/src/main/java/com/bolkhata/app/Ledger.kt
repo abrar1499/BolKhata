@@ -50,6 +50,16 @@ val LocalMainOpener = staticCompositionLocalOf<((MainAcct) -> Unit)?> { null }
 /** Long-press on an entry anywhere opens its action menu (Edit / Move). Set by the main screen. */
 val LocalEntryMenu = staticCompositionLocalOf<((Entry) -> Unit)?> { null }
 
+/** Entries picked for a move: long-press → Select starts it, taps add or remove, the bar at the bottom moves them. */
+class Selection {
+    val ids = mutableStateListOf<String>()
+    var active by mutableStateOf(false)
+    fun toggle(id: String) { if (id in ids) ids.remove(id) else ids.add(id) }
+    fun clear() { ids.clear(); active = false }
+}
+
+val LocalSelection = staticCompositionLocalOf<Selection?> { null }
+
 /** Long-press on a khata row opens Rename / Move: kind "party", "expense" (name = category label) or "income" (who paid). */
 val LocalKhataMenu = staticCompositionLocalOf<((kind: String, name: String) -> Unit)?> { null }
 
@@ -151,7 +161,7 @@ fun personAccounts(entries: List<Entry>): List<PersonAcct> =
 
 private val expenseCats = Cat.values().filter { it !in setOf(Cat.TANKHWAH, Cat.UDHAAR, Cat.SALES, Cat.STOCK) }
 
-private fun isOutflow(e: Entry) = when (e.type) {
+internal fun isOutflow(e: Entry) = when (e.type) {
     Type.KHARCHA, Type.DIYA, Type.WAPIS_DIYA, Type.PURCHASE, Type.TRANSFER_OUT -> true
     else -> false
 }
@@ -184,6 +194,22 @@ private fun cleanMoveKhataName(value: String): String {
         name = name.substringAfterLast("/")
     }
     return name.trim().trim('.', '-', '/', ' ')
+}
+
+/** Every khata to move into, by kind: "party", "business" (stock item), "income" (who paid), "expense" (category label). */
+@Composable
+fun MoveToKhata(title: String, all: List<Entry>, except: String, onMove: (kind: String, name: String) -> Unit, onDismiss: () -> Unit) {
+    val people = remember(all) { partyNames(all) }
+    val stockNames = remember(all) { stock(all).map { it.name.trim() }.filter { it.isNotBlank() }.distinctBy { it.lowercase() } }
+    val incomeNames = remember(all) { all.filter { it.type == Type.AAMDANI }.map { source(it).trim() }.filter { it.isNotBlank() }.distinctBy { it.lowercase() } }
+    PartyPicker(
+        people.filterNot { it.equals(except, true) }, "", title,
+        confirm = { creating -> if (creating) "Create & move" else "Move" },
+        onPick = { onMove("party", it) }, onDismiss = onDismiss,
+        categories = expenseCats, onCategory = { onMove("expense", it.label) },
+        stockNames = stockNames.filterNot { it.equals(except, true) }, onStock = { onMove("business", it) },
+        incomeNames = incomeNames.filterNot { it.equals(except, true) }, onIncome = { onMove("income", it) }
+    )
 }
 
 /** Move entry: pick the party (khata) the entry goes to. */

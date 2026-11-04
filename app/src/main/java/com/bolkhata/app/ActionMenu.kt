@@ -6,6 +6,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DriveFileRenameOutline
 import androidx.compose.material.icons.filled.Edit
@@ -70,9 +71,9 @@ fun ActionMenu(
                     }
                 }
                 Spacer(Modifier.height(10.dp))
-                Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 10.dp) {
+                Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 2.dp) {
                     Row(Modifier.fillMaxWidth().padding(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        actions.forEachIndexed { i, a -> ActionPill(a, main = i == 0, Modifier.weight(1f)) }
+                        actions.forEachIndexed { i, a -> ActionPill(a, main = i == 0, Modifier.weight(1f), stacked = actions.size > 3) }
                     }
                 }
             }
@@ -81,13 +82,26 @@ fun ActionMenu(
 }
 
 @Composable
-private fun ActionPill(a: MenuAction, main: Boolean, modifier: Modifier) {
+private fun ActionPill(a: MenuAction, main: Boolean, modifier: Modifier, stacked: Boolean = false) {
     val tint = when {
         main -> GreenDeep
         a.danger -> RedSpend
         else -> MoveBlue
     }
     val content = if (main) Color.White else tint
+    // Many actions: icon over a small label, so all of them fit in one row.
+    if (stacked) {
+        Column(
+            modifier.clip(RoundedCornerShape(14.dp)).background(if (main) tint else tint.copy(alpha = 0.12f))
+                .clickable(onClick = a.onClick).padding(vertical = 9.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(a.icon, contentDescription = null, tint = content, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.height(3.dp))
+            Text(a.label, color = content, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, maxLines = 1)
+        }
+        return
+    }
     Row(
         modifier
             .clip(RoundedCornerShape(14.dp))
@@ -105,7 +119,7 @@ private fun ActionPill(a: MenuAction, main: Boolean, modifier: Modifier) {
 
 /** Long-press menu of one entry: Edit, Move, Delete. */
 @Composable
-fun EntryMenu(e: Entry, currency: String, onEdit: () -> Unit, onRename: () -> Unit, onMove: () -> Unit, onDelete: () -> Unit, onDismiss: () -> Unit) {
+fun EntryMenu(e: Entry, currency: String, onEdit: () -> Unit, onRename: () -> Unit, onMove: () -> Unit, onSelect: () -> Unit, onDelete: () -> Unit, onDismiss: () -> Unit) {
     val out = isOutflowType(e.type)
     ActionMenu(
         title = entryTitle(e),
@@ -117,6 +131,7 @@ fun EntryMenu(e: Entry, currency: String, onEdit: () -> Unit, onRename: () -> Un
             MenuAction("Edit", Icons.Filled.Edit, onClick = onEdit),
             MenuAction("Rename", Icons.Filled.DriveFileRenameOutline, onClick = onRename),
             MenuAction("Move", Icons.Filled.SwapHoriz, onClick = onMove),
+            MenuAction("Select", Icons.Filled.CheckCircle, onClick = onSelect),
             MenuAction("Delete", Icons.Filled.Delete, danger = true, onClick = onDelete)
         ),
         onDismiss = onDismiss
