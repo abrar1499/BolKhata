@@ -29,6 +29,24 @@ class NativeChatEngineTest {
     private fun read(text: String, history: List<ChatMessage> = emptyList()) =
         NativeChatEngine.interpret(text, entries, now = now, history = history)
 
+    @Test fun fromADateTillTodayIsOneRange() {
+        val r = read("19 aug se aj tak expense batao")
+        assertEquals("ask", r.kind)
+        assertEquals(setOf(Type.KHARCHA), r.filter.types)
+        assertEquals(Query.day("2026-08-19"), r.filter.from)
+        assertTrue(r.filter.to!! >= now)
+        assertTrue(r.filter.items.isEmpty())
+    }
+
+    @Test fun searchingAnAmountListsThoseEntriesAndNeverEdits() {
+        val r = read("2800 wal entry search karo")
+        assertEquals("ask", r.kind)
+        assertEquals("list", r.what)
+        assertEquals(2800.0, r.filter.min!!, 0.001)
+        assertEquals(2800.0, r.filter.max!!, 0.001)
+        assertTrue(r.filter.items.isEmpty())
+    }
+
     @Test fun aShortFollowUpNarrowsTheLastSearchEvenManyTurnsLater() {
         val talk = listOf(
             ChatMessage("u1", true, "how much did I spend on food this month?"), ChatMessage("a1", false, "Spent 40 SAR"),
