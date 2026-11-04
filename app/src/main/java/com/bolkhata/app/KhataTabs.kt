@@ -472,7 +472,7 @@ private class GCell(val text: String, val kind: LKind, val ink: Color = AmountIn
 private fun GridRow(title: String, sub: String, cells: List<GCell>, w: Dp, last: Boolean, card: Boolean = false, onClick: () -> Unit) = Tight {
     val shape = if (card) RectangleShape else sheetShape(last)
     Row(
-        Modifier.padding(start = 10.dp, end = 10.dp, top = if (card) 6.dp else 0.dp).fillMaxWidth().height(IntrinsicSize.Min).shadow(1.dp, shape).clip(shape)
+        Modifier.padding(start = 10.dp, end = 10.dp, top = if (card) 2.dp else 0.dp).fillMaxWidth().height(IntrinsicSize.Min).shadow(1.dp, shape).clip(shape)
             .background(MaterialTheme.colorScheme.surface).clickable { onClick() }
     ) {
         Column(Modifier.weight(1f).padding(start = 10.dp, end = 4.dp, top = 5.dp, bottom = 5.dp), verticalArrangement = Arrangement.Center) {
