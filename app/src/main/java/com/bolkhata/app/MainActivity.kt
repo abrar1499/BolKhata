@@ -2375,7 +2375,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 )
             }
             khataRename?.let { (kind, n) ->
-                RenameDialog("Rename khata", n, onRename = { newName ->
+                RenameDialog("Rename khata", n, khataEntries(kind, n).size.let { if (it == 1) "1 entry" else "$it entries" }, onRename = { newName ->
                     khataRename = null
                     if (kind == "party") renameOrMergeKhata(n, newName, merge = false) else moveKhata(kind, n, kind, newName)
                 }, onDismiss = { khataRename = null })
@@ -2389,11 +2389,11 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 }, onDismiss = { renamingEntry = null })
             }
             khataMove?.let { (kind, n) ->
-                MoveToKhata("Move all of $n to", entries, n,
+                MoveToKhata(khataEntries(kind, n).size.let { if (it == 1) "1 entry" else "$it entries" } + " · all of $n", entries, n,
                     onMove = { toKind, to -> khataMove = null; moveKhata(kind, n, toKind, to) }, onDismiss = { khataMove = null })
             }
             if (movingPicked) MoveToKhata(
-                "Move ${selection.ids.size} entries to", entries, "",
+                "${selection.ids.size} selected " + (if (selection.ids.size == 1) "entry" else "entries"), entries, "",
                 onMove = { toKind, to -> movingPicked = false; moveEntries(selection.ids.toSet(), toKind, to); selection.clear() },
                 onDismiss = { movingPicked = false }
             )
@@ -2420,7 +2420,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 )
             }
             moving?.let { e ->
-                MoveToKhata("Move entry to", entries, "",
+                MoveToKhata("1 entry · " + entryTitle(e), entries, "",
                     onMove = { toKind, to -> moving = null; moveEntries(setOf(e.id), toKind, to) }, onDismiss = { moving = null })
             }
             confirmNew?.let { (list, said) ->

@@ -140,7 +140,7 @@ fun EntryMenu(e: Entry, currency: String, onEdit: () -> Unit, onRename: () -> Un
 
 /** A small rename card: the old name, one field with the new name, Cancel and Rename side by side. */
 @Composable
-fun RenameDialog(title: String, old: String, onRename: (String) -> Unit, onDismiss: () -> Unit) {
+fun RenameDialog(title: String, old: String, info: String = "", onRename: (String) -> Unit, onDismiss: () -> Unit) {
     var name by remember(old) { mutableStateOf(old) }
     val ok = name.isNotBlank() && !name.trim().equals(old.trim(), true)
     val shape = RoundedCornerShape(12.dp)
@@ -149,7 +149,7 @@ fun RenameDialog(title: String, old: String, onRename: (String) -> Unit, onDismi
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Column {
                     Text(title, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                    Text(old, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(listOf(old, info).filter { it.isNotBlank() }.joinToString(" · "), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 BasicTextField(
                     name, { name = it }, singleLine = true,
