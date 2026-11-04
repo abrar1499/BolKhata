@@ -469,7 +469,7 @@ private class GCell(val text: String, val kind: LKind, val ink: Color = AmountIn
 @Composable
 private fun GridRow(title: String, sub: String, cells: List<GCell>, w: Dp, last: Boolean, onClick: () -> Unit) = Tight {
     Row(
-        Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(IntrinsicSize.Min).clip(sheetShape(last))
+        Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(IntrinsicSize.Min).shadow(1.dp, sheetShape(last)).clip(sheetShape(last))
             .background(MaterialTheme.colorScheme.surface).clickable { onClick() }
     ) {
         Column(Modifier.weight(1f).padding(start = 10.dp, end = 4.dp, top = 5.dp, bottom = 5.dp), verticalArrangement = Arrangement.Center) {
@@ -501,7 +501,7 @@ private fun SheetTitle(title: String, count: String) = Tight {
     }
 }
 
-/** Shape of a row inside a white sheet: the last row rounds the sheet's bottom corners. */
+/** Shape of a row inside a white sheet (each row casts a soft shadow so the sheet looks raised): the last row rounds the bottom corners. */
 private fun sheetShape(last: Boolean) = if (last) RoundedCornerShape(bottomStart = 14.dp, bottomEnd = 14.dp) else RoundedCornerShape(0.dp)
 
 // ---------------------------------------------------------------- Cash book and party khata
@@ -587,7 +587,7 @@ private fun LedgerHead(title: String, count: String, cols: List<LCol>, empty: Bo
     val sub = MaterialTheme.colorScheme.onSurfaceVariant
     Row(
         Modifier.padding(start = 10.dp, end = 10.dp, top = 8.dp).fillMaxWidth().height(IntrinsicSize.Min)
-            .clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp, bottomStart = if (empty) 14.dp else 0.dp, bottomEnd = if (empty) 14.dp else 0.dp))
+            .then(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp, bottomStart = if (empty) 14.dp else 0.dp, bottomEnd = if (empty) 14.dp else 0.dp).let { Modifier.shadow(1.dp, it).clip(it) })
             .background(MaterialTheme.colorScheme.surface)
     ) {
         Column(Modifier.weight(1f).padding(start = 10.dp, top = 7.dp, bottom = 7.dp), verticalArrangement = Arrangement.Center) {
@@ -616,7 +616,7 @@ private fun DayLine(date: Long, cols: List<LCol>, day: List<LRow>) = Tight {
     val totals = cols.indices.map { k -> day.sumOf { it.amounts.getOrElse(k) { 0.0 } } }
     Row(
         Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(IntrinsicSize.Min)
-            .background(MaterialTheme.colorScheme.surface).background(DayTint)
+            .shadow(1.dp).background(MaterialTheme.colorScheme.surface).background(DayTint)
     ) {
         Text(dayLineFmt.format(Date(date)), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(1f).padding(start = 10.dp, top = 5.dp, bottom = 4.dp))
@@ -635,7 +635,7 @@ private fun LedgerRow(r: LRow, cols: List<LCol>, last: Boolean) = Tight {
     val sub = MaterialTheme.colorScheme.onSurfaceVariant
     val w = colW(cols)
     Row(
-        Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(IntrinsicSize.Min).clip(sheetShape(last))
+        Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(IntrinsicSize.Min).shadow(1.dp, sheetShape(last)).clip(sheetShape(last))
             .background(MaterialTheme.colorScheme.surface).clickable { r.onClick() }
     ) {
         Column(Modifier.weight(1f).padding(start = 10.dp, end = 4.dp, top = 5.dp, bottom = 5.dp), verticalArrangement = Arrangement.Center) {
@@ -927,8 +927,8 @@ fun MoneyScreen(
                     // Its own card: icon, name with a share bar (expense) or last date and count (income), amount on the right.
                     val shape = RoundedCornerShape(12.dp)
                     Row(
-                        Modifier.padding(start = 12.dp, end = 12.dp, top = 6.dp).fillMaxWidth().clip(shape)
-                            .background(MaterialTheme.colorScheme.surface).border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape)
+                        Modifier.padding(start = 12.dp, end = 12.dp, top = 6.dp).fillMaxWidth().shadow(1.dp, shape).clip(shape)
+                            .background(MaterialTheme.colorScheme.surface)
                             .clickable { if (isOpen) open.remove(g.name) else open.add(g.name) }.padding(horizontal = 10.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
