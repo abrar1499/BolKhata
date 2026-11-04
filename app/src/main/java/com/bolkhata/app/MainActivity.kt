@@ -161,6 +161,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var khataFor by remember { mutableStateOf<Pair<String, String>?>(null) }
     var khataRename by remember { mutableStateOf<Pair<String, String>?>(null) }
     var khataMove by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var renamingEntry by remember { mutableStateOf<Entry?>(null) }
     var ledgerPerson by remember { mutableStateOf<String?>(null) }
     var activeLedgerPerson by remember { mutableStateOf<String?>(null) }
     /** The party khata open from the Parties tab. */
@@ -2342,19 +2343,18 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 )
             }
             khataRename?.let { (kind, n) ->
-                var newName by remember(n) { mutableStateOf(n) }
-                AlertDialog(
-                    onDismissRequest = { khataRename = null },
-                    title = { Text("Rename khata") },
-                    text = { OutlinedTextField(newName, { newName = it }, singleLine = true, label = { Text("New name") }) },
-                    confirmButton = {
-                        Button(enabled = newName.isNotBlank() && !newName.trim().equals(n, true), onClick = {
-                            khataRename = null
-                            if (kind == "party") renameOrMergeKhata(n, newName, merge = false) else moveKhata(kind, n, newName)
-                        }) { Text("Rename") }
-                    },
-                    dismissButton = { TextButton(onClick = { khataRename = null }) { Text("Cancel") } }
-                )
+                RenameDialog("Rename khata", n, onRename = { newName ->
+                    khataRename = null
+                    if (kind == "party") renameOrMergeKhata(n, newName, merge = false) else moveKhata(kind, n, newName)
+                }, onDismiss = { khataRename = null })
+            }
+            renamingEntry?.let { e ->
+                RenameDialog("Rename entry", entryTitle(e), onRename = { newName ->
+                    renamingEntry = null
+                    // The entry's own name (its item); the note follows when it only repeated the old name.
+                    save(entries.map { if (it.id == e.id) it.copy(item = newName, note = if (it.note.isBlank() || it.note == it.item) newName else it.note) else it })
+                    toast("Renamed to $newName")
+                }, onDismiss = { renamingEntry = null })
             }
             khataMove?.let { (kind, n) ->
                 val names = when (kind) {
@@ -2372,6 +2372,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 EntryMenu(
                     e, currency,
                     onEdit = { menuFor = null; editing = e },
+                    onRename = { menuFor = null; renamingEntry = e },
                     onMove = { menuFor = null; moving = e },
                     onDelete = { menuFor = null; confirm = "Move \"${entryTitle(e)}\" (${money(currency, e.amount)}) to Trash?" to setOf(e.id) },
                     onDismiss = { menuFor = null }

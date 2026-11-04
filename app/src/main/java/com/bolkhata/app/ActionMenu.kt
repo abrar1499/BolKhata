@@ -12,8 +12,13 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MergeType
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.runtime.*
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -100,7 +105,7 @@ private fun ActionPill(a: MenuAction, main: Boolean, modifier: Modifier) {
 
 /** Long-press menu of one entry: Edit, Move, Delete. */
 @Composable
-fun EntryMenu(e: Entry, currency: String, onEdit: () -> Unit, onMove: () -> Unit, onDelete: () -> Unit, onDismiss: () -> Unit) {
+fun EntryMenu(e: Entry, currency: String, onEdit: () -> Unit, onRename: () -> Unit, onMove: () -> Unit, onDelete: () -> Unit, onDismiss: () -> Unit) {
     val out = isOutflowType(e.type)
     ActionMenu(
         title = entryTitle(e),
@@ -110,11 +115,44 @@ fun EntryMenu(e: Entry, currency: String, onEdit: () -> Unit, onMove: () -> Unit
         badge = { CatBubble(e.category) },
         actions = listOf(
             MenuAction("Edit", Icons.Filled.Edit, onClick = onEdit),
+            MenuAction("Rename", Icons.Filled.DriveFileRenameOutline, onClick = onRename),
             MenuAction("Move", Icons.Filled.SwapHoriz, onClick = onMove),
             MenuAction("Delete", Icons.Filled.Delete, danger = true, onClick = onDelete)
         ),
         onDismiss = onDismiss
     )
+}
+
+/** A small rename card: the old name, one field with the new name, Cancel and Rename side by side. */
+@Composable
+fun RenameDialog(title: String, old: String, onRename: (String) -> Unit, onDismiss: () -> Unit) {
+    var name by remember(old) { mutableStateOf(old) }
+    val ok = name.isNotBlank() && !name.trim().equals(old.trim(), true)
+    val shape = RoundedCornerShape(12.dp)
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(Modifier.fillMaxWidth(0.82f), shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surface) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column {
+                    Text(title, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    Text(old, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                BasicTextField(
+                    name, { name = it }, singleLine = true,
+                    textStyle = TextStyle(fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface),
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.onSurface),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { if (ok) onRename(name.trim()) }),
+                    modifier = Modifier.fillMaxWidth().height(42.dp).clip(shape).background(MaterialTheme.colorScheme.background)
+                        .padding(horizontal = 12.dp).wrapContentHeight(Alignment.CenterVertically)
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = onDismiss, shape = shape, modifier = Modifier.weight(1f).height(40.dp)) { Text("Cancel") }
+                    Button(onClick = { onRename(name.trim()) }, enabled = ok, shape = shape, modifier = Modifier.weight(1f).height(40.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = RedSpend)) { Text("Rename", fontWeight = FontWeight.Bold) }
+                }
+            }
+        }
+    }
 }
 
 /** Long-press menu of a khata on the Business / Expense / Income lists: Rename (not for expense categories) and Move. */
