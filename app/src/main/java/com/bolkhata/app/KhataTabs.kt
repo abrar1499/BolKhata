@@ -181,7 +181,7 @@ internal fun BusinessPill(name: String, onMenu: () -> Unit, onBusiness: () -> Un
             Icon(Icons.Filled.Menu, contentDescription = "Menu", tint = Ember, modifier = Modifier.size(17.dp))
         }
         Row(Modifier.clickable { onBusiness() }.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(name, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1C1917), maxLines = 1, overflow = TextOverflow.Ellipsis,
+            Text(name, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1C1917), maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.widthIn(max = 170.dp))
             Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Switch business", tint = Ember, modifier = Modifier.padding(start = 3.dp).size(16.dp))
         }
@@ -225,10 +225,10 @@ private fun SearchBox(q: String, hint: String, onChange: (String) -> Unit) {
         Icon(Icons.Filled.Search, contentDescription = null, tint = sub, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(8.dp))
         Box(Modifier.weight(1f)) {
-            if (q.isEmpty()) Text(hint, color = sub, fontSize = 12.sp)
+            if (q.isEmpty()) Text(hint, color = sub, fontSize = 13.sp)
             BasicTextField(
                 q, onChange, singleLine = true, modifier = Modifier.fillMaxWidth(),
-                textStyle = TextStyle(fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface),
+                textStyle = TextStyle(fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface),
                 cursorBrush = SolidColor(Ember)
             )
         }
@@ -247,10 +247,10 @@ private fun Initial(name: String) {
 @Composable
 private fun SmallChip(label: String, on: Boolean, onClick: () -> Unit) {
     Text(
-        label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = if (on) Color.White else MaterialTheme.colorScheme.onSurface,
+        label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (on) Color.White else MaterialTheme.colorScheme.onSurface,
         modifier = Modifier.clip(CircleShape).background(if (on) Ember else MaterialTheme.colorScheme.surface)
             .border(1.dp, if (on) Ember else MaterialTheme.colorScheme.outlineVariant, CircleShape)
-            .clickable { onClick() }.padding(horizontal = 11.dp, vertical = 4.dp)
+            .clickable { onClick() }.padding(horizontal = 12.dp, vertical = 4.dp)
     )
 }
 
@@ -343,7 +343,7 @@ fun PartiesScreen(
                 SearchBox(q, when (view) { 0 -> "Search parties"; 1 -> "Search items"; 2 -> "Search sales"; 3 -> "Search purchases"; else -> "Search months" }) { q = it }
             }
             item {
-                LazyRow(contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                LazyRow(contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     itemsIndexed(BusinessViews) { i, t -> SmallChip(t, view == i) { view = i; month = firstMonth(i, newest); q = "" } }
                 }
             }
@@ -395,24 +395,24 @@ private fun PartyCard(p: PersonAcct, onClick: () -> Unit) = Tight {
     val bal = p.balance
     val shape = RoundedCornerShape(14.dp)
     Row(
-        Modifier.padding(start = 10.dp, end = 10.dp, top = 6.dp).fillMaxWidth().shadow(1.dp, shape).clip(shape)
-            .background(MaterialTheme.colorScheme.surface).clickable { onClick() }.padding(start = 10.dp, top = 8.dp, bottom = 8.dp),
+        Modifier.padding(start = 10.dp, end = 10.dp, top = 8.dp).fillMaxWidth().shadow(1.dp, shape).clip(shape)
+            .background(MaterialTheme.colorScheme.surface).clickable { onClick() }.padding(start = 10.dp, top = 9.dp, bottom = 9.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(Modifier.size(28.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
             Text(p.name.trim().take(1).uppercase(), color = RedSpend, fontSize = 12.sp, fontWeight = FontWeight.Bold)
         }
         Column(Modifier.weight(1f).padding(start = 10.dp, end = 4.dp)) {
-            Text(p.name, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(p.name, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             p.history.lastOrNull()?.let {
-                Text("Last " + lastSeen(it.first.date), fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                Text("Last " + lastSeen(it.first.date), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
             }
         }
         Box(Modifier.width(WideColW), contentAlignment = Alignment.Center) {
-            if (bal < -0.005) Text(fmt(-bal), fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = RedSpend, maxLines = 1, softWrap = false)
+            if (bal < -0.005) Text(fmt(-bal), fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = RedSpend, maxLines = 1, softWrap = false)
         }
         Box(Modifier.width(WideColW), contentAlignment = Alignment.Center) {
-            if (bal > 0.005) Text(fmt(bal), fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = GreenIn, maxLines = 1, softWrap = false)
+            if (bal > 0.005) Text(fmt(bal), fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = GreenIn, maxLines = 1, softWrap = false)
         }
         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
     }
@@ -558,19 +558,10 @@ private fun monthLabel(months: List<Pair<Int, Long>>, month: Int) =
 private fun MonthChips(months: List<Pair<Int, Long>>, current: Int, onPick: (Int) -> Unit) {
     LazyRow(
         Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         item(key = ALL_MONTHS) { SmallChip("All", current == ALL_MONTHS) { onPick(ALL_MONTHS) } }
-        items(months, key = { it.first }) { (k, ms) ->
-            val on = k == current
-            Text(
-                monthFmt.format(Date(ms)), fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
-                color = if (on) Color.White else MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.clip(CircleShape).background(if (on) Ember else MaterialTheme.colorScheme.surface)
-                    .border(1.dp, if (on) Ember else MaterialTheme.colorScheme.outlineVariant, CircleShape)
-                    .clickable { onPick(k) }.padding(horizontal = 11.dp, vertical = 4.dp)
-            )
-        }
+        items(months, key = { it.first }) { (k, ms) -> SmallChip(monthFmt.format(Date(ms)), k == current) { onPick(k) } }
     }
 }
 
@@ -632,8 +623,8 @@ private fun LedgerHead(title: String, count: String, cols: List<LCol>, empty: Bo
             .background(MaterialTheme.colorScheme.surface)
     ) {
         Column(Modifier.weight(1f).padding(start = 10.dp, top = 7.dp, bottom = 7.dp), verticalArrangement = Arrangement.Center) {
-            Text(title, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
-            Text(count, fontSize = 9.sp, color = sub)
+            Text(title, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+            Text(count, fontSize = 10.sp, color = sub)
         }
         cols.forEach { c ->
             VerticalDivider(Modifier.fillMaxHeight(), color = Faint)
@@ -643,7 +634,7 @@ private fun LedgerHead(title: String, count: String, cols: List<LCol>, empty: Bo
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
             ) {
                 Text(c.label.uppercase(), fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.4.sp, maxLines = 1, color = kindColor(c.kind))
-                Text(c.total, fontSize = 10.sp, fontWeight = FontWeight.Black, maxLines = 1, softWrap = false, color = kindColor(c.kind))
+                Text(c.total, fontSize = 11.sp, fontWeight = FontWeight.Black, maxLines = 1, softWrap = false, color = kindColor(c.kind))
             }
         }
     }
