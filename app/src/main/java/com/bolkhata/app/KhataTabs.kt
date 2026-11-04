@@ -597,10 +597,10 @@ internal fun LazyListScope.ledger(
 ) {
     item(key = keyPrefix + "lh") { LedgerHead(title, entryCount(rows.size), cols, rows.isEmpty(), ids = rows.mapNotNull { it.entry?.id }, onHold = onHold) }
     // Each day's rows, found in one pass (filtering the whole list for every day made long lists slow).
-    val byDay = rows.groupBy { dayKey(it.date) }
+    val byDay = rows.groupBy { dayNumber(it.date) }
     rows.forEachIndexed { i, r ->
         if (i == 0 || !sameDay(rows[i - 1].date, r.date)) {
-            val day = byDay[dayKey(r.date)].orEmpty()
+            val day = byDay[dayNumber(r.date)].orEmpty()
             item(key = keyPrefix + "d" + r.key) { DayLine(r.date, cols, day, cards) }
         }
         // As cards, each day is one card: its day line and entries, the last entry closing it.

@@ -235,12 +235,12 @@ fun plain(n: Double): String = if (n == Math.floor(n)) n.roundToLong().toString(
 fun cal(ms: Long): Calendar = Calendar.getInstance().apply { timeInMillis = ms }
 
 /** The local calendar day of [ms] as one number: cheap enough to call for every row of a long list. */
-fun dayKey(ms: Long): Long {
+fun dayNumber(ms: Long): Long {
     val zone = java.util.TimeZone.getDefault()
     return Math.floorDiv(ms + zone.getOffset(ms), 86_400_000L)
 }
 
-fun sameDay(a: Long, b: Long): Boolean = dayKey(a) == dayKey(b)
+fun sameDay(a: Long, b: Long): Boolean = dayNumber(a) == dayNumber(b)
 
 fun dayLabel(d: Long): String {
     val now = System.currentTimeMillis()
