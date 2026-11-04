@@ -37,7 +37,7 @@ object NativeChatEngine {
         "it", "that", "this", "those", "these", "isko", "usko", "ye", "yeh", "inko",
         "open", "kholo", "khol", "kholen", "kholein", "karein", "karen", "kren", "tum", "aap", "es", "poora", "pura", "poore",
         "check", "hisab", "hisaab", "cashbook", "book", "name", "naam",
-        "jitni", "jitne", "jitny", "jitna", "bhi", "b", "hui", "hoi", "hoti", "hote", "huin", "hoin", "bheje", "bhejy", "bhejay", "bhejey",
+        "jitni", "jitne", "jitny", "jitna", "bhi", "b", "hui", "hoi", "hoti", "hote", "huin", "hoin", "bheje", "bhejy", "bhejay", "bhejey", "bheja", "bheji", "bhijwaye", "bhijwaya",
         "total", "report", "summary", "overview", "yearly", "annual", "annually", "alltime", "overall", "lifetime", "ever", "time", "day", "days",
         "delete", "delet", "del", "dlt", "remove", "hatao", "hata", "mitao", "clear", "wipe",
         "change", "edit", "update", "badlo", "correct", "fix", "move", "shift", "transfer", "send", "bhejo",
