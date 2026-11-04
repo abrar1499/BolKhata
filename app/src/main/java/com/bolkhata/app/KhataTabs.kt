@@ -255,10 +255,7 @@ private fun SmallChip(label: String, on: Boolean, onClick: () -> Unit) {
 }
 
 
-private fun lastSeen(ms: Long): String {
-    val day = if (sameDay(ms, System.currentTimeMillis())) "Today" else SimpleDateFormat("d MMM", Locale.US).format(Date(ms))
-    return day + " · " + SimpleDateFormat("h:mm a", Locale.US).format(Date(ms))
-}
+private fun lastSeen(ms: Long) = if (sameDay(ms, System.currentTimeMillis())) "Today" else shortDay.format(Date(ms))
 
 // ---------------------------------------------------------------- Business: Parties, Stock, Sale, Purchase, Profit
 
@@ -381,40 +378,46 @@ private fun LazyListScope.partiesView(accts: List<PersonAcct>, picked: List<Entr
     val pay = shown.filter { it.balance < -0.005 }.sumOf { -it.balance }
     val rec = shown.filter { it.balance > 0.005 }.sumOf { it.balance }
     item(key = "ph") {
-        LedgerHead("Parties", if (shown.size == 1) "1 · A–Z" else "${shown.size} · A–Z",
-            // A card of its own: every party below is a separate card.
-            listOf(LCol("Payable", fmt(pay), LKind.OUT), LCol("Receivable", fmt(rec), LKind.IN)), true, WideColW)
+        PartyLine(null, "Parties", if (shown.size == 1) "1 · A–Z" else "${shown.size} · A–Z", fmt(pay), fmt(rec), head = true) {}
     }
-    items(shown, key = { "p" + it.name.lowercase() }) { p -> PartyCard(p) { onOpen(p) } }
+    items(shown, key = { "p" + it.name.lowercase() }) { p ->
+        val bal = p.balance
+        PartyLine(
+            p.name.trim().take(1).uppercase(), p.name, p.history.lastOrNull()?.let { "Last " + lastSeen(it.first.date) } ?: "",
+            if (bal < -0.005) fmt(-bal) else "", if (bal > 0.005) fmt(bal) else ""
+        ) { onOpen(p) }
+    }
     if (shown.isEmpty()) emptyNote("No parties yet. Say \"Hamid ko 500 diye\" in the chat.")
 }
 
-/** One party as its own white card: initial, name, last date, the balance under Payable or Receivable, and a chevron. */
+/**
+ * One white card on the Parties page: initial, name and a small line, then the Payable (red) and Receivable (green)
+ * columns and a chevron. The [head] card has no initial, puts the column names over the totals and keeps the chevron's room,
+ * so its columns sit right above the parties' amounts.
+ */
 @Composable
-private fun PartyCard(p: PersonAcct, onClick: () -> Unit) = Tight {
-    val bal = p.balance
+private fun PartyLine(initial: String?, title: String, sub: String, payable: String, receivable: String, head: Boolean = false, onClick: () -> Unit) = Tight {
     val shape = RoundedCornerShape(14.dp)
     Row(
         Modifier.padding(start = 10.dp, end = 10.dp, top = 8.dp).fillMaxWidth().shadow(1.dp, shape).clip(shape)
-            .background(MaterialTheme.colorScheme.surface).clickable { onClick() }.padding(start = 10.dp, top = 9.dp, bottom = 9.dp),
+            .background(MaterialTheme.colorScheme.surface).clickable(enabled = !head) { onClick() }.padding(start = 12.dp, end = 6.dp, top = 9.dp, bottom = 9.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(Modifier.size(28.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
-            Text(p.name.trim().take(1).uppercase(), color = RedSpend, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        if (initial != null) Box(Modifier.padding(end = 10.dp).size(28.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
+            Text(initial, color = RedSpend, fontSize = 12.sp, fontWeight = FontWeight.Bold)
         }
-        Column(Modifier.weight(1f).padding(start = 10.dp, end = 4.dp)) {
-            Text(p.name, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            p.history.lastOrNull()?.let {
-                Text("Last " + lastSeen(it.first.date), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+        Column(Modifier.weight(1f).padding(end = 4.dp)) {
+            Text(title, fontSize = 13.sp, fontWeight = if (head) FontWeight.ExtraBold else FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (sub.isNotBlank()) Text(sub, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+        }
+        listOf(Triple("PAYABLE", payable, RedSpend), Triple("RECEIVABLE", receivable, GreenIn)).forEach { (label, v, ink) ->
+            Column(Modifier.width(WideColW), horizontalAlignment = Alignment.CenterHorizontally) {
+                if (head) Text(label, fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.4.sp, color = ink, maxLines = 1)
+                if (v.isNotEmpty()) Text(v, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = ink, maxLines = 1, softWrap = false)
             }
         }
-        Box(Modifier.width(WideColW), contentAlignment = Alignment.Center) {
-            if (bal < -0.005) Text(fmt(-bal), fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = RedSpend, maxLines = 1, softWrap = false)
-        }
-        Box(Modifier.width(WideColW), contentAlignment = Alignment.Center) {
-            if (bal > 0.005) Text(fmt(bal), fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = GreenIn, maxLines = 1, softWrap = false)
-        }
-        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+        if (head) Spacer(Modifier.width(18.dp))
+        else Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
     }
 }
 
