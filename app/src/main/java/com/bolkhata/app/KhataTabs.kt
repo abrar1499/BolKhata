@@ -555,7 +555,21 @@ internal enum class LKind { OUT, IN, PLAIN }
 internal class LCol(val label: String, val total: String, val kind: LKind)
 
 /** One line: title, time and note, and one amount per column (0 = empty cell). */
-internal class LRow(val key: String, val date: Long, val title: String, val note: String, val amounts: List<Double>, val entry: Entry? = null, val onClick: () -> Unit)
+internal class LRow(
+    val key: String, val date: Long, val title: String, val note: String, val amounts: List<Double>, val entry: Entry? = null,
+    /** The khata the entry sits in, shown small beside the time (Cash book only). */
+    val khata: String = "", val onClick: () -> Unit
+)
+
+/** The khata an entry sits in: its party, expense category, "Income", sale / purchase, or a transfer. */
+internal fun khataOf(e: Entry): String = when {
+    e.person.isNotBlank() -> e.person
+    e.type == Type.KHARCHA -> e.category.label
+    e.type == Type.AAMDANI -> "Income"
+    e.type == Type.SALE -> "Sale"
+    e.type == Type.PURCHASE -> "Purchase"
+    else -> "Transfer"
+}
 
 private val clockFmt = SimpleDateFormat("h:mma", Locale.US)
 private val dayLineFmt = SimpleDateFormat("EEE, d MMM", Locale.US)
@@ -681,7 +695,10 @@ private fun LedgerRow(r: LRow, cols: List<LCol>, last: Boolean, card: Boolean = 
             Text(r.title, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
                 buildAnnotatedString {
-                    withStyle(SpanStyle(fontSize = 8.sp)) { append(clockFmt.format(Date(r.date)).lowercase()) }
+                    withStyle(SpanStyle(fontSize = 8.sp)) {
+                        append(clockFmt.format(Date(r.date)).lowercase())
+                        if (r.khata.isNotBlank()) append(" · " + r.khata)
+                    }
                     if (r.note.isNotBlank() && !r.note.equals(r.title, true)) append(" · " + r.note)
                 },
                 fontSize = 9.sp, color = sub, maxLines = 1, overflow = TextOverflow.Ellipsis
@@ -771,7 +788,7 @@ fun CashBookScreen(
                     LCol("In", fmt(list.filter(::cashIn).sumOf { it.amount }), LKind.IN)
                 ),
                 list.map { e ->
-                    LRow(e.id, e.date, title(e), e.note, listOf(if (cashOut(e)) e.amount else 0.0, if (cashIn(e)) e.amount else 0.0), e) { onEdit(e) }
+                    LRow(e.id, e.date, title(e), e.note, listOf(if (cashOut(e)) e.amount else 0.0, if (cashIn(e)) e.amount else 0.0), e, khataOf(e)) { onEdit(e) }
                 },
                 cards = true
             )
