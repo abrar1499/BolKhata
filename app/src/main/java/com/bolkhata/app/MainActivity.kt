@@ -58,10 +58,10 @@ class MainActivity : ComponentActivity() {
             var dark by remember { mutableStateOf(store.dark) }
             var themeName by remember { mutableStateOf(store.theme) }
             val header = headerTheme(themeName, dark)
-            // Every phone shows the design 1:1: the screen is 390 units wide (like the mock-up) and the phone's
+            // Every phone shows the design 1:1: the screen is 370 units wide (the 390 mock-up, everything a bit bigger) and the phone's
             // font-size and display-size settings don't blow the compact ledgers up.
             val m = resources.displayMetrics
-            CompositionLocalProvider(LocalHeader provides header, LocalDensity provides Density(minOf(m.widthPixels, m.heightPixels) / 390f, 1f)) {
+            CompositionLocalProvider(LocalHeader provides header, LocalDensity provides Density(minOf(m.widthPixels, m.heightPixels) / 370f, 1f)) {
                 BolTheme(dark) {
                     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                         App(
