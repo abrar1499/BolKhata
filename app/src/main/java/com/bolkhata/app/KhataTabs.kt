@@ -557,7 +557,7 @@ private fun signed(k: LKind, v: Double) = if (v == 0.0) "" else (when (k) { LKin
 
 /**
  * A white ledger sheet: the head line (month and entry count, then each column's name with its total), and for every
- * day a slim line with that day's totals, then one small
+ * day a slim line (soft red fading to white) with that day's totals, then one small
  * line per entry. Lines are faint grey; amounts sit in the middle of their column.
  */
 internal fun LazyListScope.ledger(title: String, cols: List<LCol>, rows: List<LRow>, keyPrefix: String = "", cards: Boolean = false) {
@@ -608,6 +608,7 @@ private fun DayLine(date: Long, cols: List<LCol>, day: List<LRow>, card: Boolean
     Row(
         Modifier.padding(start = 10.dp, end = 10.dp, top = if (card) 2.dp else 0.dp).fillMaxWidth().height(IntrinsicSize.Min)
             .shadow(1.dp).background(MaterialTheme.colorScheme.surface)
+            .background(Brush.horizontalGradient(listOf(Ember.copy(alpha = 0.10f), Color.Transparent)))
     ) {
         Text(dayLineFmt.format(Date(date)), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(1f).padding(start = 10.dp, top = 5.dp, bottom = 4.dp))
