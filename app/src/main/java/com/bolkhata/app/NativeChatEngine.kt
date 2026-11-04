@@ -183,10 +183,15 @@ object NativeChatEngine {
         // Just a name ("kamran saeed", "nargis"): that khata, or a choice when several share it. Only whole words or
         // clear starts of a saved name count, so small talk never turns into a name.
         if (smallTalk(lower) == NOT_UNDERSTOOD) {
-            val said = words.filter { it !in setOf("ka", "ki", "ke", "khata", "account", "kholo", "open", "yar", "yaar", "plz") }
-            if (said.size in 1..3 && words.size <= 5 && said.all { it.length >= 3 }) {
+            // The words as said, before name matching rewrites them.
+            val asSaid = tokens(prepared.lowercase(Locale.ROOT))
+            val said = asSaid.filter { it !in setOf("ka", "ki", "ke", "khata", "account", "kholo", "open", "yar", "yaar", "plz") }
+            if (said.size in 1..3 && asSaid.size <= 5 && said.all { it.length >= 3 }) {
                 val hits = contacts.filter { c -> val parts = tokens(c); said.all { w -> parts.any { it == w || (w.length >= 4 && it.startsWith(w)) } } }
                     .distinctBy { it.lowercase(Locale.ROOT) }
+                // A saved name said in full ("Kamran" beside "Haji Kamran Saeed") is that one.
+                val exact = hits.filter { tokens(it) == said }
+                if (exact.size == 1) return Fixed("", "open", "", filter = Query.Filter(persons = exact))
                 if (hits.size == 1) return Fixed("", "open", "", filter = Query.Filter(persons = hits))
                 if (hits.size in 2..4) return chat("Which " + hits.joinToString(" or ") + " do you mean?")
             }
