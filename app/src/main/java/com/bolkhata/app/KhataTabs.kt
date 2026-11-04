@@ -437,7 +437,7 @@ private fun LazyListScope.tradeView(sale: Boolean, picked: List<Entry>, months: 
     if (list.isEmpty()) emptyNote(if (sale) "No sales yet. Say: \"sold 5 bags at 30\"" else "No purchases yet. Say: \"bought 10 bags at 25\"")
 }
 
-/** Profit month by month: sales, the cost of what was sold, and the profit. Tap a month to see its sales. */
+/** Profit month by month: the cost of what was sold, sales, and the profit (money out first, like Payable before Receivable). Tap a month to see its sales. */
 private fun LazyListScope.profitView(all: List<Entry>, sales: List<Entry>, months: List<Pair<Int, Long>>, month: Int, q: String, onMonth: (Int) -> Unit) {
     class Line(val key: Int, val label: String, val count: Int, val sale: Double, val cost: Double, val profit: Double)
     val lines = months.filter { month == ALL_MONTHS || it.first == month }.map { (k, ms) ->
@@ -447,7 +447,7 @@ private fun LazyListScope.profitView(all: List<Entry>, sales: List<Entry>, month
     }.filter { q.isBlank() || it.label.contains(q.trim(), true) }
     item(key = "fh") {
         LedgerHead("Profit", "by month", listOf(
-            LCol("Sale", fmt(lines.sumOf { it.sale }), LKind.IN), LCol("Cost", fmt(lines.sumOf { it.cost }), LKind.OUT),
+            LCol("Cost", fmt(lines.sumOf { it.cost }), LKind.OUT), LCol("Sale", fmt(lines.sumOf { it.sale }), LKind.IN),
             LCol("Profit", plusMinus(lines.sumOf { it.profit }), LKind.PLAIN)
         ), lines.isEmpty())
     }
@@ -455,7 +455,7 @@ private fun LazyListScope.profitView(all: List<Entry>, sales: List<Entry>, month
         GridRow(
             l.label, if (l.count == 1) "1 sale" else "${l.count} sales",
             listOf(
-                GCell(signed(LKind.IN, l.sale), LKind.IN), GCell(signed(LKind.OUT, l.cost), LKind.OUT),
+                GCell(signed(LKind.OUT, l.cost), LKind.OUT), GCell(signed(LKind.IN, l.sale), LKind.IN),
                 GCell(plusMinus(l.profit), LKind.PLAIN, if (l.profit < 0) RedSpend else GreenIn)
             ),
             62.dp, l === lines.last()
