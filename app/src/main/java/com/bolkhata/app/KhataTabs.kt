@@ -22,7 +22,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Menu
@@ -71,8 +70,6 @@ import kotlinx.coroutines.launch
 // (Parties, Cash book, Expense, Income) next to Home. Every number comes from the saved entries.
 
 private val Ember = Color(0xFFE3342F)
-/** Deep red for titles on the white sheets. */
-private val DeepRed = Color(0xFFC62828)
 /** Colour at the top of the orange header, also used for the status bar. */
 internal val EmberTop = Color(0xFFF0572E)
 internal val EmberBrush = Brush.linearGradient(listOf(Color(0xFFF0572E), Color(0xFFE3342F)))
@@ -238,7 +235,7 @@ private fun SearchBox(q: String, hint: String, onChange: (String) -> Unit) {
 /** Round letter badge for a party or an income source. */
 @Composable
 private fun Initial(name: String) {
-    Box(Modifier.size(28.dp).clip(CircleShape).background(MaterialTheme.colorScheme.background), contentAlignment = Alignment.Center) {
+    Box(Modifier.size(30.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
         Text(name.trim().take(1).uppercase(), color = Ember, fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
     }
 }
@@ -255,10 +252,7 @@ private fun SmallChip(label: String, on: Boolean, onClick: () -> Unit) {
 }
 
 
-private fun lastSeen(ms: Long): String {
-    val day = if (sameDay(ms, System.currentTimeMillis())) "Today" else SimpleDateFormat("d MMM", Locale.US).format(Date(ms))
-    return day + " · " + SimpleDateFormat("h:mm a", Locale.US).format(Date(ms))
-}
+private fun lastSeen(ms: Long) = if (sameDay(ms, System.currentTimeMillis())) "Today" else shortDay.format(Date(ms))
 
 // ---------------------------------------------------------------- Business: Parties, Stock, Sale, Purchase, Profit
 
@@ -381,40 +375,48 @@ private fun LazyListScope.partiesView(accts: List<PersonAcct>, picked: List<Entr
     val pay = shown.filter { it.balance < -0.005 }.sumOf { -it.balance }
     val rec = shown.filter { it.balance > 0.005 }.sumOf { it.balance }
     item(key = "ph") {
-        LedgerHead("Parties", if (shown.size == 1) "1 · A–Z" else "${shown.size} · A–Z",
-            // A card of its own: every party below is a separate card.
-            listOf(LCol("Payable", fmt(pay), LKind.OUT), LCol("Receivable", fmt(rec), LKind.IN)), true, WideColW)
+        PartyLine(null, "Parties", if (shown.size == 1) "1 · A–Z" else "${shown.size} · A–Z", fmt(pay), fmt(rec), head = true) {}
     }
-    items(shown, key = { "p" + it.name.lowercase() }) { p -> PartyCard(p) { onOpen(p) } }
+    items(shown, key = { "p" + it.name.lowercase() }) { p ->
+        val bal = p.balance
+        PartyLine(
+            p.name.trim().take(1).uppercase(), p.name, p.history.lastOrNull()?.let { "Last " + lastSeen(it.first.date) } ?: "",
+            if (bal < -0.005) fmt(-bal) else "", if (bal > 0.005) fmt(bal) else ""
+        ) { onOpen(p) }
+    }
     if (shown.isEmpty()) emptyNote("No parties yet. Say \"Hamid ko 500 diye\" in the chat.")
 }
 
-/** One party as its own white card: initial, name, last date, the balance under Payable or Receivable, and a chevron. */
+/**
+ * One white card on the Parties page: initial, name and a small line, then the Payable (red) and Receivable (green)
+ * columns and a chevron. The [head] card has no initial, puts the column names over the totals and keeps the chevron's room,
+ * so its columns sit right above the parties' amounts.
+ */
 @Composable
-private fun PartyCard(p: PersonAcct, onClick: () -> Unit) = Tight {
-    val bal = p.balance
-    val shape = RoundedCornerShape(14.dp)
+private fun PartyLine(initial: String?, title: String, sub: String, payable: String, receivable: String, head: Boolean = false, onClick: () -> Unit) = Tight {
+    val shape = RoundedCornerShape(12.dp)
     Row(
-        Modifier.padding(start = 10.dp, end = 10.dp, top = 6.dp).fillMaxWidth().shadow(1.dp, shape).clip(shape)
-            .background(MaterialTheme.colorScheme.surface).clickable { onClick() }.padding(start = 10.dp, top = 8.dp, bottom = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
+        Modifier.padding(start = 12.dp, end = 12.dp, top = if (head) 8.dp else 6.dp).fillMaxWidth().clip(shape)
+            .background(MaterialTheme.colorScheme.surface).border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape)
+            .clickable(enabled = !head) { onClick() }.padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Box(Modifier.size(28.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
-            Text(p.name.trim().take(1).uppercase(), color = RedSpend, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        if (initial != null) Box(Modifier.size(26.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
+            Text(initial, color = Ember, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold)
         }
-        Column(Modifier.weight(1f).padding(start = 10.dp, end = 4.dp)) {
-            Text(p.name, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            p.history.lastOrNull()?.let {
-                Text("Last " + lastSeen(it.first.date), fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+        Column(Modifier.weight(1f).padding(start = if (initial != null) 6.dp else 0.dp)) {
+            Text(title, fontSize = 12.sp, fontWeight = if (head) FontWeight.ExtraBold else FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (sub.isNotBlank()) Text(sub, fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+        }
+        listOf(Triple("PAYABLE", payable, RedSpend), Triple("RECEIVABLE", receivable, GreenIn)).forEach { (label, v, ink) ->
+            Column(Modifier.width(62.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                if (head) Text(label, fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.3.sp, color = ink, maxLines = 1, softWrap = false)
+                if (v.isNotEmpty()) Text(v, fontSize = 11.sp, fontWeight = if (head) FontWeight.Black else FontWeight.ExtraBold,
+                    color = ink, maxLines = 1, softWrap = false)
             }
         }
-        Box(Modifier.width(WideColW), contentAlignment = Alignment.Center) {
-            if (bal < -0.005) Text(fmt(-bal), fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = RedSpend, maxLines = 1, softWrap = false)
-        }
-        Box(Modifier.width(WideColW), contentAlignment = Alignment.Center) {
-            if (bal > 0.005) Text(fmt(bal), fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = GreenIn, maxLines = 1, softWrap = false)
-        }
-        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+        if (head) Spacer(Modifier.width(8.dp))
+        else Text("›", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(8.dp))
     }
 }
 
@@ -518,17 +520,14 @@ private fun GridRow(title: String, sub: String, cells: List<GCell>, w: Dp, last:
     if (!last) HorizontalDivider(Modifier.padding(horizontal = 10.dp), color = Faint)
 }
 
-/** Title card above a list of cards: a soft red-to-white strip, the title in deep red and a small count on the right. */
+/** Title line above a list of cards: the title in red and a small count on the right, on the page itself. */
 @Composable
 private fun SheetTitle(title: String, count: String) = Tight {
     Row(
-        Modifier.padding(start = 10.dp, end = 10.dp, top = 8.dp).fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surface)
-            .background(Brush.horizontalGradient(listOf(Ember.copy(alpha = 0.14f), Color.Transparent)))
-            .padding(horizontal = 10.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
+        Modifier.padding(start = 14.dp, end = 14.dp, top = 10.dp).fillMaxWidth(),
+        verticalAlignment = Alignment.Bottom
     ) {
-        Text(title, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = DeepRed, modifier = Modifier.weight(1f), maxLines = 1)
+        Text(title, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = Ember, modifier = Modifier.weight(1f), maxLines = 1)
         Text(count, fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
@@ -561,16 +560,7 @@ private fun MonthChips(months: List<Pair<Int, Long>>, current: Int, onPick: (Int
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         item(key = ALL_MONTHS) { SmallChip("All", current == ALL_MONTHS) { onPick(ALL_MONTHS) } }
-        items(months, key = { it.first }) { (k, ms) ->
-            val on = k == current
-            Text(
-                monthFmt.format(Date(ms)), fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
-                color = if (on) Color.White else MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.clip(CircleShape).background(if (on) Ember else MaterialTheme.colorScheme.surface)
-                    .border(1.dp, if (on) Ember else MaterialTheme.colorScheme.outlineVariant, CircleShape)
-                    .clickable { onPick(k) }.padding(horizontal = 11.dp, vertical = 4.dp)
-            )
-        }
+        items(months, key = { it.first }) { (k, ms) -> SmallChip(monthFmt.format(Date(ms)), k == current) { onPick(k) } }
     }
 }
 
@@ -966,14 +956,14 @@ fun MoneyScreen(
                 item(key = "g" + g.name) {
                     val share = if (total > 0) (g.total / total).toFloat() else 0f
                     // Its own card: icon, name with a share bar (expense) or last date and count (income), amount on the right.
-                    val shape = RoundedCornerShape(14.dp)
+                    val shape = RoundedCornerShape(12.dp)
                     Row(
-                        Modifier.padding(start = 10.dp, end = 10.dp, top = 6.dp).fillMaxWidth().shadow(1.dp, shape).clip(shape)
-                            .background(MaterialTheme.colorScheme.surface)
-                            .clickable { if (isOpen) open.remove(g.name) else open.add(g.name) }.padding(horizontal = 10.dp, vertical = 6.dp),
+                        Modifier.padding(start = 12.dp, end = 12.dp, top = 6.dp).fillMaxWidth().clip(shape)
+                            .background(MaterialTheme.colorScheme.surface).border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape)
+                            .clickable { if (isOpen) open.remove(g.name) else open.add(g.name) }.padding(horizontal = 10.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (g.cat != null) CatBubble(g.cat, 28.dp) else Initial(g.name)
+                        if (g.cat != null) CatBubble(g.cat, 30.dp) else Initial(g.name)
                         Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
                             Text(g.name, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
