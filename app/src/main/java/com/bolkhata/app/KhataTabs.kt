@@ -537,8 +537,6 @@ internal class LRow(val key: String, val date: Long, val title: String, val note
 
 private val clockFmt = SimpleDateFormat("h:mma", Locale.US)
 private val dayLineFmt = SimpleDateFormat("EEE, d MMM", Locale.US)
-/** Same light blue behind every day line. */
-private val DayTint = Color(0x050284C7)
 private val Faint = Color(0x14786C6C)
 /** Colour of an entry's own amount: dark grey, so red / green stay for the totals. */
 private val AmountInk = Color(0xFF3F3A36)
@@ -559,7 +557,7 @@ private fun signed(k: LKind, v: Double) = if (v == 0.0) "" else (when (k) { LKin
 
 /**
  * A white ledger sheet: the head line (month and entry count, then each column's name with its total), and for every
- * day a slim light-blue line with that day's totals, then one small
+ * day a slim line with that day's totals, then one small
  * line per entry. Lines are faint grey; amounts sit in the middle of their column.
  */
 internal fun LazyListScope.ledger(title: String, cols: List<LCol>, rows: List<LRow>, keyPrefix: String = "", cards: Boolean = false) {
@@ -569,7 +567,9 @@ internal fun LazyListScope.ledger(title: String, cols: List<LCol>, rows: List<LR
             val day = rows.filter { sameDay(it.date, r.date) }
             item(key = keyPrefix + "d" + r.key) { DayLine(r.date, cols, day, cards) }
         }
-        item(key = keyPrefix + r.key) { LedgerRow(r, cols, i == rows.lastIndex, cards) }
+        // As cards, each day is one card: its day line and entries, the last entry closing it.
+        val last = i == rows.lastIndex || (cards && !sameDay(rows[i + 1].date, r.date))
+        item(key = keyPrefix + r.key) { LedgerRow(r, cols, last, cards) }
     }
 }
 
@@ -607,7 +607,7 @@ private fun DayLine(date: Long, cols: List<LCol>, day: List<LRow>, card: Boolean
     val totals = cols.indices.map { k -> day.sumOf { it.amounts.getOrElse(k) { 0.0 } } }
     Row(
         Modifier.padding(start = 10.dp, end = 10.dp, top = if (card) 2.dp else 0.dp).fillMaxWidth().height(IntrinsicSize.Min)
-            .shadow(1.dp).background(MaterialTheme.colorScheme.surface).background(DayTint)
+            .shadow(1.dp).background(MaterialTheme.colorScheme.surface)
     ) {
         Text(dayLineFmt.format(Date(date)), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(1f).padding(start = 10.dp, top = 5.dp, bottom = 4.dp))
@@ -618,17 +618,17 @@ private fun DayLine(date: Long, cols: List<LCol>, day: List<LRow>, card: Boolean
             }
         }
     }
-    if (!card) HorizontalDivider(Modifier.padding(horizontal = 10.dp), color = Faint)
+    HorizontalDivider(Modifier.padding(horizontal = 10.dp), color = Faint)
 }
 
-/** One entry line; as a [card] it stands alone, raised and square, like the Parties cards. */
+/** One entry line; as a [card] it is part of its day's square raised card, [last] closing that card. */
 @Composable
 private fun LedgerRow(r: LRow, cols: List<LCol>, last: Boolean, card: Boolean = false) = Tight {
     val sub = MaterialTheme.colorScheme.onSurfaceVariant
     val w = colW(cols)
     val shape = if (card) RectangleShape else sheetShape(last)
     Row(
-        Modifier.padding(start = 10.dp, end = 10.dp, top = if (card) 2.dp else 0.dp).fillMaxWidth().height(IntrinsicSize.Min).shadow(1.dp, shape).clip(shape)
+        Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(IntrinsicSize.Min).shadow(1.dp, shape).clip(shape)
             .background(MaterialTheme.colorScheme.surface).clickable { r.onClick() }
     ) {
         Column(Modifier.weight(1f).padding(start = 10.dp, end = 4.dp, top = 5.dp, bottom = 5.dp), verticalArrangement = Arrangement.Center) {
@@ -651,7 +651,7 @@ private fun LedgerRow(r: LRow, cols: List<LCol>, last: Boolean, card: Boolean = 
             }
         }
     }
-    if (!last && !card) HorizontalDivider(Modifier.padding(horizontal = 10.dp), color = Faint)
+    if (!last) HorizontalDivider(Modifier.padding(horizontal = 10.dp), color = Faint)
 }
 
 /** The add button above the chat bar: a white card with a khata icon and "Entry". The form has Cash out / in. */
