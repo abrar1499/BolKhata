@@ -38,6 +38,14 @@ class NativeChatEngineTest {
         assertTrue(r.filter.items.isEmpty())
     }
 
+    @Test fun howManyEntriesInACategoryIsACount() {
+        val r = read("other me kitni entry parri hain")
+        assertEquals("ask", r.kind)
+        assertEquals("count", r.what)
+        assertEquals(setOf(Cat.OTHER), r.filter.cats)
+        assertTrue(r.filter.items.isEmpty())
+    }
+
     @Test fun todaysDateIsAnsweredInOneLine() {
         val r = read("aj kya date hai")
         assertEquals("chat", r.kind)
