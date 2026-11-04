@@ -38,6 +38,12 @@ class NativeChatEngineTest {
         assertTrue(r.filter.items.isEmpty())
     }
 
+    @Test fun todaysDateIsAnsweredInOneLine() {
+        val r = read("aj kya date hai")
+        assertEquals("chat", r.kind)
+        assertTrue(r.reply.startsWith("Aaj "))
+    }
+
     @Test fun aReportWithItsOwnDatesAsksOverThoseDates() {
         val r = read("expense reports from 19 aug 2026 to today")
         assertEquals("ask", r.kind)

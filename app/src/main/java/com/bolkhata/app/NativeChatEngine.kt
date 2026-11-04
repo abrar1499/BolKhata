@@ -299,7 +299,7 @@ object NativeChatEngine {
 
         if (lower.contains("how are you") || lower.contains("what can you do") ||
             has(words, setOf("hello", "hi", "hey", "salam", "assalam", "thanks", "thank", "bye", "goodbye"))) {
-            return talk(lower)
+            return talk(lower, now)
         }
 
         // Reports use the requested period instead of silently defaulting yearly reports to this month;
@@ -384,7 +384,7 @@ object NativeChatEngine {
         if (terms.isNotEmpty() && words.size <= 4 && lower.none(Char::isDigit) && smallTalk(lower) == NOT_UNDERSTOOD &&
             entries.any { e -> val hay = (e.item + e.note).lowercase(Locale.ROOT).replace(" ", ""); terms.all { hay.contains(it) } })
             return Fixed("", "ask", "", "list", Query.Filter(items = terms))
-        return talk(lower)
+        return talk(lower, now)
     }
 
     private val renameUrdu = Regex("""^(.+?)\s+(?:ka|ki|ke)\s+(?:khata\s+(?:ka\s+)?)?(?:naam|name)\s+(?:badal\s+(?:ke|kar|k)\s+)?(.+?)\s+(?:kar|kr|karo|kro|rakh|rakho|rakhdo)\b""")
@@ -560,16 +560,20 @@ object NativeChatEngine {
 
     private fun chat(reply: String) = Fixed("", "chat", reply)
 
-    private const val NOT_UNDERSTOOD = "I can help with your saved khata, transactions, balances, searches and edits. Try 'chai 5', 'food this month' or 'Ali ka khata'."
+    private const val NOT_UNDERSTOOD = "Samajh nahi aaya. Jaise: 'chai 5', 'food is mahine', 'Ali ka khata'."
 
     /** Small talk, or the not-understood reply marked [Fixed.unsure]. */
-    private fun talk(text: String): Fixed = smallTalk(text).let { Fixed("", "chat", it, unsure = it == NOT_UNDERSTOOD) }
+    private fun talk(text: String, now: Long): Fixed = smallTalk(text, now).let { Fixed("", "chat", it, unsure = it == NOT_UNDERSTOOD) }
 
-    private fun smallTalk(text: String): String {
+    private fun smallTalk(text: String, now: Long): String {
         val w = tokens(text)
         return when {
             has(w, setOf("hi", "hello", "hey", "good", "morning", "evening", "salam", "assalam", "assalamualaikum", "aoa")) ->
                 "Wa alaikum assalam! Batayein?"
+            has(w, setOf("date", "tareekh", "tarikh", "din", "day")) && has(w, setOf("aaj", "aj", "today", "kya", "kia", "what", "konsa", "kaunsa")) ->
+                java.text.SimpleDateFormat("'Aaj' d MMM yyyy, EEEE.", Locale.ENGLISH).format(java.util.Date(now))
+            has(w, setOf("time", "waqt", "baje", "bje")) && has(w, setOf("kya", "kia", "what", "kitne", "kitny")) ->
+                java.text.SimpleDateFormat("h:mm a", Locale.ENGLISH).format(java.util.Date(now))
             has(w, setOf("hal", "haal", "kaise", "kaisa", "kaisi")) || (has(w, setOf("kya", "kia")) && has(w, setOf("hal", "haal"))) ->
                 "Theek hoon, shukriya! Batayein?"
             has(w, setOf("how", "are", "you")) -> "Theek hoon! Batayein?"

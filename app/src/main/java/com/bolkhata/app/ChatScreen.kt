@@ -28,6 +28,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -403,8 +406,8 @@ private fun ReportCard(r: Report, text: String) {
             .clip(RoundedCornerShape(18.dp))
             .copyable(text)
             .background(MaterialTheme.colorScheme.surface)
-            .padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp)
     ) {
         if (r.title.isNotBlank() && r.title != hero?.label) Text(r.title, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
         if (hero != null) {
@@ -421,13 +424,17 @@ private fun ReportCard(r: Report, text: String) {
         }
         r.rows.forEachIndexed { i, l ->
             if (i > 0 || hero != null) HorizontalDivider(color = grey.copy(alpha = 0.12f))
-            Row(Modifier.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(l.title, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    val sub = listOf(l.date, l.sub).filter { it.isNotBlank() }.joinToString(" · ")
-                    if (sub.isNotBlank()) Text(sub, fontSize = 12.sp, color = grey, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                Text(l.amount, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            // One compact line per entry: name (· note in grey), date, amount.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    buildAnnotatedString {
+                        append(l.title)
+                        if (l.sub.isNotBlank()) withStyle(SpanStyle(color = grey, fontWeight = FontWeight.Normal)) { append(" · " + l.sub) }
+                    },
+                    Modifier.weight(1f), fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis
+                )
+                if (l.date.isNotBlank()) Text(l.date, Modifier.padding(horizontal = 8.dp), fontSize = 11.sp, color = grey, maxLines = 1)
+                Text(l.amount, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             }
         }
         if (r.total.isNotEmpty()) {
