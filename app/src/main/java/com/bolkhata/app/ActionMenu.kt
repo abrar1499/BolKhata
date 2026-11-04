@@ -172,7 +172,7 @@ fun RenameDialog(title: String, old: String, info: String = "", onRename: (Strin
 
 /** Long-press menu of a khata on the Business / Expense / Income lists: Rename (not for expense categories) and Move. */
 @Composable
-fun GroupMenu(name: String, entryCount: Int, onRename: (() -> Unit)?, onMove: () -> Unit, onDismiss: () -> Unit) {
+fun GroupMenu(name: String, entryCount: Int, onRename: (() -> Unit)?, onMove: () -> Unit, onDelete: (() -> Unit)?, onDismiss: () -> Unit) {
     ActionMenu(
         title = name,
         subtitle = if (entryCount == 1) "1 entry" else "$entryCount entries",
@@ -181,7 +181,8 @@ fun GroupMenu(name: String, entryCount: Int, onRename: (() -> Unit)?, onMove: ()
         badge = { Initial(name) },
         actions = listOfNotNull(
             onRename?.let { MenuAction("Rename", Icons.Filled.DriveFileRenameOutline, onClick = it) },
-            MenuAction("Move", Icons.Filled.SwapHoriz, onClick = onMove)
+            MenuAction("Move", Icons.Filled.SwapHoriz, onClick = onMove),
+            onDelete?.let { MenuAction("Delete", Icons.Filled.Delete, danger = true, onClick = it) }
         ),
         onDismiss = onDismiss
     )

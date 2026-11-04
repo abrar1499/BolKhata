@@ -2400,6 +2400,12 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     n, khataEntries(kind, n).size,
                     onRename = if (kind == "expense" || kind == "expense-name") null else ({ khataFor = null; khataRename = kind to n }),
                     onMove = { khataFor = null; khataMove = kind to n },
+                    // A whole expense category is not deleted from here; a party, payer or name khata is (to Trash).
+                    onDelete = if (kind == "expense") null else ({
+                        khataFor = null
+                        val ids = khataEntries(kind, n).map { it.id }.toSet()
+                        confirm = "Move khata \"$n\" (${ids.size} " + (if (ids.size == 1) "entry" else "entries") + ") to Trash?" to ids
+                    }),
                     onDismiss = { khataFor = null }
                 )
             }
