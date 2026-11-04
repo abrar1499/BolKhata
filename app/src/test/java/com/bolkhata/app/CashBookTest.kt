@@ -55,4 +55,21 @@ class CashBookTest {
         val card = all[2].copy(category = Cat.KHANA)
         assertEquals(Cat.OTHER, Recat.sameShop(all, all[2], card)[3].category)
     }
+
+    @Test
+    fun pastedBankSmsLooksLikeTheShopsEarlierEntries() {
+        val sms = "PoS Purchase\nBy:1234;mada-Pay\nAmount: SAR 5\nAt:ESTABLISH\n4/11/26 12:36"
+        val parsed = (Parser.parse(sms).entries + Parser.parse(sms).unclear).single()
+        val earlier = Entry("old", Type.KHARCHA, 3.0, Cat.KHANA, "ESTABLISHMENT NOORAN A", "", "Riyadh · card · Al Rajhi", 1L, 1L)
+        val e = Recat.fromHistory(parsed, listOf(earlier))
+        assertEquals("ESTABLISHMENT NOORAN A", e.item)
+        assertEquals(Cat.KHANA, e.category)
+        assertEquals("Riyadh · card · Al Rajhi", e.note)
+        assertEquals(5.0, e.amount, 0.001)
+        // A statement note ("City · card · Bank") is not a shop: fixing one entry never drags that city's others along.
+        val a = Entry("a", Type.KHARCHA, 2.0, Cat.OTHER, "SHOP ONE", "", "Riyadh · card · Al Rajhi", 0L, 0L)
+        val b = Entry("b", Type.KHARCHA, 2.0, Cat.OTHER, "SHOP TWO", "", "Riyadh · card · Al Rajhi", 0L, 0L)
+        val fixed = a.copy(category = Cat.KHANA)
+        assertEquals(Cat.OTHER, Recat.sameShop(listOf(fixed, b), a, fixed)[1].category)
+    }
 }

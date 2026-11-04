@@ -444,8 +444,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         applyKhataContext(list, if (ledger != null) ledgerPerson ?: activeLedgerPerson else account?.takeIf { it.main == PEOPLE }?.sub)
 
     fun addOffline(r: Parser.Result) {
-        val contextualEntries = contextualizeCurrentKhata(r.entries)
-        val contextualUnclear = contextualizeCurrentKhata(r.unclear)
+        // A pasted bank SMS takes the shop's full name, category and note from its earlier entries.
+        val contextualEntries = contextualizeCurrentKhata(r.entries).map { Recat.fromHistory(it, entries) }
+        val contextualUnclear = contextualizeCurrentKhata(r.unclear).map { Recat.fromHistory(it, entries) }
         if (contextualEntries.isEmpty() && contextualUnclear.isEmpty()) {
             flash = Flash("How much? e.g. \"petrol 70\"", Flash.Kind.ANSWER)
             return
