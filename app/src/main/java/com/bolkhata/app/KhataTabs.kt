@@ -596,9 +596,11 @@ internal fun LazyListScope.ledger(
     title: String, cols: List<LCol>, rows: List<LRow>, keyPrefix: String = "", cards: Boolean = false, onHold: (() -> Unit)? = null
 ) {
     item(key = keyPrefix + "lh") { LedgerHead(title, entryCount(rows.size), cols, rows.isEmpty(), ids = rows.mapNotNull { it.entry?.id }, onHold = onHold) }
+    // Each day's rows, found in one pass (filtering the whole list for every day made long lists slow).
+    val byDay = rows.groupBy { dayKey(it.date) }
     rows.forEachIndexed { i, r ->
         if (i == 0 || !sameDay(rows[i - 1].date, r.date)) {
-            val day = rows.filter { sameDay(it.date, r.date) }
+            val day = byDay[dayKey(r.date)].orEmpty()
             item(key = keyPrefix + "d" + r.key) { DayLine(r.date, cols, day, cards) }
         }
         // As cards, each day is one card: its day line and entries, the last entry closing it.
@@ -762,14 +764,14 @@ fun CashBookScreen(
     val hand = remember(newest) { newest.sumOf { if (cashIn(it)) it.amount else -it.amount } }
     // This month's net cash: in minus out.
     val nowKey = monthKey(System.currentTimeMillis())
-    val thisMonth = newest.filter { monthKey(it.date) == nowKey }.sumOf { if (cashIn(it)) it.amount else -it.amount }
+    val thisMonth = remember(newest, nowKey) { newest.filter { monthKey(it.date) == nowKey }.sumOf { if (cashIn(it)) it.amount else -it.amount } }
     val months = remember(newest) { monthsOf(newest) }
     var month by rememberSaveable(months.firstOrNull()?.first) { mutableIntStateOf(months.firstOrNull()?.first ?: 0) }
     // A remembered month that no longer has entries (the khata changed since) falls back to the newest month.
     if (month != ALL_MONTHS && months.none { it.first == month }) month = months.firstOrNull()?.first ?: ALL_MONTHS
     var q by rememberSaveable { mutableStateOf("") }
     // A search looks through every month; otherwise only the picked month is listed.
-    val list = if (q.isBlank()) newest.filter { inMonth(it.date, month) } else newest.filter { matches(it, q) }
+    val list = remember(newest, month, q) { if (q.isBlank()) newest.filter { inMonth(it.date, month) } else newest.filter { matches(it, q) } }
     val state = rememberLazyListState()
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
@@ -816,7 +818,7 @@ fun PartyKhataScreen(
     // A remembered month that no longer has entries (the khata changed since) falls back to the newest month.
     if (month != ALL_MONTHS && months.none { it.first == month }) month = months.firstOrNull()?.first ?: ALL_MONTHS
     var q by rememberSaveable(name) { mutableStateOf("") }
-    val list = if (q.isBlank()) hist.filter { inMonth(it.first.date, month) } else hist.filter { matches(it.first, q) }
+    val list = remember(hist, month, q) { if (q.isBlank()) hist.filter { inMonth(it.first.date, month) } else hist.filter { matches(it.first, q) } }
     val bal = p?.balance ?: 0.0
     val state = rememberLazyListState()
     Box(Modifier.fillMaxSize()) {
@@ -871,7 +873,7 @@ fun TransactionsScreen(entries: List<Entry>, currency: String, onEdit: (Entry) -
     var month by rememberSaveable(months.firstOrNull()?.first) { mutableIntStateOf(months.firstOrNull()?.first ?: 0) }
     // A remembered month that no longer has entries (the khata changed since) falls back to the newest month.
     if (month != ALL_MONTHS && months.none { it.first == month }) month = months.firstOrNull()?.first ?: ALL_MONTHS
-    val list = if (q.isBlank()) newest.filter { inMonth(it.date, month) } else newest.filter { matches(it, q) }
+    val list = remember(newest, month, q) { if (q.isBlank()) newest.filter { inMonth(it.date, month) } else newest.filter { matches(it, q) } }
     // Money that left you (or a purchase) goes in Out; everything else in In.
     fun out(e: Entry) = cashOut(e) || e.type == Type.PURCHASE
     val outT = list.filter(::out).sumOf { it.amount }
@@ -970,13 +972,15 @@ fun MoneyScreen(
     val months = remember(list) { monthsOf(list) }
     var pick by rememberSaveable(income) { mutableIntStateOf(ALL_MONTHS) }
     var q by rememberSaveable(income) { mutableStateOf("") }
-    val shown = list.filter { inMonth(it.date, pick) && (q.isBlank() || matches(it, q)) }
+    val shown = remember(list, pick, q) { list.filter { inMonth(it.date, pick) && (q.isBlank() || matches(it, q)) } }
     val total = shown.sumOf { it.amount }
     // Expense by category; income by who paid (like the party list).
-    val groups = (if (income) shown.groupBy { source(it).lowercase() }.map { (_, l) -> Group(source(l.first()), null, l) }
-    else shown.groupBy { it.category }.map { (c, l) -> Group(c.label, c, l) })
-        // Categories biggest first (they show a share); payers newest first, like every dated list.
-        .sortedByDescending { if (income) it.list.maxOf { e -> e.date }.toDouble() else it.total }
+    val groups = remember(shown, income) {
+        (if (income) shown.groupBy { source(it).lowercase() }.map { (_, l) -> Group(source(l.first()), null, l) }
+        else shown.groupBy { it.category }.map { (c, l) -> Group(c.label, c, l) })
+            // Categories biggest first (they show a share); payers newest first, like every dated list.
+            .sortedByDescending { if (income) it.list.maxOf { e -> e.date }.toDouble() else it.total }
+    }
     val open = remember(income) { mutableStateListOf<String>() }
     val khataMenu = LocalKhataMenu.current
     Box(Modifier.fillMaxSize()) {

@@ -234,11 +234,13 @@ fun plain(n: Double): String = if (n == Math.floor(n)) n.roundToLong().toString(
 
 fun cal(ms: Long): Calendar = Calendar.getInstance().apply { timeInMillis = ms }
 
-fun sameDay(a: Long, b: Long): Boolean {
-    val ca = cal(a)
-    val cb = cal(b)
-    return ca.get(Calendar.YEAR) == cb.get(Calendar.YEAR) && ca.get(Calendar.DAY_OF_YEAR) == cb.get(Calendar.DAY_OF_YEAR)
+/** The local calendar day of [ms] as one number: cheap enough to call for every row of a long list. */
+fun dayKey(ms: Long): Long {
+    val zone = java.util.TimeZone.getDefault()
+    return Math.floorDiv(ms + zone.getOffset(ms), 86_400_000L)
 }
+
+fun sameDay(a: Long, b: Long): Boolean = dayKey(a) == dayKey(b)
 
 fun dayLabel(d: Long): String {
     val now = System.currentTimeMillis()
