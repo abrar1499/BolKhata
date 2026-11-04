@@ -562,14 +562,14 @@ private fun signed(k: LKind, v: Double) = if (v == 0.0) "" else (when (k) { LKin
  * day a slim light-blue line with that day's totals, then one small
  * line per entry. Lines are faint grey; amounts sit in the middle of their column.
  */
-internal fun LazyListScope.ledger(title: String, cols: List<LCol>, rows: List<LRow>, keyPrefix: String = "") {
+internal fun LazyListScope.ledger(title: String, cols: List<LCol>, rows: List<LRow>, keyPrefix: String = "", cards: Boolean = false) {
     item(key = keyPrefix + "lh") { LedgerHead(title, entryCount(rows.size), cols, rows.isEmpty()) }
     rows.forEachIndexed { i, r ->
         if (i == 0 || !sameDay(rows[i - 1].date, r.date)) {
             val day = rows.filter { sameDay(it.date, r.date) }
-            item(key = keyPrefix + "d" + r.key) { DayLine(r.date, cols, day) }
+            item(key = keyPrefix + "d" + r.key) { DayLine(r.date, cols, day, cards) }
         }
-        item(key = keyPrefix + r.key) { LedgerRow(r, cols, i == rows.lastIndex) }
+        item(key = keyPrefix + r.key) { LedgerRow(r, cols, i == rows.lastIndex, cards) }
     }
 }
 
@@ -602,11 +602,11 @@ private fun LedgerHead(title: String, count: String, cols: List<LCol>, empty: Bo
 
 /** The slim line above each day: the day's name and its totals in their columns. */
 @Composable
-private fun DayLine(date: Long, cols: List<LCol>, day: List<LRow>) = Tight {
+private fun DayLine(date: Long, cols: List<LCol>, day: List<LRow>, card: Boolean = false) = Tight {
     val w = colW(cols)
     val totals = cols.indices.map { k -> day.sumOf { it.amounts.getOrElse(k) { 0.0 } } }
     Row(
-        Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(IntrinsicSize.Min)
+        Modifier.padding(start = 10.dp, end = 10.dp, top = if (card) 2.dp else 0.dp).fillMaxWidth().height(IntrinsicSize.Min)
             .shadow(1.dp).background(MaterialTheme.colorScheme.surface).background(DayTint)
     ) {
         Text(dayLineFmt.format(Date(date)), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -618,15 +618,17 @@ private fun DayLine(date: Long, cols: List<LCol>, day: List<LRow>) = Tight {
             }
         }
     }
-    HorizontalDivider(Modifier.padding(horizontal = 10.dp), color = Faint)
+    if (!card) HorizontalDivider(Modifier.padding(horizontal = 10.dp), color = Faint)
 }
 
+/** One entry line; as a [card] it stands alone, raised and square, like the Parties cards. */
 @Composable
-private fun LedgerRow(r: LRow, cols: List<LCol>, last: Boolean) = Tight {
+private fun LedgerRow(r: LRow, cols: List<LCol>, last: Boolean, card: Boolean = false) = Tight {
     val sub = MaterialTheme.colorScheme.onSurfaceVariant
     val w = colW(cols)
+    val shape = if (card) RectangleShape else sheetShape(last)
     Row(
-        Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(IntrinsicSize.Min).shadow(1.dp, sheetShape(last)).clip(sheetShape(last))
+        Modifier.padding(start = 10.dp, end = 10.dp, top = if (card) 2.dp else 0.dp).fillMaxWidth().height(IntrinsicSize.Min).shadow(1.dp, shape).clip(shape)
             .background(MaterialTheme.colorScheme.surface).clickable { r.onClick() }
     ) {
         Column(Modifier.weight(1f).padding(start = 10.dp, end = 4.dp, top = 5.dp, bottom = 5.dp), verticalArrangement = Arrangement.Center) {
@@ -649,7 +651,7 @@ private fun LedgerRow(r: LRow, cols: List<LCol>, last: Boolean) = Tight {
             }
         }
     }
-    if (!last) HorizontalDivider(Modifier.padding(horizontal = 10.dp), color = Faint)
+    if (!last && !card) HorizontalDivider(Modifier.padding(horizontal = 10.dp), color = Faint)
 }
 
 /** The add button above the chat bar: a white card with a khata icon and "Entry". The form has Cash out / in. */
@@ -724,7 +726,8 @@ fun CashBookScreen(
                 ),
                 list.map { e ->
                     LRow(e.id, e.date, title(e), e.note, listOf(if (cashOut(e)) e.amount else 0.0, if (cashIn(e)) e.amount else 0.0)) { onEdit(e) }
-                }
+                },
+                cards = true
             )
         }
         UpButton(state)
