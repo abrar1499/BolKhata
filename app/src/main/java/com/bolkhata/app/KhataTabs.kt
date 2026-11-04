@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Menu
@@ -384,17 +385,40 @@ private fun LazyListScope.partiesView(accts: List<PersonAcct>, picked: List<Entr
     val rec = shown.filter { it.balance > 0.005 }.sumOf { it.balance }
     item(key = "ph") {
         LedgerHead("Parties", if (shown.size == 1) "1 · A–Z" else "${shown.size} · A–Z",
-            listOf(LCol("Payable", fmt(pay), LKind.OUT), LCol("Receivable", fmt(rec), LKind.IN)), shown.isEmpty(), WideColW)
+            // A card of its own: every party below is a separate card.
+            listOf(LCol("Payable", fmt(pay), LKind.OUT), LCol("Receivable", fmt(rec), LKind.IN)), true, WideColW)
     }
-    items(shown, key = { "p" + it.name.lowercase() }) { p ->
-        val bal = p.balance
-        GridRow(
-            p.name, p.history.lastOrNull()?.let { "Last " + lastSeen(it.first.date) } ?: "",
-            listOf(GCell(if (bal < -0.005) signed(LKind.OUT, -bal) else "", LKind.OUT), GCell(if (bal > 0.005) signed(LKind.IN, bal) else "", LKind.IN)),
-            WideColW, p === shown.last()
-        ) { onOpen(p) }
-    }
+    items(shown, key = { "p" + it.name.lowercase() }) { p -> PartyCard(p) { onOpen(p) } }
     if (shown.isEmpty()) emptyNote("No parties yet. Say \"Hamid ko 500 diye\" in the chat.")
+}
+
+/** One party as its own white card: initial, name, last date, the balance under Payable or Receivable, and a chevron. */
+@Composable
+private fun PartyCard(p: PersonAcct, onClick: () -> Unit) = Tight {
+    val bal = p.balance
+    val shape = RoundedCornerShape(14.dp)
+    Row(
+        Modifier.padding(start = 10.dp, end = 10.dp, top = 6.dp).fillMaxWidth().shadow(1.dp, shape).clip(shape)
+            .background(MaterialTheme.colorScheme.surface).clickable { onClick() }.padding(start = 10.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(Modifier.size(28.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
+            Text(p.name.trim().take(1).uppercase(), color = RedSpend, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        }
+        Column(Modifier.weight(1f).padding(start = 10.dp, end = 4.dp)) {
+            Text(p.name, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            p.history.lastOrNull()?.let {
+                Text("Last " + lastSeen(it.first.date), fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+            }
+        }
+        Box(Modifier.width(WideColW), contentAlignment = Alignment.Center) {
+            if (bal < -0.005) Text(fmt(-bal), fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = RedSpend, maxLines = 1, softWrap = false)
+        }
+        Box(Modifier.width(WideColW), contentAlignment = Alignment.Center) {
+            if (bal > 0.005) Text(fmt(bal), fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = GreenIn, maxLines = 1, softWrap = false)
+        }
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+    }
 }
 
 /** Items in stock with quantity and value; tap one to record a sale or a purchase of it. */
