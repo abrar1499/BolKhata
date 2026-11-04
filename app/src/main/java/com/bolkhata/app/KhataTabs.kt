@@ -97,7 +97,8 @@ val KHATA_TABS = listOf(Tab.CHAT, Tab.PARTIES, Tab.CASHBOOK, Tab.EXPENSE, Tab.IN
 
 @Composable
 fun KhataNav(tab: Tab, onTab: (Tab) -> Unit) {
-    Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 6.dp) {
+    // No shadow: it joins the white chat strip above into one bottom panel.
+    Surface(color = MaterialTheme.colorScheme.surface) {
         Row(Modifier.fillMaxWidth().navigationBarsPadding().height(58.dp)) {
             KHATA_TABS.forEach { t ->
                 val (label, icon) = navItem(t)
@@ -677,12 +678,12 @@ private fun LedgerRow(r: LRow, cols: List<LCol>, last: Boolean, card: Boolean = 
     if (!last) HorizontalDivider(Modifier.padding(horizontal = 10.dp), color = Faint)
 }
 
-/** The add button above the chat bar: a white card with a khata icon and "Entry". The form has Cash out / in. */
+/** The add button just above the bottom panel: a white card with a khata icon and "Entry". The form has Cash out / in. */
 @Composable
 private fun BoxScope.PlusButton(onClick: () -> Unit) {
     val shape = RoundedCornerShape(14.dp)
     Row(
-        Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = (LocalBarSpace.current - 30.dp).coerceAtLeast(8.dp))
+        Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = LocalBarSpace.current + 6.dp)
             .height(46.dp).shadow(2.dp, shape).clip(shape).background(MaterialTheme.colorScheme.surface)
             .clickable { onClick() }.padding(start = 10.dp, end = 14.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -699,8 +700,8 @@ private fun BoxScope.UpButton(state: LazyListState) {
     val scope = rememberCoroutineScope()
     val show by remember { derivedStateOf { state.firstVisibleItemIndex > 4 } }
     if (show) Box(
-        Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = (LocalBarSpace.current - 30.dp).coerceAtLeast(8.dp) + 62.dp)
-            .size(40.dp).shadow(4.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.onSurface)
+        Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = LocalBarSpace.current + 60.dp)
+            .size(40.dp).shadow(2.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.onSurface)
             .clickable { scope.launch { state.animateScrollToItem(0) } },
         contentAlignment = Alignment.Center
     ) { Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Back to top", tint = MaterialTheme.colorScheme.surface) }
