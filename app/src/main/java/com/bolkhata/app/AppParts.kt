@@ -13,6 +13,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -28,16 +29,13 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.FormatListBulleted
 import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -80,18 +78,14 @@ internal fun InputBar(
     val ink = MaterialTheme.colorScheme.onSurface
     val talking = voice?.on == true
     val hint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-    // Like ChatGPT: the page darkens slightly towards the bottom, so the white bar stands out without an outline.
-    val shade = lerp(bg, if (bg.luminance() > 0.5f) Color.Black else Color.White, 0.09f)
-    Column(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(bg.copy(alpha = 0f), shade)))) {
-        Spacer(Modifier.height(40.dp))
+    // One white strip with the tabs below it (no floating pill, no shadow, so its edges stay crisp):
+    // rounded at the top, the field inside on the page colour.
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)).background(MaterialTheme.colorScheme.surface)) {
         if (talking) VoicePanel(voice!!)
-        Box(Modifier.fillMaxWidth().then(if (navPad) Modifier.navigationBarsPadding() else Modifier).padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 10.dp)) {
-            // Like ChatGPT's bar: a white pill with a soft shadow and no outline, on the off-white page.
-            Surface(
-                shape = RoundedCornerShape(26.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 3.dp,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(Modifier.heightIn(min = 48.dp).padding(start = 4.dp, end = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.fillMaxWidth().then(if (navPad) Modifier.navigationBarsPadding() else Modifier)
+            .padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = if (navPad) 8.dp else 0.dp)) {
+            Surface(shape = RoundedCornerShape(12.dp), color = bg, modifier = Modifier.fillMaxWidth()) {
+                Row(Modifier.heightIn(min = 44.dp).padding(start = 2.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (onAttach != null) {
                         Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onAttach), contentAlignment = Alignment.Center) {
                             ThinPlus(ink)
@@ -100,7 +94,7 @@ internal fun InputBar(
                     BasicTextField(
                         value = text,
                         onValueChange = { text = it },
-                        modifier = Modifier.weight(1f).padding(horizontal = 4.dp, vertical = 12.dp),
+                        modifier = Modifier.weight(1f).padding(horizontal = 4.dp, vertical = 10.dp),
                         maxLines = 4,
                         textStyle = LocalTextStyle.current.copy(fontSize = 16.sp, color = ink),
                         cursorBrush = SolidColor(GreenDeep),
@@ -113,11 +107,13 @@ internal fun InputBar(
                             }
                         }
                     )
+                    // A plain line mic in a white circle (no colour fill).
                     Box(
                         Modifier
                             .size(36.dp)
                             .clip(CircleShape)
-                            .background(GreenDeep)
+                            .background(MaterialTheme.colorScheme.surface)
+                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
                             .clickable(enabled = talking || !busy) {
                                 when {
                                     talking -> voice!!.toggle()
@@ -128,10 +124,10 @@ internal fun InputBar(
                         contentAlignment = Alignment.Center
                     ) {
                         when {
-                            talking -> Box(Modifier.size(12.dp).clip(RoundedCornerShape(3.dp)).background(Color.White))
-                            busy -> CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
-                            text.isNotBlank() -> Icon(Icons.Filled.ArrowUpward, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(20.dp))
-                            else -> Icon(Icons.Rounded.Mic, contentDescription = "Speak", tint = Color.White, modifier = Modifier.size(21.dp))
+                            talking -> Box(Modifier.size(12.dp).clip(RoundedCornerShape(3.dp)).background(ink))
+                            busy -> CircularProgressIndicator(Modifier.size(18.dp), color = ink, strokeWidth = 2.dp)
+                            text.isNotBlank() -> Icon(Icons.Filled.ArrowUpward, contentDescription = "Send", tint = ink, modifier = Modifier.size(20.dp))
+                            else -> Icon(Icons.Outlined.Mic, contentDescription = "Speak", tint = ink, modifier = Modifier.size(19.dp))
                         }
                     }
                 }

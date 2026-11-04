@@ -66,9 +66,11 @@ object Query {
             (f.ids.isEmpty() || e.id in f.ids) && (f.from == null || e.date >= f.from) && (f.to == null || e.date <= f.to) &&
                 (f.createdFrom == null || e.createdAt >= f.createdFrom) && (f.createdTo == null || e.createdAt <= f.createdTo) &&
                 (f.types.isEmpty() || e.type in f.types) &&
-                (f.persons.isEmpty() || f.persons.any { samePerson(e.person, it) }) &&
+                // The person's khata, or a bank entry whose note names them ("To Saleem Butt · D360").
+                (f.persons.isEmpty() || f.persons.any { samePerson(e.person, it) || e.note.contains(it.trim(), true) }) &&
                 (f.cats.isEmpty() || e.category in f.cats) &&
-                (f.items.isEmpty() || f.items.any { w -> val q = w.lowercase(); e.item.lowercase().contains(q) || e.note.lowercase().contains(q) }) &&
+                // Spaces don't matter: "easypaisa" finds "Easy Paisa".
+                (f.items.isEmpty() || f.items.any { w -> val q = w.lowercase().replace(" ", ""); (e.item + e.note).lowercase().replace(" ", "").contains(q) }) &&
                 (f.min == null || e.amount >= f.min) && (f.max == null || e.amount <= f.max) &&
                 (!f.noPeople || (e.person.isBlank() && !Recat.isTransfer(e) && !e.note.startsWith("To ") && !e.note.startsWith("From "))) &&
                 (f.notItems.isEmpty() || f.notItems.none { w -> val q = w.lowercase(); e.item.lowercase().contains(q) || e.note.lowercase().contains(q) })

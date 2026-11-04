@@ -25,12 +25,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.Alignment
@@ -58,10 +60,10 @@ class MainActivity : ComponentActivity() {
             var dark by remember { mutableStateOf(store.dark) }
             var themeName by remember { mutableStateOf(store.theme) }
             val header = headerTheme(themeName, dark)
-            // Every phone shows the design 1:1: the screen is 390 units wide (like the mock-up) and the phone's
+            // Every phone shows the design 1:1: the screen is 350 units wide (the 390 mock-up, everything a bit bigger) and the phone's
             // font-size and display-size settings don't blow the compact ledgers up.
             val m = resources.displayMetrics
-            CompositionLocalProvider(LocalHeader provides header, LocalDensity provides Density(minOf(m.widthPixels, m.heightPixels) / 390f, 1f)) {
+            CompositionLocalProvider(LocalHeader provides header, LocalDensity provides Density(minOf(m.widthPixels, m.heightPixels) / 350f, 1f)) {
                 BolTheme(dark) {
                     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                         App(
@@ -76,6 +78,9 @@ class MainActivity : ComponentActivity() {
 }
 
 enum class Tab { HOME, STOCK, CHAT, ENTRIES, REPORTS, TRASH, SETTINGS, PARTIES, CASHBOOK, EXPENSE, INCOME }
+
+/** Tabs whose top (KhataTop) sits on the theme's coloured band. */
+val BAND_TABS = setOf(Tab.PARTIES, Tab.CASHBOOK, Tab.EXPENSE, Tab.INCOME, Tab.ENTRIES, Tab.TRASH)
 
 /** The open tab and the tabs it was reached from, so Back returns the same way. Chat (the first tab) starts over. */
 class TabNav {
@@ -103,13 +108,15 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var lang by remember { mutableStateOf(store.language) }
     val tabNav = remember { TabNav() }
     var tab by tabNav
-    // The status bar takes the page colour, so every tab runs up to the top with no coloured band.
+    // The status bar takes the colour right under it: the theme band's top on the khata tabs, else the page colour.
     val pageColor = MaterialTheme.colorScheme.background
-    LaunchedEffect(pageColor, dark) {
+    val header = LocalHeader.current
+    val banded = header.name != "Clean" && tab in BAND_TABS
+    LaunchedEffect(pageColor, dark, banded, header) {
         (context as? Activity)?.window?.let { w ->
             @Suppress("DEPRECATION")
-            w.statusBarColor = pageColor.toArgb()
-            WindowCompat.getInsetsController(w, w.decorView).isAppearanceLightStatusBars = !dark
+            w.statusBarColor = (if (banded) header.top else pageColor).toArgb()
+            WindowCompat.getInsetsController(w, w.decorView).isAppearanceLightStatusBars = if (banded) header.light else !dark
         }
     }
     var chatMessages by remember { mutableStateOf(store.loadChatMessages()) }
@@ -151,6 +158,14 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     // The main account opened from the home screen, and the entry whose long-press menu / move dialog is open.
     var ledger by remember { mutableStateOf<MainAcct?>(null) }
     var menuFor by remember { mutableStateOf<Entry?>(null) }
+    // A long-pressed khata (kind to name), and the khata being renamed or moved.
+    var khataFor by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var khataRename by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var khataMove by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var renamingEntry by remember { mutableStateOf<Entry?>(null) }
+    // Entries picked for a move, and whether the move picker for them is open.
+    val selection = remember { Selection() }
+    var movingPicked by remember { mutableStateOf(false) }
     var ledgerPerson by remember { mutableStateOf<String?>(null) }
     var activeLedgerPerson by remember { mutableStateOf<String?>(null) }
     /** The party khata open from the Parties tab. */
@@ -335,6 +350,54 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         }
     }
 
+    /** Entries of a khata on the Business / Expense / Income lists (see [LocalKhataMenu]). */
+    fun khataEntries(kind: String, name: String) = when (kind) {
+        "party" -> entries.filter { it.person.equals(name, true) }
+        "expense" -> entries.filter { it.type == Type.KHARCHA && it.category.label.equals(name, true) }
+        else -> entries.filter { it.type == Type.AAMDANI && source(it).equals(name, true) }
+    }
+
+    /**
+     * Moves entries into a khata of any kind: a party (loan or repayment from its balance), an expense category, an
+     * income source or a stock item (purchase / sale). Money out can't go to Income, money in can't go to Expense.
+     */
+    fun moveEntries(ids: Set<String>, kind: String, to: String): Int {
+        val t = to.trim()
+        if (ids.isEmpty() || t.isEmpty()) return 0
+        val cat = if (kind == "expense") Cat.entries.firstOrNull { it.label.equals(t, true) } ?: return 0 else null
+        var skipped = 0
+        val after = entries.map { e ->
+            if (e.id !in ids) return@map e
+            val out = isOutflow(e)
+            when (kind) {
+                "party" -> movedTo(e, entries, null, false, t)
+                "expense" -> if (out) movedTo(e, entries, cat, false, null) else e.also { skipped++ }
+                "income" -> if (!out) e.copy(type = Type.AAMDANI, category = Cat.TANKHWAH, person = "", item = t, paid = false) else e.also { skipped++ }
+                else -> e.copy(type = if (out) Type.PURCHASE else Type.SALE, category = if (out) Cat.STOCK else Cat.SALES, person = "", item = t, paid = false)
+            }
+        }
+        val record = store.recordMove(entries, after)
+        if (record == null) { toast(if (skipped > 0) "Money out can't go to Income, money in can't go to Expense" else "Already there"); return 0 }
+        save(after)
+        scope.launch {
+            val moved = ids.size - skipped
+            val msg = "✓ Moved $moved " + (if (moved == 1) "entry" else "entries") + " to $t" + (if (skipped > 0) " ($skipped skipped)" else "")
+            if (snackbar.showSnackbar(msg, actionLabel = "Undo", duration = SnackbarDuration.Long) == SnackbarResult.ActionPerformed) {
+                val restored = restoreMoveBatch(entries, record)
+                if (restored != null) { save(restored); store.forgetMove(record.id) } else toast("Cannot undo: entries were changed after the move.")
+            }
+        }
+        return ids.size - skipped
+    }
+
+    /** Moves a whole khata into another (or renames it): party into party merges; otherwise every entry moves. */
+    fun moveKhata(kind: String, from: String, toKind: String, to: String) {
+        val t = to.trim()
+        if (t.isEmpty() || (kind == toKind && t.equals(from, true))) return
+        if (kind == "party" && toKind == "party") { renameOrMergeKhata(from, t, merge = entries.any { it.person.equals(t, true) }); return }
+        moveEntries(khataEntries(kind, from).map { it.id }.toSet(), toKind, t)
+    }
+
     /** Handles typed or spoken commands: search, edit, delete, clear all. Returns true if it was a command. */
     fun handleCommand(text: String): Boolean {
         val c = Commands.read(text) ?: return false
@@ -365,7 +428,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     /** When the person fixes a category, remember the words so it is right next time. */
     /** Names the person has entries with: people in the khata and names on transfers. */
     fun contactNames(): List<String> = (personAccounts(entries).map { it.name } + entries.mapNotNull { e ->
-        e.note.trim().takeIf { it.startsWith("To ") || it.startsWith("From ") }?.substringAfter(' ')?.trim()
+        e.note.trim().takeIf { it.startsWith("To ") || it.startsWith("From ") }?.substringAfter(' ')?.substringBefore(" · ")?.trim()
     }).mapNotNull { cleanPersonName(it) }.distinctBy { it.lowercase() }
 
     fun learnFrom(before: Entry?, after: Entry) {
@@ -859,7 +922,30 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 changed.take(3).joinToString("; ") { (a, b) -> entryTitle(a) + " " + fmt(a.amount) + " → " + entryTitle(b) + " " + fmt(b.amount) } +
                     if (changed.size > 3) " +${changed.size - 3} more" else ""
             }
+            "rename_khata" -> {
+                val (kind, from, to) = Triple(f.set["kind"].orEmpty(), f.set["from"].orEmpty(), f.set["to"].orEmpty())
+                if (kind == "expense") return "Expense categories keep their names. Say which entries should move instead."
+                if (kind == "party") renameOrMergeKhata(from, to, merge = false) else moveKhata(kind, from, kind, to)
+                "Renamed $from → $to"
+            }
+            "move_khata" -> {
+                val from = f.set["from"].orEmpty()
+                val to = f.set["to"].orEmpty()
+                val n = khataEntries(f.set["kind"].orEmpty(), from).size
+                if (n == 0) return "No entries in $from."
+                moveKhata(f.set["kind"].orEmpty(), from, f.set["toKind"].orEmpty(), to)
+                "All of $from ($n " + (if (n == 1) "entry" else "entries") + ") → $to"
+            }
             "to_khata" -> {
+                // "2000 aur 5000 wali entry Noor Building Contracting me": an income or business khata, not a party.
+                f.set["kind"]?.let { kind ->
+                    val name = f.set["name"].orEmpty()
+                    val hits = scoped(Query.select(entries, q))
+                    if (hits.isEmpty()) return "Nothing found (${Query.label(q)})."
+                    val moved = moveEntries(hits.map { it.id }.toSet(), kind, name)
+                    return if (moved == 0) "Nothing moved: money out can't go to Income, money in can't go to Expense."
+                    else "$moved " + (if (moved == 1) "entry" else "entries") + " → $name"
+                }
                 // "Ye sari Abrar D360 ka khata bana do": these records become that khata's lene-dene, in date order,
                 // each one a loan or a repayment by the running balance (money out = they owe me, money in = back / I owe).
                 val name = f.set["person"]?.trim()?.takeIf { it.isNotEmpty() } ?: f.payer.ifBlank { return "Which khata? e.g. \"Abrar D360 ka khata\"" }
@@ -1109,7 +1195,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             return
         }
         val roman = runCatching { Translit.toRoman(text) }.getOrDefault(text)
-        val history = chatMessages.takeLast(20)
+        // A long window, so a follow-up still knows the search or list from many turns back.
+        val history = chatMessages.takeLast(60)
         postChat(text, isUser = true)
 
         NativeMemory.handle(text, store.memory)?.let { memory ->
@@ -1366,7 +1453,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         loadingLabel = "Listening with Groq…"
         if (voiceOn) voiceStatus = "Thinking…"
         scope.launch {
-            val said = Groq.transcribe(groqKey, file)
+            val said = Groq.transcribe(groqKey, file, contactNames() + entries.filter { it.type == Type.AAMDANI }.map { source(it) })
             runCatching { file.delete() }
             chatLoading = false
             loadingLabel = "Thinking…"
@@ -1949,12 +2036,18 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         // Like ChatGPT, screens run underneath the floating message bar; lists add LocalBarSpace at their end.
         Box(Modifier.padding(top = pad.calculateTopPadding()).fillMaxSize()) {
             val who = people
+            val saveable = rememberSaveableStateHolder()
             val acct = account
             CompositionLocalProvider(
                 LocalBarSpace provides pad.calculateBottomPadding(),
                 LocalMainOpener provides { a: MainAcct -> ledger = a },
-                LocalEntryMenu provides { e: Entry -> menuFor = e }
+                LocalEntryMenu provides { e: Entry -> menuFor = e },
+                LocalKhataMenu provides { kind: String, n: String -> khataFor = kind to n },
+                LocalSelection provides selection
             ) {
+            // Each screen keeps its own scroll and picks when another opens over it (a party, a report…),
+            // so Back returns to the same place in the list.
+            saveable.SaveableStateProvider("$tab|$partyOpen|${who != null}|${results != null}|${acct != null}") {
             when {
                 results != null -> {
                     val (q, editMode) = results!!
@@ -2211,6 +2304,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 )
             }
             }
+            }
             // Main accounts open over the list, so going back returns to the same place in the list.
             ledger?.let { start ->
                 Box(
@@ -2297,35 +2391,62 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     onDismiss = { showMoveHistory = false }
                 )
             }
+            khataFor?.let { (kind, n) ->
+                GroupMenu(
+                    n, khataEntries(kind, n).size,
+                    onRename = if (kind == "expense") null else ({ khataFor = null; khataRename = kind to n }),
+                    onMove = { khataFor = null; khataMove = kind to n },
+                    onDismiss = { khataFor = null }
+                )
+            }
+            khataRename?.let { (kind, n) ->
+                RenameDialog("Rename khata", n, khataEntries(kind, n).size.let { if (it == 1) "1 entry" else "$it entries" }, onRename = { newName ->
+                    khataRename = null
+                    if (kind == "party") renameOrMergeKhata(n, newName, merge = false) else moveKhata(kind, n, kind, newName)
+                }, onDismiss = { khataRename = null })
+            }
+            renamingEntry?.let { e ->
+                RenameDialog("Rename entry", entryTitle(e), onRename = { newName ->
+                    renamingEntry = null
+                    // The entry's own name (its item); the note follows when it only repeated the old name.
+                    save(entries.map { if (it.id == e.id) it.copy(item = newName, note = if (it.note.isBlank() || it.note == it.item) newName else it.note) else it })
+                    toast("Renamed to $newName")
+                }, onDismiss = { renamingEntry = null })
+            }
+            khataMove?.let { (kind, n) ->
+                MoveToKhata(khataEntries(kind, n).size.let { if (it == 1) "1 entry" else "$it entries" } + " · all of $n", entries, n,
+                    onMove = { toKind, to -> khataMove = null; moveKhata(kind, n, toKind, to) }, onDismiss = { khataMove = null })
+            }
+            if (movingPicked) MoveToKhata(
+                "${selection.ids.size} selected " + (if (selection.ids.size == 1) "entry" else "entries"), entries, "",
+                onMove = { toKind, to -> movingPicked = false; moveEntries(selection.ids.toSet(), toKind, to); selection.clear() },
+                onDismiss = { movingPicked = false }
+            )
+            // The picking bar: count, All is in each ledger's head, Move opens the khata list, × stops picking.
+            if (selection.active) Surface(
+                Modifier.align(Alignment.BottomCenter).padding(start = 12.dp, end = 12.dp, bottom = pad.calculateBottomPadding() + 8.dp),
+                shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.onSurface
+            ) {
+                Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("${selection.ids.size} selected", color = MaterialTheme.colorScheme.surface, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    TextButton(enabled = selection.ids.isNotEmpty(), onClick = { movingPicked = true }) { Text("Move", color = MaterialTheme.colorScheme.surface, fontWeight = FontWeight.Bold) }
+                    IconButton(onClick = { selection.clear() }) { Icon(Icons.Filled.Close, contentDescription = "Stop selecting", tint = MaterialTheme.colorScheme.surface) }
+                }
+            }
             menuFor?.let { e ->
                 EntryMenu(
                     e, currency,
                     onEdit = { menuFor = null; editing = e },
+                    onRename = { menuFor = null; renamingEntry = e },
                     onMove = { menuFor = null; moving = e },
+                    onSelect = { menuFor = null; selection.ids.clear(); selection.ids.add(e.id); selection.active = true },
                     onDelete = { menuFor = null; confirm = "Move \"${entryTitle(e)}\" (${money(currency, e.amount)}) to Trash?" to setOf(e.id) },
                     onDismiss = { menuFor = null }
                 )
             }
             moving?.let { e ->
-                MoveDialog(e, entries, onMove = { moved ->
-                    moving = null
-                    val current = entries.firstOrNull { it.id == moved.id }
-                    if (current != null && current != moved) {
-                        val after = entries.map { if (it.id == moved.id) moved else it }
-                        val record = store.recordMove(entries, after)
-                        save(after)
-                        scope.launch {
-                            val result = snackbar.showSnackbar("✓ Moved entry", actionLabel = "Undo", duration = SnackbarDuration.Long)
-                            if (result == SnackbarResult.ActionPerformed && record != null) {
-                                val restored = restoreMoveBatch(entries, record)
-                                if (restored != null) {
-                                    save(restored)
-                                    store.forgetMove(record.id)
-                                } else toast("Cannot undo: this entry changed.")
-                            }
-                        }
-                    }
-                }, onDismiss = { moving = null })
+                MoveToKhata("1 entry · " + entryTitle(e), entries, "",
+                    onMove = { toKind, to -> moving = null; moveEntries(setOf(e.id), toKind, to) }, onDismiss = { moving = null })
             }
             confirmNew?.let { (list, said) ->
                 ConfirmCard(

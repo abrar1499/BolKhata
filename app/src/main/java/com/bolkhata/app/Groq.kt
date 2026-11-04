@@ -25,6 +25,10 @@ object Groq {
     private const val VOICE_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
     private const val CHAT_MODEL = "openai/gpt-oss-120b"
     private const val VOICE_MODEL = "whisper-large-v3"
+    /** Words every person says to a khata app, in Roman Urdu, so Whisper spells them the usual way for everyone. */
+    private const val COMMON_WORDS = "Hamid ka khata kholo. Chai 50 riyal likho. Kal nashta 10 riyal, lunch 25, dinner 30. " +
+        "Petrol 60, kiraya 1500, bijli bill, mobile recharge. Ali ko 500 udhaar diye, 200 wapas mile. Salary aayi 3000. " +
+        "Is mahine kitna kharcha hua? Pichle mahine ka hisaab. Ye entry delete karo. Rupay, riyal, dirham."
 
     private val instructions = """
         Fix a message for an offline khata (ledger) app. People type Roman Urdu, Urdu or Hindi script, or English,
@@ -168,15 +172,19 @@ object Groq {
         val t = text.trim().lowercase()
         if (t.none { it.isLetterOrDigit() }) return true
         if (t.any { it in '\u0370'..'\u03FF' || it in '\u0400'..'\u04FF' || it in '\u3040'..'\u9FFF' }) return true
-        return listOf("subtitle", "thanks for watching", "thank you for watching", "amara.org", "subscribe", "authorwave")
-            .any { it in t }
+        if (listOf("subtitle", "thanks for watching", "thank you for watching", "amara.org", "subscribe", "authorwave",
+                "welcome to my channel", "موسیقی", "mosiqi", "moseeqi", "mausiqi", "musiqi", "¿").any { it in t }) return true
+        // "National National National National": one word said over and over is noise, not a message.
+        val words = t.split(Regex("""\s+""")).filter { it.isNotBlank() }
+        return words.size >= 3 && words.distinct().size == 1
     }
 
     /**
-     * Whisper speech-to-text. The language is detected by itself (Urdu, Hindi, English or a mix); the short example
-     * nudges it to write the way people type here, in Roman Urdu.
+     * Whisper speech-to-text. The language is detected by itself (Urdu, Hindi, English or a mix). The prompt holds a
+     * short example and the saved khata [names], so names are spelled the way they are saved. Parts Whisper itself
+     * marks as no speech (silence, music) are dropped.
      */
-    suspend fun transcribe(key: String, audio: File): Result<String> = withContext(Dispatchers.IO) {
+    suspend fun transcribe(key: String, audio: File, names: List<String> = emptyList()): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
             val boundary = "----bolkhata" + System.nanoTime()
             val out = java.io.ByteArrayOutputStream()
@@ -184,15 +192,23 @@ object Groq {
                 out.write("--$boundary\r\nContent-Disposition: form-data; name=\"$name\"\r\n\r\n$value\r\n".toByteArray())
             }
             field("model", VOICE_MODEL)
-            field("response_format", "json")
-            field("prompt", "Hamid ka khata kholo. Chai 50 riyal likho. Is mahine kitna kharcha hua?")
+            field("response_format", "verbose_json")
+            field("temperature", "0")
+            val known = names.map { it.trim() }.filter { it.isNotBlank() }.distinct().joinToString(", ").take(600)
+            field("prompt", COMMON_WORDS + if (known.isEmpty()) "" else " Khata: $known.")
             out.write("--$boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"voice.m4a\"\r\nContent-Type: audio/mp4\r\n\r\n".toByteArray())
             out.write(audio.readBytes())
             out.write("\r\n--$boundary--\r\n".toByteArray())
             val (code, text) = post(VOICE_URL, key, "multipart/form-data; boundary=$boundary", out.toByteArray())
             if (code !in 200..299) error(describe(code))
+            val o = JSONObject(text)
+            val segments = o.optJSONArray("segments")
+            val heard = if (segments == null || segments.length() == 0) o.optString("text") else
+                (0 until segments.length()).map { segments.getJSONObject(it) }
+                    .filter { it.optDouble("no_speech_prob", 0.0) < 0.6 && it.optDouble("avg_logprob", 0.0) > -1.0 }
+                    .joinToString(" ") { it.optString("text").trim() }
             // Urdu or Hindi script is written in English letters, the way the app and the owner type.
-            JSONObject(text).optString("text").trim().let { runCatching { Translit.toRoman(it) }.getOrDefault(it).trim() }
+            heard.trim().let { runCatching { Translit.toRoman(it) }.getOrDefault(it).trim() }
         }
     }
 
