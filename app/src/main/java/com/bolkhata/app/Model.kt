@@ -108,6 +108,14 @@ fun restoreMoveBatch(entries: List<Entry>, batch: MoveBatch): List<Entry>? {
     return entries.map { e -> changes[e.id]?.restore(e) ?: e }
 }
 
+/** Transfers to or from a person turned into loans and repayments, oldest first (see [movedTo]). */
+fun transfersToLoans(entries: List<Entry>): List<Entry> {
+    var work = entries
+    entries.filter { isTransfer(it.type) && it.person.isNotBlank() }.sortedWith(compareBy<Entry> { it.date }.thenBy { it.createdAt })
+        .forEach { e -> val moved = movedTo(e, work, null, false, e.person); work = work.map { if (it.id == e.id) moved else it } }
+    return work
+}
+
 /** Saves entries on the phone itself (no internet needed). */
 class Store(context: Context) {
     private val prefs = context.getSharedPreferences("bolkhata", Context.MODE_PRIVATE)
@@ -125,16 +133,24 @@ class Store(context: Context) {
 
     fun load(): List<Entry> {
         val list = read(scoped("entries"))
-        if (prefs.getBoolean("bankNamesV1", false)) return list
-        // One-time fix of the bank statement import: traffic fines are Transport, the Jawazat fee is the Iqama fee.
-        val fixed = list.map { e ->
-            when {
-                e.category == Cat.FEES && e.item == "Traffic fine" -> e.copy(category = Cat.TRANSPORT)
-                e.category == Cat.FEES && e.item == "Jawazat fee" -> e.copy(item = "Iqama fee", note = if (e.note == "Jawazat fee") "Iqama fee" else e.note)
-                else -> e
+        var fixed = list
+        if (!prefs.getBoolean("bankNamesV1", false)) {
+            // One-time fix of the bank statement import: traffic fines are Transport, the Jawazat fee is the Iqama fee.
+            fixed = fixed.map { e ->
+                when {
+                    e.category == Cat.FEES && e.item == "Traffic fine" -> e.copy(category = Cat.TRANSPORT)
+                    e.category == Cat.FEES && e.item == "Jawazat fee" -> e.copy(item = "Iqama fee", note = if (e.note == "Jawazat fee") "Iqama fee" else e.note)
+                    else -> e
+                }
             }
+            prefs.edit().putBoolean("bankNamesV1", true).apply()
         }
-        prefs.edit().putBoolean("bankNamesV1", true).apply()
+        if (!prefs.getBoolean("transfersToLoansV1", false)) {
+            // One-time: money sent to or received from a person (bank transfers) becomes lena-dena, so every party shows
+            // what is payable or receivable. Oldest first, each one a loan or a repayment by that person's running balance.
+            fixed = transfersToLoans(fixed)
+            prefs.edit().putBoolean("transfersToLoansV1", true).apply()
+        }
         if (fixed != list) write(scoped("entries"), fixed)
         return fixed
     }
