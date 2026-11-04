@@ -178,7 +178,6 @@ object Groq {
         val words = t.split(Regex("""\s+""")).filter { it.isNotBlank() }
         return words.size >= 3 && words.distinct().size == 1
     }
-    }
 
     /**
      * Whisper speech-to-text. The language is detected by itself (Urdu, Hindi, English or a mix). The prompt holds a
