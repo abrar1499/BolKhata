@@ -608,13 +608,17 @@ private fun DayLine(date: Long, cols: List<LCol>, day: List<LRow>, card: Boolean
     Row(
         Modifier.padding(start = 10.dp, end = 10.dp, top = if (card) 2.dp else 0.dp).fillMaxWidth().height(IntrinsicSize.Min)
             .shadow(1.dp).background(MaterialTheme.colorScheme.surface)
-            .background(Brush.horizontalGradient(listOf(Ember.copy(alpha = 0.10f), Color.Transparent)))
     ) {
+        // The red-to-white shade stays on the date; the amount columns keep the same tint as the entries under them.
         Text(dayLineFmt.format(Date(date)), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f).padding(start = 10.dp, top = 5.dp, bottom = 4.dp))
+            modifier = Modifier.weight(1f).fillMaxHeight().background(Brush.horizontalGradient(listOf(Ember.copy(alpha = 0.10f), Color.Transparent)))
+                .padding(start = 10.dp, top = 5.dp, bottom = 4.dp))
         cols.forEachIndexed { k, c ->
             VerticalDivider(Modifier.fillMaxHeight(), color = Faint)
-            Box(Modifier.width(w).fillMaxHeight(), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier.width(w).fillMaxHeight().background(if (c.kind == LKind.OUT) RedSpend.copy(alpha = 0.025f) else Color.Transparent),
+                contentAlignment = Alignment.Center
+            ) {
                 Text(signed(c.kind, totals[k]), fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = kindColor(c.kind), maxLines = 1, softWrap = false)
             }
         }
