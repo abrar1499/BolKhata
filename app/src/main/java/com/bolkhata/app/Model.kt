@@ -400,7 +400,7 @@ class Store(context: Context) {
         val originals = before.associateBy { it.id }
         val changes = after.mapNotNull { a ->
             val b = originals[a.id] ?: return@mapNotNull null
-            if (a.person == b.person) return@mapNotNull null
+            if (a.person == b.person && a.type == b.type && a.category == b.category && a.item == b.item && a.paid == b.paid) return@mapNotNull null
             MoveChange(b.id, b.person, b.type, b.category, b.item, b.paid,
                 a.person, a.type, a.category, a.item, a.paid)
         }

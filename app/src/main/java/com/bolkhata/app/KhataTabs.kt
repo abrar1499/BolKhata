@@ -584,7 +584,7 @@ private fun signed(k: LKind, v: Double) = if (v == 0.0) "" else (when (k) { LKin
  * line per entry. Lines are faint grey; amounts sit in the middle of their column.
  */
 internal fun LazyListScope.ledger(title: String, cols: List<LCol>, rows: List<LRow>, keyPrefix: String = "", cards: Boolean = false) {
-    item(key = keyPrefix + "lh") { LedgerHead(title, entryCount(rows.size), cols, rows.isEmpty()) }
+    item(key = keyPrefix + "lh") { LedgerHead(title, entryCount(rows.size), cols, rows.isEmpty(), ids = rows.mapNotNull { it.entry?.id }) }
     rows.forEachIndexed { i, r ->
         if (i == 0 || !sameDay(rows[i - 1].date, r.date)) {
             val day = rows.filter { sameDay(it.date, r.date) }
@@ -597,8 +597,9 @@ internal fun LazyListScope.ledger(title: String, cols: List<LCol>, rows: List<LR
 }
 
 @Composable
-private fun LedgerHead(title: String, count: String, cols: List<LCol>, empty: Boolean, w: Dp = colW(cols)) = Tight {
+private fun LedgerHead(title: String, count: String, cols: List<LCol>, empty: Boolean, w: Dp = colW(cols), ids: List<String> = emptyList()) = Tight {
     val sub = MaterialTheme.colorScheme.onSurfaceVariant
+    val sel = LocalSelection.current
     Row(
         Modifier.padding(start = 10.dp, end = 10.dp, top = 8.dp).fillMaxWidth().height(IntrinsicSize.Min)
             .then(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp, bottomStart = if (empty) 14.dp else 0.dp, bottomEnd = if (empty) 14.dp else 0.dp).let { Modifier.shadow(1.dp, it).clip(it) })
@@ -607,6 +608,16 @@ private fun LedgerHead(title: String, count: String, cols: List<LCol>, empty: Bo
         Column(Modifier.weight(1f).padding(start = 10.dp, top = 7.dp, bottom = 7.dp), verticalArrangement = Arrangement.Center) {
             Text(title, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
             Text(count, fontSize = 9.sp, color = sub)
+        }
+        // While picking entries: "All" picks (or drops) every entry of this ledger.
+        if (sel?.active == true && ids.isNotEmpty()) {
+            val all = ids.all { it in sel.ids }
+            Text(
+                if (all) "None" else "All", color = Ember, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.align(Alignment.CenterVertically).clip(CircleShape)
+                    .clickable { if (all) sel.ids.removeAll(ids) else ids.filterNot { it in sel.ids }.forEach { sel.ids.add(it) } }
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+            )
         }
         cols.forEach { c ->
             VerticalDivider(Modifier.fillMaxHeight(), color = Faint)
@@ -656,10 +667,15 @@ private fun LedgerRow(r: LRow, cols: List<LCol>, last: Boolean, card: Boolean = 
     val w = colW(cols)
     val shape = if (card) RectangleShape else sheetShape(last)
     val menu = LocalEntryMenu.current
+    val sel = LocalSelection.current
+    val picking = sel?.active == true && r.entry != null
+    val picked = picking && r.entry!!.id in sel!!.ids
     Row(
         Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(IntrinsicSize.Min).shadow(1.dp, shape).clip(shape)
-            .background(MaterialTheme.colorScheme.surface)
-            .combinedClickable(onLongClick = r.entry?.let { e -> menu?.let { { it(e) } } }) { r.onClick() }
+            .background(MaterialTheme.colorScheme.surface).background(if (picked) Ember.copy(alpha = 0.12f) else Color.Transparent)
+            .combinedClickable(onLongClick = r.entry?.let { e -> if (picking) ({ sel!!.toggle(e.id) }) else menu?.let { { it(e) } } }) {
+                if (picking) sel!!.toggle(r.entry!!.id) else r.onClick()
+            }
     ) {
         Column(Modifier.weight(1f).padding(start = 10.dp, end = 4.dp, top = 5.dp, bottom = 5.dp), verticalArrangement = Arrangement.Center) {
             Text(r.title, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)

@@ -5,7 +5,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -20,6 +19,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.ui.window.Dialog
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -49,6 +49,16 @@ val LocalMainOpener = staticCompositionLocalOf<((MainAcct) -> Unit)?> { null }
 
 /** Long-press on an entry anywhere opens its action menu (Edit / Move). Set by the main screen. */
 val LocalEntryMenu = staticCompositionLocalOf<((Entry) -> Unit)?> { null }
+
+/** Entries picked for a move: long-press → Select starts it, taps add or remove, the bar at the bottom moves them. */
+class Selection {
+    val ids = mutableStateListOf<String>()
+    var active by mutableStateOf(false)
+    fun toggle(id: String) { if (id in ids) ids.remove(id) else ids.add(id) }
+    fun clear() { ids.clear(); active = false }
+}
+
+val LocalSelection = staticCompositionLocalOf<Selection?> { null }
 
 /** Long-press on a khata row opens Rename / Move: kind "party", "expense" (name = category label) or "income" (who paid). */
 val LocalKhataMenu = staticCompositionLocalOf<((kind: String, name: String) -> Unit)?> { null }
@@ -151,7 +161,7 @@ fun personAccounts(entries: List<Entry>): List<PersonAcct> =
 
 private val expenseCats = Cat.values().filter { it !in setOf(Cat.TANKHWAH, Cat.UDHAAR, Cat.SALES, Cat.STOCK) }
 
-private fun isOutflow(e: Entry) = when (e.type) {
+internal fun isOutflow(e: Entry) = when (e.type) {
     Type.KHARCHA, Type.DIYA, Type.WAPIS_DIYA, Type.PURCHASE, Type.TRANSFER_OUT -> true
     else -> false
 }
@@ -186,6 +196,23 @@ private fun cleanMoveKhataName(value: String): String {
     return name.trim().trim('.', '-', '/', ' ')
 }
 
+/** Every khata to move into, by kind: "party", "business" (stock item), "income" (who paid), "expense" (category label). */
+@Composable
+fun MoveToKhata(subtitle: String, all: List<Entry>, except: String, onMove: (kind: String, name: String) -> Unit, onDismiss: () -> Unit) {
+    val people = remember(all) { partyNames(all) }
+    val stockNames = remember(all) { stock(all).map { it.name.trim() }.filter { it.isNotBlank() }.distinctBy { it.lowercase() } }
+    val incomeNames = remember(all) { all.filter { it.type == Type.AAMDANI }.map { source(it).trim() }.filter { it.isNotBlank() }.distinctBy { it.lowercase() } }
+    PartyPicker(
+        people.filterNot { it.equals(except, true) }, "", "Move to",
+        confirm = { creating -> if (creating) "Create & move" else "Move" },
+        onPick = { onMove("party", it) }, onDismiss = onDismiss,
+        categories = expenseCats, onCategory = { onMove("expense", it.label) },
+        stockNames = stockNames.filterNot { it.equals(except, true) }, onStock = { onMove("business", it) },
+        incomeNames = incomeNames.filterNot { it.equals(except, true) }, onIncome = { onMove("income", it) },
+        subtitle = subtitle
+    )
+}
+
 /** Move entry: pick the party (khata) the entry goes to. */
 @Composable
 fun MoveDialog(e: Entry, all: List<Entry>, onMove: (Entry) -> Unit, onDismiss: () -> Unit, count: Int = 1) {
@@ -210,169 +237,133 @@ fun partyNames(all: List<Entry>): List<String> =
         .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { cleanMoveKhataName(it) })
 
 /**
- * The party list used by Move entry and by the entry form's Person field: a chat-bar style search with "+" for a
- * new khata, every party A–Z under it; tap one, then the confirm button. [current] is marked and can't be picked.
+ * The khata list used by Move and by the entry form: a compact white card with the title, tabs (Party, Business, Income,
+ * Expense when given), one search box that also takes a new name, the list, and Cancel / confirm side by side.
+ * [current] is marked and can't be picked.
  */
 @Composable
 fun PartyPicker(
     people: List<String>, current: String, title: String,
     confirm: (creating: Boolean) -> String, onPick: (String) -> Unit, onDismiss: () -> Unit,
-    /** When given, a "Party | Expense" switch: the entry can go to an expense category instead of a party. */
+    /** When given, an Expense tab: the entry can go to an expense category instead of a party. */
     categories: List<Cat> = emptyList(), currentCat: Cat? = null, onCategory: (Cat) -> Unit = {},
     /** When given, Business (stock items) and Income (who paid) tabs too, so one picker reaches every khata. */
     stockNames: List<String> = emptyList(), onStock: (String) -> Unit = {},
-    incomeNames: List<String> = emptyList(), onIncome: (String) -> Unit = {}
+    incomeNames: List<String> = emptyList(), onIncome: (String) -> Unit = {},
+    subtitle: String = ""
 ) {
     val tabs = listOfNotNull("Party", "Business".takeIf { stockNames.isNotEmpty() }, "Income".takeIf { incomeNames.isNotEmpty() },
         "Expense".takeIf { categories.isNotEmpty() })
     var tab by remember { mutableStateOf("Party") }
-    val toCats = tab == "Expense"
     var pickedCat by remember { mutableStateOf<Cat?>(null) }
-    var pickedName by remember(tab) { mutableStateOf<String?>(null) }
-    var searchQuery by remember { mutableStateOf("") }
-    var selectedPerson by remember { mutableStateOf<String?>(null) }
-    // "+" beside the search box: the box then takes a new khata's name.
-    var creating by remember { mutableStateOf(false) }
-    val query = searchQuery.trim()
-    val shown = remember(people, query) {
-        if (query.isBlank()) people
-        else people.filter { cleanMoveKhataName(it).contains(query, ignoreCase = true) || it.contains(query, ignoreCase = true) }
+    var picked by remember(tab) { mutableStateOf<String?>(null) }
+    var query by remember(tab) { mutableStateOf("") }
+    val q = query.trim()
+    val names = when (tab) { "Business" -> stockNames; "Income" -> incomeNames; else -> people }
+    val shown = remember(names, q) {
+        if (q.isBlank()) names else names.filter { cleanMoveKhataName(it).contains(q, true) || it.contains(q, true) }
     }
-    val exactMatch = people.any { cleanMoveKhataName(it).equals(query, ignoreCase = true) || it.equals(query, ignoreCase = true) }
+    val exact = names.any { cleanMoveKhataName(it).equals(q, true) || it.equals(q, true) }
+    val creating = picked != null && names.none { it.equals(picked, true) }
     val sub = MaterialTheme.colorScheme.onSurfaceVariant
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        // A compact card: narrower than the screen, short list.
-        modifier = Modifier.fillMaxWidth(0.84f),
-        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
-        shape = RoundedCornerShape(24.dp),
-        containerColor = MaterialTheme.colorScheme.surface,
-        tonalElevation = 0.dp,
-        title = {
-            Text(
-                title, Modifier.fillMaxWidth(),
-                fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = sub,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-            )
-        },
-        text = {
-            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    val shape = RoundedCornerShape(12.dp)
+    Dialog(onDismissRequest = onDismiss, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(Modifier.fillMaxWidth(0.86f), shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surface) {
+            Column(Modifier.padding(16.dp)) {
+                Text(title, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (subtitle.isNotBlank()) Text(subtitle, fontSize = 11.sp, color = sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (tabs.size > 1) Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant).padding(3.dp)
+                    Modifier.padding(top = 12.dp).fillMaxWidth().clip(RoundedCornerShape(11.dp)).background(MaterialTheme.colorScheme.background).padding(3.dp)
                 ) {
                     tabs.forEach { label ->
+                        val on = tab == label
                         Box(
-                            Modifier.weight(1f).clip(RoundedCornerShape(10.dp))
-                                .background(if (tab == label) MaterialTheme.colorScheme.surface else Color.Transparent)
+                            Modifier.weight(1f).clip(RoundedCornerShape(9.dp))
+                                .background(if (on) MaterialTheme.colorScheme.surface else Color.Transparent)
                                 .clickable { tab = label }.padding(vertical = 7.dp),
                             contentAlignment = Alignment.Center
-                        ) { Text(label, fontSize = 12.sp, maxLines = 1, fontWeight = if (tab == label) FontWeight.SemiBold else FontWeight.Normal) }
+                        ) {
+                            Text(label, fontSize = 11.5.sp, maxLines = 1, fontWeight = FontWeight.SemiBold,
+                                color = if (on) MaterialTheme.colorScheme.onSurface else sub)
+                        }
                     }
                 }
-                if (toCats) LazyColumn(Modifier.fillMaxWidth().heightIn(max = 300.dp)) {
+                if (tab == "Expense") LazyColumn(Modifier.padding(top = 6.dp).fillMaxWidth().heightIn(max = 260.dp)) {
                     items(categories, key = { it.name }) { c ->
                         KhataChoice(c.icon, c.label, c == pickedCat, c == currentCat) { if (c != currentCat) pickedCat = c }
                     }
-                } else if (tab != "Party") LazyColumn(Modifier.fillMaxWidth().heightIn(max = 300.dp)) {
-                    items(if (tab == "Business") stockNames else incomeNames, key = { it }) { n ->
-                        KhataChoice(n.take(1).uppercase(), n, n == pickedName, false) { pickedName = n }
-                    }
                 } else {
-                val taken = creating && exactMatch
-                // Looks like the chat's message bar, a little lower: a white pill, "+" on the left (here: new khata).
-                val ink = MaterialTheme.colorScheme.onSurface
-                Surface(
-                    shape = RoundedCornerShape(26.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 3.dp,
-                    border = if (taken) BorderStroke(1.dp, MaterialTheme.colorScheme.error) else null,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(Modifier.heightIn(min = 40.dp).padding(start = 2.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            Modifier.size(36.dp).clip(CircleShape).clickable {
-                                creating = !creating
-                                selectedPerson = if (creating) query.takeIf { it.isNotEmpty() && !exactMatch } else null
-                            },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (creating) Icon(Icons.Filled.Close, contentDescription = "Back to search", tint = ink)
-                            else ThinPlus(ink)
-                        }
-                        BasicTextField(
-                            value = searchQuery,
-                            onValueChange = {
-                                searchQuery = it
-                                selectedPerson = if (creating) it.trim().takeIf { n -> n.isNotEmpty() && people.none { p -> p.equals(n, true) } } else null
-                            },
-                            modifier = Modifier.weight(1f).padding(horizontal = 4.dp, vertical = 8.dp),
-                            singleLine = true,
-                            textStyle = LocalTextStyle.current.copy(fontSize = 16.sp, color = ink),
-                            cursorBrush = SolidColor(GreenDeep),
-                            decorationBox = { field ->
-                                Box(contentAlignment = Alignment.CenterStart) {
-                                    if (searchQuery.isEmpty()) Text(if (creating) "New party name" else "Search party", fontSize = 16.sp, color = sub, maxLines = 1)
+                    // One box: search the list, or type a new name (Party only; Business and Income too).
+                    BasicTextField(
+                        query, { query = it; picked = null }, singleLine = true,
+                        textStyle = LocalTextStyle.current.copy(fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.onSurface),
+                        modifier = Modifier.padding(top = 10.dp).fillMaxWidth().height(38.dp).clip(shape)
+                            .background(MaterialTheme.colorScheme.background).padding(horizontal = 12.dp),
+                        decorationBox = { field ->
+                            Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Filled.Search, contentDescription = null, tint = sub, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Box(Modifier.weight(1f)) {
+                                    if (query.isEmpty()) Text("Search or type a new name", fontSize = 13.sp, color = sub, maxLines = 1)
                                     field()
                                 }
                             }
-                        )
-                        if (!creating) Icon(Icons.Filled.Search, contentDescription = null, tint = sub, modifier = Modifier.size(20.dp))
+                        }
+                    )
+                    LazyColumn(Modifier.padding(top = 6.dp).fillMaxWidth().heightIn(max = 250.dp)) {
+                        if (q.isNotBlank() && !exact) item(key = "+new") {
+                            KhataChoice("+", "New: $q", picked == q, false) { picked = q }
+                        }
+                        items(shown, key = { it }) { n ->
+                            val isCurrent = current.equals(n, true)
+                            KhataChoice(cleanMoveKhataName(n).take(1).uppercase(), cleanMoveKhataName(n), n == picked, isCurrent) { if (!isCurrent) picked = n }
+                        }
+                        if (shown.isEmpty() && q.isBlank()) item(key = "none") {
+                            Text("Nothing here yet. Type a name to add one.", fontSize = 12.sp, color = sub, modifier = Modifier.padding(8.dp))
+                        }
                     }
                 }
-                if (creating) Text(
-                    if (taken) "This party already exists. Tap × and pick it from the list." else "A new party with this name will be made.",
-                    fontSize = 12.sp, color = if (taken) MaterialTheme.colorScheme.error else sub
-                )
-                if (!creating) LazyColumn(Modifier.fillMaxWidth().heightIn(max = 250.dp)) {
-                    if (query.isNotBlank() && !exactMatch) item(key = "+new") {
-                        KhataChoice("+", "New party: $query", query == selectedPerson, false) { selectedPerson = query }
-                    }
-                    items(shown, key = { it }) { person ->
-                        val isCurrent = current.equals(person, ignoreCase = true)
-                        KhataChoice(cleanMoveKhataName(person).take(1).uppercase(), cleanMoveKhataName(person),
-                            person == selectedPerson, isCurrent) { if (!isCurrent) selectedPerson = person }
-                    }
-                    if (shown.isEmpty() && query.isBlank()) item(key = "none") {
-                        Text("No parties yet. Tap + or type a name to add one.", fontSize = 13.sp, color = sub, modifier = Modifier.padding(8.dp))
-                    }
-                }
+                Row(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = onDismiss, shape = shape, modifier = Modifier.weight(1f).height(40.dp)) { Text("Cancel") }
+                    Button(
+                        enabled = if (tab == "Expense") pickedCat != null else picked != null, shape = shape,
+                        colors = ButtonDefaults.buttonColors(containerColor = RedSpend), modifier = Modifier.weight(1f).height(40.dp),
+                        onClick = {
+                            when (tab) {
+                                "Expense" -> onCategory(pickedCat ?: return@Button)
+                                "Business" -> onStock(picked ?: return@Button)
+                                "Income" -> onIncome(picked ?: return@Button)
+                                else -> onPick(picked ?: return@Button)
+                            }
+                        }
+                    ) { Text(confirm(creating && tab != "Expense"), fontWeight = FontWeight.Bold, maxLines = 1) }
                 }
             }
-        },
-        confirmButton = {
-            Button(enabled = when (tab) { "Expense" -> pickedCat != null; "Party" -> selectedPerson != null; else -> pickedName != null }, onClick = {
-                when (tab) {
-                    "Expense" -> onCategory(pickedCat ?: return@Button)
-                    "Business" -> onStock(pickedName ?: return@Button)
-                    "Income" -> onIncome(pickedName ?: return@Button)
-                    else -> onPick(selectedPerson ?: return@Button)
-                }
-            }) { Text(confirm(creating && tab == "Party")) }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
-    )
+        }
+    }
 }
 
-/** One khata in the Move list: initial, name, and a tick when picked ("Current" for the entry's own khata). */
+/** One khata in the list: initial, name, and a red tick when picked ("Current" for the entry's own khata). */
 @Composable
 private fun KhataChoice(initial: String, name: String, picked: Boolean, current: Boolean, onClick: () -> Unit) {
-    val green = MaterialTheme.colorScheme.primary
+    val red = RedSpend
     Row(
         Modifier.fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(if (picked) green.copy(alpha = 0.10f) else Color.Transparent)
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (picked) red.copy(alpha = 0.08f) else Color.Transparent)
             .clickable(enabled = !current) { onClick() }
-            .padding(horizontal = 6.dp, vertical = 6.dp),
+            .padding(horizontal = 6.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(Modifier.size(30.dp).clip(CircleShape).background(green.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
-            Text(initial, color = green, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+        Box(Modifier.size(28.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
+            Text(initial, color = red, fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
         }
-        Spacer(Modifier.width(12.dp))
-        Text(name, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
-            fontWeight = if (picked) FontWeight.SemiBold else FontWeight.Medium)
+        Spacer(Modifier.width(10.dp))
+        Text(name, Modifier.weight(1f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
         when {
-            current -> Text("Current", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            picked -> Text("✓", color = green, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            current -> Text("Current", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            picked -> Text("✓", color = red, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
         }
     }
 }
