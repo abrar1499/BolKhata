@@ -487,6 +487,37 @@ class NativeChatEngineUnsureTest {
     }
 }
 
+class QueryPersonInNoteTest {
+    @Test fun aPersonIsFoundInABankEntrysNote() {
+        val sent = Entry("s1", Type.KHARCHA, 300.0, Cat.GHAR, "Sent home", "", "To Saleem Butt · D360", 1L, 1L)
+        val other = Entry("s2", Type.KHARCHA, 20.0, Cat.KHANA, "Lunch", "", "Lunch", 2L, 2L)
+        val hits = Query.select(listOf(sent, other), Query.Filter(persons = listOf("Saleem Butt")))
+        assertEquals(listOf("s1"), hits.map { it.id })
+    }
+
+    @Test fun aWordFromSavedEntriesFindsThemWhateverTheSpacing() {
+        val sent = Entry("s1", Type.KHARCHA, 300.0, Cat.GHAR, "Sent home", "", "To Saleem Butt · Easy Paisa", 1L, 1L)
+        val bare = NativeChatEngine.interpret("easypaisa", listOf(sent))
+        assertEquals("ask", bare.kind)
+        assertEquals(listOf("s1"), Query.select(listOf(sent), bare.filter).map { it.id })
+        val long = NativeChatEngine.interpret("easypaisa me jitni b transaction hoi hain dikhao", listOf(sent))
+        assertEquals(listOf("easypaisa"), long.filter.items)
+    }
+
+    @Test fun moneySentToPakistanIsSentHome() {
+        val r = NativeChatEngine.interpret("saleem butt ko jitny b Pakistan bhejy hain dikhao", emptyList(), listOf("Saleem Butt"))
+        assertEquals(setOf(Cat.GHAR), r.filter.cats)
+        assertTrue(r.filter.items.isEmpty())
+    }
+
+    @Test fun theWordNameIsNotSearchedFor() {
+        val r = NativeChatEngine.interpret("saleem butt name se entry dikhao", emptyList(), listOf("Saleem Butt"))
+        assertEquals("ask", r.kind)
+        assertTrue(r.filter.items.isEmpty())
+        assertEquals(listOf("Saleem Butt"), r.filter.persons)
+    }
+}
+
 class NativeChatEngineKhataCommandsTest {
     private val contacts = listOf("Hamid Akram", "Nargis Salim Rashid", "Haji Kamran Saeed", "Kamran Aslam")
     private fun read(text: String) = NativeChatEngine.interpret(text, emptyList(), contacts)

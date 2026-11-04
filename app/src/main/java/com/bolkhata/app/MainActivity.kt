@@ -428,7 +428,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     /** When the person fixes a category, remember the words so it is right next time. */
     /** Names the person has entries with: people in the khata and names on transfers. */
     fun contactNames(): List<String> = (personAccounts(entries).map { it.name } + entries.mapNotNull { e ->
-        e.note.trim().takeIf { it.startsWith("To ") || it.startsWith("From ") }?.substringAfter(' ')?.trim()
+        e.note.trim().takeIf { it.startsWith("To ") || it.startsWith("From ") }?.substringAfter(' ')?.substringBefore(" · ")?.trim()
     }).mapNotNull { cleanPersonName(it) }.distinctBy { it.lowercase() }
 
     fun learnFrom(before: Entry?, after: Entry) {
