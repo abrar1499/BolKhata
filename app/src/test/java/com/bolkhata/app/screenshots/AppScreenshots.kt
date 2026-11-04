@@ -141,7 +141,7 @@ class AppScreenshots {
 
     @Test fun entryMenu() = shot("08-entry-menu") {
         Box(Modifier.fillMaxSize()) {
-            EntryMenu(entries.first(), "SAR", onEdit = {}, onMove = {}, onDelete = {}, onDismiss = {})
+            EntryMenu(entries.first(), "SAR", onEdit = {}, onRename = {}, onMove = {}, onSelect = {}, onDelete = {}, onDismiss = {})
         }
     }
 
