@@ -202,7 +202,7 @@ fun BolTheme(dark: Boolean, content: @Composable () -> Unit) {
         onSecondaryContainer = Color(0xFF065F46),
         background = Color(0xFFF3F1EF),
         onBackground = Color(0xFF0D0D0D),
-        surface = Color(0xFFFCFBF9),
+        surface = Color.White,
         onSurface = Color(0xFF0D0D0D),
         surfaceVariant = Color(0xFFF7F5F3),
         onSurfaceVariant = Color(0xFF6B6560),
