@@ -988,13 +988,17 @@ fun MoneyScreen(
                         }
                     }
                 }
-                // A group's own entries open right under it, on the same ledger page.
+                // A group's own entries open right under it, on the same ledger page; an expense category with
+                // several names (Bank fee, Iqama fee…) shows one ledger per name, biggest first.
                 if (isOpen) {
-                    ledger(
-                        g.name, listOf(LCol("Amount", fmt(g.total), kind)),
-                        g.list.map { e -> LRow(e.id, e.date, title(e), e.note, listOf(e.amount), e) { onEdit(e) } },
-                        keyPrefix = "g${g.name}:"
-                    )
+                    val subs = if (g.cat == null) listOf(g.list) else g.list.groupBy { title(it).trim().lowercase() }.values.sortedByDescending { l -> l.sumOf { it.amount } }
+                    subs.forEach { list ->
+                        ledger(
+                            if (subs.size == 1) g.name else title(list.first()), listOf(LCol("Amount", fmt(list.sumOf { it.amount }), kind)),
+                            list.map { e -> LRow(e.id, e.date, title(e), e.note, listOf(e.amount), e) { onEdit(e) } },
+                            keyPrefix = "g${g.name}:${title(list.first()).lowercase()}:"
+                        )
+                    }
                     item(key = "g${g.name}:end") { Spacer(Modifier.height(8.dp)) }
                 }
             }
