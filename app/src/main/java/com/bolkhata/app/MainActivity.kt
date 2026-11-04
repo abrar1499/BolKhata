@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.Alignment
@@ -1978,6 +1979,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         // Like ChatGPT, screens run underneath the floating message bar; lists add LocalBarSpace at their end.
         Box(Modifier.padding(top = pad.calculateTopPadding()).fillMaxSize()) {
             val who = people
+            val saveable = rememberSaveableStateHolder()
             val acct = account
             CompositionLocalProvider(
                 LocalBarSpace provides pad.calculateBottomPadding(),
@@ -1985,6 +1987,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 LocalEntryMenu provides { e: Entry -> menuFor = e },
                 LocalKhataMenu provides { kind: String, n: String -> khataFor = kind to n }
             ) {
+            // Each screen keeps its own scroll and picks when another opens over it (a party, a report…),
+            // so Back returns to the same place in the list.
+            saveable.SaveableStateProvider("$tab|$partyOpen|${who != null}|${results != null}|${acct != null}") {
             when {
                 results != null -> {
                     val (q, editMode) = results!!
@@ -2239,6 +2244,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     },
                     onImport = { importFile.launch(arrayOf("application/json", "text/plain", "application/octet-stream", "*/*")) },
                 )
+            }
             }
             }
             // Main accounts open over the list, so going back returns to the same place in the list.
