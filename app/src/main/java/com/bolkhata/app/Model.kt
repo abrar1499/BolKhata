@@ -565,9 +565,9 @@ class Store(context: Context) {
 
     var theme: String
         get() {
-            // The redesign moves everyone to the plain "Clean" look once; any theme picked afterwards is kept.
-            if (!prefs.getBoolean("cleanLookV1", false)) prefs.edit().putBoolean("cleanLookV1", true).putString("theme", "Clean").apply()
-            return prefs.getString("theme", "Clean") ?: "Clean"
+            // The red band look is given to everyone once; any theme picked afterwards (Clean too) is kept.
+            if (!prefs.getBoolean("redBandV1", false)) prefs.edit().putBoolean("redBandV1", true).putString("theme", "Red").apply()
+            return prefs.getString("theme", "Red") ?: "Red"
         }
         set(v) = prefs.edit().putString("theme", v).apply()
 

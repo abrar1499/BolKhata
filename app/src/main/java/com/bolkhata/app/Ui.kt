@@ -91,12 +91,16 @@ data class HeaderTheme(val name: String, val c1: Color, val c2: Color, val c3: C
 
     /** The plain "Clean" look: one flat colour, no gradient or circles. */
     val flat: Boolean get() = c1 == c2 && c2 == c3
+
+    /** Colour at the very top of the band (its first colour under the glossy sheen), also used for the status bar. */
+    val top: Color get() = androidx.compose.ui.graphics.lerp(c1, Color.White, 0.12f)
 }
 
 private fun h(name: String, a: Long, b: Long, c: Long, light: Boolean) = HeaderTheme(name, Color(a), Color(b), Color(c), light)
 
 /** All themes the person can pick in Settings. The first one is the default. */
 val HEADER_THEMES = listOf(
+    h("Red", 0xFFE3342F, 0xFFE3342F, 0xFFDC2F2A, false),
     h("Clean", 0xFFF3F1EF, 0xFFF3F1EF, 0xFFF3F1EF, true),
     h("Sand", 0xFFFED7AA, 0xFFFDE7CC, 0xFFFFF5EA, true),
     h("Mint", 0xFFA7F3D0, 0xFFC6F6E0, 0xFFE3FBF1, true),

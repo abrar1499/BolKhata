@@ -43,6 +43,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
@@ -94,7 +97,8 @@ val KHATA_TABS = listOf(Tab.CHAT, Tab.PARTIES, Tab.CASHBOOK, Tab.EXPENSE, Tab.IN
 
 @Composable
 fun KhataNav(tab: Tab, onTab: (Tab) -> Unit) {
-    Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 6.dp) {
+    // No shadow: it joins the white chat strip above into one bottom panel.
+    Surface(color = MaterialTheme.colorScheme.surface) {
         Row(Modifier.fillMaxWidth().navigationBarsPadding().height(58.dp)) {
             KHATA_TABS.forEach { t ->
                 val (label, icon) = navItem(t)
@@ -141,25 +145,27 @@ internal fun GlassHeader(modifier: Modifier) {
 }
 
 /**
- * The header every khata screen shares: the glassy orange band, the business pill (or a back arrow and title on
- * inner pages), and the summary card hanging half over its bottom edge.
+ * The header every khata screen shares: the theme's band (none for Clean) from the status bar down to the middle of
+ * the search box below, the business pill (or a back arrow and title on inner pages), and the summary card on it.
  */
 @Composable
 private fun KhataTop(
     title: String, subtitle: String, onMenu: () -> Unit, back: Boolean = false,
     business: String? = null, onBusiness: () -> Unit = {}, card: @Composable () -> Unit
 ) {
-    // No coloured band: the page colour runs up to the status bar, with the pill and the card on it.
-    Box(Modifier.fillMaxWidth()) {
+    val theme = LocalHeader.current
+    val banded = theme.name != "Clean"
+    val ink = if (banded) theme.on else MaterialTheme.colorScheme.onSurface
+    Box(Modifier.fillMaxWidth().then(if (banded) Modifier.drawBehind { drawBand(theme, size.height + BandBelow.toPx()) } else Modifier)) {
         Column(Modifier.statusBarsPadding().padding(horizontal = 12.dp)) {
             if (business != null) BusinessPill(business, onMenu, onBusiness) else
             Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onMenu) {
-                    Icon(if (back) Icons.AutoMirrored.Filled.ArrowBack else Icons.Filled.Menu, contentDescription = if (back) "Back" else "Menu", tint = MaterialTheme.colorScheme.onSurface)
+                    Icon(if (back) Icons.AutoMirrored.Filled.ArrowBack else Icons.Filled.Menu, contentDescription = if (back) "Back" else "Menu", tint = ink)
                 }
                 if (title.isNotEmpty()) Column {
-                    Text(title, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    if (subtitle.isNotEmpty()) Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                    Text(title, color = ink, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (subtitle.isNotEmpty()) Text(subtitle, color = if (banded) ink.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                 }
             }
             Spacer(Modifier.height(10.dp))
@@ -168,11 +174,24 @@ private fun KhataTop(
     }
 }
 
+/** How far the band reaches past the header: the search box's top gap and half its height. */
+private val BandBelow = 30.dp
+
+/** The theme band: its colours, a soft glossy top half, one white glow at the top right and a thin light bottom edge. */
+private fun DrawScope.drawBand(theme: HeaderTheme, h: Float) {
+    val w = size.width
+    val area = Size(w, h)
+    drawRect(Brush.linearGradient(listOf(theme.c1, theme.c2, theme.c3), start = Offset.Zero, end = Offset(w, h)), size = area)
+    drawRect(Brush.verticalGradient(0f to Color.White.copy(alpha = 0.12f), 0.48f to Color.White.copy(alpha = 0.04f), 0.52f to Color.Transparent, endY = h), size = area)
+    drawRect(Brush.radialGradient(listOf(Color.White.copy(alpha = 0.32f), Color.Transparent), center = Offset(w * 0.95f, 0f), radius = w * 0.5f), size = area)
+    drawRect(Color.White.copy(alpha = 0.35f), topLeft = Offset(0f, h - 1.dp.toPx()), size = Size(w, 1.dp.toPx()))
+}
+
 /** Compact frosted pill at the top: menu, then the open business with ▾ to switch or add one. */
 @Composable
 internal fun BusinessPill(name: String, onMenu: () -> Unit, onBusiness: () -> Unit) {
     Row(
-        Modifier.padding(top = 10.dp).shadow(1.dp, CircleShape).clip(CircleShape).background(Color.White).padding(end = 11.dp),
+        Modifier.padding(top = 12.dp).shadow(1.dp, CircleShape).clip(CircleShape).background(Color.White).padding(end = 11.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(Modifier.size(38.dp).clip(CircleShape).clickable { onMenu() }, contentAlignment = Alignment.Center) {
@@ -659,14 +678,14 @@ private fun LedgerRow(r: LRow, cols: List<LCol>, last: Boolean, card: Boolean = 
     if (!last) HorizontalDivider(Modifier.padding(horizontal = 10.dp), color = Faint)
 }
 
-/** The add button above the chat bar: a white card with a khata icon and "Entry". The form has Cash out / in. */
+/** The add button just above the bottom panel: a white card with a khata icon and "Entry". The form has Cash out / in. */
 @Composable
 private fun BoxScope.PlusButton(onClick: () -> Unit) {
     val shape = RoundedCornerShape(14.dp)
     Row(
-        Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = (LocalBarSpace.current - 30.dp).coerceAtLeast(8.dp))
-            .height(46.dp).shadow(6.dp, shape).clip(shape).background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape).clickable { onClick() }.padding(start = 10.dp, end = 14.dp),
+        Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = LocalBarSpace.current + 6.dp)
+            .height(46.dp).shadow(2.dp, shape).clip(shape).background(MaterialTheme.colorScheme.surface)
+            .clickable { onClick() }.padding(start = 10.dp, end = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(Icons.Outlined.NoteAdd, contentDescription = null, tint = Ember, modifier = Modifier.size(22.dp))
@@ -681,8 +700,8 @@ private fun BoxScope.UpButton(state: LazyListState) {
     val scope = rememberCoroutineScope()
     val show by remember { derivedStateOf { state.firstVisibleItemIndex > 4 } }
     if (show) Box(
-        Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = (LocalBarSpace.current - 30.dp).coerceAtLeast(8.dp) + 62.dp)
-            .size(40.dp).shadow(4.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.onSurface)
+        Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = LocalBarSpace.current + 60.dp)
+            .size(40.dp).shadow(2.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.onSurface)
             .clickable { scope.launch { state.animateScrollToItem(0) } },
         contentAlignment = Alignment.Center
     ) { Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Back to top", tint = MaterialTheme.colorScheme.surface) }
