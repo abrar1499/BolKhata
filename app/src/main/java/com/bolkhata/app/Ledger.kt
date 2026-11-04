@@ -79,15 +79,17 @@ class PersonAcct(
     val got: Double
 )
 
-/** What an entry does to a person's balance (+ = they owe me more). */
+/**
+ * What an entry does to a person's balance (+ = they owe me more). A bank transfer to a person counts like money
+ * given and one from them like money received, so the khata's balance matches its Paid / Received columns.
+ */
 fun personEffect(e: Entry): Double = when (e.type) {
-    Type.DIYA, Type.WAPIS_DIYA, Type.SALE -> e.amount
-    Type.LIYA, Type.WAPIS_MILA, Type.PURCHASE -> -e.amount
-    Type.TRANSFER_IN, Type.TRANSFER_OUT -> 0.0
+    Type.DIYA, Type.WAPIS_DIYA, Type.SALE, Type.TRANSFER_OUT -> e.amount
+    Type.LIYA, Type.WAPIS_MILA, Type.PURCHASE, Type.TRANSFER_IN -> -e.amount
     else -> 0.0
 }
 
-/** Direction shown for a transaction in a person's history; transfer direction is independent of debt balance. */
+/** Direction shown for a transaction in a person's history. */
 fun personHistoryIsOutflow(e: Entry): Boolean = when (e.type) {
     Type.TRANSFER_OUT -> true
     Type.TRANSFER_IN -> false
