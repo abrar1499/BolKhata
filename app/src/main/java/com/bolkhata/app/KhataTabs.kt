@@ -492,14 +492,16 @@ private fun GridRow(title: String, sub: String, cells: List<GCell>, w: Dp, last:
     if (!last && !card) HorizontalDivider(Modifier.padding(horizontal = 10.dp), color = Faint)
 }
 
-/** Title line above a list of cards: the title in red and a small count on the right, on the page itself. */
+/** Head card above a list of cards: rounded at the top only, the title and a small count on the right. */
 @Composable
 private fun SheetTitle(title: String, count: String) = Tight {
     Row(
-        Modifier.padding(start = 14.dp, end = 14.dp, top = 10.dp).fillMaxWidth(),
-        verticalAlignment = Alignment.Bottom
+        Modifier.padding(start = 10.dp, end = 10.dp, top = 8.dp).fillMaxWidth()
+            .then(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp).let { Modifier.shadow(1.dp, it).clip(it) })
+            .background(MaterialTheme.colorScheme.surface).padding(horizontal = 10.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(title, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = Ember, modifier = Modifier.weight(1f), maxLines = 1)
+        Text(title, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f), maxLines = 1)
         Text(count, fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
@@ -927,10 +929,9 @@ fun MoneyScreen(
                 val isOpen = g.name in open
                 item(key = "g" + g.name) {
                     val share = if (total > 0) (g.total / total).toFloat() else 0f
-                    // Its own card: icon, name with a share bar (expense) or last date and count (income), amount on the right.
-                    val shape = RoundedCornerShape(12.dp)
+                    // Its own square raised card: icon, name with a share bar (expense) or last date and count (income), amount on the right.
                     Row(
-                        Modifier.padding(start = 12.dp, end = 12.dp, top = 6.dp).fillMaxWidth().shadow(1.dp, shape).clip(shape)
+                        Modifier.padding(start = 10.dp, end = 10.dp, top = 2.dp).fillMaxWidth().shadow(1.dp)
                             .background(MaterialTheme.colorScheme.surface)
                             .clickable { if (isOpen) open.remove(g.name) else open.add(g.name) }.padding(horizontal = 10.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
