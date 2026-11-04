@@ -2,7 +2,6 @@
 
 package com.bolkhata.app
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -23,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Menu
@@ -174,8 +174,7 @@ private fun KhataTop(
 @Composable
 internal fun BusinessPill(name: String, onMenu: () -> Unit, onBusiness: () -> Unit) {
     Row(
-        Modifier.padding(top = 10.dp).shadow(2.dp, CircleShape).clip(CircleShape).background(Color.White)
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape).padding(end = 11.dp),
+        Modifier.padding(top = 10.dp).shadow(1.dp, CircleShape).clip(CircleShape).background(Color.White).padding(end = 11.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(Modifier.size(32.dp).clip(CircleShape).clickable { onMenu() }, contentAlignment = Alignment.Center) {
@@ -193,21 +192,20 @@ internal fun BusinessPill(name: String, onMenu: () -> Unit, onBusiness: () -> Un
 @Composable
 private fun SumCard(a: Triple<String, String, Color>, b: Triple<String, String, Color>, link: String, onLink: () -> Unit) {
     Surface(
-        shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 2.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 1.dp
     ) {
         Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
             listOf(a, b).forEachIndexed { i, (value, label, color) ->
                 if (i > 0) VerticalDivider(Modifier.fillMaxHeight(), color = MaterialTheme.colorScheme.outlineVariant)
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(value, color = color, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                    Text(label, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(value, color = color, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+                    Text(label, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             VerticalDivider(Modifier.fillMaxHeight(), color = MaterialTheme.colorScheme.outlineVariant)
             Text(
-                link, color = Ember, fontSize = 12.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
-                modifier = Modifier.width(72.dp).clickable { onLink() }.padding(vertical = 8.dp)
+                link, color = Ember, fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
+                modifier = Modifier.width(64.dp).clickable { onLink() }.padding(vertical = 8.dp)
             )
         }
     }
@@ -384,17 +382,40 @@ private fun LazyListScope.partiesView(accts: List<PersonAcct>, picked: List<Entr
     val rec = shown.filter { it.balance > 0.005 }.sumOf { it.balance }
     item(key = "ph") {
         LedgerHead("Parties", if (shown.size == 1) "1 · A–Z" else "${shown.size} · A–Z",
-            listOf(LCol("Payable", fmt(pay), LKind.OUT), LCol("Receivable", fmt(rec), LKind.IN)), shown.isEmpty(), WideColW)
+            // A card of its own: every party below is a separate card.
+            listOf(LCol("Payable", fmt(pay), LKind.OUT), LCol("Receivable", fmt(rec), LKind.IN)), true, WideColW)
     }
-    items(shown, key = { "p" + it.name.lowercase() }) { p ->
-        val bal = p.balance
-        GridRow(
-            p.name, p.history.lastOrNull()?.let { "Last " + lastSeen(it.first.date) } ?: "",
-            listOf(GCell(if (bal < -0.005) signed(LKind.OUT, -bal) else "", LKind.OUT), GCell(if (bal > 0.005) signed(LKind.IN, bal) else "", LKind.IN)),
-            WideColW, p === shown.last()
-        ) { onOpen(p) }
-    }
+    items(shown, key = { "p" + it.name.lowercase() }) { p -> PartyCard(p) { onOpen(p) } }
     if (shown.isEmpty()) emptyNote("No parties yet. Say \"Hamid ko 500 diye\" in the chat.")
+}
+
+/** One party as its own white card: initial, name, last date, the balance under Payable or Receivable, and a chevron. */
+@Composable
+private fun PartyCard(p: PersonAcct, onClick: () -> Unit) = Tight {
+    val bal = p.balance
+    val shape = RoundedCornerShape(14.dp)
+    Row(
+        Modifier.padding(start = 10.dp, end = 10.dp, top = 6.dp).fillMaxWidth().shadow(1.dp, shape).clip(shape)
+            .background(MaterialTheme.colorScheme.surface).clickable { onClick() }.padding(start = 10.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(Modifier.size(28.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
+            Text(p.name.trim().take(1).uppercase(), color = RedSpend, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        }
+        Column(Modifier.weight(1f).padding(start = 10.dp, end = 4.dp)) {
+            Text(p.name, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            p.history.lastOrNull()?.let {
+                Text("Last " + lastSeen(it.first.date), fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+            }
+        }
+        Box(Modifier.width(WideColW), contentAlignment = Alignment.Center) {
+            if (bal < -0.005) Text(fmt(-bal), fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = RedSpend, maxLines = 1, softWrap = false)
+        }
+        Box(Modifier.width(WideColW), contentAlignment = Alignment.Center) {
+            if (bal > 0.005) Text(fmt(bal), fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = GreenIn, maxLines = 1, softWrap = false)
+        }
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+    }
 }
 
 /** Items in stock with quantity and value; tap one to record a sale or a purchase of it. */
@@ -497,12 +518,12 @@ private fun GridRow(title: String, sub: String, cells: List<GCell>, w: Dp, last:
     if (!last) HorizontalDivider(Modifier.padding(horizontal = 10.dp), color = Faint)
 }
 
-/** Title line of a white sheet: a soft red-to-white strip, the title in deep red and a small count on the right. */
+/** Title card above a list of cards: a soft red-to-white strip, the title in deep red and a small count on the right. */
 @Composable
 private fun SheetTitle(title: String, count: String) = Tight {
     Row(
         Modifier.padding(start = 10.dp, end = 10.dp, top = 8.dp).fillMaxWidth()
-            .clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp)).background(MaterialTheme.colorScheme.surface)
+            .clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surface)
             .background(Brush.horizontalGradient(listOf(Ember.copy(alpha = 0.14f), Color.Transparent)))
             .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -510,7 +531,6 @@ private fun SheetTitle(title: String, count: String) = Tight {
         Text(title, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = DeepRed, modifier = Modifier.weight(1f), maxLines = 1)
         Text(count, fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
-    HorizontalDivider(Modifier.padding(horizontal = 10.dp), color = MaterialTheme.colorScheme.outlineVariant)
 }
 
 /** Shape of a row inside a white sheet: the last row rounds the sheet's bottom corners. */
@@ -943,12 +963,12 @@ fun MoneyScreen(
             if (groups.isNotEmpty()) item { SheetTitle(if (income) "Income" else "Expense", "Total " + fmt(total)) }
             groups.forEach { g ->
                 val isOpen = g.name in open
-                val lastGroup = g === groups.last()
                 item(key = "g" + g.name) {
                     val share = if (total > 0) (g.total / total).toFloat() else 0f
-                    // Icon, name with a share bar (expense) or last date and count (income), amount on the right.
+                    // Its own card: icon, name with a share bar (expense) or last date and count (income), amount on the right.
+                    val shape = RoundedCornerShape(14.dp)
                     Row(
-                        Modifier.padding(horizontal = 10.dp).fillMaxWidth().clip(sheetShape(lastGroup && !isOpen))
+                        Modifier.padding(start = 10.dp, end = 10.dp, top = 6.dp).fillMaxWidth().shadow(1.dp, shape).clip(shape)
                             .background(MaterialTheme.colorScheme.surface)
                             .clickable { if (isOpen) open.remove(g.name) else open.add(g.name) }.padding(horizontal = 10.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -973,7 +993,6 @@ fun MoneyScreen(
                                 fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-                    if (!(lastGroup && !isOpen)) HorizontalDivider(Modifier.padding(horizontal = 10.dp), color = Faint)
                 }
                 // A group's own entries open right under it, on the same ledger page.
                 if (isOpen) {
