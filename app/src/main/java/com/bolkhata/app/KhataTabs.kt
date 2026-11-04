@@ -375,49 +375,18 @@ private fun LazyListScope.partiesView(accts: List<PersonAcct>, picked: List<Entr
     val pay = shown.filter { it.balance < -0.005 }.sumOf { -it.balance }
     val rec = shown.filter { it.balance > 0.005 }.sumOf { it.balance }
     item(key = "ph") {
-        PartyLine(null, "Parties", if (shown.size == 1) "1 · A–Z" else "${shown.size} · A–Z", fmt(pay), fmt(rec), head = true) {}
+        LedgerHead("Parties", if (shown.size == 1) "1 · A–Z" else "${shown.size} · A–Z",
+            listOf(LCol("Payable", fmt(pay), LKind.OUT), LCol("Receivable", fmt(rec), LKind.IN)), shown.isEmpty(), WideColW)
     }
     items(shown, key = { "p" + it.name.lowercase() }) { p ->
         val bal = p.balance
-        PartyLine(
-            p.name.trim().take(1).uppercase(), p.name, p.history.lastOrNull()?.let { "Last " + lastSeen(it.first.date) } ?: "",
-            if (bal < -0.005) fmt(-bal) else "", if (bal > 0.005) fmt(bal) else ""
+        GridRow(
+            p.name, p.history.lastOrNull()?.let { "Last " + lastSeen(it.first.date) } ?: "",
+            listOf(GCell(if (bal < -0.005) signed(LKind.OUT, -bal) else "", LKind.OUT), GCell(if (bal > 0.005) signed(LKind.IN, bal) else "", LKind.IN)),
+            WideColW, p === shown.last()
         ) { onOpen(p) }
     }
     if (shown.isEmpty()) emptyNote("No parties yet. Say \"Hamid ko 500 diye\" in the chat.")
-}
-
-/**
- * One white card on the Parties page: initial, name and a small line, then the Payable (red) and Receivable (green)
- * columns and a chevron. The [head] card has no initial, puts the column names over the totals and keeps the chevron's room,
- * so its columns sit right above the parties' amounts.
- */
-@Composable
-private fun PartyLine(initial: String?, title: String, sub: String, payable: String, receivable: String, head: Boolean = false, onClick: () -> Unit) = Tight {
-    val shape = RoundedCornerShape(12.dp)
-    Row(
-        Modifier.padding(start = 12.dp, end = 12.dp, top = if (head) 8.dp else 6.dp).fillMaxWidth().clip(shape)
-            .background(MaterialTheme.colorScheme.surface).border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape)
-            .clickable(enabled = !head) { onClick() }.padding(horizontal = 10.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        if (initial != null) Box(Modifier.size(26.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
-            Text(initial, color = Ember, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold)
-        }
-        Column(Modifier.weight(1f).padding(start = if (initial != null) 6.dp else 0.dp)) {
-            Text(title, fontSize = 12.sp, fontWeight = if (head) FontWeight.ExtraBold else FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (sub.isNotBlank()) Text(sub, fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-        }
-        listOf(Triple("PAYABLE", payable, RedSpend), Triple("RECEIVABLE", receivable, GreenIn)).forEach { (label, v, ink) ->
-            Column(Modifier.width(62.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                if (head) Text(label, fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.3.sp, color = ink, maxLines = 1, softWrap = false)
-                if (v.isNotEmpty()) Text(v, fontSize = 11.sp, fontWeight = if (head) FontWeight.Black else FontWeight.ExtraBold,
-                    color = ink, maxLines = 1, softWrap = false)
-            }
-        }
-        if (head) Spacer(Modifier.width(8.dp))
-        else Text("›", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(8.dp))
-    }
 }
 
 /** Items in stock with quantity and value; tap one to record a sale or a purchase of it. */
