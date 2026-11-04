@@ -97,7 +97,7 @@ private fun h(name: String, a: Long, b: Long, c: Long, light: Boolean) = HeaderT
 
 /** All themes the person can pick in Settings. The first one is the default. */
 val HEADER_THEMES = listOf(
-    h("Clean", 0xFFF9F9F9, 0xFFF9F9F9, 0xFFF9F9F9, true),
+    h("Clean", 0xFFF2F1EF, 0xFFF2F1EF, 0xFFF2F1EF, true),
     h("Sand", 0xFFFED7AA, 0xFFFDE7CC, 0xFFFFF5EA, true),
     h("Mint", 0xFFA7F3D0, 0xFFC6F6E0, 0xFFE3FBF1, true),
     h("Sky", 0xFFBAE6FD, 0xFFD6EFFE, 0xFFEEF8FF, true),
