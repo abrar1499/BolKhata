@@ -50,6 +50,9 @@ val LocalMainOpener = staticCompositionLocalOf<((MainAcct) -> Unit)?> { null }
 /** Long-press on an entry anywhere opens its action menu (Edit / Move). Set by the main screen. */
 val LocalEntryMenu = staticCompositionLocalOf<((Entry) -> Unit)?> { null }
 
+/** Long-press on a khata row opens Rename / Move: kind "party", "expense" (name = category label) or "income" (who paid). */
+val LocalKhataMenu = staticCompositionLocalOf<((kind: String, name: String) -> Unit)?> { null }
+
 // ---------------------------------------------------------------- people
 
 /**

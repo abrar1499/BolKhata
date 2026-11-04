@@ -156,6 +156,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     // The main account opened from the home screen, and the entry whose long-press menu / move dialog is open.
     var ledger by remember { mutableStateOf<MainAcct?>(null) }
     var menuFor by remember { mutableStateOf<Entry?>(null) }
+    // A long-pressed khata (kind to name), and the khata being renamed or moved.
+    var khataFor by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var khataRename by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var khataMove by remember { mutableStateOf<Pair<String, String>?>(null) }
     var ledgerPerson by remember { mutableStateOf<String?>(null) }
     var activeLedgerPerson by remember { mutableStateOf<String?>(null) }
     /** The party khata open from the Parties tab. */
@@ -338,6 +342,26 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 } else toast("Cannot undo: entries were changed after the move.")
             }
         }
+    }
+
+    /** Entries of a khata on the Business / Expense / Income lists (see [LocalKhataMenu]). */
+    fun khataEntries(kind: String, name: String) = when (kind) {
+        "party" -> entries.filter { it.person.equals(name, true) }
+        "expense" -> entries.filter { it.type == Type.KHARCHA && it.category.label.equals(name, true) }
+        else -> entries.filter { it.type == Type.AAMDANI && source(it).equals(name, true) }
+    }
+
+    /** Moves a whole khata into another (or renames it): a party merges, an expense category or income source is relabelled. */
+    fun moveKhata(kind: String, from: String, to: String) {
+        val t = to.trim()
+        if (t.isEmpty() || t.equals(from, true)) return
+        if (kind == "party") { renameOrMergeKhata(from, t, merge = entries.any { it.person.equals(t, true) }); return }
+        val target = if (kind == "expense") Cat.entries.firstOrNull { it.label.equals(t, true) } ?: run { toast("Pick an expense category"); return } else null
+        val ids = khataEntries(kind, from).map { it.id }.toSet()
+        val after = entries.map { if (it.id in ids) (if (target != null) it.copy(category = target) else it.copy(item = t)) else it }
+        store.recordMove(entries, after) ?: return
+        save(after)
+        toast("Moved ${ids.size} entries to $t")
     }
 
     /** Handles typed or spoken commands: search, edit, delete, clear all. Returns true if it was a command. */
@@ -1958,7 +1982,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             CompositionLocalProvider(
                 LocalBarSpace provides pad.calculateBottomPadding(),
                 LocalMainOpener provides { a: MainAcct -> ledger = a },
-                LocalEntryMenu provides { e: Entry -> menuFor = e }
+                LocalEntryMenu provides { e: Entry -> menuFor = e },
+                LocalKhataMenu provides { kind: String, n: String -> khataFor = kind to n }
             ) {
             when {
                 results != null -> {
@@ -2300,6 +2325,41 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         }
                     },
                     onDismiss = { showMoveHistory = false }
+                )
+            }
+            khataFor?.let { (kind, n) ->
+                GroupMenu(
+                    n, khataEntries(kind, n).size,
+                    onRename = if (kind == "expense") null else ({ khataFor = null; khataRename = kind to n }),
+                    onMove = { khataFor = null; khataMove = kind to n },
+                    onDismiss = { khataFor = null }
+                )
+            }
+            khataRename?.let { (kind, n) ->
+                var newName by remember(n) { mutableStateOf(n) }
+                AlertDialog(
+                    onDismissRequest = { khataRename = null },
+                    title = { Text("Rename khata") },
+                    text = { OutlinedTextField(newName, { newName = it }, singleLine = true, label = { Text("New name") }) },
+                    confirmButton = {
+                        Button(enabled = newName.isNotBlank() && !newName.trim().equals(n, true), onClick = {
+                            khataRename = null
+                            if (kind == "party") renameOrMergeKhata(n, newName, merge = false) else moveKhata(kind, n, newName)
+                        }) { Text("Rename") }
+                    },
+                    dismissButton = { TextButton(onClick = { khataRename = null }) { Text("Cancel") } }
+                )
+            }
+            khataMove?.let { (kind, n) ->
+                val names = when (kind) {
+                    "party" -> partyNames(entries)
+                    "expense" -> Cat.entries.filter { it !in setOf(Cat.UDHAAR, Cat.TANKHWAH, Cat.SALES, Cat.STOCK) }.map { it.label }
+                    else -> entries.filter { it.type == Type.AAMDANI }.map { source(it).trim() }.distinctBy { it.lowercase() }
+                }.filterNot { it.equals(n, true) }
+                PartyPicker(
+                    names, n, "Move $n to",
+                    confirm = { creating -> if (creating) "Create & move" else "Move" },
+                    onPick = { khataMove = null; moveKhata(kind, n, it) }, onDismiss = { khataMove = null }
                 )
             }
             menuFor?.let { e ->
