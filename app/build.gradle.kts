@@ -10,14 +10,16 @@ val buildNumber = (System.getenv("APP_VERSION") ?: System.getenv("GITHUB_RUN_NUM
 
 android {
     namespace = "com.bolkhata.app"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.bolkhata.app"
         minSdk = 24
-        targetSdk = 34
+        targetSdk = 35
         versionCode = buildNumber
         versionName = "1.$buildNumber"
+        // The Play Store build updates through Play, so it has no self-updater (see the "play" build type).
+        buildConfigField("boolean", "PLAY", "false")
         ndk {
             // Real phones only: the x86 copies of the OCR library are for PC emulators and added ~23 MB.
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")
@@ -43,6 +45,12 @@ android {
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.getByName("fixed")
+        }
+        // The Google Play bundle (gradle bundlePlay): the release build without the self-updater.
+        create("play") {
+            initWith(getByName("release"))
+            matchingFallbacks += "release"
+            buildConfigField("boolean", "PLAY", "true")
         }
     }
     compileOptions {

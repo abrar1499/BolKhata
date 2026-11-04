@@ -33,7 +33,7 @@ jobs:
       - name: Build
         run: |
           set -o pipefail
-          gradle testReleaseUnitTest assembleRelease --no-daemon 2>&1 | tee build.log || {
+          gradle testReleaseUnitTest assembleRelease bundlePlay --no-daemon 2>&1 | tee build.log || {
             grep -E "^e: |What went wrong" -A2 build.log | head -40 | while IFS= read -r l; do echo "::error::$l"; done
             exit 1
           }
@@ -47,8 +47,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp app/build/outputs/apk/release/app-release.apk BolKhata.apk
+          cp app/build/outputs/bundle/play/app-play.aab SmartExpense-play.aab
           git log -1 --format=%B | grep -v -e '^Co-Authored-By' -e '^Claude-Session' > notes.txt
-          gh release create "v${APP_VERSION}" BolKhata.apk --repo "${{ github.repository }}" --title "Smart Expense 1.${APP_VERSION}" --notes-file notes.txt --latest
+          gh release create "v${APP_VERSION}" BolKhata.apk SmartExpense-play.aab --repo "${{ github.repository }}" --title "Smart Expense 1.${APP_VERSION}" --notes-file notes.txt --latest
 
   # Started by hand (Run workflow): renders the real screens with sample data and commits the PNGs to
   # docs/screenshots on the same branch, so the look can be reviewed without installing the app.
