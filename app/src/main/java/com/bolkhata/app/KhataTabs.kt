@@ -562,7 +562,7 @@ internal class LRow(
 )
 
 private val clockFmt = SimpleDateFormat("h:mma", Locale.US)
-private val dayLineFmt = SimpleDateFormat("EEE, d MMM", Locale.US)
+private val dayLineFmt = SimpleDateFormat("EEE, d MMM yyyy", Locale.US)
 /** Blue of the small khata name in ledger rows: red and green stay for money. */
 private val KhataBlue = Color(0xFF0369A1)
 private val Faint = Color(0x14786C6C)
