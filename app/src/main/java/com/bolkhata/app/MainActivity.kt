@@ -365,14 +365,16 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     fun moveEntries(ids: Set<String>, kind: String, to: String): Int {
         val t = to.trim()
         if (ids.isEmpty() || t.isEmpty()) return 0
-        val cat = if (kind == "expense") Cat.entries.firstOrNull { it.label.equals(t, true) } ?: return 0 else null
+        // "Transport › Petrol": the category, and the sub-category that becomes the entry's item.
+        val (catLabel, sub) = if (kind == "expense") splitSub(t) else t to ""
+        val cat = if (kind == "expense") Cat.entries.firstOrNull { it.label.equals(catLabel, true) } ?: return 0 else null
         var skipped = 0
         val after = entries.map { e ->
             if (e.id !in ids) return@map e
             val out = isOutflow(e)
             when (kind) {
                 "party" -> movedTo(e, entries, null, false, t)
-                "expense" -> if (out) movedTo(e, entries, cat, false, null) else e.also { skipped++ }
+                "expense" -> if (out) movedTo(e, entries, cat, false, null).let { if (sub.isNotBlank()) withSub(it, sub) else it } else e.also { skipped++ }
                 "income" -> if (!out) e.copy(type = Type.AAMDANI, category = Cat.TANKHWAH, person = "", item = t, paid = false) else e.also { skipped++ }
                 else -> e.copy(type = if (out) Type.PURCHASE else Type.SALE, category = if (out) Cat.STOCK else Cat.SALES, person = "", item = t, paid = false)
             }

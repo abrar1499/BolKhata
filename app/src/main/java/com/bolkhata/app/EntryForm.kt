@@ -234,10 +234,11 @@ fun EntryForm(
             Button(
                 onClick = {
                     chosen?.let { t ->
-                        // An expense's category comes from what the note and goods say ("nashta" -> Food).
+                        // An expense's category comes from what the note and goods say ("nashta" -> Food), but a category
+                        // already set (Transport) stays when the entry is only renamed: the guess only fills Other.
+                        val kept = initial.category.takeIf { initial.type == Type.KHARCHA && it != Cat.UDHAAR && it != Cat.OTHER }
                         val guess = Parser.guessCategory((item + " " + note).trim())
-                        val cat = pickCat ?: guess?.first
-                            ?: initial.category.takeIf { initial.type == Type.KHARCHA && it != Cat.UDHAAR } ?: Cat.OTHER
+                        val cat = pickCat ?: kept ?: guess?.first ?: Cat.OTHER
                         val finalCat = when {
                             t == Type.SALE -> Cat.SALES
                             t == Type.PURCHASE -> Cat.STOCK

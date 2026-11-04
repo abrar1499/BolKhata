@@ -72,4 +72,16 @@ class CashBookTest {
         val fixed = a.copy(category = Cat.KHANA)
         assertEquals(Cat.OTHER, Recat.sameShop(listOf(fixed, b), a, fixed)[1].category)
     }
+
+    @Test
+    fun movingIntoASubCategoryKeepsTheShopName() {
+        assertTrue(subsFor(Cat.TRANSPORT, emptyList()).containsAll(listOf("Petrol", "Car repair")))
+        assertEquals("Transport" to "Petrol", splitSub("Transport › Petrol"))
+        assertEquals("Food" to "", splitSub("Food"))
+        val e = Entry("1", Type.KHARCHA, 40.0, Cat.OTHER, "ALJIDAR STATION", "", "Riyadh · card · Al Rajhi", 0L, 0L)
+        val moved = withSub(movedTo(e, listOf(e), Cat.TRANSPORT, false, null), "Petrol")
+        assertEquals(Cat.TRANSPORT, moved.category)
+        assertEquals("Petrol", moved.item)
+        assertEquals("ALJIDAR STATION · Riyadh · card · Al Rajhi", moved.note)
+    }
 }
