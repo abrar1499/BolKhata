@@ -492,20 +492,6 @@ private fun GridRow(title: String, sub: String, cells: List<GCell>, w: Dp, last:
     if (!last && !card) HorizontalDivider(Modifier.padding(horizontal = 10.dp), color = Faint)
 }
 
-/** Head card above a list of cards: rounded at the top only, the title and a small count on the right. */
-@Composable
-private fun SheetTitle(title: String, count: String) = Tight {
-    Row(
-        Modifier.padding(start = 10.dp, end = 10.dp, top = 8.dp).fillMaxWidth()
-            .then(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp).let { Modifier.shadow(1.dp, it).clip(it) })
-            .background(MaterialTheme.colorScheme.surface).padding(horizontal = 10.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(title, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f), maxLines = 1)
-        Text(count, fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
-
 /** Shape of a row inside a white sheet (each row casts a soft shadow so the sheet looks raised): the last row rounds the bottom corners. */
 private fun sheetShape(last: Boolean) = if (last) RoundedCornerShape(bottomStart = 14.dp, bottomEnd = 14.dp) else RoundedCornerShape(0.dp)
 
@@ -924,21 +910,26 @@ fun MoneyScreen(
             }
             item { SearchBox(q, "Search") { q = it } }
             if (months.isNotEmpty()) item { MonthChips(months, pick) { pick = it } }
-            if (groups.isNotEmpty()) item { SheetTitle(if (income) "Income" else "Expense", "Total " + fmt(total)) }
+            val kind = if (income) LKind.IN else LKind.OUT
+            if (groups.isNotEmpty()) item {
+                LedgerHead(if (income) "Income" else "Expense", if (groups.size == 1) "1 group" else "${groups.size} groups",
+                    listOf(LCol("Total", fmt(total), kind)), false, WideColW)
+            }
             groups.forEach { g ->
                 val isOpen = g.name in open
                 item(key = "g" + g.name) {
                     val share = if (total > 0) (g.total / total).toFloat() else 0f
-                    // Its own square raised card: icon, name with a share bar (expense) or last date and count (income), amount on the right.
+                    // Its own square raised card: icon, name with a share bar (expense) or last date and count (income), then the
+                    // amount in a tinted column right under the head's Total, like the Parties cards.
                     Row(
-                        Modifier.padding(start = 10.dp, end = 10.dp, top = 2.dp).fillMaxWidth().shadow(1.dp)
+                        Modifier.padding(start = 10.dp, end = 10.dp, top = 2.dp).fillMaxWidth().height(IntrinsicSize.Min).shadow(1.dp)
                             .background(MaterialTheme.colorScheme.surface)
-                            .clickable { if (isOpen) open.remove(g.name) else open.add(g.name) }.padding(horizontal = 10.dp, vertical = 8.dp),
+                            .clickable { if (isOpen) open.remove(g.name) else open.add(g.name) }.padding(start = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         if (g.cat != null) CatBubble(g.cat, 30.dp) else Initial(g.name)
                         Spacer(Modifier.width(10.dp))
-                        Column(Modifier.weight(1f)) {
+                        Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
                             Text(g.name, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             if (g.cat != null) {
                                 Box(Modifier.padding(top = 4.dp).fillMaxWidth().height(4.dp).clip(CircleShape).background(MaterialTheme.colorScheme.outlineVariant)) {
@@ -950,8 +941,12 @@ fun MoneyScreen(
                             }
                         }
                         Spacer(Modifier.width(10.dp))
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text(fmt(g.total), fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, color = if (g.cat == null) color else MaterialTheme.colorScheme.onSurface)
+                        VerticalDivider(Modifier.fillMaxHeight(), color = Faint)
+                        Column(
+                            Modifier.width(WideColW).fillMaxHeight().background(cellTint(kind, 0.04f)),
+                            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
+                        ) {
+                            Text(fmt(g.total), fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, color = color)
                             Text(if (g.cat != null) "${Math.round(share * 100)}%" else if (isOpen) "⌄" else "›",
                                 fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
@@ -960,7 +955,7 @@ fun MoneyScreen(
                 // A group's own entries open right under it, on the same ledger page.
                 if (isOpen) {
                     ledger(
-                        g.name, listOf(LCol("Amount", fmt(g.total), if (income) LKind.IN else LKind.OUT)),
+                        g.name, listOf(LCol("Amount", fmt(g.total), kind)),
                         g.list.map { e -> LRow(e.id, e.date, title(e), e.note, listOf(e.amount)) { onEdit(e) } },
                         keyPrefix = "g${g.name}:"
                     )
