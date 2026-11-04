@@ -29,6 +29,46 @@ class NativeChatEngineTest {
     private fun read(text: String, history: List<ChatMessage> = emptyList()) =
         NativeChatEngine.interpret(text, entries, now = now, history = history)
 
+    @Test fun anAmountWithAWriteWordIsANewEntryNotASearch() {
+        assertEquals("entry", read("kal shaam ka 10 riyal khana likho").kind)
+        assertEquals("entry", read("add expense 15 riyal dinner").kind)
+        assertEquals("entry", read("kal subah ke naashte ka 10 riyal kharcha likh do").kind)
+    }
+
+    @Test fun openingAPeriodsSpendingShowsItInsteadOfEditing() {
+        val year = read("is saal ka kharcha kholo")
+        assertEquals("ask", year.kind)
+        assertEquals("list", year.what)
+        assertEquals(setOf(Type.KHARCHA), year.filter.types)
+        assertTrue(year.filter.items.isEmpty())
+        val month = read("is mahine ka total kharcha open karein")
+        assertEquals("ask", month.kind)
+        assertEquals("sum", month.what)
+        assertTrue(month.filter.items.isEmpty())
+    }
+
+    @Test fun showingADaysEntriesIsNeverAnEdit() {
+        val r = read("23 oct ki entry dikhao")
+        assertEquals("ask", r.kind)
+        assertEquals("list", r.what)
+    }
+
+    @Test fun totalCheckIsThisMonthsSpending() {
+        val r = read("total check karo")
+        assertEquals("ask", r.kind)
+        assertEquals("sum", r.what)
+        assertTrue(r.filter.from != null)
+        assertTrue(r.filter.items.isEmpty())
+    }
+
+    @Test fun aNewExpenseKhataNamesTheShownEntries() {
+        val shown = listOf(ChatMessage("u1", true, "bank fee"), ChatMessage("a1", false, "Bank fee 0.58 / Bank fee 2.07", listIds = listOf("tea-today", "petrol-yesterday")))
+        val r = read("Expense me Bank fee khata bana k os me dal do", shown)
+        assertEquals("change", r.kind)
+        assertEquals(setOf("tea-today", "petrol-yesterday"), r.filter.ids)
+        assertEquals("Bank Fee", r.set["item"])
+    }
+
     @Test fun recognizesLastFiveTransactionsEvenThoughTheRequestContainsANumber() {
         val result = read("show last 5 transactions")
         assertEquals("ask", result.kind)
