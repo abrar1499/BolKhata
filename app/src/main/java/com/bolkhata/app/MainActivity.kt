@@ -1195,7 +1195,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             return
         }
         val roman = runCatching { Translit.toRoman(text) }.getOrDefault(text)
-        val history = chatMessages.takeLast(20)
+        // A long window, so a follow-up still knows the search or list from many turns back.
+        val history = chatMessages.takeLast(60)
         postChat(text, isUser = true)
 
         NativeMemory.handle(text, store.memory)?.let { memory ->

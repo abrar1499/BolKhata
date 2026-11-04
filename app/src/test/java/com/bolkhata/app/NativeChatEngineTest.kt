@@ -29,6 +29,20 @@ class NativeChatEngineTest {
     private fun read(text: String, history: List<ChatMessage> = emptyList()) =
         NativeChatEngine.interpret(text, entries, now = now, history = history)
 
+    @Test fun aShortFollowUpNarrowsTheLastSearchEvenManyTurnsLater() {
+        val talk = listOf(
+            ChatMessage("u1", true, "how much did I spend on food this month?"), ChatMessage("a1", false, "Spent 40 SAR"),
+            ChatMessage("u2", true, "hello"), ChatMessage("a2", false, "Wa alaikum assalam!"),
+            ChatMessage("u3", true, "thanks"), ChatMessage("a3", false, "You're welcome.")
+        )
+        val r = read("aur petrol?", talk)
+        assertEquals("ask", r.kind)
+        assertEquals(listOf("petrol"), r.filter.items)
+        assertTrue(r.filter.from != null)
+        // Small talk is never read as a narrower search.
+        assertEquals("chat", read("kya hal hai", talk).kind)
+    }
+
     @Test fun anAmountWithAWriteWordIsANewEntryNotASearch() {
         assertEquals("entry", read("kal shaam ka 10 riyal khana likho").kind)
         assertEquals("entry", read("add expense 15 riyal dinner").kind)

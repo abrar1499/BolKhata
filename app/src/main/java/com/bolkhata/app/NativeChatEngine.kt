@@ -147,6 +147,11 @@ object NativeChatEngine {
                 else chat("Which date should I use for that search?")
             }
         }
+        // "Sirf food", "aur petrol?", "Ali ki": the conversation's last search narrowed, however many turns ago it was.
+        if (history.isNotEmpty() && lower.none(Char::isDigit) && words.size <= 5) {
+            val base = lastSearchFromHistory(history, entries, contacts, wordFixes, currency, now)
+            if (base != null) refine(lower, base, contacts, entries, now)?.let { return it }
+        }
         if (dateOnlyFollowUp) {
             val date = dateBounds(lower, now)
             if (date != null) return Fixed("", "ask", "", "list", Query.Filter(from = date.from, to = date.to))
@@ -808,12 +813,41 @@ object NativeChatEngine {
                     }
                 }
                 else -> {
-                    val candidate = interpret(priorText, entries, contacts, wordFixes, emptyList(), currency, now)
+                    val narrowed = lastSearch?.let { refine(priorLower, it, contacts, entries, now) }
+                    val candidate = narrowed ?: interpret(priorText, entries, contacts, wordFixes, emptyList(), currency, now)
                     if (candidate.kind == "ask") lastSearch = candidate
                 }
             }
         }
         return lastSearch
+    }
+
+    private val refineFiller = setOf(
+        "sirf", "only", "bas", "aur", "and", "or", "bhi", "b", "what", "about", "wali", "wala", "wale", "ki", "ka", "ke",
+        "me", "mein", "main", "se", "isme", "inme", "inmein", "ismein", "un", "in", "us", "usme", "sath", "saath", "wo", "woh"
+    )
+
+    /**
+     * A short follow-up that only names a category, item, kind of money or person ("sirf food", "aur petrol?",
+     * "Ali ki"): [base] narrowed to it, keeping its dates. Null for anything else, including a new date or a khata.
+     */
+    private fun refine(text: String, base: Fixed, contacts: List<String>, entries: List<Entry>, now: Long): Fixed? {
+        val w = tokens(text)
+        if (w.isEmpty() || w.size > 5 || text.any(Char::isDigit) || dateBounds(text, now) != null || "khata" in w) return null
+        val f = buildFilter(text, contacts, now, false)
+        val personWords = f.persons.flatMap { tokens(it) }.toSet()
+        val catWords = categories.values.flatten().toSet()
+        // Item words must be things actually saved, so small talk is never read as a search.
+        val items = f.items.filter { it !in refineFiller }
+        if (items.any { t -> entries.none { e -> (e.item + " " + e.note).contains(t, true) } }) return null
+        if (f.cats.isEmpty() && f.persons.isEmpty() && items.isEmpty() && f.types.isEmpty()) return null
+        if (!w.all { it in refineFiller || it in items || it in catWords || it in personWords || it in expense + income + lent + borrowed }) return null
+        val b = base.filter
+        return Fixed("", "ask", "", base.what, Query.Filter(
+            from = b.from, to = b.to, types = f.types.ifEmpty { b.types }, persons = f.persons.ifEmpty { b.persons },
+            cats = f.cats.ifEmpty { if (items.isNotEmpty()) emptySet() else b.cats }, items = items,
+            min = b.min, max = b.max, noPeople = b.noPeople
+        ))
     }
 
     /** "detail do", "details", "tafseel batao", "list dikhao": show the entries behind the last answer. */
