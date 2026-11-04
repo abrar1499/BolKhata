@@ -68,6 +68,26 @@ object Recat {
             }
             .sortedWith(compareBy<Group> { it.guess == Cat.OTHER }.thenByDescending { it.total })
 
+    /** The shop an expense was paid at: the bank note (merchant), else the item; blank for generic names. */
+    private fun shopOf(e: Entry): String {
+        val name = e.note.ifBlank { e.item }.substringBefore(" · ").replace(Regex("\\d+"), " ")
+            .replace(Regex("[^\\p{L}&' ]+"), " ").replace(Regex("\\s+"), " ").trim().lowercase()
+        return if (name.length < 3 || name in setOf("other", "others", "card payment", "cash", "expense")) "" else name
+    }
+
+    /**
+     * Told once: when one expense is moved out of Other, every other expense from the same shop still in Other
+     * moves to the same category. (Later ones follow on their own through the learned words.)
+     */
+    fun sameShop(all: List<Entry>, before: Entry, after: Entry): List<Entry> {
+        if (before.type != Type.KHARCHA || before.category != Cat.OTHER || after.category == Cat.OTHER || isTransfer(before)) return all
+        val shop = shopOf(before).ifBlank { return all }
+        return all.map { e ->
+            if (e.id != after.id && e.type == Type.KHARCHA && e.category == Cat.OTHER && !isTransfer(e) && shopOf(e) == shop)
+                e.copy(category = after.category) else e
+        }
+    }
+
     /** The categories an expense can be moved to. */
     val expenseCats = Cat.entries.filter { it !in setOf(Cat.TANKHWAH, Cat.UDHAAR, Cat.SALES, Cat.STOCK) }
 

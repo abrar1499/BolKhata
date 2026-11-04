@@ -2845,9 +2845,13 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 saveLabel = "Save",
                 onSave = { changed ->
                     learnFrom(e, changed)
-                    save(entries.map { if (it.id == changed.id) changed else it })
+                    val updated = entries.map { if (it.id == changed.id) changed else it }
+                    // Moving one shop's expense out of Other moves that shop's other Other expenses too.
+                    val moved = Recat.sameShop(updated, e, changed)
+                    val more = moved.indices.count { moved[it] !== updated[it] }
+                    save(moved)
                     editing = null
-                    toast("✓ Saved")
+                    toast(if (more > 0) "✓ Saved · $more more from this shop moved to ${changed.category.label}" else "✓ Saved")
                 },
                 onDelete = {
                     editing = null

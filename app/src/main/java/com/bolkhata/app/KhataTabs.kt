@@ -555,10 +555,16 @@ internal enum class LKind { OUT, IN, PLAIN }
 internal class LCol(val label: String, val total: String, val kind: LKind)
 
 /** One line: title, time and note, and one amount per column (0 = empty cell). */
-internal class LRow(val key: String, val date: Long, val title: String, val note: String, val amounts: List<Double>, val entry: Entry? = null, val onClick: () -> Unit)
+internal class LRow(
+    val key: String, val date: Long, val title: String, val note: String, val amounts: List<Double>, val entry: Entry? = null,
+    /** The khata the entry sits in (party or category), shown small after the time; blank to leave it out. */
+    val khata: String = "", val onClick: () -> Unit
+)
 
 private val clockFmt = SimpleDateFormat("h:mma", Locale.US)
 private val dayLineFmt = SimpleDateFormat("EEE, d MMM", Locale.US)
+/** Blue of the small khata name in ledger rows: red and green stay for money. */
+private val KhataBlue = Color(0xFF0369A1)
 private val Faint = Color(0x14786C6C)
 /** Colour of an entry's own amount: plain text ink (dark grey, light in dark mode), so red / green stay for the totals. */
 private val AmountInk: Color
@@ -682,6 +688,10 @@ private fun LedgerRow(r: LRow, cols: List<LCol>, last: Boolean, card: Boolean = 
             Text(
                 buildAnnotatedString {
                     withStyle(SpanStyle(fontSize = 8.sp)) { append(clockFmt.format(Date(r.date)).lowercase()) }
+                    if (r.khata.isNotBlank() && !r.khata.equals(r.title, true)) {
+                        append(" · ")
+                        withStyle(SpanStyle(fontSize = 8.sp, fontWeight = FontWeight.SemiBold, color = KhataBlue)) { append(r.khata) }
+                    }
                     if (r.note.isNotBlank() && !r.note.equals(r.title, true)) append(" · " + r.note)
                 },
                 fontSize = 9.sp, color = sub, maxLines = 1, overflow = TextOverflow.Ellipsis
@@ -771,7 +781,8 @@ fun CashBookScreen(
                     LCol("In", fmt(list.filter(::cashIn).sumOf { it.amount }), LKind.IN)
                 ),
                 list.map { e ->
-                    LRow(e.id, e.date, title(e), e.note, listOf(if (cashOut(e)) e.amount else 0.0, if (cashIn(e)) e.amount else 0.0), e) { onEdit(e) }
+                    LRow(e.id, e.date, title(e), e.note, listOf(if (cashOut(e)) e.amount else 0.0, if (cashIn(e)) e.amount else 0.0), e,
+                        khata = e.person.trim().ifBlank { e.category.label }) { onEdit(e) }
                 },
                 cards = true
             )

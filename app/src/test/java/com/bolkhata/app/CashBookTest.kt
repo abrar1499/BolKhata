@@ -43,4 +43,16 @@ class CashBookTest {
         assertEquals("+1,150", plusMinus(1150.0))
         assertEquals("−400", plusMinus(-400.0))
     }
+
+    @Test
+    fun movingOneShopExpenseMovesTheRest() {
+        fun x(id: String, note: String, cat: Cat = Cat.OTHER) = Entry(id, Type.KHARCHA, 2.0, cat, "Other", "", note, 0L, 0L)
+        val all = listOf(x("1", "NESTO MARKET 12"), x("2", "NESTO MARKET 99"), x("3", "Card payment"), x("4", "Card payment"), x("5", "OTHER SHOP"))
+        val fixed = all[0].copy(category = Cat.KHANA)
+        val out = Recat.sameShop(all.map { if (it.id == "1") fixed else it }, all[0], fixed)
+        assertEquals(listOf(Cat.KHANA, Cat.KHANA, Cat.OTHER, Cat.OTHER, Cat.OTHER), out.map { it.category })
+        // A generic name never drags other entries along.
+        val card = all[2].copy(category = Cat.KHANA)
+        assertEquals(Cat.OTHER, Recat.sameShop(all, all[2], card)[3].category)
+    }
 }
