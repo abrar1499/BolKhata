@@ -108,6 +108,16 @@ fun restoreMoveBatch(entries: List<Entry>, batch: MoveBatch): List<Entry>? {
     return entries.map { e -> changes[e.id]?.restore(e) ?: e }
 }
 
+/** [entries] with every id unique: a repeated id gets "-2", "-3"…; the same list when nothing repeats. */
+fun uniqueIds(entries: List<Entry>): List<Entry> {
+    if (entries.distinctBy { it.id }.size == entries.size) return entries
+    val seen = HashSet<String>()
+    return entries.map { e ->
+        if (seen.add(e.id)) e
+        else { var n = 2; while (!seen.add(e.id + "-" + n)) n++; e.copy(id = e.id + "-" + n) }
+    }
+}
+
 /** Saves entries on the phone itself (no internet needed). */
 class Store(context: Context) {
     private val prefs = context.getSharedPreferences("bolkhata", Context.MODE_PRIVATE)
@@ -124,7 +134,10 @@ class Store(context: Context) {
     }
 
     fun load(): List<Entry> {
-        val list = read(scoped("entries"))
+        val raw = read(scoped("entries"))
+        // Two entries with one id crash the lists (each row is keyed by its id), so a repeated id gets a new one.
+        val list = uniqueIds(raw)
+        if (list !== raw) write(scoped("entries"), list)
         if (prefs.getBoolean("bankNamesV1", false)) return list
         // One-time fix of the bank statement import: traffic fines are Transport, the Jawazat fee is the Iqama fee.
         val fixed = list.map { e ->
