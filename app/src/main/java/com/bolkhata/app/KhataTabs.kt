@@ -928,7 +928,7 @@ fun MoneyScreen(
                 item(key = "g" + g.name) {
                     val share = if (total > 0) (g.total / total).toFloat() else 0f
                     // Its own square raised card: icon, name with a share bar (expense) or last date and count (income), then the
-                    // amount in a tinted column right under the head's Total, like the Parties cards.
+                    // amount in dark ink (only the head's Total is red / green), in a column tinted a bit deeper than the head's.
                     Row(
                         Modifier.padding(start = 10.dp, end = 10.dp, top = 2.dp).fillMaxWidth().height(IntrinsicSize.Min).shadow(1.dp)
                             .background(MaterialTheme.colorScheme.surface)
@@ -951,10 +951,10 @@ fun MoneyScreen(
                         Spacer(Modifier.width(10.dp))
                         VerticalDivider(Modifier.fillMaxHeight(), color = Faint)
                         Column(
-                            Modifier.width(WideColW).fillMaxHeight().background(cellTint(kind, 0.04f)),
+                            Modifier.width(WideColW).fillMaxHeight().background(cellTint(kind, 0.09f)),
                             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
                         ) {
-                            Text(fmt(g.total), fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, color = color)
+                            Text(fmt(g.total), fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, color = AmountInk)
                             Text(if (g.cat != null) "${Math.round(share * 100)}%" else if (isOpen) "⌄" else "›",
                                 fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
