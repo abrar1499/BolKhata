@@ -1478,18 +1478,25 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         var lastSound = start
         // Background noise level, learnt while recording, so a noisy room still counts as a pause. Speech only has to
         // be a little above it, so a soft voice is heard too; steady noise slowly becomes the new level.
+        // The floor is capped, so a soft voice or a headset mic never raises it above speech.
         var floor = 300f
+        var peak = 0
         while (recorder === r) {
             kotlinx.coroutines.delay(150)
             val now = System.currentTimeMillis()
             val amp = runCatching { r.maxAmplitude }.getOrDefault(0)
+            peak = maxOf(peak, amp)
             voiceLevel = (amp / 6_000f).coerceAtMost(1f)
-            val loud = maxOf(700f, floor * 2.2f)
-            if (amp > loud) { spoke = true; lastSound = now; floor = floor * 0.98f + amp * 0.02f }
-            else floor = floor * 0.9f + amp * 0.1f
+            val loud = maxOf(450f, floor * 1.8f)
+            if (amp > loud) { spoke = true; lastSound = now }
+            else floor = (floor * 0.9f + amp * 0.1f).coerceAtMost(1_200f)
             // A call answers sooner after a pause than the mic, so it feels live.
             if (spoke && now - lastSound > (if (voiceOn) 900 else 1200)) { finishRecording(); break }
-            if (!spoke && now - start > 8000) { finishRecording(send = false); recordMissed(); break }
+            // No clear start heard: anything above a whisper still goes to Whisper (its noise filter drops silence).
+            if (!spoke && now - start > 8000) {
+                if (peak > 350) finishRecording() else { finishRecording(send = false); recordMissed() }
+                break
+            }
         }
     }
 
