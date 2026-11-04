@@ -1453,7 +1453,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         loadingLabel = "Listening with Groq…"
         if (voiceOn) voiceStatus = "Thinking…"
         scope.launch {
-            val said = Groq.transcribe(groqKey, file)
+            val said = Groq.transcribe(groqKey, file, contactNames() + entries.filter { it.type == Type.AAMDANI }.map { source(it) })
             runCatching { file.delete() }
             chatLoading = false
             loadingLabel = "Thinking…"
