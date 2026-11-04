@@ -29,6 +29,60 @@ class NativeChatEngineTest {
     private fun read(text: String, history: List<ChatMessage> = emptyList()) =
         NativeChatEngine.interpret(text, entries, now = now, history = history)
 
+    @Test fun aShortFollowUpNarrowsTheLastSearchEvenManyTurnsLater() {
+        val talk = listOf(
+            ChatMessage("u1", true, "how much did I spend on food this month?"), ChatMessage("a1", false, "Spent 40 SAR"),
+            ChatMessage("u2", true, "hello"), ChatMessage("a2", false, "Wa alaikum assalam!"),
+            ChatMessage("u3", true, "thanks"), ChatMessage("a3", false, "You're welcome.")
+        )
+        val r = read("aur petrol?", talk)
+        assertEquals("ask", r.kind)
+        assertEquals(listOf("petrol"), r.filter.items)
+        assertTrue(r.filter.from != null)
+        // Small talk is never read as a narrower search.
+        assertEquals("chat", read("kya hal hai", talk).kind)
+    }
+
+    @Test fun anAmountWithAWriteWordIsANewEntryNotASearch() {
+        assertEquals("entry", read("kal shaam ka 10 riyal khana likho").kind)
+        assertEquals("entry", read("add expense 15 riyal dinner").kind)
+        assertEquals("entry", read("kal subah ke naashte ka 10 riyal kharcha likh do").kind)
+    }
+
+    @Test fun openingAPeriodsSpendingShowsItInsteadOfEditing() {
+        val year = read("is saal ka kharcha kholo")
+        assertEquals("ask", year.kind)
+        assertEquals("list", year.what)
+        assertEquals(setOf(Type.KHARCHA), year.filter.types)
+        assertTrue(year.filter.items.isEmpty())
+        val month = read("is mahine ka total kharcha open karein")
+        assertEquals("ask", month.kind)
+        assertEquals("sum", month.what)
+        assertTrue(month.filter.items.isEmpty())
+    }
+
+    @Test fun showingADaysEntriesIsNeverAnEdit() {
+        val r = read("23 oct ki entry dikhao")
+        assertEquals("ask", r.kind)
+        assertEquals("list", r.what)
+    }
+
+    @Test fun totalCheckIsThisMonthsSpending() {
+        val r = read("total check karo")
+        assertEquals("ask", r.kind)
+        assertEquals("sum", r.what)
+        assertTrue(r.filter.from != null)
+        assertTrue(r.filter.items.isEmpty())
+    }
+
+    @Test fun aNewExpenseKhataNamesTheShownEntries() {
+        val shown = listOf(ChatMessage("u1", true, "bank fee"), ChatMessage("a1", false, "Bank fee 0.58 / Bank fee 2.07", listIds = listOf("tea-today", "petrol-yesterday")))
+        val r = read("Expense me Bank fee khata bana k os me dal do", shown)
+        assertEquals("change", r.kind)
+        assertEquals(setOf("tea-today", "petrol-yesterday"), r.filter.ids)
+        assertEquals("Bank Fee", r.set["item"])
+    }
+
     @Test fun recognizesLastFiveTransactionsEvenThoughTheRequestContainsANumber() {
         val result = read("show last 5 transactions")
         assertEquals("ask", result.kind)
@@ -430,6 +484,67 @@ class NativeChatEngineUnsureTest {
         assertTrue(!read("kya hal hai").unsure)
         assertTrue(!read("hello").unsure)
         assertTrue(!read("aaj kitna kharcha huwa").unsure)
+    }
+}
+
+class NativeChatEngineKhataCommandsTest {
+    private val contacts = listOf("Hamid Akram", "Nargis Salim Rashid", "Haji Kamran Saeed", "Kamran Aslam")
+    private fun read(text: String) = NativeChatEngine.interpret(text, emptyList(), contacts)
+
+    @Test fun renamesAKhataByItsSavedName() {
+        val r = read("Hamid Akram ka naam Hamid Akram Khan kar do")
+        assertEquals("rename_khata", r.kind)
+        assertEquals("party", r.set["kind"])
+        assertEquals("Hamid Akram", r.set["from"])
+        assertEquals("Hamid Akram Khan", r.set["to"])
+    }
+
+    @Test fun mergesAWholeKhataIntoAnother() {
+        val r = read("Hamid Akram ka khata Nargis Salim Rashid me merge kar do")
+        assertEquals("move_khata", r.kind)
+        assertEquals("Hamid Akram", r.set["from"])
+        assertEquals("party", r.set["toKind"])
+        assertEquals("Nargis Salim Rashid", r.set["to"])
+    }
+
+    @Test fun aBareNameOpensItsKhataOrAsksWhichOne() {
+        val one = read("kamran saeed")
+        assertEquals("open", one.kind)
+        assertEquals(listOf("Haji Kamran Saeed"), one.filter.persons)
+        assertTrue(read("kamran").reply.startsWith("Which "))
+    }
+
+    @Test fun plainSumsAreAnswered() {
+        assertTrue(read("2 aur 2 kitna hota hai").reply.endsWith("= 4"))
+        assertEquals("chat", read("5 x 12").kind)
+    }
+
+    @Test fun esMahinyIsThisMonth() {
+        val r = read("es mahiny")
+        assertEquals("ask", r.kind)
+        assertTrue(r.filter.from != null)
+    }
+}
+
+class NativeChatEngineMoveByAmountTest {
+    private val entries = listOf(
+        Entry("t1", Type.TRANSFER_IN, 2000.0, Cat.OTHER, "Transfer", "Hamid Akram", "From Hamid Akram", 1L, 1L),
+        Entry("t2", Type.TRANSFER_IN, 5000.0, Cat.OTHER, "Transfer", "Nargis Salim Rashid", "From Nargis", 2L, 2L),
+        Entry("t3", Type.TRANSFER_IN, 600.0, Cat.OTHER, "From Al Rajhi", "", "Own account", 3L, 3L),
+        Entry("i1", Type.AAMDANI, 3500.0, Cat.TANKHWAH, "Noor Building Contracting LTD", "", "Payment", 4L, 4L),
+        Entry("i2", Type.AAMDANI, 1500.0, Cat.TANKHWAH, "Sitara Paint Works Est", "", "Payment", 5L, 5L)
+    )
+    private val history = listOf(
+        ChatMessage("u1", true, "8 jul ki entries"),
+        ChatMessage("a1", false, "Transfer 2,000 · Transfer 5,000 · From Al Rajhi 600", listIds = listOf("t1", "t2", "t3"))
+    )
+
+    @Test fun shownRowsPickedByAmountGoToAnIncomeKhataNamedByItsFirstWords() {
+        val r = NativeChatEngine.interpret("2000 and 5000 wali entry Noor building contracting me move kr do", entries, history = history)
+        assertEquals("to_khata", r.kind)
+        assertEquals(setOf("t1", "t2"), r.filter.ids)
+        assertEquals("income", r.set["kind"])
+        assertEquals("Noor Building Contracting LTD", r.set["name"])
     }
 }
 

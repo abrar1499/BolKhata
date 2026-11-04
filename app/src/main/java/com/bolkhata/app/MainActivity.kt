@@ -361,10 +361,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
      * Moves entries into a khata of any kind: a party (loan or repayment from its balance), an expense category, an
      * income source or a stock item (purchase / sale). Money out can't go to Income, money in can't go to Expense.
      */
-    fun moveEntries(ids: Set<String>, kind: String, to: String) {
+    fun moveEntries(ids: Set<String>, kind: String, to: String): Int {
         val t = to.trim()
-        if (ids.isEmpty() || t.isEmpty()) return
-        val cat = if (kind == "expense") Cat.entries.firstOrNull { it.label.equals(t, true) } ?: return else null
+        if (ids.isEmpty() || t.isEmpty()) return 0
+        val cat = if (kind == "expense") Cat.entries.firstOrNull { it.label.equals(t, true) } ?: return 0 else null
         var skipped = 0
         val after = entries.map { e ->
             if (e.id !in ids) return@map e
@@ -377,7 +377,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             }
         }
         val record = store.recordMove(entries, after)
-        if (record == null) { toast(if (skipped > 0) "Money out can't go to Income, money in can't go to Expense" else "Already there"); return }
+        if (record == null) { toast(if (skipped > 0) "Money out can't go to Income, money in can't go to Expense" else "Already there"); return 0 }
         save(after)
         scope.launch {
             val moved = ids.size - skipped
@@ -387,6 +387,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 if (restored != null) { save(restored); store.forgetMove(record.id) } else toast("Cannot undo: entries were changed after the move.")
             }
         }
+        return ids.size - skipped
     }
 
     /** Moves a whole khata into another (or renames it): party into party merges; otherwise every entry moves. */
@@ -921,7 +922,30 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 changed.take(3).joinToString("; ") { (a, b) -> entryTitle(a) + " " + fmt(a.amount) + " → " + entryTitle(b) + " " + fmt(b.amount) } +
                     if (changed.size > 3) " +${changed.size - 3} more" else ""
             }
+            "rename_khata" -> {
+                val (kind, from, to) = Triple(f.set["kind"].orEmpty(), f.set["from"].orEmpty(), f.set["to"].orEmpty())
+                if (kind == "expense") return "Expense categories keep their names. Say which entries should move instead."
+                if (kind == "party") renameOrMergeKhata(from, to, merge = false) else moveKhata(kind, from, kind, to)
+                "Renamed $from → $to"
+            }
+            "move_khata" -> {
+                val from = f.set["from"].orEmpty()
+                val to = f.set["to"].orEmpty()
+                val n = khataEntries(f.set["kind"].orEmpty(), from).size
+                if (n == 0) return "No entries in $from."
+                moveKhata(f.set["kind"].orEmpty(), from, f.set["toKind"].orEmpty(), to)
+                "All of $from ($n " + (if (n == 1) "entry" else "entries") + ") → $to"
+            }
             "to_khata" -> {
+                // "2000 aur 5000 wali entry Noor Building Contracting me": an income or business khata, not a party.
+                f.set["kind"]?.let { kind ->
+                    val name = f.set["name"].orEmpty()
+                    val hits = scoped(Query.select(entries, q))
+                    if (hits.isEmpty()) return "Nothing found (${Query.label(q)})."
+                    val moved = moveEntries(hits.map { it.id }.toSet(), kind, name)
+                    return if (moved == 0) "Nothing moved: money out can't go to Income, money in can't go to Expense."
+                    else "$moved " + (if (moved == 1) "entry" else "entries") + " → $name"
+                }
                 // "Ye sari Abrar D360 ka khata bana do": these records become that khata's lene-dene, in date order,
                 // each one a loan or a repayment by the running balance (money out = they owe me, money in = back / I owe).
                 val name = f.set["person"]?.trim()?.takeIf { it.isNotEmpty() } ?: f.payer.ifBlank { return "Which khata? e.g. \"Abrar D360 ka khata\"" }
@@ -1171,7 +1195,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             return
         }
         val roman = runCatching { Translit.toRoman(text) }.getOrDefault(text)
-        val history = chatMessages.takeLast(20)
+        // A long window, so a follow-up still knows the search or list from many turns back.
+        val history = chatMessages.takeLast(60)
         postChat(text, isUser = true)
 
         NativeMemory.handle(text, store.memory)?.let { memory ->
@@ -1428,7 +1453,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         loadingLabel = "Listening with Groq…"
         if (voiceOn) voiceStatus = "Thinking…"
         scope.launch {
-            val said = Groq.transcribe(groqKey, file)
+            val said = Groq.transcribe(groqKey, file, contactNames() + entries.filter { it.type == Type.AAMDANI }.map { source(it) })
             runCatching { file.delete() }
             chatLoading = false
             loadingLabel = "Thinking…"
