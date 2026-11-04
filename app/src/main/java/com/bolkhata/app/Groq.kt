@@ -25,6 +25,10 @@ object Groq {
     private const val VOICE_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
     private const val CHAT_MODEL = "openai/gpt-oss-120b"
     private const val VOICE_MODEL = "whisper-large-v3"
+    /** Words every person says to a khata app, in Roman Urdu, so Whisper spells them the usual way for everyone. */
+    private const val COMMON_WORDS = "Hamid ka khata kholo. Chai 50 riyal likho. Kal nashta 10 riyal, lunch 25, dinner 30. " +
+        "Petrol 60, kiraya 1500, bijli bill, mobile recharge. Ali ko 500 udhaar diye, 200 wapas mile. Salary aayi 3000. " +
+        "Is mahine kitna kharcha hua? Pichle mahine ka hisaab. Ye entry delete karo. Rupay, riyal, dirham."
 
     private val instructions = """
         Fix a message for an offline khata (ledger) app. People type Roman Urdu, Urdu or Hindi script, or English,
@@ -192,7 +196,7 @@ object Groq {
             field("response_format", "verbose_json")
             field("temperature", "0")
             val known = names.map { it.trim() }.filter { it.isNotBlank() }.distinct().joinToString(", ").take(600)
-            field("prompt", "Hamid ka khata kholo. Chai 50 riyal likho. Is mahine kitna kharcha hua?" + if (known.isEmpty()) "" else " Khata: $known.")
+            field("prompt", COMMON_WORDS + if (known.isEmpty()) "" else " Khata: $known.")
             out.write("--$boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"voice.m4a\"\r\nContent-Type: audio/mp4\r\n\r\n".toByteArray())
             out.write(audio.readBytes())
             out.write("\r\n--$boundary--\r\n".toByteArray())
