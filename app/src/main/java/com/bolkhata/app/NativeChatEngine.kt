@@ -38,7 +38,7 @@ object NativeChatEngine {
         "open", "kholo", "khol", "kholen", "kholein", "karein", "karen", "kren", "tum", "aap", "es", "poora", "pura", "poore",
         "check", "hisab", "hisaab", "cashbook", "book", "name", "naam", "tak", "tk", "wal", "dhoondo", "dhundo", "talash",
         "jitni", "jitne", "jitny", "jitna", "bhi", "b", "hui", "hoi", "hoti", "hote", "huin", "hoin", "bheje", "bhejy", "bhejay", "bhejey", "bheja", "bheji", "bhijwaye", "bhijwaya",
-        "total", "report", "summary", "overview", "yearly", "annual", "annually", "alltime", "overall", "lifetime", "ever", "time", "day", "days",
+        "total", "report", "reports", "summary", "overview", "yearly", "annual", "annually", "alltime", "overall", "lifetime", "ever", "time", "day", "days",
         "delete", "delet", "del", "dlt", "remove", "hatao", "hata", "mitao", "clear", "wipe",
         "change", "edit", "update", "badlo", "correct", "fix", "move", "shift", "transfer", "send", "bhejo",
         "khata", "account", "paid", "pay", "by", "kiya", "kya", "khaya", "pese", "paise", "paisa", "diye", "diya", "us"
@@ -302,8 +302,9 @@ object NativeChatEngine {
             return talk(lower)
         }
 
-        // Reports use the requested period instead of silently defaulting yearly reports to this month.
-        if (has(words, setOf("report", "summary", "overview"))) {
+        // Reports use the requested period instead of silently defaulting yearly reports to this month;
+        // a report with its own dates ("from 19 aug to today") is a normal question over those dates.
+        if (has(words, setOf("report", "reports", "summary", "overview")) && dateBounds(lower, now) == null) {
             val periodQuery = when {
                 has(words, setOf("last", "previous", "pichle", "pichhle")) && has(words, setOf("year", "yearly", "annual", "annually", "saal")) -> "last year spent"
                 has(words, setOf("year", "yearly", "annual", "annually", "saal")) -> "this year spent"

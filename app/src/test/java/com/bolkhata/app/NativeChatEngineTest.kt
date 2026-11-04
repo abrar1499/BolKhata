@@ -38,6 +38,15 @@ class NativeChatEngineTest {
         assertTrue(r.filter.items.isEmpty())
     }
 
+    @Test fun aReportWithItsOwnDatesAsksOverThoseDates() {
+        val r = read("expense reports from 19 aug 2026 to today")
+        assertEquals("ask", r.kind)
+        assertEquals(setOf(Type.KHARCHA), r.filter.types)
+        assertEquals(Query.day("2026-08-19"), r.filter.from)
+        assertTrue(r.filter.to!! >= now)
+        assertTrue(r.filter.items.isEmpty())
+    }
+
     @Test fun searchingAnAmountListsThoseEntriesAndNeverEdits() {
         val r = read("2800 wal entry search karo")
         assertEquals("ask", r.kind)
