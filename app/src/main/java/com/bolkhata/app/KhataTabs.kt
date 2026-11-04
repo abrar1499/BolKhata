@@ -49,6 +49,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -486,7 +487,7 @@ private fun LazyListScope.profitView(all: List<Entry>, sales: List<Entry>, month
 }
 
 /** One grid cell: its text, the column it sits in (for the tint) and its ink. */
-private class GCell(val text: String, val kind: LKind, val ink: Color = AmountInk)
+private class GCell(val text: String, val kind: LKind, val ink: Color = Color.Unspecified)
 
 /** A ledger-style line that is not an entry: name and a small line under it, then one cell per column. As a [card] it stands alone, raised, with square corners. */
 @Composable
@@ -506,7 +507,7 @@ private fun GridRow(title: String, sub: String, cells: List<GCell>, w: Dp, last:
                 Modifier.width(w).fillMaxHeight().background(if (c.kind == LKind.OUT) RedSpend.copy(alpha = 0.025f) else Color.Transparent),
                 contentAlignment = Alignment.Center
             ) {
-                Text(c.text, fontSize = 9.sp, fontWeight = FontWeight.Bold, color = c.ink, maxLines = 1, softWrap = false)
+                Text(c.text, fontSize = 9.sp, fontWeight = FontWeight.Bold, color = c.ink.takeOrElse { AmountInk }, maxLines = 1, softWrap = false)
             }
         }
     }
@@ -559,8 +560,9 @@ internal class LRow(val key: String, val date: Long, val title: String, val note
 private val clockFmt = SimpleDateFormat("h:mma", Locale.US)
 private val dayLineFmt = SimpleDateFormat("EEE, d MMM", Locale.US)
 private val Faint = Color(0x14786C6C)
-/** Colour of an entry's own amount: dark grey, so red / green stay for the totals. */
-private val AmountInk = Color(0xFF3F3A36)
+/** Colour of an entry's own amount: plain text ink (dark grey, light in dark mode), so red / green stay for the totals. */
+private val AmountInk: Color
+    @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
 
 private fun colW(cols: List<LCol>) = if (cols.size == 1) 70.dp else 62.dp
 /** Wider columns for Parties and Stock: "Receivable", quantities with units and big totals must fit. */
