@@ -23,6 +23,15 @@ import java.net.URL
 object Groq {
     private const val CHAT_URL = "https://api.groq.com/openai/v1/chat/completions"
     private const val VOICE_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
+
+    /**
+     * The shared server (groq-proxy/worker.js on Cloudflare) that holds the owner's key, so people without their own
+     * Groq key still get Groq. Empty until it is set up; then [SHARED] works as a key.
+     */
+    private const val PROXY = ""
+    /** Stands in for a key: send through [PROXY] instead of straight to Groq. */
+    const val SHARED = "shared"
+    val sharedReady: Boolean get() = PROXY.isNotBlank()
     private const val CHAT_MODEL = "openai/gpt-oss-120b"
     private const val VOICE_MODEL = "whisper-large-v3"
     /** Words every person says to a khata app, in Roman Urdu, so Whisper spells them the usual way for everyone. */
@@ -221,12 +230,14 @@ object Groq {
     }
 
     private fun post(url: String, key: String, type: String, body: ByteArray): Pair<Int, String> {
-        val conn = URL(url).openConnection() as HttpURLConnection
+        val shared = key == SHARED
+        val to = if (!shared) url else PROXY.trimEnd('/') + if (url == VOICE_URL) "/transcribe" else "/chat"
+        val conn = URL(to).openConnection() as HttpURLConnection
         conn.requestMethod = "POST"
         conn.connectTimeout = 10_000
         conn.readTimeout = 25_000
         conn.doOutput = true
-        conn.setRequestProperty("Authorization", "Bearer $key")
+        if (shared) conn.setRequestProperty("X-App", "smart-expense") else conn.setRequestProperty("Authorization", "Bearer $key")
         conn.setRequestProperty("Content-Type", type)
         try {
             conn.outputStream.use { it.write(body) }
