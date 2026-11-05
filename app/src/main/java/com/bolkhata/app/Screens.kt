@@ -32,6 +32,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
@@ -1556,11 +1558,11 @@ fun SettingsScreen(
                         }
                     }
                     ListDivider()
-                    ListRow("Dark mode", null, trailing = { Switch(checked = dark, onCheckedChange = onDark) }) { onDark(!dark) }
+                    ListRow("Dark mode", null, trailing = { Toggle(dark, onChange = onDark) }) { onDark(!dark) }
                     ListDivider()
                     ListRow("Theme", themeName) { dialog = "theme" }
                     ListDivider()
-                    ListRow("Bank alerts", null, trailing = { Switch(checked = bankOn, onCheckedChange = { onBank() }) }, onClick = onBank)
+                    ListRow("Bank alerts", null, trailing = { Toggle(bankOn) { onBank() } }, onClick = onBank)
                     ListDivider()
                     ListRow("Groq AI", if (groqOn) "On" else "Off", valueColor = if (groqOn) GreenIn else faint) { dialog = "groq" }
                     ListDivider()
@@ -1639,7 +1641,7 @@ fun SettingsScreen(
                                 Text("Groq voice for the mic and call", fontSize = 15.sp)
                                 Text("Whisper hears Urdu and mixed speech better", fontSize = 12.sp, color = faint)
                             }
-                            Switch(checked = groqVoice, onCheckedChange = onGroqVoice, enabled = groqOn)
+                            Toggle(groqVoice, enabled = groqOn, onChange = onGroqVoice)
                         }
                     }
                 },
@@ -1717,15 +1719,30 @@ private fun ListRow(
     trailing: (@Composable () -> Unit)? = null, onClick: () -> Unit
 ) {
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 54.dp).padding(horizontal = 16.dp, vertical = 8.dp),
+        Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 42.dp).padding(horizontal = 14.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(label, fontSize = 16.sp, modifier = Modifier.weight(1f))
+        Text(label, fontSize = 14.sp, modifier = Modifier.weight(1f))
         if (value != null) Text(
-            value, fontSize = 14.sp, maxLines = 1,
+            value, fontSize = 13.sp, maxLines = 1,
             color = if (valueColor == Color.Unspecified) MaterialTheme.colorScheme.onSurfaceVariant else valueColor
         )
         trailing?.invoke()
+    }
+}
+
+/** A small iOS-style on/off switch: green track with a white raised knob when on, soft grey when off. */
+@Composable
+private fun Toggle(checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
+    val x by androidx.compose.animation.core.animateDpAsState(if (checked) 16.dp else 0.dp, label = "knob")
+    val track by androidx.compose.animation.animateColorAsState(
+        if (checked) GreenIn else MaterialTheme.colorScheme.outlineVariant, label = "track"
+    )
+    Box(
+        Modifier.size(width = 38.dp, height = 22.dp).alpha(if (enabled) 1f else 0.4f).clip(CircleShape).background(track)
+            .clickable(enabled = enabled) { onChange(!checked) }.padding(2.dp)
+    ) {
+        Box(Modifier.offset(x = x).size(18.dp).shadow(1.5.dp, CircleShape).clip(CircleShape).background(Color.White))
     }
 }
 
