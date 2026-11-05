@@ -84,7 +84,7 @@ object Groq {
         val what: String = "", val query: Query.Filter? = null
     )
 
-    private val QUERY_TYPES = TYPES + mapOf("sale" to Type.SALE, "purchase" to Type.PURCHASE)
+    private val QUERY_TYPES get() = TYPES + mapOf("sale" to Type.SALE, "purchase" to Type.PURCHASE)
 
     /**
      * Groq's "query" as a filter the app runs on its own records. Null when there is none or its mode is unknown;
