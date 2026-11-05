@@ -35,43 +35,56 @@ object Groq {
         "Is mahine kitna kharcha hua? Pichle mahine ka hisaab. Ye entry delete karo. Rupay, riyal, dirham."
 
     private val instructions = """
-        Fix a message for an offline khata (ledger) app. People type Roman Urdu, Urdu or Hindi script, or English,
-        often misspelled or from voice typing. Return the SAME message in simple Roman Urdu/English the app can read:
-        fix spelling, write Urdu/Hindi script in Roman letters, and replace a name with the matching saved name.
-        Keep every number exactly. Do not answer, add or drop meaning. Short replies like "detail do" stay as they are.
-        Reply with the corrected message only.
+        You are the brain of a khata (ledger and expense) app. People type or speak Roman Urdu, Urdu or Hindi script,
+        or English, often misspelled. Read every message and reply with JSON only: {"command": ..., "reply": ...}.
+        - If it is about their money or the app's data (add, show, search, count, total, balance, report, cashbook,
+          a khata, edit, move, rename, delete, undo, a follow-up like "detail do" or "sirf food"), put ONE short
+          clear message for the app in "command", in simple Roman Urdu/English like these: "chai 50", "Ali ko 500
+          diye", "is mahine food kitna", "19 aug se aaj tak expense", "Ali ka khata", "cashbook", "expense report",
+          "last 5 entries", "2800 wali entry", "petrol 50 nahi 40 tha", "other me kitni entries". Keep every number
+          exactly and use the matching saved name. Leave "reply" empty: the app answers from its own records.
+        - Otherwise (greeting, general question, help, advice), leave "command" empty and answer in "reply" in 1 to 3
+          short lines, in the language they used. You cannot see their records: never state their amounts or totals.
     """.trimIndent()
 
+    /** What Groq made of a message: a [command] for the app (blank for none), or its own [reply]. */
+    data class Routed(val command: String, val reply: String)
+
     /**
-     * Every chat message passes through here first when Groq is on. Returns the corrected message, or null when Groq
-     * is unreachable or changed a number (the app then uses the message as typed). [lastAnswer] lets a follow-up
-     * ("dlip shhzad aqbal" after "Which A or B?") be corrected; [names] are only the saved names that look like words
-     * in the message, to keep tokens low.
+     * Every chat message passes through here first when Groq is on. Null when Groq is unreachable (the app then reads
+     * the message as typed). A command whose numbers differ from the message is replaced by the message, so money is
+     * never changed. [lastAnswer] lets a follow-up be understood; [names] are only the saved names that look like
+     * words in the message, to keep tokens low.
      */
-    suspend fun correct(key: String, said: String, lastAnswer: String, names: List<String>): String? = withContext(Dispatchers.IO) {
+    suspend fun route(key: String, said: String, lastAnswer: String, names: List<String>): Routed? = withContext(Dispatchers.IO) {
         runCatching {
             val prompt = buildString {
                 if (names.isNotEmpty()) append("Saved names: ").append(names.joinToString(", ")).append('\n')
                 if (lastAnswer.isNotBlank()) append("App's last reply: ").append(lastAnswer.take(150)).append('\n')
                 append("Message: ").append(said.take(300))
             }
-            fun body(lowEffort: Boolean) = JSONObject()
+            val body = JSONObject()
                 .put("model", CHAT_MODEL)
                 .put("temperature", 0)
-                .put("max_tokens", 500)
-                .apply { if (lowEffort) put("reasoning_effort", "low") }
+                .put("max_tokens", 700)
+                .put("reasoning_effort", "low")
+                .put("response_format", JSONObject().put("type", "json_object"))
                 .put("messages", JSONArray()
                     .put(JSONObject().put("role", "system").put("content", instructions))
                     .put(JSONObject().put("role", "user").put("content", prompt)))
                 .toString().toByteArray(Charsets.UTF_8)
-            var (code, text) = post(CHAT_URL, key, "application/json", body(true))
-            if (code == 400) post(CHAT_URL, key, "application/json", body(false)).let { code = it.first; text = it.second }
+            val (code, text) = post(CHAT_URL, key, "application/json", body)
             if (code !in 200..299) error(describe(code))
-            val fixed = JSONObject(text).getJSONArray("choices").getJSONObject(0).getJSONObject("message")
-                .optString("content").trim().removeSurrounding("\"").lines().firstOrNull { it.isNotBlank() }?.trim().orEmpty()
-            // Never let a correction change money: the digits must stay exactly the same.
+            val o = JSONObject(JSONObject(text).getJSONArray("choices").getJSONObject(0).getJSONObject("message").optString("content"))
+            // Never let Groq change money: a command keeps exactly the digits that were said.
             fun digits(s: String) = Regex("""\d+(?:[.,]\d+)?""").findAll(s).map { it.value.replace(",", "") }.toList()
-            fixed.takeIf { it.isNotBlank() && it.length <= 400 && digits(it) == digits(said) }
+            val command = o.optString("command").trim().take(400)
+            val reply = o.optString("reply").trim().take(600)
+            when {
+                command.isNotBlank() -> Routed(if (digits(command) == digits(said)) command else said, "")
+                reply.isNotBlank() -> Routed("", reply)
+                else -> error("empty")
+            }
         }.getOrNull()
     }
 
