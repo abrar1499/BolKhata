@@ -1221,17 +1221,27 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         chatLoading = true
         scope.launch {
             try {
-                // With the owner's Groq key, every message is first corrected by Groq (spelling, script, names).
-                // Groq only rewrites; the local engine below still decides and answers from the saved records.
+                // With Groq on, Groq reads every message first: money and app requests become a clear command that the
+                // local engine runs against the saved records (totals, reports, cashbook); anything else Groq answers.
                 var groqTrace = ""
-                val read = if (groqKey.isBlank()) roman else {
+                var read = roman
+                if (groqKey.isNotBlank()) {
                     val names = Understand.similarNames(roman.split(Regex("""\s+""")), contactNames())
                     val lastAnswer = history.lastOrNull { !it.isUser }?.text.orEmpty()
-                    val fixed = Groq.correct(groqKey, text, lastAnswer, names)
-                    if (fixed == null) { groqTrace = "; groq=unavailable"; roman }
-                    else {
-                        groqTrace = if (fixed.equals(text, ignoreCase = true)) "; groq=same" else "; groq=" + fixed.take(120)
-                        runCatching { Translit.toRoman(fixed) }.getOrDefault(fixed)
+                    val routed = Groq.route(groqKey, text, lastAnswer, names)
+                    when {
+                        routed == null -> groqTrace = "; groq=unavailable"
+                        routed.command.isBlank() -> {
+                            val usage = Groq.takeUsage()
+                            lastSpeech = routed.reply
+                            postChat(routed.reply, isUser = false,
+                                meta = "engine=Groq; intent=chat" + (if (usage.isBlank()) "" else "; usage=" + usage))
+                            return@launch
+                        }
+                        else -> {
+                            groqTrace = "; groq=" + routed.command.take(120)
+                            read = runCatching { Translit.toRoman(routed.command) }.getOrDefault(routed.command)
+                        }
                     }
                 }
                 val intent = NativeChatEngine.interpret(
@@ -1247,18 +1257,25 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 }
                 var executionStatus = "returned"
                 listedRows[0] = emptyList()
-                val reply = runCatching { runFixed(intent, text, inChat = true) }
+                var reply = runCatching { runFixed(intent, text, inChat = true) }
                     .onFailure { executionStatus = "exception:" + it.javaClass.simpleName }
                     .getOrElse {
                         "Kuch nahi badla. Date, amount ya naam batayein."
                     }
+                // What the app's engine did not understand, Groq answers itself (never with the person's amounts).
+                if (intent.unsure && groqKey.isNotBlank()) {
+                    val recent = history.takeLast(6).joinToString("\n") { (if (it.isUser) "Person: " else "App: ") + it.text.take(200) }
+                    Groq.answer(groqKey, read, recent)?.let { reply = it; executionStatus = "groq_answer" }
+                }
+                val usage = Groq.takeUsage()
                 if (reply == null && executionStatus == "returned") executionStatus = "awaiting_confirmation"
                 val matchCount = if (intent.kind in setOf("ask", "open", "delete", "change", "to_khata", "paid_by", "reread")) {
                     runCatching { Query.select(scopeKhataEntries(entries), intent.filter).size }.getOrNull()
                 } else null
                 val trace = "engine=NativeChatEngine; intent=" + intent.kind +
                     (if (intent.what.isBlank()) "" else "; query=" + intent.what) +
-                    (matchCount?.let { "; matched=" + it } ?: "") + "; execution=" + executionStatus + groqTrace
+                    (matchCount?.let { "; matched=" + it } ?: "") + "; execution=" + executionStatus + groqTrace +
+                    (if (usage.isBlank()) "" else "; usage=" + usage)
                 if (!reply.isNullOrBlank()) {
                     lastSpeech = reply
                     postChat(reply, isUser = false, meta = trace, listIds = listedRows[0])
