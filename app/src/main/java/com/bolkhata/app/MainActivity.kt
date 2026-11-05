@@ -55,6 +55,8 @@ import androidx.core.view.WindowCompat
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // The app draws under the status bar, so the theme band runs to the very top of the screen in one piece.
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         val store = Store(this)
         setContent {
             var dark by remember { mutableStateOf(store.dark) }
@@ -108,14 +110,14 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var lang by remember { mutableStateOf(store.language) }
     val tabNav = remember { TabNav() }
     var tab by tabNav
-    // The status bar takes the colour right under it: the theme band's top on the khata tabs, else the page colour.
+    // The status bar is see-through: the theme band shows through it on the khata tabs, the page colour elsewhere.
     val pageColor = MaterialTheme.colorScheme.background
     val header = LocalHeader.current
     val banded = header.name != "Clean" && tab in BAND_TABS
     LaunchedEffect(pageColor, dark, banded, header) {
         (context as? Activity)?.window?.let { w ->
             @Suppress("DEPRECATION")
-            w.statusBarColor = (if (banded) header.top else pageColor).toArgb()
+            w.statusBarColor = android.graphics.Color.TRANSPARENT
             WindowCompat.getInsetsController(w, w.decorView).isAppearanceLightStatusBars = if (banded) header.light else !dark
         }
     }
@@ -2008,7 +2010,13 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             }
         }
     ) {
+    // Only a main khata tab with the band draws under the status bar; every other screen starts below it.
+    // The keyboard pushes the screen up (as adjustResize did before drawing under the bars).
+    val underStatusBar = banded && results == null && people == null && account == null && ledger == null
     Scaffold(
+        modifier = Modifier
+            .then(if (underStatusBar) Modifier else Modifier.statusBarsPadding())
+            .windowInsetsPadding(WindowInsets.ime.exclude(WindowInsets.navigationBars)),
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
             val main = results == null && people == null && account == null && ledger == null
