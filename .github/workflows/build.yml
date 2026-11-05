@@ -31,6 +31,8 @@ jobs:
           last=$(gh release view --repo "${{ github.repository }}" --json tagName -q .tagName 2>/dev/null | tr -d 'v')
           echo "APP_VERSION=$(( ${last:-0} + 1 ))" >> "$GITHUB_ENV"
       - name: Build
+        env:
+          GROQ_KEY: ${{ secrets.GROQ_KEY }}
         run: |
           set -o pipefail
           gradle testReleaseUnitTest assembleRelease bundlePlay --no-daemon 2>&1 | tee build.log || {

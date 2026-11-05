@@ -129,7 +129,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         mutableStateOf(chatLog.load().mapNotNull { r -> if (r.flagged) r.id to false else if (r.liked) r.id to true else null }.toMap())
     }
     var logToken by remember { mutableStateOf(store.logToken) }
-    // Without a key of their own, people use the shared Groq server (when it is set up), unless they turned Groq off.
+    // Without a key of their own, people use the built-in key (when the build has one), unless they turned Groq off.
     fun groqKeyNow() = store.groqKey.ifBlank { if (Groq.sharedReady && !store.groqOff) Groq.SHARED else "" }
     var groqKey by remember { mutableStateOf(groqKeyNow()) }
     var groqVoice by remember { mutableStateOf(store.groqVoice) }
