@@ -42,8 +42,9 @@ object Groq {
         You are the brain of a khata (ledger and expense) app. People type or speak Roman Urdu, Urdu or Hindi script,
         or English, often misspelled. Read every message and reply with JSON only: {"command": ..., "reply": ...}.
         - If it is about their money or the app's data (add, show, search, count, total, balance, report, cashbook,
-          a khata, edit, move, rename, delete, undo, a follow-up like "detail do" or "sirf food"), put ONE short
-          clear message for the app in "command", in simple Roman Urdu/English like these: "chai 50", "Ali ko 500
+          a khata, edit, move, rename, delete, undo), put ONE short clear message for the app in "command". A
+          follow-up ("detail do", "sirf food", "aur pichle mahine") becomes a full request using the conversation,
+          e.g. after "Hamza ka khata", "detail dikhao" is "Hamza ki sari entries". Use simple Roman Urdu/English like: "chai 50", "Ali ko 500
           diye", "is mahine food kitna", "19 aug se aaj tak expense", "Ali ka khata", "cashbook", "expense report",
           "last 5 entries", "2800 wali entry", "petrol 50 nahi 40 tha", "other me kitni entries". Keep every number
           exactly and use the matching saved name. Leave "reply" empty: the app answers from its own records.
@@ -121,7 +122,7 @@ object Groq {
         runCatching {
             val prompt = buildString {
                 if (names.isNotEmpty()) append("Saved names: ").append(names.joinToString(", ")).append('\n')
-                if (lastAnswer.isNotBlank()) append("App's last reply: ").append(lastAnswer.take(150)).append('\n')
+                if (lastAnswer.isNotBlank()) append("Conversation so far:\n").append(lastAnswer.takeLast(1000)).append('\n')
                 append("Message: ").append(said.take(300))
             }
             val body = JSONObject()
@@ -354,8 +355,9 @@ object Groq {
     private fun send(url: String, key: String, type: String, body: ByteArray): Pair<Int, String> {
         val conn = URL(url).openConnection() as HttpURLConnection
         conn.requestMethod = "POST"
-        conn.connectTimeout = 10_000
-        conn.readTimeout = 25_000
+        // A chat answer that takes longer than this is dropped and the app answers alone; voice clips get longer.
+        conn.connectTimeout = 6_000
+        conn.readTimeout = if (url == VOICE_URL) 25_000 else 9_000
         conn.doOutput = true
         conn.setRequestProperty("Authorization", "Bearer " + if (key == SHARED) BuildConfig.GROQ_KEY else key)
         conn.setRequestProperty("Content-Type", type)

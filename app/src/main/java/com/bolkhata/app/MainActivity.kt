@@ -1227,8 +1227,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 var read = roman
                 if (groqKey.isNotBlank()) {
                     val names = Understand.similarNames(roman.split(Regex("""\s+""")), contactNames())
-                    val lastAnswer = history.lastOrNull { !it.isUser }?.text.orEmpty()
-                    val routed = Groq.route(groqKey, text, lastAnswer, names)
+                    // The last few turns, so a follow-up ("detail dikhao", "sirf food") is read in context.
+                    val recent = history.takeLast(6).joinToString("\n") { (if (it.isUser) "Person: " else "App: ") + it.text.take(160) }
+                    // Groq answers within about 9 seconds (see Groq.send); else the app answers by itself, so the chat never hangs.
+                    val routed = Groq.route(groqKey, text, recent, names)
                     when {
                         routed == null -> groqTrace = "; groq=unavailable"
                         routed.command.isBlank() -> {
