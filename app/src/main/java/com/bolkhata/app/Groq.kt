@@ -44,7 +44,9 @@ object Groq {
         - If it is about their money or the app's data (add, show, search, count, total, balance, report, cashbook,
           a khata, edit, move, rename, delete, undo), put ONE short clear message for the app in "command". A
           follow-up ("detail do", "sirf food", "aur pichle mahine") becomes a full request using the conversation,
-          e.g. after "Hamza ka khata", "detail dikhao" is "Hamza ki sari entries". Use simple Roman Urdu/English like: "chai 50", "Ali ko 500
+          e.g. after "Hamza ka khata", "detail dikhao" is "Hamza ki sari entries"; after "is mahine ka total",
+          "kahan kahan laga" is "is mahine ka expense report" and "detail batao" is "is mahine ki expense entries".
+          "aaj tak" / "ab tak" means all time ("all time expense"), not only today. Use simple Roman Urdu/English like: "chai 50", "Ali ko 500
           diye", "is mahine food kitna", "19 aug se aaj tak expense", "Ali ka khata", "cashbook", "expense report",
           "last 5 entries", "2800 wali entry", "petrol 50 nahi 40 tha", "other me kitni entries". Keep every number
           exactly and use the matching saved name. Leave "reply" empty: the app answers from its own records.

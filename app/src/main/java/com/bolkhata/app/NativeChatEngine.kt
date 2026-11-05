@@ -37,7 +37,7 @@ object NativeChatEngine {
         "it", "that", "this", "those", "these", "isko", "usko", "ye", "yeh", "inko",
         "open", "kholo", "khol", "kholen", "kholein", "karein", "karen", "kren", "tum", "aap", "es", "poora", "pura", "poore",
         "check", "hisab", "hisaab", "cashbook", "book", "name", "naam", "tak", "tk", "wal", "dhoondo", "dhundo", "talash",
-        "jitni", "jitne", "jitny", "jitna", "parri", "pari", "padi", "pari", "parre", "pare", "pade", "parhi", "bhi", "b", "hui", "hoi", "hoti", "hote", "huin", "hoin", "bheje", "bhejy", "bhejay", "bhejey", "bheja", "bheji", "bhijwaye", "bhijwaya",
+        "jitni", "jitne", "jitny", "jitna", "detail", "details", "detailed", "tafseel", "tafsil", "breakdown", "mtlb", "matlab", "parri", "pari", "padi", "pari", "parre", "pare", "pade", "parhi", "bhi", "b", "hui", "hoi", "hoti", "hote", "huin", "hoin", "bheje", "bhejy", "bhejay", "bhejey", "bheja", "bheji", "bhijwaye", "bhijwaya",
         "total", "report", "reports", "summary", "overview", "yearly", "annual", "annually", "alltime", "overall", "lifetime", "ever", "time", "day", "days",
         "delete", "delet", "del", "dlt", "remove", "hatao", "hata", "mitao", "clear", "wipe",
         "change", "edit", "update", "badlo", "correct", "fix", "move", "shift", "transfer", "send", "bhejo",
@@ -614,7 +614,8 @@ object NativeChatEngine {
     private fun buildFilter(input: String, contacts: List<String>, now: Long, defaultMonth: Boolean): Query.Filter {
         val lower = input.lowercase(Locale.ROOT)
         val w = tokens(lower)
-        val bounds = dateBounds(lower, now) ?: if (defaultMonth) monthBounds(now, 0) else null
+        // "aaj tak", "ab tak", "all time": everything saved so far, no date limit.
+        val bounds = dateBounds(lower, now) ?: if (defaultMonth && !soFar(lower)) monthBounds(now, 0) else null
         val types = when {
             has(w, expense) -> setOf(Type.KHARCHA)
             has(w, income) -> setOf(Type.AAMDANI)
@@ -671,6 +672,9 @@ object NativeChatEngine {
         ids = f.ids, createdFrom = f.createdFrom, createdTo = f.createdTo
     )
 
+    private fun soFar(text: String) =
+        Regex("""\b(?:aaj|aj|ab|abhi|abi)\s+(?:tak|tk)\b|\ball\s+time\b|\b(?:alltime|overall|lifetime|ever)\b""").containsMatchIn(text)
+
     private fun dateBounds(text: String, now: Long): Bounds? {
         // "19 aug se aaj tak", "from 19 aug to today": from the first day to the end of the second.
         (Regex("""^(.*?)\s+(?:se|sy|say)\s+(.*?)\s+(?:tak|tk|takk|until|till)\b""").find(text)
@@ -679,6 +683,7 @@ object NativeChatEngine {
             val b = dateBounds(m.groupValues[2], now)
             if (a != null && b != null) return Bounds(minOf(a.from, b.from), maxOf(a.to, b.to))
         }
+        if (soFar(text)) return null
         val w = tokens(text)
         fun day(offset: Int): Bounds {
             val c = Calendar.getInstance().apply { timeInMillis = now; add(Calendar.DAY_OF_YEAR, offset) }
