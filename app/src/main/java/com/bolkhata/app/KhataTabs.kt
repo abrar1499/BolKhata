@@ -764,7 +764,8 @@ fun CashBookScreen(
     val hand = remember(newest) { newest.sumOf { if (cashIn(it)) it.amount else -it.amount } }
     // This month's net cash: in minus out.
     val nowKey = monthKey(System.currentTimeMillis())
-    val thisMonth = remember(newest, nowKey) { newest.filter { monthKey(it.date) == nowKey }.sumOf { if (cashIn(it)) it.amount else -it.amount } }
+    // The head shows what was spent this month (Expense entries), like the Expense tab.
+    val spentMonth = remember(newest, nowKey) { newest.filter { it.type == Type.KHARCHA && monthKey(it.date) == nowKey }.sumOf { it.amount } }
     val months = remember(newest) { monthsOf(newest) }
     var month by rememberSaveable(months.firstOrNull()?.first) { mutableIntStateOf(months.firstOrNull()?.first ?: 0) }
     // A remembered month that no longer has entries (the khata changed since) falls back to the newest month.
@@ -779,7 +780,7 @@ fun CashBookScreen(
                 KhataTop("", "", onMenu, business = business, onBusiness = onBusiness) {
                     SumCard(
                         Triple(money(currency, hand), "Cash in hand", if (hand < 0) RedSpend else GreenIn),
-                        Triple(money(currency, thisMonth), "This month", if (thisMonth < 0) RedSpend else GreenIn),
+                        Triple(money(currency, spentMonth), "Spent this month", RedSpend),
                         "History", onHistory
                     )
                 }
