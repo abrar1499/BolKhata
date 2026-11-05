@@ -540,6 +540,11 @@ class Store(context: Context) {
         set(v) = prefs.edit().putString("elevenAgent", v.trim()).apply()
 
     /** Use Groq Whisper for the mic and the voice call instead of the phone's speech recognition. */
+    /** True once the person turned Groq off, so the shared Groq server is not used either. */
+    var groqOff: Boolean
+        get() = prefs.getBoolean("groqOff", false)
+        set(v) = prefs.edit().putBoolean("groqOff", v).apply()
+
     var groqVoice: Boolean
         get() = prefs.getBoolean("groqVoice", true)
         set(v) = prefs.edit().putBoolean("groqVoice", v).apply()

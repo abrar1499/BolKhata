@@ -129,9 +129,12 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         mutableStateOf(chatLog.load().mapNotNull { r -> if (r.flagged) r.id to false else if (r.liked) r.id to true else null }.toMap())
     }
     var logToken by remember { mutableStateOf(store.logToken) }
-    var groqKey by remember { mutableStateOf(store.groqKey) }
+    // Without a key of their own, people use the built-in key (when the build has one), unless they turned Groq off.
+    fun groqKeyNow() = store.groqKey.ifBlank { if (Groq.sharedReady && !store.groqOff) Groq.SHARED else "" }
+    var groqKey by remember { mutableStateOf(groqKeyNow()) }
     var groqVoice by remember { mutableStateOf(store.groqVoice) }
-    var elevenKey by remember { mutableStateOf(store.elevenKey) }
+    // The Play build has no ElevenLabs voice: calls always use the phone's own voice.
+    var elevenKey by remember { mutableStateOf(if (BuildConfig.PLAY) "" else store.elevenKey) }
     var elevenVoice by remember { mutableStateOf(store.elevenVoice) }
     var elevenAgent by remember { mutableStateOf(store.elevenAgent) }
     var logRepo by remember { mutableStateOf(store.logRepo) }
@@ -2296,9 +2299,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     onLogSendNow = { sendChatLog(force = true) },
                     groqOn = groqKey.isNotBlank(),
                     groqVoice = groqVoice,
-                    onGroqSave = { key -> store.groqKey = key; groqKey = store.groqKey; toast("✓ Groq turned on") },
+                    onGroqSave = { key -> store.groqKey = key; store.groqOff = false; groqKey = groqKeyNow(); toast("✓ Groq turned on") },
                     onGroqVoice = { on -> store.groqVoice = on; groqVoice = on },
-                    onGroqOff = { store.groqKey = ""; groqKey = ""; toast("Groq turned off. The app is fully offline again.") },
+                    onGroqOff = { store.groqKey = ""; store.groqOff = true; groqKey = ""; toast("Groq turned off. The app is fully offline again.") },
                     elevenVoice = elevenVoice,
                     elevenAgent = elevenAgent,
                     elevenOn = elevenKey.isNotBlank() && (elevenVoice.isNotBlank() || elevenAgent.isNotBlank()),

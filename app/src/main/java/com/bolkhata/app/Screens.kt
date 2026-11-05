@@ -1562,14 +1562,21 @@ fun SettingsScreen(
                     ListDivider()
                     ListRow("Theme", themeName) { dialog = "theme" }
                     ListDivider()
-                    ListRow("Bank alerts", null, trailing = { Toggle(bankOn) { onBank() } }, onClick = onBank)
-                    ListDivider()
+                    // The Play build leaves out bank alerts (notification access) and chat review (uploads the chat log).
+                    if (!BuildConfig.PLAY) {
+                        ListRow("Bank alerts", null, trailing = { Toggle(bankOn) { onBank() } }, onClick = onBank)
+                        ListDivider()
+                    }
                     ListRow("Groq AI", if (groqOn) "On" else "Off", valueColor = if (groqOn) GreenIn else faint) { dialog = "groq" }
                     ListDivider()
-                    ListRow("Call voice", if (elevenOn) "ElevenLabs" else "Phone", valueColor = if (elevenOn) GreenIn else faint) { dialog = "eleven" }
-                    ListDivider()
-                    ListRow("Chat review", if (logTokenSet) "On" else "Off", valueColor = if (logTokenSet) GreenIn else faint) { dialog = "review" }
-                    ListDivider()
+                    if (!BuildConfig.PLAY) {
+                        ListRow("Call voice", if (elevenOn) "ElevenLabs" else "Phone", valueColor = if (elevenOn) GreenIn else faint) { dialog = "eleven" }
+                        ListDivider()
+                    }
+                    if (!BuildConfig.PLAY) {
+                        ListRow("Chat review", if (logTokenSet) "On" else "Off", valueColor = if (logTokenSet) GreenIn else faint) { dialog = "review" }
+                        ListDivider()
+                    }
                     Box {
                         var open by remember { mutableStateOf(false) }
                         ListRow("Backup", "Export · Import") { open = true }

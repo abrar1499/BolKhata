@@ -23,6 +23,10 @@ import java.net.URL
 object Groq {
     private const val CHAT_URL = "https://api.groq.com/openai/v1/chat/completions"
     private const val VOICE_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
+
+    /** Stands in for a key: use the app's built-in key (the GROQ_KEY secret, added at build time). */
+    const val SHARED = "shared"
+    val sharedReady: Boolean get() = BuildConfig.GROQ_KEY.isNotBlank()
     private const val CHAT_MODEL = "openai/gpt-oss-120b"
     private const val VOICE_MODEL = "whisper-large-v3"
     /** Words every person says to a khata app, in Roman Urdu, so Whisper spells them the usual way for everyone. */
@@ -226,7 +230,7 @@ object Groq {
         conn.connectTimeout = 10_000
         conn.readTimeout = 25_000
         conn.doOutput = true
-        conn.setRequestProperty("Authorization", "Bearer $key")
+        conn.setRequestProperty("Authorization", "Bearer " + if (key == SHARED) BuildConfig.GROQ_KEY else key)
         conn.setRequestProperty("Content-Type", type)
         try {
             conn.outputStream.use { it.write(body) }

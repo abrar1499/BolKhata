@@ -20,6 +20,8 @@ android {
         versionName = "1.$buildNumber"
         // The Play Store build updates through Play, so it has no self-updater (see the "play" build type).
         buildConfigField("boolean", "PLAY", "false")
+        // The owner's Groq key from the GROQ_KEY repository secret (CI only), so people without a key of their own get Groq.
+        buildConfigField("String", "GROQ_KEY", "\"" + (System.getenv("GROQ_KEY") ?: "").trim() + "\"")
         ndk {
             // Real phones only: the x86 copies of the OCR library are for PC emulators and added ~23 MB.
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")
