@@ -131,7 +131,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     var logToken by remember { mutableStateOf(store.logToken) }
     var groqKey by remember { mutableStateOf(store.groqKey) }
     var groqVoice by remember { mutableStateOf(store.groqVoice) }
-    var elevenKey by remember { mutableStateOf(store.elevenKey) }
+    // The Play build has no ElevenLabs voice: calls always use the phone's own voice.
+    var elevenKey by remember { mutableStateOf(if (BuildConfig.PLAY) "" else store.elevenKey) }
     var elevenVoice by remember { mutableStateOf(store.elevenVoice) }
     var elevenAgent by remember { mutableStateOf(store.elevenAgent) }
     var logRepo by remember { mutableStateOf(store.logRepo) }

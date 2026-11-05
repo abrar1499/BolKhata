@@ -32,11 +32,11 @@
 - **Target audience:** 18 and over.
 - **Content rating questionnaire:** Utility / productivity. Answer "No" to every content question.
 - **Financial features:** none of loans, banking, crypto or trading. It is only a personal expense tracker.
-- **Notification access:** not used. The Play build leaves out bank alerts, chat review and the self-updater.
+- **Notification access:** not used. The Play build leaves out bank alerts, chat review, ElevenLabs voice and the self-updater.
 
 ## Data safety form
 - **Does the app collect or share user data?** Yes, but only through optional features the user turns on:
-  - **Audio (voice recordings):** shared with Groq or ElevenLabs only when the user adds their own key. Purpose: app
+  - **Audio (voice recordings):** shared with Groq only when the user adds their own key. Purpose: app
     functionality. Not stored by the app developer. Optional.
   - **Messages / app activity (chat text):** sent to Groq only when the user adds their key. Purpose: app functionality.
     Optional.

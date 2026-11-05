@@ -1569,8 +1569,10 @@ fun SettingsScreen(
                     }
                     ListRow("Groq AI", if (groqOn) "On" else "Off", valueColor = if (groqOn) GreenIn else faint) { dialog = "groq" }
                     ListDivider()
-                    ListRow("Call voice", if (elevenOn) "ElevenLabs" else "Phone", valueColor = if (elevenOn) GreenIn else faint) { dialog = "eleven" }
-                    ListDivider()
+                    if (!BuildConfig.PLAY) {
+                        ListRow("Call voice", if (elevenOn) "ElevenLabs" else "Phone", valueColor = if (elevenOn) GreenIn else faint) { dialog = "eleven" }
+                        ListDivider()
+                    }
                     if (!BuildConfig.PLAY) {
                         ListRow("Chat review", if (logTokenSet) "On" else "Off", valueColor = if (logTokenSet) GreenIn else faint) { dialog = "review" }
                         ListDivider()
