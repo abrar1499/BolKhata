@@ -34,6 +34,10 @@ object Groq {
         "Petrol 60, kiraya 1500, bijli bill, mobile recharge. Ali ko 500 udhaar diye, 200 wapas mile. Salary aayi 3000. " +
         "Is mahine kitna kharcha hua? Pichle mahine ka hisaab. Ye entry delete karo. Rupay, riyal, dirham."
 
+    /** The expense categories Groq may pick from (declared before the instructions that name them). */
+    private val CATEGORY_NAMES = Cat.entries.filter { it !in setOf(Cat.TANKHWAH, Cat.UDHAAR, Cat.SALES, Cat.STOCK) }
+        .joinToString(", ") { it.label }
+
     private val instructions = """
         You are the brain of a khata (ledger and expense) app. People type or speak Roman Urdu, Urdu or Hindi script,
         or English, often misspelled. Read every message and reply with JSON only: {"command": ..., "reply": ...}.
@@ -45,10 +49,65 @@ object Groq {
           exactly and use the matching saved name. Leave "reply" empty: the app answers from its own records.
         - Otherwise (greeting, general question, help, advice), leave "command" empty and answer in "reply" in 1 to 3
           short lines, in the language they used. You cannot see their records: never state their amounts or totals.
+        - When the message records NEW money (one or more entries, e.g. "chai 50 aur petrol 60", "Ali ko 500 diye",
+          "kal salary 3000 aayi"), also fill "entries": a list of {"type", "amount", "category", "item", "person",
+          "note", "date", "qty", "unit"}. type is one of expense, income, lent (gave a loan / paid someone on credit),
+          borrowed, received_back, paid_back. category (for expense) is one of $CATEGORY_NAMES. item is 1-3 words
+          (e.g. "Petrol", "Chai"), person is the other person's name (saved name if it matches) or "", note is any
+          extra detail or "", date is "YYYY-MM-DD" when a day is said (today is TODAY) else "", qty and unit only
+          when a quantity is said. Amounts exactly as said. For edits, questions and anything else, "entries" is [].
     """.trimIndent()
 
-    /** What Groq made of a message: a [command] for the app (blank for none), or its own [reply]. */
-    data class Routed(val command: String, val reply: String)
+    /** What Groq made of a message: a [command] for the app (blank for none), or its own [reply]; [entries] to save. */
+    data class Routed(val command: String, val reply: String, val entries: List<Entry> = emptyList())
+
+    private val TYPES = mapOf(
+        "expense" to Type.KHARCHA, "income" to Type.AAMDANI, "lent" to Type.DIYA, "borrowed" to Type.LIYA,
+        "received_back" to Type.WAPIS_MILA, "paid_back" to Type.WAPIS_DIYA
+    )
+
+    /**
+     * Groq's "entries" as app entries. Null (so the app's own reader is used) when any part is off: an unknown type,
+     * or an amount that was not said in [said] (numbers said as words count), so money is never made up.
+     */
+    fun entriesFrom(list: JSONArray?, said: String, now: Long): List<Entry>? {
+        if (list == null || list.length() == 0) return emptyList()
+        val spoken = Regex("""\d+(?:\.\d+)?""").findAll(NumberWords.convert(said.lowercase()).replace(",", ""))
+            .map { it.value.toDouble() }.toSet()
+        val out = mutableListOf<Entry>()
+        for (i in 0 until list.length()) {
+            val o = list.optJSONObject(i) ?: return null
+            val type = TYPES[o.optString("type").trim().lowercase()] ?: return null
+            val amount = o.optDouble("amount", 0.0)
+            if (amount <= 0.0 || amount !in spoken) return null
+            val person = o.optString("person").trim()
+            val category = when (type) {
+                Type.KHARCHA -> Cat.entries.firstOrNull { it.label.equals(o.optString("category").trim(), true) } ?: Cat.OTHER
+                Type.AAMDANI -> Cat.TANKHWAH
+                else -> Cat.UDHAAR
+            }
+            if (type != Type.KHARCHA && type != Type.AAMDANI && person.isBlank()) return null
+            val day = runCatching {
+                java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).parse(o.optString("date").trim())!!.time
+            }.getOrNull()
+            // A said day keeps the current time of day, so the entries of one message stay in order.
+            val date = if (day == null) now else day + (now - dayStart(now))
+            out += Entry(
+                id = "e" + System.nanoTime() + i,
+                type = type, amount = amount, category = category,
+                item = o.optString("item").trim().take(40).replaceFirstChar { it.uppercase() }.ifBlank { category.label },
+                person = person.take(40), note = o.optString("note").trim().take(120),
+                date = date + i, createdAt = now + i,
+                qty = o.optDouble("qty", 0.0).takeIf { it > 0 } ?: 0.0, unit = o.optString("unit").trim().take(10)
+            )
+        }
+        return out
+    }
+
+    private fun dayStart(ms: Long) = java.util.Calendar.getInstance().apply {
+        timeInMillis = ms; set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0)
+        set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
+    }.timeInMillis
 
     /**
      * Every chat message passes through here first when Groq is on. Null when Groq is unreachable (the app then reads
@@ -56,7 +115,9 @@ object Groq {
      * never changed. [lastAnswer] lets a follow-up be understood; [names] are only the saved names that look like
      * words in the message, to keep tokens low.
      */
-    suspend fun route(key: String, said: String, lastAnswer: String, names: List<String>): Routed? = withContext(Dispatchers.IO) {
+    suspend fun route(
+        key: String, said: String, lastAnswer: String, names: List<String>, now: Long = System.currentTimeMillis()
+    ): Routed? = withContext(Dispatchers.IO) {
         runCatching {
             val prompt = buildString {
                 if (names.isNotEmpty()) append("Saved names: ").append(names.joinToString(", ")).append('\n')
@@ -66,11 +127,12 @@ object Groq {
             val body = JSONObject()
                 .put("model", CHAT_MODEL)
                 .put("temperature", 0)
-                .put("max_tokens", 700)
+                .put("max_tokens", 1200)
                 .put("reasoning_effort", "low")
                 .put("response_format", JSONObject().put("type", "json_object"))
                 .put("messages", JSONArray()
-                    .put(JSONObject().put("role", "system").put("content", instructions))
+                    .put(JSONObject().put("role", "system").put("content", instructions
+                        .replace("TODAY", java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date(now)))))
                     .put(JSONObject().put("role", "user").put("content", prompt)))
                 .toString().toByteArray(Charsets.UTF_8)
             val (code, text) = post(CHAT_URL, key, "application/json", body)
@@ -81,7 +143,10 @@ object Groq {
             val command = o.optString("command").trim().take(400)
             val reply = o.optString("reply").trim().take(600)
             when {
-                command.isNotBlank() -> Routed(if (digits(command) == digits(said)) command else said, "")
+                command.isNotBlank() -> Routed(
+                    if (digits(command) == digits(said)) command else said, "",
+                    entriesFrom(o.optJSONArray("entries"), said, now).orEmpty()
+                )
                 reply.isNotBlank() -> Routed("", reply)
                 else -> error("empty")
             }
