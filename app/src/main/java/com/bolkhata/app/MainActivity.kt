@@ -97,6 +97,9 @@ class TabNav {
     fun back() { now.value = past.removeLastOrNull() ?: Tab.CHAT }
 }
 
+/** Runs heavy reading (the chat engine over every entry) off the main thread, so the screen never stutters. */
+private suspend fun <T> offMain(block: () -> T): T = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { block() }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: String, onTheme: (String) -> Unit) {
@@ -1221,17 +1224,26 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         chatLoading = true
         scope.launch {
             try {
+                // Reading the message runs off the main thread, so the chat keeps scrolling smoothly with many entries.
+                val scoped = scopeKhataEntries(entries)
+                val names0 = contactNames()
                 // With Groq on, Groq reads every message first: money and app requests become a clear command that the
                 // local engine runs against the saved records (totals, reports, cashbook); anything else Groq answers.
                 var groqTrace = ""
                 var read = roman
                 if (groqKey.isNotBlank()) {
                     val names = Understand.similarNames(roman.split(Regex("""\s+""")), contactNames())
-                    val lastAnswer = history.lastOrNull { !it.isUser }?.text.orEmpty()
-                    val routed = Groq.route(groqKey, text, lastAnswer, names)
+                    // The last few turns, so a follow-up ("detail dikhao", "sirf food") is read in context.
+                    val recent = history.takeLast(6).joinToString("\n") { (if (it.isUser) "Person: " else "App: ") + it.text.take(160) }
+                    // Groq answers within about 9 seconds (see Groq.send); else the app answers by itself, so the chat never hangs.
+                    val routed = Groq.route(groqKey, text, recent, names)
                     when {
                         routed == null -> groqTrace = "; groq=unavailable"
-                        routed.command.isBlank() -> {
+                        // Groq's own reply is used only for talk the app itself does not understand, and never when it
+                        // names a number the person did not say: a question about money is always answered from the records.
+                        routed.command.isBlank() && Groq.replyIsSafe(routed.reply, text) && offMain {
+                            NativeChatEngine.interpret(roman, scoped, names0, wordFixes, history, currency = currency)
+                        }.unsure -> {
                             val usage = Groq.takeUsage()
                             lastSpeech = routed.reply
                             postChat(routed.reply, isUser = false,
@@ -1245,14 +1257,12 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                             return@launch
                         }
                         else -> {
-                            groqTrace = "; groq=" + routed.command.take(120)
-                            read = runCatching { Translit.toRoman(routed.command) }.getOrDefault(routed.command)
+                            groqTrace = "; groq=" + routed.command.ifBlank { "reply not used" }.take(120)
+                            if (routed.command.isNotBlank()) read = runCatching { Translit.toRoman(routed.command) }.getOrDefault(routed.command)
                         }
                     }
                 }
-                val intent = NativeChatEngine.interpret(
-                    read, scopeKhataEntries(entries), contactNames(), wordFixes, history, currency = currency
-                )
+                val intent = offMain { NativeChatEngine.interpret(read, scoped, names0, wordFixes, history, currency = currency) }
                 if (intent.kind in setOf("delete", "clear_all", "change", "to_khata", "paid_by", "reread", "undo")) {
                     val actionSnapshot = entries
                     chatWatch = actionSnapshot
@@ -1276,7 +1286,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 val usage = Groq.takeUsage()
                 if (reply == null && executionStatus == "returned") executionStatus = "awaiting_confirmation"
                 val matchCount = if (intent.kind in setOf("ask", "open", "delete", "change", "to_khata", "paid_by", "reread")) {
-                    runCatching { Query.select(scopeKhataEntries(entries), intent.filter).size }.getOrNull()
+                    offMain { runCatching { Query.select(scoped, intent.filter).size }.getOrNull() }
                 } else null
                 val trace = "engine=NativeChatEngine; intent=" + intent.kind +
                     (if (intent.what.isBlank()) "" else "; query=" + intent.what) +

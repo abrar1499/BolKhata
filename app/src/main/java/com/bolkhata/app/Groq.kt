@@ -42,13 +42,16 @@ object Groq {
         You are the brain of a khata (ledger and expense) app. People type or speak Roman Urdu, Urdu or Hindi script,
         or English, often misspelled. Read every message and reply with JSON only: {"command": ..., "reply": ...}.
         - If it is about their money or the app's data (add, show, search, count, total, balance, report, cashbook,
-          a khata, edit, move, rename, delete, undo, a follow-up like "detail do" or "sirf food"), put ONE short
-          clear message for the app in "command", in simple Roman Urdu/English like these: "chai 50", "Ali ko 500
+          a khata, edit, move, rename, delete, undo), put ONE short clear message for the app in "command". A
+          follow-up ("detail do", "sirf food", "aur pichle mahine") becomes a full request using the conversation,
+          e.g. after "Hamza ka khata", "detail dikhao" is "Hamza ki sari entries". Use simple Roman Urdu/English like: "chai 50", "Ali ko 500
           diye", "is mahine food kitna", "19 aug se aaj tak expense", "Ali ka khata", "cashbook", "expense report",
           "last 5 entries", "2800 wali entry", "petrol 50 nahi 40 tha", "other me kitni entries". Keep every number
           exactly and use the matching saved name. Leave "reply" empty: the app answers from its own records.
         - Otherwise (greeting, general question, help, advice), leave "command" empty and answer in "reply" in 1 to 3
           short lines, in the language they used. You cannot see their records: never state their amounts or totals.
+        - Any question about how much, totals, spending, income, balance or a day/month ("aaj tak kitna expense",
+          "kal kitna huwa") is ALWAYS a "command", never a reply.
         - When the message records NEW money (one or more entries, e.g. "chai 50 aur petrol 60", "Ali ko 500 diye",
           "kal salary 3000 aayi"), also fill "entries": a list of {"type", "amount", "category", "item", "person",
           "note", "date", "qty", "unit"}. type is one of expense, income, lent (gave a loan / paid someone on credit),
@@ -57,6 +60,12 @@ object Groq {
           extra detail or "", date is "YYYY-MM-DD" when a day is said (today is TODAY) else "", qty and unit only
           when a quantity is said. Amounts exactly as said. For edits, questions and anything else, "entries" is [].
     """.trimIndent()
+
+    /** False when Groq's own [reply] holds a number that was not in the message [said] (an amount it made up). */
+    fun replyIsSafe(reply: String, said: String): Boolean {
+        fun numbers(s: String) = Regex("""\d+(?:[.,]\d+)*""").findAll(s).map { it.value.replace(",", "") }.toSet()
+        return (numbers(reply) - numbers(NumberWords.convert(said.lowercase()))).isEmpty()
+    }
 
     /** What Groq made of a message: a [command] for the app (blank for none), or its own [reply]; [entries] to save. */
     data class Routed(val command: String, val reply: String, val entries: List<Entry> = emptyList())
@@ -121,7 +130,7 @@ object Groq {
         runCatching {
             val prompt = buildString {
                 if (names.isNotEmpty()) append("Saved names: ").append(names.joinToString(", ")).append('\n')
-                if (lastAnswer.isNotBlank()) append("App's last reply: ").append(lastAnswer.take(150)).append('\n')
+                if (lastAnswer.isNotBlank()) append("Conversation so far:\n").append(lastAnswer.takeLast(1000)).append('\n')
                 append("Message: ").append(said.take(300))
             }
             val body = JSONObject()
@@ -354,8 +363,9 @@ object Groq {
     private fun send(url: String, key: String, type: String, body: ByteArray): Pair<Int, String> {
         val conn = URL(url).openConnection() as HttpURLConnection
         conn.requestMethod = "POST"
-        conn.connectTimeout = 10_000
-        conn.readTimeout = 25_000
+        // A chat answer that takes longer than this is dropped and the app answers alone; voice clips get longer.
+        conn.connectTimeout = 6_000
+        conn.readTimeout = if (url == VOICE_URL) 25_000 else 9_000
         conn.doOutput = true
         conn.setRequestProperty("Authorization", "Bearer " + if (key == SHARED) BuildConfig.GROQ_KEY else key)
         conn.setRequestProperty("Content-Type", type)

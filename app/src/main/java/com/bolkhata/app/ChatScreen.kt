@@ -156,7 +156,8 @@ fun ChatScreen(
                 } else {
                     Column(Modifier.fillMaxWidth()) {
                         if (message.entryIds.isNotEmpty()) SavedCard(message, byId, currency, onUndo, onEditEntry)
-                        else Report.parse(message.text, currency)?.let { ReportCard(it, message.text) } ?: AssistantBubble(message.text)
+                        else remember(message.text, currency) { Report.parse(message.text, currency) }
+                            ?.let { ReportCard(it, message.text) } ?: AssistantBubble(message.text)
                         // "Which A or B do you mean?": one tap on a name opens that khata.
                         if (message == messages.lastOrNull()) {
                             val names = NativeChatEngine.nameChoices(message.text)

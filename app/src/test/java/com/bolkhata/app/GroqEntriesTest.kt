@@ -28,6 +28,11 @@ class GroqEntriesTest {
         assertNull(Groq.entriesFrom(list, "petrol 50", now))
     }
 
+    @Test fun aReplyWithAMadeUpAmountIsNotShown() {
+        assertEquals(false, Groq.replyIsSafe("Kal ka total expense 93.87 SAR tha.", "kal kitna huwa tha"))
+        assertEquals(true, Groq.replyIsSafe("Wa alaikum assalam! Batayein?", "salam"))
+    }
+
     @Test fun aLoanWithoutAPersonIsRefused() {
         val list = JSONArray("""[{"type":"lent","amount":200,"person":""}]""")
         assertNull(Groq.entriesFrom(list, "200 udhaar diye", now))
