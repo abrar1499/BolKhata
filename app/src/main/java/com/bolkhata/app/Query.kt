@@ -153,6 +153,15 @@ object Query {
                 } + if (list.size > 10) "\n+${list.size - 10} more" else ""
                 rows + "\nTotal: " + answer(list, "sum", f, currency)
             }
+            // "Where did it go": the spending by category, biggest first, as one card.
+            "report" -> {
+                val spent = list.filter { it.type == Type.KHARCHA }
+                if (spent.isEmpty()) answer(list, "sum", f, currency)
+                else "Spent: " + fmt(spent.sumOf { it.amount }) + " " + currency +
+                    " (${spent.size} " + (if (spent.size == 1) "entry" else "entries") + ", $head)" +
+                    spent.groupBy { it.category }.map { (c, v) -> c.label to v.sumOf { it.amount } }
+                        .sortedByDescending { it.second }.joinToString("") { " · " + it.first + " " + fmt(it.second) + " " + currency }
+            }
             "highest" -> {
                 val expenses = list.filter { it.type == Type.KHARCHA }
                 val top = expenses.sortedWith(compareByDescending<Entry> { it.amount }.thenByDescending { it.date }).take(5)

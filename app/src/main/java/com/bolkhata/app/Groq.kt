@@ -61,6 +61,14 @@ object Groq {
           (e.g. "Petrol", "Chai"), person is the other person's name (saved name if it matches) or "", note is any
           extra detail or "", date is "YYYY-MM-DD" when a day is said (today is TODAY) else "", qty and unit only
           when a quantity is said. Amounts exactly as said. For edits, questions and anything else, "entries" is [].
+        - When the message asks about saved money (a total, list, count, report, biggest), also fill "query":
+          {"mode": "sum" | "list" | "count" | "report" | "highest", "types": [any of expense, income, lent,
+          borrowed, received_back, paid_back, sale, purchase], "categories": [category names], "persons": [saved
+          names], "items": [words to search in entries, only real item words], "from": "YYYY-MM-DD" or "",
+          "to": "YYYY-MM-DD" or "", "last": number of latest entries or 0}. "report" is where the money went (by
+          category, e.g. "kahan kahan laga"); "list" shows the entries ("detail", "dikhao"); "sum" is a total.
+          "aaj tak"/"ab tak" with no start means no dates. A follow-up keeps the period and filters of the
+          conversation. For anything else "query" is null.
     """.trimIndent()
 
     /** False when Groq's own [reply] holds a number that was not in the message [said] (an amount it made up). */
@@ -69,8 +77,36 @@ object Groq {
         return (numbers(reply) - numbers(NumberWords.convert(said.lowercase()))).isEmpty()
     }
 
-    /** What Groq made of a message: a [command] for the app (blank for none), or its own [reply]; [entries] to save. */
-    data class Routed(val command: String, val reply: String, val entries: List<Entry> = emptyList())
+    /** What Groq made of a message: a [command] for the app (blank for none), or its own [reply]; [entries] to save;
+     *  [query] what to look up in the saved records ([what] is sum, list, count, report or highest). */
+    data class Routed(
+        val command: String, val reply: String, val entries: List<Entry> = emptyList(),
+        val what: String = "", val query: Query.Filter? = null
+    )
+
+    private val QUERY_TYPES = TYPES + mapOf("sale" to Type.SALE, "purchase" to Type.PURCHASE)
+
+    /**
+     * Groq's "query" as a filter the app runs on its own records. Null when there is none or its mode is unknown;
+     * unknown types or categories are left out, and dates are whole days.
+     */
+    fun queryFrom(o: JSONObject?): Pair<String, Query.Filter>? {
+        if (o == null) return null
+        val mode = o.optString("mode").trim().lowercase()
+        if (mode !in setOf("sum", "list", "count", "report", "highest")) return null
+        fun strings(key: String) = o.optJSONArray(key)?.let { a -> (0 until a.length()).map { a.optString(it).trim() } }
+            .orEmpty().filter { it.isNotBlank() }
+        fun day(key: String, end: Boolean) = runCatching {
+            val d = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).parse(o.optString(key).trim())!!.time
+            if (end) d + 86_400_000L - 1 else d
+        }.getOrNull()
+        val types = strings("types").mapNotNull { QUERY_TYPES[it.lowercase()] }.toSet()
+        val cats = strings("categories").mapNotNull { n -> Cat.entries.firstOrNull { it.label.equals(n, true) } }.toSet()
+        return mode to Query.Filter(
+            from = day("from", false), to = day("to", true), types = types, persons = strings("persons"),
+            cats = cats, items = strings("items").map { it.lowercase() }, last = o.optInt("last", 0).coerceIn(0, 100)
+        )
+    }
 
     private val TYPES = mapOf(
         "expense" to Type.KHARCHA, "income" to Type.AAMDANI, "lent" to Type.DIYA, "borrowed" to Type.LIYA,
@@ -154,10 +190,13 @@ object Groq {
             val command = o.optString("command").trim().take(400)
             val reply = o.optString("reply").trim().take(600)
             when {
-                command.isNotBlank() -> Routed(
-                    if (digits(command) == digits(said)) command else said, "",
-                    entriesFrom(o.optJSONArray("entries"), said, now).orEmpty()
-                )
+                command.isNotBlank() -> {
+                    val q = queryFrom(o.optJSONObject("query"))
+                    Routed(
+                        if (digits(command) == digits(said)) command else said, "",
+                        entriesFrom(o.optJSONArray("entries"), said, now).orEmpty(), q?.first.orEmpty(), q?.second
+                    )
+                }
                 reply.isNotBlank() -> Routed("", reply)
                 else -> error("empty")
             }

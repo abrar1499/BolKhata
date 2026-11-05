@@ -1231,6 +1231,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 // local engine runs against the saved records (totals, reports, cashbook); anything else Groq answers.
                 var groqTrace = ""
                 var read = roman
+                // What Groq understood the question to be, run straight on the saved records (no second reading).
+                var groqAsk: NativeChatEngine.Fixed? = null
                 if (groqKey.isNotBlank()) {
                     val names = Understand.similarNames(roman.split(Regex("""\s+""")), contactNames())
                     // The last few turns, so a follow-up ("detail dikhao", "sirf food") is read in context.
@@ -1257,12 +1259,13 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                             return@launch
                         }
                         else -> {
+                            routed.query?.let { groqAsk = NativeChatEngine.Fixed(read, "ask", "", routed.what, it) }
                             groqTrace = "; groq=" + routed.command.ifBlank { "reply not used" }.take(120)
                             if (routed.command.isNotBlank()) read = runCatching { Translit.toRoman(routed.command) }.getOrDefault(routed.command)
                         }
                     }
                 }
-                val intent = offMain { NativeChatEngine.interpret(read, scoped, names0, wordFixes, history, currency = currency) }
+                val intent = groqAsk ?: offMain { NativeChatEngine.interpret(read, scoped, names0, wordFixes, history, currency = currency) }
                 if (intent.kind in setOf("delete", "clear_all", "change", "to_khata", "paid_by", "reread", "undo")) {
                     val actionSnapshot = entries
                     chatWatch = actionSnapshot
