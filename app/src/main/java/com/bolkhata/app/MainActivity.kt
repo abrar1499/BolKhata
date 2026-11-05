@@ -1238,6 +1238,12 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                                 meta = "engine=Groq; intent=chat" + (if (usage.isBlank()) "" else "; usage=" + usage))
                             return@launch
                         }
+                        // New entries Groq filled in itself (amounts checked against the message) are saved as they are.
+                        routed.entries.isNotEmpty() -> {
+                            chatWatch = entries
+                            addOffline(Parser.Result(routed.entries, emptyList()))
+                            return@launch
+                        }
                         else -> {
                             groqTrace = "; groq=" + routed.command.take(120)
                             read = runCatching { Translit.toRoman(routed.command) }.getOrDefault(routed.command)
