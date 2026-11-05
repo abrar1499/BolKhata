@@ -50,6 +50,8 @@ object Groq {
           exactly and use the matching saved name. Leave "reply" empty: the app answers from its own records.
         - Otherwise (greeting, general question, help, advice), leave "command" empty and answer in "reply" in 1 to 3
           short lines, in the language they used. You cannot see their records: never state their amounts or totals.
+        - Any question about how much, totals, spending, income, balance or a day/month ("aaj tak kitna expense",
+          "kal kitna huwa") is ALWAYS a "command", never a reply.
         - When the message records NEW money (one or more entries, e.g. "chai 50 aur petrol 60", "Ali ko 500 diye",
           "kal salary 3000 aayi"), also fill "entries": a list of {"type", "amount", "category", "item", "person",
           "note", "date", "qty", "unit"}. type is one of expense, income, lent (gave a loan / paid someone on credit),
@@ -58,6 +60,12 @@ object Groq {
           extra detail or "", date is "YYYY-MM-DD" when a day is said (today is TODAY) else "", qty and unit only
           when a quantity is said. Amounts exactly as said. For edits, questions and anything else, "entries" is [].
     """.trimIndent()
+
+    /** False when Groq's own [reply] holds a number that was not in the message [said] (an amount it made up). */
+    fun replyIsSafe(reply: String, said: String): Boolean {
+        fun numbers(s: String) = Regex("""\d+(?:[.,]\d+)*""").findAll(s).map { it.value.replace(",", "") }.toSet()
+        return (numbers(reply) - numbers(NumberWords.convert(said.lowercase()))).isEmpty()
+    }
 
     /** What Groq made of a message: a [command] for the app (blank for none), or its own [reply]; [entries] to save. */
     data class Routed(val command: String, val reply: String, val entries: List<Entry> = emptyList())

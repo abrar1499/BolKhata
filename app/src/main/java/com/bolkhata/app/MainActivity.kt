@@ -1233,7 +1233,11 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     val routed = Groq.route(groqKey, text, recent, names)
                     when {
                         routed == null -> groqTrace = "; groq=unavailable"
-                        routed.command.isBlank() -> {
+                        // Groq's own reply is used only for talk the app itself does not understand, and never when it
+                        // names a number the person did not say: a question about money is always answered from the records.
+                        routed.command.isBlank() && Groq.replyIsSafe(routed.reply, text) && NativeChatEngine.interpret(
+                            roman, scopeKhataEntries(entries), contactNames(), wordFixes, history, currency = currency
+                        ).unsure -> {
                             val usage = Groq.takeUsage()
                             lastSpeech = routed.reply
                             postChat(routed.reply, isUser = false,
@@ -1247,8 +1251,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                             return@launch
                         }
                         else -> {
-                            groqTrace = "; groq=" + routed.command.take(120)
-                            read = runCatching { Translit.toRoman(routed.command) }.getOrDefault(routed.command)
+                            groqTrace = "; groq=" + routed.command.ifBlank { "reply not used" }.take(120)
+                            if (routed.command.isNotBlank()) read = runCatching { Translit.toRoman(routed.command) }.getOrDefault(routed.command)
                         }
                     }
                 }
