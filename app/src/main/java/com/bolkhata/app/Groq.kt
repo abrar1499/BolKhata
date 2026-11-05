@@ -168,6 +168,37 @@ object Groq {
         }.getOrNull()
     }
 
+    private val answerInstructions = """
+        You are the helpful assistant inside a khata (ledger and expense) app. The app could not match this message
+        to its own commands, so answer it yourself: general questions, how to use the app, advice, small talk.
+        You cannot see their saved entries: never state or guess their amounts, balances or totals. If they ask
+        about their own money, say in one line how to ask the app, e.g. "is mahine ka kharcha", "Ali ka khata".
+        Answer in 1 to 3 short lines, in the language they used (Roman Urdu for Urdu or Hindi, else English).
+    """.trimIndent()
+
+    /** Groq's own short answer to a message the app's engine did not understand. Null when Groq is unreachable. */
+    suspend fun answer(key: String, said: String, recent: String): String? = withContext(Dispatchers.IO) {
+        runCatching {
+            val prompt = buildString {
+                if (recent.isNotBlank()) append("Conversation so far:\n").append(recent.takeLast(1200)).append("\n\n")
+                append("Message: ").append(said.take(500))
+            }
+            val body = JSONObject()
+                .put("model", CHAT_MODEL)
+                .put("temperature", 0.4)
+                .put("max_tokens", 700)
+                .put("reasoning_effort", "low")
+                .put("messages", JSONArray()
+                    .put(JSONObject().put("role", "system").put("content", answerInstructions))
+                    .put(JSONObject().put("role", "user").put("content", prompt)))
+                .toString().toByteArray(Charsets.UTF_8)
+            val (code, text) = post(CHAT_URL, key, "application/json", body)
+            if (code !in 200..299) error(describe(code))
+            JSONObject(text).getJSONArray("choices").getJSONObject(0).getJSONObject("message").optString("content")
+                .trim().take(600).ifBlank { null }
+        }.getOrNull()
+    }
+
     /**
      * Whisper makes up words for silence and noise ("Subtitles by…", "Thanks for watching", a lone "."). True for
      * such text, so it is never sent as a message.
@@ -224,7 +255,25 @@ object Groq {
         else -> "Groq error $code"
     }
 
+    private val usedTokens = java.util.concurrent.atomic.AtomicInteger()
+    private val usedMs = java.util.concurrent.atomic.AtomicLong()
+
+    /** Time and tokens Groq used since the last call, as "Groq · 1.2s · 340 tokens" (blank for none); then resets. */
+    fun takeUsage(): String {
+        val ms = usedMs.getAndSet(0)
+        val tokens = usedTokens.getAndSet(0)
+        if (ms == 0L) return ""
+        return "Groq · " + String.format(java.util.Locale.US, "%.1fs", ms / 1000.0) + if (tokens > 0) " · $tokens tokens" else ""
+    }
+
     private fun post(url: String, key: String, type: String, body: ByteArray): Pair<Int, String> {
+        val started = System.currentTimeMillis()
+        try { return send(url, key, type, body).also { (_, text) ->
+            usedTokens.addAndGet(runCatching { JSONObject(text).getJSONObject("usage").optInt("total_tokens") }.getOrDefault(0))
+        } } finally { usedMs.addAndGet(System.currentTimeMillis() - started) }
+    }
+
+    private fun send(url: String, key: String, type: String, body: ByteArray): Pair<Int, String> {
         val conn = URL(url).openConnection() as HttpURLConnection
         conn.requestMethod = "POST"
         conn.connectTimeout = 10_000

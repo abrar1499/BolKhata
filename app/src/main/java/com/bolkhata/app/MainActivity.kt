@@ -1247,18 +1247,25 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 }
                 var executionStatus = "returned"
                 listedRows[0] = emptyList()
-                val reply = runCatching { runFixed(intent, text, inChat = true) }
+                var reply = runCatching { runFixed(intent, text, inChat = true) }
                     .onFailure { executionStatus = "exception:" + it.javaClass.simpleName }
                     .getOrElse {
                         "Kuch nahi badla. Date, amount ya naam batayein."
                     }
+                // What the app's engine did not understand, Groq answers itself (never with the person's amounts).
+                if (intent.unsure && groqKey.isNotBlank()) {
+                    val recent = history.takeLast(6).joinToString("\n") { (if (it.isUser) "Person: " else "App: ") + it.text.take(200) }
+                    Groq.answer(groqKey, read, recent)?.let { reply = it; executionStatus = "groq_answer" }
+                }
+                val usage = Groq.takeUsage()
                 if (reply == null && executionStatus == "returned") executionStatus = "awaiting_confirmation"
                 val matchCount = if (intent.kind in setOf("ask", "open", "delete", "change", "to_khata", "paid_by", "reread")) {
                     runCatching { Query.select(scopeKhataEntries(entries), intent.filter).size }.getOrNull()
                 } else null
                 val trace = "engine=NativeChatEngine; intent=" + intent.kind +
                     (if (intent.what.isBlank()) "" else "; query=" + intent.what) +
-                    (matchCount?.let { "; matched=" + it } ?: "") + "; execution=" + executionStatus + groqTrace
+                    (matchCount?.let { "; matched=" + it } ?: "") + "; execution=" + executionStatus + groqTrace +
+                    (if (usage.isBlank()) "" else "; usage=" + usage)
                 if (!reply.isNullOrBlank()) {
                     lastSpeech = reply
                     postChat(reply, isUser = false, meta = trace, listIds = listedRows[0])
