@@ -31,6 +31,7 @@ object Updater {
 
     suspend fun check(): UpdateInfo? = withContext(Dispatchers.IO) {
         lastCheckFailed = false
+        if (BuildConfig.PLAY) return@withContext null // Play installs its own updates
         val latest = runCatching { fromApi() }.getOrNull() ?: runCatching { fromPage() }.getOrNull()
         if (latest == null) {
             lastCheckFailed = true

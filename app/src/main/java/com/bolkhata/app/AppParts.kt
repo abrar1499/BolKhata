@@ -205,23 +205,31 @@ internal fun DrawerMenu(tab: Tab, name: String, currency: String, onCurrency: (S
         drawerShape = RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp),
         windowInsets = WindowInsets(0, 0, 0, 0)
     ) {
-        // Orange header like the khata screens.
+        // The header follows the chosen theme: its colours, or the plain page colour for "Clean".
+        val header = LocalHeader.current
         Row(
-            Modifier.fillMaxWidth().background(EmberBrush).statusBarsPadding().padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 18.dp),
+            Modifier.fillMaxWidth().background(header.brush).statusBarsPadding().padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 18.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(Modifier.size(44.dp).clip(CircleShape).background(Color.White), contentAlignment = Alignment.Center) {
-                Text(name.trim().take(1).uppercase().ifEmpty { "B" }, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = EmberTop)
+            Box(
+                Modifier.size(44.dp).clip(CircleShape).background(if (header.flat) EmberTop else Color.White),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    name.trim().take(1).uppercase().ifEmpty { "B" }, fontWeight = FontWeight.Bold, fontSize = 18.sp,
+                    color = if (header.flat) Color.White else header.c1
+                )
             }
             Spacer(Modifier.width(12.dp))
             Column {
-                Text("BolKhata", fontWeight = FontWeight.Bold, fontSize = 17.sp, color = Color.White)
+                Text("BolKhata", fontWeight = FontWeight.Bold, fontSize = 17.sp, color = header.on)
                 Text(
                     if (name.isBlank()) "Speak it. Track it." else "Hello, ${name.trim()}",
-                    fontSize = 12.sp, color = Color.White.copy(alpha = 0.85f)
+                    fontSize = 12.sp, color = header.on.copy(alpha = 0.75f)
                 )
             }
         }
+        if (header.flat) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         Spacer(Modifier.height(8.dp))
         DrawerRow("All entries", Icons.Outlined.FormatListBulleted, tab == Tab.ENTRIES, Color(0xFF8B5CF6)) { onPick(Tab.ENTRIES) }
         DrawerRow("Reports", Icons.Outlined.BarChart, tab == Tab.REPORTS, Color(0xFF0EA5E9)) { onPick(Tab.REPORTS) }
