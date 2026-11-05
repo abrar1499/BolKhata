@@ -46,6 +46,19 @@ class NativeChatEngineTest {
         assertTrue(r.filter.items.isEmpty())
     }
 
+    @Test fun tillTodayMeansEverythingSoFar() {
+        val r = read("aj tak total expense batao")
+        assertEquals("ask", r.kind)
+        assertEquals(setOf(Type.KHARCHA), r.filter.types)
+        assertEquals(null, r.filter.from)
+    }
+
+    @Test fun detailIsNotASearchWord() {
+        val r = read("is mahine ki expense detail batao")
+        assertEquals("ask", r.kind)
+        assertTrue(r.filter.items.isEmpty())
+    }
+
     @Test fun todaysDateIsAnsweredInOneLine() {
         val r = read("aj kya date hai")
         assertEquals("chat", r.kind)

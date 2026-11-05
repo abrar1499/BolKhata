@@ -33,6 +33,27 @@ class GroqEntriesTest {
         assertEquals(true, Groq.replyIsSafe("Wa alaikum assalam! Batayein?", "salam"))
     }
 
+    @Test fun aQueryBecomesAFilter() {
+        val (what, f) = Groq.queryFrom(org.json.JSONObject(
+            """{"mode":"report","types":["expense"],"categories":["Food","Nonsense"],"from":"2026-11-01","to":"2026-11-30"}"""
+        ))!!
+        assertEquals("report", what)
+        assertEquals(setOf(Type.KHARCHA), f.types)
+        assertEquals(setOf(Cat.KHANA), f.cats)
+        assertEquals(true, f.to!! > f.from!!)
+        assertNull(Groq.queryFrom(org.json.JSONObject("""{"mode":"delete"}""")))
+    }
+
+    @Test fun aReportShowsSpendingByCategory() {
+        val e = listOf(
+            Entry("a", Type.KHARCHA, 70.0, Cat.KHANA, "Chai", "", "", now, now),
+            Entry("b", Type.KHARCHA, 30.0, Cat.TRANSPORT, "Petrol", "", "", now, now)
+        )
+        val text = Query.answer(e, "report", Query.Filter(), "SAR")
+        assertEquals(true, text.startsWith("Spent: 100 SAR"))
+        assertEquals(true, text.indexOf("Food 70 SAR") < text.indexOf("Transport 30 SAR"))
+    }
+
     @Test fun aLoanWithoutAPersonIsRefused() {
         val list = JSONArray("""[{"type":"lent","amount":200,"person":""}]""")
         assertNull(Groq.entriesFrom(list, "200 udhaar diye", now))
