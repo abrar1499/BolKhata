@@ -662,7 +662,8 @@ private fun Entry.isCashInFlow(): Boolean = when (type) {
 }
 
 private fun Entry.isCashOutFlow(): Boolean = when (type) {
-    Type.KHARCHA, Type.WAPIS_DIYA, Type.DIYA, Type.TRANSFER_OUT -> true
+    Type.KHARCHA -> !isWork(this)
+    Type.WAPIS_DIYA, Type.DIYA, Type.TRANSFER_OUT -> true
     Type.PURCHASE -> person.isBlank() || paid
     else -> false
 }

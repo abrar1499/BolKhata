@@ -101,4 +101,23 @@ class PersonAccountsTest {
         val inn = Entry("7", Type.AAMDANI, 1500.0, Cat.TANKHWAH, "Transfer", "", "From Nisar", 7L, 7L)
         assertEquals(Type.WAPIS_MILA, movedTo(inn, listOf(gave, inn), null, true, "Nisar").type)
     }
+
+    /** Advance 20,000, then work 1,500 × 1.6 owed: advance left 17,600; work is an expense but moves no cash. */
+    @Test
+    fun workPaysBackAnAdvanceWithoutCash() {
+        val adv = e("a", Type.DIYA, 20000.0, 0, "Hamid Akram")
+        val work = Entry("w", Type.KHARCHA, 2400.0, Cat.PRODUCTION, "Kachi", "Hamid Akram", "Work · Kachi", adv.date + day, adv.date + day,
+            qty = 1500.0, rate = 1.6, credit = true)
+        assertTrue(isWork(work))
+        assertFalse(cashOut(work))
+        val p = personAccounts(listOf(adv, work)).single()
+        assertEquals(17600.0, p.balance, 0.001)
+        assertEquals("Worker", partyRole(listOf(adv, work)))
+        // Salary owed to staff with no advance: I owe them.
+        val pay = work.copy(id = "s", person = "Nargis Salim", item = "Salary", qty = 0.0, rate = 0.0, amount = 35000.0)
+        assertEquals(-35000.0, personAccounts(listOf(pay)).single().balance, 0.001)
+        assertEquals("Staff", partyRole(listOf(pay)))
+        // A plain expense is still cash out.
+        assertTrue(cashOut(work.copy(person = "", credit = false)))
+    }
 }
