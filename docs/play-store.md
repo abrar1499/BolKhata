@@ -35,16 +35,10 @@
 - **Notification access:** not used. The Play build leaves out bank alerts, chat review, ElevenLabs voice and the self-updater.
 
 ## Data safety form
-- **Does the app collect or share user data?** Collects: yes (sent to Groq, our service provider, to read messages).
-  Shares with third parties: no (a service provider acting for the app is not "sharing").
-  - **Messages → Other in-app messages:** chat text. Purpose: app functionality. Optional (Groq AI can be turned off).
-  - **Audio → Voice or sound recordings:** when the mic is used. Purpose: app functionality. Optional.
-  - **Financial info → Other financial info:** amounts written in chat messages. Purpose: app functionality. Optional.
-  - **Personal info → Name:** names of people in the khatas, sent with a message. Purpose: app functionality. Optional.
-- **Processed ephemerally?** No (Groq may keep requests for a short time under its policy).
-- **Encrypted in transit:** Yes (HTTPS).
-- **Can users ask for deletion?** Data on the phone: yes, in the app or by uninstalling.
-- **Saved entries and balances:** stay on the device and are never sent.
+- **Does the app collect or share user data?** No. Everything stays on the phone (Groq AI, voice calls and bank
+  alerts are switched off in the app for now). If they come back, update this form and the privacy policy first.
+- **Encrypted in transit:** not applicable (nothing is sent).
+- **Can users delete their data?** Yes: in the app, or by uninstalling it.
 
 ## Things that can get the account in trouble (keep it this way)
 - Upload only `SmartExpense-play.aab` (no self-updater, no notification reading). Never the GitHub APK.

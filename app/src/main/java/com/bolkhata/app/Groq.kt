@@ -26,7 +26,12 @@ object Groq {
 
     /** Stands in for a key: use the app's built-in key (the GROQ_KEY secret, added at build time). */
     const val SHARED = "shared"
-    val sharedReady: Boolean get() = BuildConfig.GROQ_KEY.isNotBlank()
+    /** Groq is switched off for now: no message or recording leaves the phone. */
+    const val ENABLED = false
+
+    /** The built-in key is switched off for now (cost): Groq works only with a key the person adds in Settings. */
+    private const val SHARED_ON = false
+    val sharedReady: Boolean get() = SHARED_ON && BuildConfig.GROQ_KEY.isNotBlank()
     private const val CHAT_MODEL = "openai/gpt-oss-120b"
     private const val VOICE_MODEL = "whisper-large-v3"
     /** Words every person says to a khata app, in Roman Urdu, so Whisper spells them the usual way for everyone. */
