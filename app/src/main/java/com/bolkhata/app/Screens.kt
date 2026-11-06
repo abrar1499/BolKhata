@@ -1561,9 +1561,7 @@ fun SettingsScreen(
         item {
             Surface(
                 Modifier.fillMaxWidth().padding(horizontal = 16.dp), shape = RoundedCornerShape(20.dp),
-                color = MaterialTheme.colorScheme.surface,
-                // A faint edge, so the white list stands apart from the white page.
-                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                color = MaterialTheme.colorScheme.surface
             ) {
                 Column {
                     ListRow("Name", name.ifBlank { "Add" }) { dialog = "name" }

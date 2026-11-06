@@ -79,7 +79,12 @@ import kotlinx.coroutines.launch
 private val Ember = Color(0xFFE3342F)
 /** Colour at the top of the orange header, also used for the status bar. */
 internal val EmberTop = Color(0xFFF0572E)
-internal val EmberBrush = Brush.linearGradient(listOf(Color(0xFFF0572E), Color(0xFFE3342F)))
+/** The theme's glass look behind white text (headers, big buttons). */
+@Composable
+internal fun glassBand(): Modifier {
+    val colors = glassColors(LocalHeader.current)
+    return Modifier.drawBehind { drawGlass(colors, size.height) }
+}
 
 /** Money that left your hand. A sale or purchase on credit with a party moves no cash. */
 fun cashOut(e: Entry) = when (e.type) {
@@ -1083,7 +1088,7 @@ fun BusinessPicker(
     androidx.compose.ui.window.Dialog(onDismissRequest = onBack, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Column {
-                Row(Modifier.fillMaxWidth().background(EmberBrush).padding(horizontal = 6.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().then(glassBand()).padding(horizontal = 6.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White) }
                     Text("Select Business", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
                 }
@@ -1114,7 +1119,7 @@ fun BusinessPicker(
                     }
                 }
                 Box(
-                    Modifier.navigationBarsPadding().padding(16.dp).fillMaxWidth().height(50.dp).clip(CircleShape).background(EmberBrush)
+                    Modifier.navigationBarsPadding().padding(16.dp).fillMaxWidth().height(50.dp).clip(CircleShape).then(glassBand())
                         .clickable { naming = null to "" },
                     contentAlignment = Alignment.Center
                 ) { Text("+  Add New Business", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
