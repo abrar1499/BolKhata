@@ -82,6 +82,9 @@ class MainActivity : ComponentActivity() {
 enum class Tab { HOME, STOCK, CHAT, ENTRIES, REPORTS, TRASH, SETTINGS, PARTIES, CASHBOOK, EXPENSE, INCOME }
 
 /** Tabs whose top (KhataTop) sits on the theme's coloured band. */
+/** Chat review (sending the chat log to a GitHub repository) is switched off for now: the chat stays on the phone. */
+const val CHAT_REVIEW_ON = false
+
 val BAND_TABS = setOf(Tab.CHAT, Tab.PARTIES, Tab.CASHBOOK, Tab.EXPENSE, Tab.INCOME, Tab.ENTRIES, Tab.TRASH, Tab.SETTINGS)
 
 /** The open tab and the tabs it was reached from, so Back returns the same way. Chat (the first tab) starts over. */
@@ -273,7 +276,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
      * a busy chat does not upload after every message; [force] is the "Send now" button.
      */
     fun sendChatLog(force: Boolean = false) {
-        if (logToken.isBlank() || logRepo.isBlank() || logSending) return
+        if (!CHAT_REVIEW_ON || logToken.isBlank() || logRepo.isBlank() || logSending) return
         val nowMs = System.currentTimeMillis()
         if (!force && nowMs - logLastTry < 3 * 60_000L) return
         logLastTry = nowMs

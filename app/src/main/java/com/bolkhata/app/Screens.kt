@@ -1589,11 +1589,7 @@ fun SettingsScreen(
                     ListRow("Theme", themeName) { dialog = "theme" }
                     ListDivider()
                     // The Play build leaves out bank alerts (notification access) and chat review (uploads the chat log).
-                    // Bank alerts, Groq AI and Call voice are switched off for now, so they are not offered here.
-                    if (!BuildConfig.PLAY) {
-                        ListRow("Chat review", if (logTokenSet) "On" else "Off", valueColor = if (logTokenSet) GreenIn else faint) { dialog = "review" }
-                        ListDivider()
-                    }
+                    // Bank alerts, Groq AI, Call voice and Chat review are switched off for now, so they are not offered here.
                     Box {
                         var open by remember { mutableStateOf(false) }
                         ListRow("Backup", "Export · Import") { open = true }
@@ -1609,8 +1605,7 @@ fun SettingsScreen(
         }
         item {
             Text(
-                "Tap Version to check for updates. Your entries stay on this phone and the assistant works offline; " +
-                    "chat leaves the phone only when Groq AI or Chat review is on.",
+                "Tap Version to check for updates. Your entries stay on this phone.",
                 fontSize = 12.sp, color = faint, modifier = Modifier.padding(horizontal = 24.dp, vertical = 14.dp)
             )
         }
