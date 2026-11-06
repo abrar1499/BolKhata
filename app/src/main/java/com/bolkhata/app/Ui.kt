@@ -15,6 +15,7 @@ import androidx.compose.material.icons.outlined.Category
 import androidx.compose.material.icons.outlined.Chair
 import androidx.compose.material.icons.outlined.Handshake
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Factory
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.LocalGasStation
 import androidx.compose.material.icons.outlined.MedicalServices
@@ -43,6 +44,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -160,6 +162,7 @@ fun catColor(c: Cat): Color = when (c) {
     Cat.ASSETS -> Color(0xFF7C3AED)
     Cat.SALES -> Color(0xFF16A34A)
     Cat.STOCK -> Color(0xFF0891B2)
+    Cat.PRODUCTION -> Color(0xFFB45309)
     Cat.OTHER -> Color(0xFF94A3B8)
 }
 
@@ -195,7 +198,8 @@ fun BolTheme(dark: Boolean, content: @Composable () -> Unit) {
         onPrimaryContainer = Color(0xFFD1FAE5),
         secondaryContainer = Color(0xFF064E3B),
         onSecondaryContainer = Color(0xFFD1FAE5),
-        background = Color(0xFF0F0F0F),
+        // A slate-grey page, so the dark cards stand out on it.
+        background = Color(0xFF2A2F36),
         surface = Color(0xFF181818),
         surfaceVariant = Color(0xFF262626),
         onSurfaceVariant = Color(0xFFA3A3A3),
@@ -493,6 +497,7 @@ fun catIcon(c: Cat): ImageVector = when (c) {
     Cat.ASSETS -> Icons.Outlined.Sell
     Cat.SALES -> Icons.Outlined.ReceiptLong
     Cat.STOCK -> Icons.Outlined.Inventory2
+    Cat.PRODUCTION -> Icons.Outlined.Factory
     Cat.OTHER -> Icons.Outlined.Category
 }
 
@@ -669,7 +674,7 @@ fun GlassLogo(size: Dp, modifier: Modifier = Modifier, onBand: Boolean = false) 
 }
 
 /**
- * The glass edge of a field or chip, as in the mock-up: a thin border in the theme's glass colours over a faint
+ * The glass edge of a field, as in the mock-up: a thin border in the theme's glass colours over a faint
  * tint of them (light pink on Red).
  */
 @Composable
@@ -679,9 +684,11 @@ fun Modifier.glassEdge(shape: androidx.compose.ui.graphics.Shape, width: Dp = 1.
     return this.clip(shape).background(fill, shape).border(width, Brush.linearGradient(c), shape)
 }
 
-/** A chosen chip: filled with the theme's glass colours (white text on it). */
+/** The chat field and search box, as in the Claude app: a soft cream fill with a hairline warm-grey edge. */
 @Composable
-fun Modifier.glassFill(shape: androidx.compose.ui.graphics.Shape): Modifier {
-    val c = glassColors(LocalHeader.current)
-    return this.shadow(2.dp, shape).clip(shape).background(Brush.linearGradient(0f to c[0], 0.55f to c[1], 1f to c[2]), shape)
+fun Modifier.fieldEdge(shape: androidx.compose.ui.graphics.Shape): Modifier {
+    val light = MaterialTheme.colorScheme.background.luminance() > 0.5f
+    val fill = if (light) Color(0xFFFBFAF8) else MaterialTheme.colorScheme.surface
+    val edge = if (light) Color(0xFFDCD6CF) else MaterialTheme.colorScheme.outlineVariant
+    return this.clip(shape).background(fill, shape).border(1.dp, edge, shape)
 }

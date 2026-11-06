@@ -52,6 +52,8 @@ android {
         create("play") {
             initWith(getByName("release"))
             matchingFallbacks += "release"
+            // com.bolkhata.app is taken on Google Play, so the Play listing uses its own id; the APK keeps com.bolkhata.app.
+            applicationIdSuffix = ".play"
             buildConfigField("boolean", "PLAY", "true")
         }
     }

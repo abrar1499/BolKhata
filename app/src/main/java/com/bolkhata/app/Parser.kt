@@ -23,6 +23,11 @@ object Parser {
     /** Checked in this order; the first rule that matches wins. */
     private val rules = listOf(
         r(Cat.GHAR, "Sent home", "ghar bhej", "bheje", "bheja", "bhejay", "bhejy", "bheji", "send home", "sent home", "بھیجے", "بھیجا"),
+        // A brick kiln's (or any maker's) costs go to Production, under the step they paid for.
+        r(Cat.PRODUCTION, "Moulding", "thapai", "thapaai", "thapayi", "تھپائی"),
+        r(Cat.PRODUCTION, "Loading", "bharai", "bharaai", "bharayi", "بھرائی"),
+        r(Cat.PRODUCTION, "Unloading", "nikasi", "nikaasi", "nakasi", "نکاسی"),
+        r(Cat.PRODUCTION, "Fuel", "koila", "koela", "koyla", "coal", "کوئلہ"),
 
         r(Cat.EDU, "School fees", "school fee", "school fees", "tuition", "tution", "admission"),
         r(Cat.EDU, "Books & study", "books", "kitab", "kitaab", "kitabein", "copy", "stationery", "course", "college", "university", "uniform", "school"),
@@ -655,7 +660,9 @@ object Parser {
         "ka", "ki", "ke", "ko", "se", "ne", "aaj", "kal", "liya", "liye", "lia", "diya", "diye", "khaya", "khai", "khaye",
         "kiya", "kiye", "hai", "hain", "tha", "the", "thay", "riyal", "riyals", "sar", "rupay", "rupees", "and", "for",
         "from", "with", "mein", "par", "pay", "wala", "wali", "wale", "dala", "dali", "bheja", "bheje", "liye", "mila",
-        "mile", "sath", "saath", "mera", "meri", "mere", "apna", "apni", "today", "yesterday", "date"
+        "mile", "sath", "saath", "mera", "meri", "mere", "apna", "apni", "today", "yesterday", "date",
+        // How it was paid and how much: never what was bought ("cash" once learned as car brakes made every cash entry Transport).
+        "cash", "naqad", "nakad", "naqd", "nakd", "lakh", "lac", "hazar", "hazaar", "thousand", "hundred", "sau"
     )
 
     /** Words from a note worth remembering for a category ("10 ki shawarma khai" -> ["shawarma"]). */
@@ -677,7 +684,8 @@ object Parser {
 
     private fun matchSpending(t: String, words: List<String>): Pair<Cat, String>? {
         // A name ("ali") learned by mistake earlier never decides what was bought.
-        words.firstNotNullOfOrNull { w -> if (Understand.isCommonName(w)) null else learned[w] }?.let { return it }
+        // Neither do payment and amount words learned before they were stopped ("cash", "lakh").
+        words.firstNotNullOfOrNull { w -> if (Understand.isCommonName(w) || w in learnStop) null else learned[w] }?.let { return it }
         if (repairWords.any { matches(it, t, words) }) {
             return when {
                 carWords.any { matches(it, t, words) } -> Cat.TRANSPORT to "Car repair"
