@@ -139,6 +139,22 @@ object NativeChatEngine {
             val base = lastSearchFromHistory(history, entries, contacts, wordFixes, currency, now)
             if (base != null) return Fixed("", "ask", "", "list", base.filter)
         }
+        // "kahan kahan laga", "kis cheez par": the last question's spending by category.
+        if (history.isNotEmpty() && isBreakdownFollowUp(lower)) {
+            val base = lastSearchFromHistory(history, entries, contacts, wordFixes, currency, now)
+            if (base != null) return Fixed("", "ask", "", "report", withTypes(base.filter, base.filter.types.ifEmpty { setOf(Type.KHARCHA) }))
+        }
+        // "es me fees aur ghar wale nikal ke batao": the last question without those categories.
+        if (history.isNotEmpty()) leftOutCats(lower)?.let { out ->
+            val base = lastSearchFromHistory(history, entries, contacts, wordFixes, currency, now)
+            if (base != null) {
+                val b = base.filter
+                return Fixed("", "ask", "", base.what.ifBlank { "sum" }, Query.Filter(
+                    b.from, b.to, b.types, b.persons, b.cats - out, b.items, b.min, b.max, b.last, b.noPeople, b.notItems,
+                    b.ids, b.createdFrom, b.createdTo, b.notCats + out
+                ))
+            }
+        }
         val dateOnlyFollowUp = isDateFollowUp(lower)
         val repeatSearch = isRepeatSearch(lower)
         if (history.isNotEmpty() && (dateOnlyFollowUp || repeatSearch)) {
@@ -693,7 +709,7 @@ object NativeChatEngine {
     private fun copyFilter(f: Query.Filter, b: Bounds) = Query.Filter(
         from = b.from, to = b.to, types = f.types, persons = f.persons, cats = f.cats, items = f.items,
         min = f.min, max = f.max, last = f.last, noPeople = f.noPeople, notItems = f.notItems,
-        ids = f.ids, createdFrom = f.createdFrom, createdTo = f.createdTo
+        ids = f.ids, createdFrom = f.createdFrom, createdTo = f.createdTo, notCats = f.notCats
     )
 
     private fun soFar(text: String) =
@@ -888,7 +904,10 @@ object NativeChatEngine {
 
     private val refineFiller = setOf(
         "sirf", "only", "bas", "aur", "and", "or", "bhi", "b", "what", "about", "wali", "wala", "wale", "ki", "ka", "ke",
-        "me", "mein", "main", "se", "isme", "inme", "inmein", "ismein", "un", "in", "us", "usme", "sath", "saath", "wo", "woh"
+        "me", "mein", "main", "se", "isme", "inme", "inmein", "ismein", "un", "in", "us", "usme", "sath", "saath", "wo", "woh",
+        // "income kya thi", "food kitna tha": the same question about another kind of money.
+        "kya", "kia", "thi", "tha", "the", "hai", "hain", "hui", "hua", "huwa", "kitna", "kitni", "kitne", "batao", "btao", "dikhao",
+        "logon", "logo", "log"
     )
 
     /**
@@ -921,6 +940,24 @@ object NativeChatEngine {
         val filler = ask + setOf("do", "de", "dein", "dena", "dikhao", "dikha", "batao", "btao", "show", "give", "me", "mujhe",
             "please", "plz", "ki", "ka", "ke", "sab", "sari", "saari", "un", "in", "inki", "unki", "wo", "woh", "the", "its", "of", "with")
         return w.isNotEmpty() && w.size <= 5 && has(w, ask) && w.all { it in filler }
+    }
+
+    /** "kahan kahan laga", "kis cheez par kharch hua", "breakdown do": where the money of the last answer went. */
+    private fun isBreakdownFollowUp(text: String): Boolean {
+        val w = tokens(text)
+        val ask = setOf("kahan", "kahaan", "kahn", "kidhar", "where", "breakdown", "category", "categories", "categorywise")
+        val filler = ask + setOf("kis", "cheez", "chez", "cheezon", "par", "pe", "laga", "lage", "lagi", "gaya", "gaye", "gya",
+            "hua", "huwa", "hue", "kharch", "kharcha", "spent", "went", "did", "it", "go", "money", "paisa", "pese", "paise",
+            "wise", "wo", "ye", "batao", "btao", "dikhao", "kya", "the", "tha", "thi", "me", "mein", "aur", "or", "sab", "by", "show")
+        return w.isNotEmpty() && w.size <= 7 && has(w, ask + "kis") && w.all { it in filler }
+    }
+
+    /** The categories a message leaves out ("fees aur ghar nikal ke", "food ke ilawa", "without rent"), or null. */
+    private fun leftOutCats(text: String): Set<Cat>? {
+        val w = tokens(text)
+        if (!has(w, setOf("nikal", "nikaal", "nikal", "nikalo", "ilawa", "alawa", "siwa", "siwaye", "without", "except", "excluding", "chor", "chhor", "hata", "hatake", "minus"))) return null
+        val out = categories.filter { (c, aliases) -> c !in setOf(Cat.TANKHWAH, Cat.SALES, Cat.STOCK) && w.any { it in aliases } }.keys
+        return out.takeIf { it.isNotEmpty() && text.none(Char::isDigit) }
     }
 
     private fun isRepeatSearch(text: String): Boolean {

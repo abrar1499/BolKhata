@@ -7,10 +7,10 @@ import org.json.JSONObject
 enum class Type(val label: String) {
     KHARCHA("Cash Out"),
     AAMDANI("Cash In"),
-    DIYA("Lent"),
-    LIYA("Borrowed"),
-    WAPIS_MILA("Received back"),
-    WAPIS_DIYA("Paid back"),
+    DIYA("Gave"),
+    LIYA("Took"),
+    WAPIS_MILA("Got back"),
+    WAPIS_DIYA("Returned"),
     SALE("Sale"),
     PURCHASE("Purchase"),
     TRANSFER_IN("Transfer received"),
@@ -38,7 +38,15 @@ enum class Cat(val label: String, val icon: String) {
     OTHER("Other", "📝")
 }
 
-val CURRENCIES = listOf("SAR", "PKR", "AED", "QAR", "KWD", "OMR", "BHD", "INR", "USD", "EUR", "GBP")
+/** Every currency: the Gulf, South Asia and the big ones first, then all others A–Z. */
+val CURRENCIES: List<String> = run {
+    val first = listOf("SAR", "PKR", "AED", "QAR", "KWD", "OMR", "BHD", "INR", "BDT", "NPR", "LKR", "USD", "EUR", "GBP")
+    first + java.util.Currency.getAvailableCurrencies().map { it.currencyCode }.filter { it !in first }.sorted()
+}
+
+/** "SAR · Saudi Riyal": the code with its English name, for the currency menus. */
+fun currencyLabel(code: String): String =
+    runCatching { code + " · " + java.util.Currency.getInstance(code).getDisplayName(java.util.Locale.ENGLISH) }.getOrDefault(code)
 
 data class Entry(
     val id: String,
@@ -315,9 +323,15 @@ class Store(context: Context) {
         emptyList()
     }
 
+    /** Saved on the background saver, so a long answer never makes the chat stutter. */
     fun saveChatMessages(messages: List<ChatMessage>) {
+        val last = messages.takeLast(100)
+        saver.execute { writeChat(last) }
+    }
+
+    private fun writeChat(messages: List<ChatMessage>) {
         val arr = JSONArray()
-        messages.takeLast(100).forEach { message ->
+        messages.forEach { message ->
             arr.put(
                 JSONObject()
                     .put("id", message.id)

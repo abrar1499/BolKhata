@@ -236,6 +236,14 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         store.saveSuggestions(left)
     }
     var results by remember { mutableStateOf<Pair<String, Boolean>?>(null) }      // query, edit mode
+
+    /** "Hamid ka khata kholo": the party's own khata on the Business tab (the same screen as tapping the party). */
+    fun openParty(name: String) {
+        val saved = personAccounts(entries).firstOrNull { it.name.equals(name, true) }?.name ?: name
+        results = null; people = null; account = null; ledger = null; ledgerPerson = null
+        tab = Tab.PARTIES
+        partyOpen = saved
+    }
     var confirmEmptyTrash by remember { mutableStateOf(false) }
     var showMoveHistory by remember { mutableStateOf(false) }
     var confirm by remember { mutableStateOf<Pair<String, Set<String>>?>(null) }  // message, ids to delete  // entries the app did not understand
@@ -746,11 +754,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             Understand.Kind.OPEN_KHATA -> {
                 val name = u.contact
                 if (name == null) handleTextSafely(u.text, u.clock, original)
-                else {
-                    val p = personAccounts(entries).firstOrNull { it.name.equals(name, true) }
-                    ledgerPerson = name
-                    ledger = if (p == null || p.toReceive) MainAcct.TO_RECEIVE else MainAcct.TO_PAY
-                }
+                else openParty(name)
             }
             Understand.Kind.SUMMARY -> { reportStart = ReportKind.CASH_OUT; tab = Tab.REPORTS }
             Understand.Kind.ENTRY -> {
@@ -1012,7 +1016,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     val res = snackbar.showSnackbar("✓ $payer paid", actionLabel = "Undo", duration = SnackbarDuration.Long)
                     if (res == SnackbarResult.ActionPerformed) save(before)
                 }
-                "${entryTitle(h)} ${fmt(total)} paid by $payer → your share ${fmt(mine)} · you owe $payer ${fmt(mine)}"
+                "${entryTitle(h)} ${fmt(total)} paid by $payer → your share ${fmt(mine)} · you will give $payer ${fmt(mine)}"
             }
             "reread" -> {
                 // "Galat hai, theek karo": the app reads each entry's own note again with what it knows now.
@@ -1048,9 +1052,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             "open" -> {
                 val name = q.persons.firstOrNull()
                 if (name != null) {
-                    val p = personAccounts(entries).firstOrNull { it.name.equals(name, true) }
-                    ledgerPerson = p?.name ?: name
-                    ledger = if (p == null || p.toReceive) MainAcct.TO_RECEIVE else MainAcct.TO_PAY
+                    openParty(name)
                     null
                 } else {
                     val term = (q.items + q.cats.map { it.label }).firstOrNull()

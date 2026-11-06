@@ -41,7 +41,7 @@ import java.util.Locale
 
 /** The five main accounts on the home screen. */
 enum class MainAcct(val label: String) {
-    EXPENSE("Expense"), INCOME("Income"), TO_PAY("To pay"), TO_RECEIVE("To receive"), CASH("Cash in hand")
+    EXPENSE("Expense"), INCOME("Income"), TO_PAY("To give"), TO_RECEIVE("To get"), CASH("Cash in hand")
 }
 
 /** Opens one of the five main accounts. Set by the main screen. */
@@ -636,11 +636,11 @@ private fun PeopleView(
     val total = list.sumOf { kotlin.math.abs(it.balance) }
     val color = if (receive) GreenIn else OrangeOwe
     LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = barSpace())) {
-        item { Header(if (receive) "To receive" else "To pay", if (list.size == 1) "1 person" else "${list.size} people", onBack) }
-        item { TotalsStrip((if (receive) "They owe you" else "You owe") to money(currency, total), color = color) }
+        item { Header(if (receive) "To get" else "To give", if (list.size == 1) "1 person" else "${list.size} people", onBack) }
+        item { TotalsStrip((if (receive) "You will get" else "You will give") to money(currency, total), color = color) }
         if (list.isEmpty()) item {
             Text(
-                if (receive) "Nobody owes you right now." else "You don't owe anyone right now.",
+                if (receive) "Nothing to get right now." else "Nothing to give right now.",
                 modifier = Modifier.padding(20.dp), color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
@@ -787,7 +787,7 @@ private fun PersonView(
     val p = remember(entries, name) { personAccounts(entries).firstOrNull { it.name.equals(name, true) } }
     val df = SimpleDateFormat("d MMM yyyy", Locale.US)
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = barSpace())) {
-        item { Header(name, if (p == null) "" else (if (p.toReceive) "To receive" else "To pay") + " · " + count(p.history.size), onBack) }
+        item { Header(name, if (p == null) "" else (if (p.toReceive) "To get" else "To give") + " · " + count(p.history.size), onBack) }
         item { TextButton(onClick = onMoveHistory, modifier = Modifier.padding(horizontal = 16.dp)) { Text("Move history & restore") } }
         if (p == null) {
             item { Text("No entries with $name.", modifier = Modifier.padding(20.dp)) }
@@ -795,8 +795,8 @@ private fun PersonView(
             item {
                 val bal = p.balance
                 val text = when {
-                    bal > 0.005 -> "$name owes you " + money(currency, bal)
-                    bal < -0.005 -> "You owe $name " + money(currency, -bal)
+                    bal > 0.005 -> "$name will pay you " + money(currency, bal)
+                    bal < -0.005 -> "You will pay $name " + money(currency, -bal)
                     else -> "Settled · nothing owed"
                 }
                 Text(
@@ -866,8 +866,8 @@ private fun PersonView(
                         Text((if (outflow) "−" else "+") + fmt(e.amount), fontWeight = FontWeight.Bold, fontSize = 14.sp, color = if (outflow) RedSpend else GreenIn)
                         Text(
                             when {
-                                after > 0.005 -> "owes you " + fmt(after)
-                                after < -0.005 -> "you owe " + fmt(-after)
+                                after > 0.005 -> "to get " + fmt(after)
+                                after < -0.005 -> "to give " + fmt(-after)
                                 else -> "settled"
                             },
                             fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant

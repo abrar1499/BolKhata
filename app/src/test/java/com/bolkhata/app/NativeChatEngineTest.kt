@@ -70,6 +70,28 @@ class NativeChatEngineTest {
         assertEquals("chat", NativeChatEngine.interpret("hi", emptyList(), history = after, now = now).kind)
     }
 
+    @Test fun shortFollowUpsWithoutGroq() {
+        val history = listOf(
+            ChatMessage("u1", true, "pichle mahine kitna kharcha tha"),
+            ChatMessage("a1", false, "Spent 3,679.85 SAR (51 entries, 1 Sep – 30 Sep)")
+        )
+        val where = read("kahan kahan laga", history)
+        assertEquals("report", where.what)
+        assertEquals(setOf(Type.KHARCHA), where.filter.types)
+        assertEquals(Query.day("2026-09-01"), where.filter.from)
+        val income = read("income kya thi", history)
+        assertEquals(setOf(Type.AAMDANI), income.filter.types)
+        assertEquals(Query.day("2026-09-01"), income.filter.from)
+        // The chips under a total: "Details", "Income?", "By category".
+        assertEquals("list", read("Details", history).what)
+        assertEquals(setOf(Type.AAMDANI), read("Income?", history).filter.types)
+        assertEquals(Query.day("2026-09-01"), read("Income?", history).filter.from)
+        assertEquals("report", read("By category", history).what)
+        val without = read("es me fees aur ghar nikal ke batao", history)
+        assertEquals(setOf(Cat.FEES, Cat.GHAR), without.filter.notCats)
+        assertEquals(Query.day("2026-09-01"), without.filter.from)
+    }
+
     @Test fun todaysDateIsAnsweredInOneLine() {
         val r = read("aj kya date hai")
         assertEquals("chat", r.kind)

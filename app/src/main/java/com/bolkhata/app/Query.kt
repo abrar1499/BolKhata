@@ -181,8 +181,8 @@ object Query {
     /** Totals by kind: "Spent 120 SAR · Lent 50 SAR (4 entries, 25 Oct)". */
     private fun totals(list: List<Entry>, head: String, currency: String): String {
         val byType = list.groupBy { it.type }.mapValues { (_, v) -> v.sumOf { it.amount } }
-        val names = mapOf(Type.KHARCHA to "Spent", Type.AAMDANI to "Income", Type.DIYA to "Lent", Type.LIYA to "Borrowed",
-            Type.WAPIS_MILA to "Got back", Type.WAPIS_DIYA to "Paid back", Type.SALE to "Sales", Type.PURCHASE to "Bought")
+        val names = mapOf(Type.KHARCHA to "Spent", Type.AAMDANI to "Income", Type.DIYA to "Gave", Type.LIYA to "Took",
+            Type.WAPIS_MILA to "Got back", Type.WAPIS_DIYA to "Returned", Type.SALE to "Sales", Type.PURCHASE to "Bought")
         return Type.entries.filter { it in byType }.joinToString(" · ") { (names[it] ?: it.label) + " " + fmt(byType[it]!!) + " " + currency } +
             " (${list.size} " + (if (list.size == 1) "entry" else "entries") + ", $head)"
     }

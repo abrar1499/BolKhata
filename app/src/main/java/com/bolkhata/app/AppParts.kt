@@ -200,7 +200,7 @@ fun ThinPlus(color: Color) {
 internal fun DrawerMenu(tab: Tab, name: String, currency: String, onCurrency: (String) -> Unit, onPick: (Tab) -> Unit) {
     var currencyOpen by remember { mutableStateOf(false) }
     ModalDrawerSheet(
-        modifier = Modifier.width(280.dp),
+        modifier = Modifier.width(240.dp),
         drawerContainerColor = MaterialTheme.colorScheme.background,
         drawerShape = RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp),
         windowInsets = WindowInsets(0, 0, 0, 0)
@@ -241,7 +241,7 @@ internal fun DrawerMenu(tab: Tab, name: String, currency: String, onCurrency: (S
             PickMenu(currencyOpen, { currencyOpen = false }) {
                 CURRENCIES.forEach { c ->
                     DropdownMenuItem(
-                        text = { Text(c, fontWeight = if (c == currency) FontWeight.SemiBold else FontWeight.Normal) },
+                        text = { Text(currencyLabel(c), fontSize = 13.sp, fontWeight = if (c == currency) FontWeight.SemiBold else FontWeight.Normal) },
                         onClick = { onCurrency(c); currencyOpen = false }
                     )
                 }
@@ -360,10 +360,10 @@ internal fun AskDialog(entry: Entry, currency: String, onPick: (Entry) -> Unit, 
                         }
                         Spacer(Modifier.height(10.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            ChoiceTile("To pay", "I owe $who", "💸", OrangeOwe, Modifier.weight(1f)) {
+                            ChoiceTile("To give", "I will give $who", "💸", OrangeOwe, Modifier.weight(1f)) {
                                 onPick(entry.copy(type = Type.LIYA, category = Cat.UDHAAR, item = "Loans", person = who))
                             }
-                            ChoiceTile("To receive", "$who owes me", "🤝", GreenIn, Modifier.weight(1f)) {
+                            ChoiceTile("To get", "$who will give me", "🤝", GreenIn, Modifier.weight(1f)) {
                                 onPick(entry.copy(type = Type.DIYA, category = Cat.UDHAAR, item = "Loans", person = who))
                             }
                         }

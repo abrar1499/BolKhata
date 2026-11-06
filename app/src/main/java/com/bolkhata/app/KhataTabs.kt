@@ -324,16 +324,16 @@ fun PartiesScreen(
     val about = remember(newest, view) { aboutView(view, newest) }
     val months = remember(about) { monthsOf(about) }
     val pick = if (month == ALL_MONTHS || months.any { it.first == month }) month else ALL_MONTHS
-    val picked = about.filter { inMonth(it.date, pick) }
+    val picked = remember(about, pick) { about.filter { inMonth(it.date, pick) } }
     val now = System.currentTimeMillis()
     val accts = remember(entries) { personAccounts(entries) }
     val stock = remember(entries) { stockItems(entries) }
 
-    // The card: the two figures that matter most for this view.
-    val card: Triple<Triple<String, String, Color>, Triple<String, String, Color>, ReportKind> = when (view) {
+    // The card: the two figures that matter most for this view (worked out again only when the data or view changes).
+    val card: Triple<Triple<String, String, Color>, Triple<String, String, Color>, ReportKind> = remember(about, accts, stock, view, currency) { when (view) {
         0 -> Triple(
-            Triple(money(currency, accts.filter { it.balance < -0.005 }.sumOf { -it.balance }), "Payable", RedSpend),
-            Triple(money(currency, accts.filter { it.balance > 0.005 }.sumOf { it.balance }), "Receivable", GreenIn), ReportKind.TO_RECEIVE
+            Triple(money(currency, accts.filter { it.balance < -0.005 }.sumOf { -it.balance }), "To give", RedSpend),
+            Triple(money(currency, accts.filter { it.balance > 0.005 }.sumOf { it.balance }), "To get", GreenIn), ReportKind.TO_RECEIVE
         )
         1 -> Triple(
             Triple(money(currency, stock.sumOf { if (it.line.qty > 0) it.line.qty * it.buyRate else 0.0 }), "Stock value", GreenIn),
@@ -355,7 +355,7 @@ fun PartiesScreen(
                 Triple(plusMinus(y), "Year ${yearOf(now)}", if (y < 0) RedSpend else GreenIn), ReportKind.PROFIT
             )
         }
-    }
+    } }
     val state = rememberLazyListState()
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
@@ -404,7 +404,7 @@ private fun LazyListScope.partiesView(accts: List<PersonAcct>, picked: List<Entr
     item(key = "ph") {
         LedgerHead("Parties", if (shown.size == 1) "1 · A–Z" else "${shown.size} · A–Z",
             // Only this head is rounded, at the top; every party below is its own raised square card with the same columns.
-            listOf(LCol("Payable", fmt(pay), LKind.OUT), LCol("Receivable", fmt(rec), LKind.IN)), shown.isEmpty(), WideColW)
+            listOf(LCol("To give", fmt(pay), LKind.OUT), LCol("To get", fmt(rec), LKind.IN)), shown.isEmpty(), WideColW)
     }
     items(shown, key = { "p" + it.name.lowercase() }) { p ->
         val bal = p.balance
@@ -820,7 +820,8 @@ fun PartyKhataScreen(
     val p = remember(entries, name) { personAccounts(entries).firstOrNull { it.name.equals(name, true) } }
     val hist = remember(p) { p?.history?.asReversed() ?: emptyList() }
     val months = remember(hist) { monthsOf(hist.map { it.first }) }
-    var month by rememberSaveable(name, months.firstOrNull()?.first) { mutableIntStateOf(months.firstOrNull()?.first ?: 0) }
+    // A party's khata opens on All (its whole history); a month chip narrows it.
+    var month by rememberSaveable(name) { mutableIntStateOf(ALL_MONTHS) }
     // A remembered month that no longer has entries (the khata changed since) falls back to the newest month.
     if (month != ALL_MONTHS && months.none { it.first == month }) month = months.firstOrNull()?.first ?: ALL_MONTHS
     var q by rememberSaveable(name) { mutableStateOf("") }
@@ -832,7 +833,7 @@ fun PartyKhataScreen(
             stickyHeader { TabHead {
                 KhataTop(name, if (hist.size == 1) "1 entry" else "${hist.size} entries", onBack, back = true) {
                     SumCard(
-                        Triple(money(currency, kotlin.math.abs(bal)), if (bal > 0.005) "Receivable" else if (bal < -0.005) "Payable" else "Settled",
+                        Triple(money(currency, kotlin.math.abs(bal)), if (bal > 0.005) "To get" else if (bal < -0.005) "To give" else "Settled",
                             if (bal > 0.005) GreenIn else if (bal < -0.005) RedSpend else MaterialTheme.colorScheme.onSurfaceVariant),
                         Triple(money(currency, p?.gave ?: 0.0), "You paid", RedSpend),
                         "Report ›", onReport
