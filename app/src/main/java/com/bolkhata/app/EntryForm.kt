@@ -60,11 +60,11 @@ fun FormPopup(onDismiss: () -> Unit, content: @Composable () -> Unit) {
 }
 
 /**
- * One compact form for adding, editing and answering "what is this?". The owner only picks Cash out or Cash in
- * (none picked when [askType]); the app works out the rest: no party means an expense (its category read from the
- * note and goods) or income; a party means a loan or a repayment, from that party's balance. An edit that keeps the
- * direction and the party keeps the entry's own kind (sale, purchase, transfer…). The khata list also offers
- * Business (a stock item: sale or purchase), Income (who paid) and Expense (a category).
+ * One compact form for adding, editing and answering "what is this?". Tabs Out · In · Sale · Purchase · Work (none
+ * picked when [askType]), then the same order on each: item (chips of names used before), qty × rate, amount, party,
+ * note. On Out / In the app works out the rest: no party means an expense (its category read from the item and note)
+ * or income; a party means a loan or a repayment, from that party's balance. An edit that keeps the direction and the
+ * party keeps the entry's own kind (transfer…). The khata list on Out / In also offers Income and Expense khatas.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -87,10 +87,17 @@ fun EntryForm(
     // The other khatas the entry can go to: stock items (sale / purchase), who paid income, expense categories.
     val stockNames = remember(all) { stock(all).map { it.name.trim() }.filter { it.isNotBlank() }.distinctBy { it.lowercase() } }
     val incomeNames = remember(all) { all.filter { it.type == Type.AAMDANI }.map { source(it).trim() }.filter { it.isNotBlank() }.distinctBy { it.lowercase() } }
+    /** What money went on before, newest first, offered as chips on the Out tab. */
+    val expenseNames = remember(all) {
+        all.filter { it.type == Type.KHARCHA && !isWork(it) }.sortedByDescending { it.date }.map { it.item.trim() }
+            .filter { it.isNotBlank() }.distinctBy { it.lowercase() }.take(12)
+    }
     val expenseCats = remember { Cat.entries.filter { it !in setOf(Cat.UDHAAR, Cat.TANKHWAH, Cat.SALES, Cat.STOCK) } }
-    /** A non-party khata picked in the list: "stock" / "income" (name in [item]) or "expense" (in [pickCat]); null = party. */
-    var khata by remember(initial.id) { mutableStateOf<String?>(null) }
-    var pickCat by remember(initial.id) { mutableStateOf<Cat?>(null) }
+    /** A non-party khata picked in the list: "income" (name in [item]) or "expense" (in [pickCat]); null = party. */
+    // A production cost (Add cost) opens with its khata shown: Expense · Production.
+    val prodCost = !askType && initial.type == Type.KHARCHA && initial.category == Cat.PRODUCTION && !isWork(initial)
+    var khata by remember(initial.id) { mutableStateOf(if (prodCost) "expense" else null) }
+    var pickCat by remember(initial.id) { mutableStateOf(if (prodCost) Cat.PRODUCTION else null) }
     var amount by remember(initial.id) { mutableStateOf(if (initial.amount > 0) plain(initial.amount) else "") }
     var item by remember(initial.id) { mutableStateOf(if (initial.item == "Loans") "" else initial.item) }
     var qty by remember(initial.id) { mutableStateOf(if (initial.qty > 0) plain(initial.qty) else "") }
@@ -99,6 +106,8 @@ fun EntryForm(
     /** Work mode: what a worker earned (qty × rate) or a salary, owed to the party; no cash moves until paid. */
     var work by remember(initial.id) { mutableStateOf(isWork(initial)) }
     var salary by remember(initial.id) { mutableStateOf(isWork(initial) && initial.qty <= 0) }
+    /** The Sale or Purchase tab; null on Out, In and Work. */
+    var trade by remember(initial.id) { mutableStateOf(if (askType) null else initial.type.takeIf { it == Type.SALE || it == Type.PURCHASE }) }
     var rate by remember(initial.id) { mutableStateOf(if (initial.rate > 0) plain(initial.rate) else "") }
     var date by remember(initial.id) { mutableLongStateOf(initial.date) }
     var note by remember(initial.id) { mutableStateOf(initial.note) }
@@ -106,15 +115,18 @@ fun EntryForm(
     var askDelete by remember { mutableStateOf(false) }
 
     val amountValue = amount.toDoubleOrNull()
-    val accent = if (work) OrangeOwe else when (out) { true -> RedSpend; false -> GreenIn; null -> MaterialTheme.colorScheme.primary }
+    val accent = when {
+        work -> OrangeOwe
+        trade == Type.SALE -> GreenIn
+        trade == Type.PURCHASE -> RedSpend
+        else -> when (out) { true -> RedSpend; false -> GreenIn; null -> MaterialTheme.colorScheme.primary }
+    }
 
-    /** The entry's kind from Cash out / in and the party (see the class comment). */
+    /** The entry's kind from the tab and the party (see the class comment). */
     fun kind(o: Boolean): Type {
         if (work) return Type.KHARCHA
-        when (khata) {
-            "stock" -> return if (o) Type.PURCHASE else Type.SALE
-            "income", "expense" -> return if (o) Type.KHARCHA else Type.AAMDANI
-        }
+        trade?.let { return it }
+        if (khata == "income" || khata == "expense") return if (o) Type.KHARCHA else Type.AAMDANI
         val p = person.trim()
         if (!askType && o == isOut(initial.type) && p.equals(initial.person.trim(), true)) return initial.type
         if (p.isEmpty()) return if (o) Type.KHARCHA else Type.AAMDANI
@@ -137,6 +149,18 @@ fun EntryForm(
     /** The rate last used for this party's work, so the next entry fills it in. */
     fun lastRate(p: String) = all.filter { isWork(it) && it.rate > 0 && it.person.trim().equals(p.trim(), true) }
         .maxByOrNull { it.date }?.rate
+    /** Sale or Purchase tab: stock items in the chips, the party is the customer or supplier. */
+    fun toTrade(t: Type) {
+        if (khata != null) item = ""
+        khata = null; pickCat = null; work = false; trade = t; out = t == Type.PURCHASE
+    }
+    // The chips under the item field: what was used before on this tab, so a name is never spelt two ways.
+    val chipNames = when {
+        work -> workTypes
+        trade != null -> stockNames
+        out == false -> incomeNames
+        else -> expenseNames
+    }
 
     Column(
         Modifier
@@ -163,38 +187,47 @@ fun EntryForm(
             }
         }
 
-        // Only the direction; the app works out expense / income / loan.
+        // Where the entry goes; on Out / In the app works out expense / income / loan from the khata.
         Row(
             Modifier.fillMaxWidth().height(38.dp).clip(RoundedCornerShape(12.dp))
                 .background(MaterialTheme.colorScheme.background).padding(3.dp)
         ) {
-            Seg("↑ Cash out", out == true && !work, RedSpend, Modifier.weight(1f)) { out = true; work = false }
-            Seg("↓ Cash in", out == false, GreenIn, Modifier.weight(1f)) { out = false; work = false }
+            Seg("Out", out == true && !work && trade == null, RedSpend, Modifier.weight(1f)) { out = true; work = false; trade = null }
+            Seg("In", out == false && trade == null, GreenIn, Modifier.weight(1f)) { out = false; work = false; trade = null }
+            Seg("Sale", trade == Type.SALE, GreenIn, Modifier.weight(1f)) { toTrade(Type.SALE) }
+            Seg("Purchase", trade == Type.PURCHASE, RedSpend, Modifier.weight(1.25f)) { toTrade(Type.PURCHASE) }
             Seg("Work", work, OrangeOwe, Modifier.weight(1f)) {
                 if (khata != null) item = ""
-                khata = null; pickCat = null; out = true; work = true
+                khata = null; pickCat = null; out = true; work = true; trade = null
                 if (rate.isBlank() && person.isNotBlank()) lastRate(person)?.let { rate = plain(it); fillAmount() }
             }
         }
 
-        if (work) {
-            // Work = quantity × rate (bricks made, pieces sewn); Salary = a fixed amount. Both go in the party's khata.
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Pill("Work", !salary, OrangeOwe) { salary = false }
-                Pill("Salary", salary, OrangeOwe) { salary = true }
+        // Work = quantity × rate; Salary = a fixed amount. Both go in the party's khata.
+        if (work) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Pill("Work", !salary, OrangeOwe) { salary = false }
+            Pill("Salary", salary, OrangeOwe) { salary = true }
+        }
+        if (!(work && salary)) {
+            Field(
+                item, { item = it },
+                when {
+                    work -> "Work type"
+                    trade == Type.SALE -> "Item sold"
+                    trade == Type.PURCHASE -> "Item bought"
+                    out == false -> "From what (optional)"
+                    else -> "What for (optional)"
+                },
+                Modifier.fillMaxWidth()
+            )
+            val typed = item.trim()
+            val offered = chipNames.filter { !it.equals(typed, true) && (typed.isEmpty() || it.contains(typed, true)) }
+            if (offered.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                offered.forEach { w -> Pill(w, false, accent) { item = w } }
             }
-            if (!salary) {
-                Field(item, { item = it }, "Work type", Modifier.fillMaxWidth())
-                // Work types already used: tap one so the same work is never spelt two ways.
-                val typed = item.trim()
-                val offered = workTypes.filter { !it.equals(typed, true) && (typed.isEmpty() || it.contains(typed, true)) }
-                if (offered.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    offered.forEach { w -> Pill(w, false, OrangeOwe) { item = w } }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Field(qty, { v -> qty = v.filter { it.isDigit() || it == '.' }; fillAmount() }, "Qty", Modifier.weight(1f), numeric = true)
-                    Field(rate, { v -> rate = v.filter { it.isDigit() || it == '.' }; fillAmount() }, "Rate", Modifier.weight(1f), numeric = true)
-                }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Field(qty, { v -> qty = v.filter { it.isDigit() || it == '.' }; fillAmount() }, "Qty", Modifier.weight(1f), numeric = true)
+                Field(rate, { v -> rate = v.filter { it.isDigit() || it == '.' }; fillAmount() }, "Rate", Modifier.weight(1f), numeric = true)
             }
         }
 
@@ -219,23 +252,21 @@ fun EntryForm(
             }
         }
 
-        if (!work) Field(note, { note = it }, "Note (what for?)", Modifier.fillMaxWidth())
-
-        if (!work) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Field(item, { item = it }, "Goods (optional)", Modifier.weight(1f))
-            Field(qty, { v -> qty = v.filter { it.isDigit() || it == '.' } }, "Qty", Modifier.width(72.dp), numeric = true)
-        }
-
         var picking by remember { mutableStateOf(false) }
         val shown = when (khata) {
-            "stock" -> "Business · $item"
             "income" -> "Income · $item"
             "expense" -> "Expense · " + (pickCat?.label ?: "")
             else -> person
         }
         Box {
             Field(
-                shown, { person = it }, if (work) "Party · who did the work" else "Khata (optional) · party, business, income, expense",
+                shown, { person = it },
+                when {
+                    work -> "Party · who did the work"
+                    trade == Type.SALE -> "Customer (optional)"
+                    trade == Type.PURCHASE -> "Supplier (optional)"
+                    else -> "Khata (optional) · party, income, expense"
+                },
                 Modifier.fillMaxWidth(), readOnly = true
             ) {
                 if (shown.isNotBlank()) IconButton(onClick = { person = ""; if (khata != null) item = ""; khata = null; pickCat = null }, modifier = Modifier.size(36.dp)) {
@@ -246,7 +277,8 @@ fun EntryForm(
             // The field (not its × button) opens the khata list.
             Box(Modifier.matchParentSize().padding(end = 40.dp).clip(RoundedCornerShape(12.dp)).clickable { picking = true })
         }
-        if (work) Field(note, { note = it }, "Note (what for?)", Modifier.fillMaxWidth())
+        // Only Out / In can go to an expense category, an income or a stock item; the other tabs pick a party.
+        val anyKhata = !work && trade == null
         if (picking) PartyPicker(
             people, "", "Select khata",
             confirm = { creating -> if (creating) "Create & select" else "Select" },
@@ -254,10 +286,21 @@ fun EntryForm(
                 person = it; khata = null; pickCat = null; picking = false
                 if (work) lastRate(it)?.let { r -> rate = plain(r); fillAmount() }
             }, onDismiss = { picking = false },
-            categories = expenseCats, onCategory = { pickCat = it; khata = "expense"; person = ""; out = true; work = false; picking = false },
-            stockNames = stockNames, onStock = { item = it; khata = "stock"; person = ""; work = false; picking = false },
-            incomeNames = incomeNames, onIncome = { item = it; khata = "income"; person = ""; out = false; work = false; picking = false }
+            categories = if (anyKhata) expenseCats else emptyList(),
+            onCategory = { pickCat = it; khata = "expense"; person = ""; out = true; picking = false },
+            stockNames = if (anyKhata) stockNames else emptyList(),
+            onStock = { toTrade(if (out == false) Type.SALE else Type.PURCHASE); item = it; person = ""; picking = false },
+            incomeNames = if (anyKhata) incomeNames else emptyList(),
+            onIncome = { item = it; khata = "income"; person = ""; out = false; picking = false }
         )
+        if (chosen != null && isTrade(chosen) && person.isNotBlank()) {
+            // On credit: the amount goes in To pay / To receive. Paid: settled in cash, khata unchanged.
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Pill("On credit", !paid, OrangeOwe) { paid = false }
+                Pill("Paid now", paid, GreenIn) { paid = true }
+            }
+        }
+        Field(note, { note = it }, "Note (optional)", Modifier.fillMaxWidth())
         if (work) {
             val sum = amountValue ?: 0.0
             val who = person.trim().ifBlank { "the party" }
@@ -268,13 +311,6 @@ fun EntryForm(
                     "${fmt(sum)} owed to $who. It counts in Production cost; paying them is a Cash out to $who.",
                 fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-        }
-        if (chosen != null && isTrade(chosen) && person.isNotBlank()) {
-            // On credit: the amount goes in To pay / To receive. Paid: settled in cash, khata unchanged.
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Pill("On credit", !paid, OrangeOwe) { paid = false }
-                Pill("Paid now", paid, GreenIn) { paid = true }
-            }
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -313,11 +349,11 @@ fun EntryForm(
                         }
                         val finalItem = when {
                             work && salary -> "Salary"
-                            work -> item.trim().let { t -> workTypes.firstOrNull { it.equals(t, true) } ?: t }.ifBlank { "Work" }
+                            work -> spelled(item, workTypes).ifBlank { "Work" }
                             isLoan(t) -> item.trim().ifBlank { "Loans" }
                             isTransfer(t) -> item.trim().ifBlank { "Transfer" }
-                            isTrade(t) -> item.trim().ifBlank { if (t == Type.SALE) "Sale" else "Purchase" }
-                            item.isNotBlank() -> item.trim()
+                            isTrade(t) -> spelled(item, stockNames).ifBlank { if (t == Type.SALE) "Sale" else "Purchase" }
+                            item.isNotBlank() -> spelled(item, chipNames)
                             t == Type.AAMDANI -> "Income"
                             else -> guess?.second ?: finalCat.label
                         }
@@ -328,7 +364,7 @@ fun EntryForm(
                                 category = finalCat,
                                 item = finalItem,
                                 qty = if (work && salary) 0.0 else qty.toDoubleOrNull() ?: 0.0,
-                                rate = if (work) (if (salary) 0.0 else rate.toDoubleOrNull() ?: 0.0) else initial.rate,
+                                rate = if (work && salary) 0.0 else rate.toDoubleOrNull() ?: 0.0,
                                 person = if (work || isLoan(t) || isTrade(t) || isTransfer(t)) person.trim() else "",
                                 paid = isTrade(t) && person.isNotBlank() && paid,
                                 credit = work,
@@ -397,7 +433,7 @@ private fun Seg(label: String, selected: Boolean, color: Color, modifier: Modifi
         modifier.fillMaxHeight().clip(RoundedCornerShape(9.dp)).background(if (selected) color else Color.Transparent).clickable { onClick() },
         contentAlignment = Alignment.Center
     ) {
-        Text(label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, color = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -420,3 +456,6 @@ private fun Pill(label: String, selected: Boolean, color: Color, modifier: Modif
         )
     }
 }
+
+/** [typed] in the spelling already used in [names] ("cement" → "Cement"), else as typed. */
+private fun spelled(typed: String, names: List<String>): String = typed.trim().let { t -> names.firstOrNull { it.equals(t, true) } ?: t }

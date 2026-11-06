@@ -384,7 +384,7 @@ fun PartiesScreen(
             }
         }
         UpButton(state)
-        PlusButton {
+        PlusButton(when (view) { 0 -> "Add entry"; 1 -> "Add stock"; 3 -> "Add purchase"; 5 -> "Add cost"; else -> "Add sale" }) {
             onAdd(
                 when (view) {
                     0 -> template(Type.DIYA, "")
@@ -429,7 +429,7 @@ private fun LazyListScope.productionView(
         GridRow("Cost per unit", if (made > 0 && perUnit < 100) "Per 1000: " + money(currency, perUnit * 1000) else "",
             listOf(GCell(if (made > 0) fmt(perUnit) else "—", LKind.OUT)), WideColW, true) {}
     }
-    if (list.isEmpty()) emptyNote("No production costs yet. Tap Entry to add one.")
+    if (list.isEmpty()) emptyNote("No production costs yet. Tap Add cost to add one.")
     else ledger(
         if (month == ALL_MONTHS) "All" else monthLabel(months, month) ?: "All",
         listOf(LCol("Cost", fmt(cost), LKind.OUT)),
@@ -689,7 +689,7 @@ private fun EmptyHint() {
         GlassLogo(44.dp)
         Spacer(Modifier.height(10.dp))
         Text("No entries here yet", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-        Text("Say \"tea 5\" in the chat, or tap Entry.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Tap the Add button below, or tell the Chat.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -805,9 +805,9 @@ private fun LedgerRow(r: LRow, cols: List<LCol>, last: Boolean, card: Boolean = 
     if (!last) HorizontalDivider(Modifier.padding(horizontal = 10.dp), color = Faint)
 }
 
-/** The add button just above the bottom panel: a white card with a khata icon and "Entry". The form has Cash out / in. */
+/** The add button just above the bottom panel: a white card with a khata icon and what it adds ("Add expense"). */
 @Composable
-private fun BoxScope.PlusButton(onClick: () -> Unit) {
+private fun BoxScope.PlusButton(label: String = "Add entry", onClick: () -> Unit) {
     val shape = RoundedCornerShape(14.dp)
     Row(
         Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = LocalBarSpace.current + 6.dp)
@@ -817,7 +817,7 @@ private fun BoxScope.PlusButton(onClick: () -> Unit) {
     ) {
         Icon(Icons.Outlined.NoteAdd, contentDescription = null, tint = Ember, modifier = Modifier.size(22.dp))
         Spacer(Modifier.width(8.dp))
-        Text("Entry", color = Ember, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        Text(label, color = Ember, fontSize = 13.sp, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -1145,7 +1145,7 @@ fun MoneyScreen(
                 Text(if (income) "No income yet." else "No expenses yet.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp, modifier = Modifier.padding(24.dp))
             }
         }
-        PlusButton(onAdd)
+        PlusButton(if (income) "Add income" else "Add expense", onAdd)
     }
 }
 
