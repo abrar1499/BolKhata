@@ -133,7 +133,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     }
     var logToken by remember { mutableStateOf(store.logToken) }
     // Without a key of their own, people use the built-in key (when the build has one), unless they turned Groq off.
-    fun groqKeyNow() = store.groqKey.ifBlank { if (Groq.sharedReady && !store.groqOff) Groq.SHARED else "" }
+    // Groq is switched off for now (Groq.ENABLED): the app reads and answers every message by itself.
+    fun groqKeyNow() = if (!Groq.ENABLED) "" else store.groqKey.ifBlank { if (Groq.sharedReady && !store.groqOff) Groq.SHARED else "" }
     var groqKey by remember { mutableStateOf(groqKeyNow()) }
     var groqVoice by remember { mutableStateOf(store.groqVoice) }
     // The Play build has no ElevenLabs voice: calls always use the phone's own voice.
