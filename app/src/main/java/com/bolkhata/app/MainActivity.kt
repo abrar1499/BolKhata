@@ -2126,20 +2126,11 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     KhataNav(tab) { tab = it }
                 }
             } else {
-                // The khata tabs sit under the chat bar on the main screens.
+                // The chat box lives only on the Chat tab; the other screens show just the tabs.
                 val nav = main && tab in KHATA_TABS && partyOpen == null
                 Column {
                     FlashStrip(flash) { flash = null }
-                    InputBar(
-                        onSend = { homeInput(it) },
-                        onMic = { startVoice(forChat = true) },
-                        placeholder = "Speak, type or ask…",
-                        onAttach = { pickFile.launch(arrayOf("image/*", "application/pdf")) },
-                        busy = chatLoading,
-                        voice = if (recorder != null) VoiceState(true, "Listening…", "sends when you stop", level = voiceLevel) { finishRecording() } else null,
-                        navPad = !nav
-                    )
-                    if (nav) KhataNav(tab) { tab = it }
+                    if (nav) KhataNav(tab) { tab = it } else Spacer(Modifier.navigationBarsPadding())
                 }
             }
         },
