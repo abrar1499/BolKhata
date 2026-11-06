@@ -441,10 +441,13 @@ private fun ReportCard(r: Report, text: String) {
             }
         }
         if (r.notes.isNotEmpty()) Text(r.notes.joinToString(" · "), fontSize = 9.5.sp, color = grey, lineHeight = 12.sp)
-        if (r.rows.isNotEmpty() || r.total.isNotEmpty()) Column(
+        // "Biggest", "Daily average" and "Saved" are facts about the whole answer: shown under the box, not in it.
+        val facts = r.rows.filter { it.title.startsWith("Biggest") || it.title == "Daily average" || it.title == "Saved" }
+        val rows = r.rows - facts.toSet()
+        if (rows.isNotEmpty() || r.total.isNotEmpty()) Column(
             Modifier.padding(top = 4.dp).fillMaxWidth().clip(RoundedCornerShape(10.dp)).border(1.dp, line, RoundedCornerShape(10.dp))
         ) {
-            r.rows.forEachIndexed { i, l ->
+            rows.forEachIndexed { i, l ->
                 if (i > 0) HorizontalDivider(color = line)
                 // One line per row: name, its note (count · share, a date) in small grey, the amount.
                 Row(Modifier.padding(horizontal = 8.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -460,6 +463,15 @@ private fun ReportCard(r: Report, text: String) {
                     Text(if (s.label == "Total") "Total" else "Total · " + s.label, Modifier.weight(1f), fontWeight = FontWeight.Bold, fontSize = 10.sp)
                     Text(s.amount, fontWeight = FontWeight.Bold, fontSize = 10.5.sp, color = color(s.tone))
                 }
+            }
+        }
+        facts.forEach { l ->
+            Row(Modifier.padding(start = 2.dp, top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(l.title.removePrefix("Biggest: ").let { if (l.title.startsWith("Biggest")) "Biggest · $it" else it },
+                    Modifier.weight(1f), fontSize = 9.5.sp, color = grey, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                val note = listOf(l.date, l.sub).filter { it.isNotBlank() }.joinToString(" · ")
+                if (note.isNotBlank()) Text(note, Modifier.padding(horizontal = 6.dp), fontSize = 8.5.sp, color = grey)
+                Text(l.amount, fontSize = 9.5.sp, fontWeight = FontWeight.SemiBold)
             }
         }
     }
