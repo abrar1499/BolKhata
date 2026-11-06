@@ -353,6 +353,7 @@ fun PartiesScreen(
     // Production: what the picked month (or every month, on All) cost, how many were made, and the cost of one.
     var madeTick by remember { mutableIntStateOf(0) }
     var askMade by remember { mutableStateOf(false) }
+    var askParty by remember { mutableStateOf(false) }
     val madeQty = remember(view, pick, months, madeTick) {
         if (view != 5) 0.0 else if (pick == ALL_MONTHS) months.sumOf { made(it.first) } else made(pick)
     }
@@ -384,10 +385,10 @@ fun PartiesScreen(
             }
         }
         UpButton(state)
-        PlusButton(when (view) { 0 -> "Add entry"; 1 -> "Add stock"; 3 -> "Add purchase"; 5 -> "Add cost"; else -> "Add sale" }) {
-            onAdd(
+        PlusButton(when (view) { 0 -> "Add party"; 1 -> "Add stock"; 3 -> "Add purchase"; 5 -> "Add cost"; else -> "Add sale" }) {
+            if (view == 0) askParty = true
+            else onAdd(
                 when (view) {
-                    0 -> template(Type.DIYA, "")
                     1, 3 -> template(Type.PURCHASE, "").copy(category = Cat.STOCK, item = "")
                     5 -> template(Type.KHARCHA, "").copy(category = Cat.PRODUCTION, item = "")
                     else -> template(Type.SALE, "").copy(category = Cat.SALES, item = "")
@@ -395,6 +396,12 @@ fun PartiesScreen(
             )
         }
     }
+    // Add party: pick or type the name, then the first entry for that party opens.
+    if (askParty) PartyPicker(
+        remember(entries) { partyNames(entries) }, "", "Add party",
+        confirm = { creating -> if (creating) "Add party" else "Open" },
+        onPick = { name -> askParty = false; onAdd(template(Type.DIYA, name)) }, onDismiss = { askParty = false }
+    )
     if (askMade) MadeDialog(madeQty.takeIf { pick != ALL_MONTHS }, onDismiss = { askMade = false }) { qty ->
         val m = if (pick == ALL_MONTHS) monthKey(now) else pick
         onSetMade(m, qty); madeTick++; askMade = false
