@@ -84,7 +84,7 @@ internal fun InputBar(
         if (talking) VoicePanel(voice!!)
         Box(Modifier.fillMaxWidth().then(if (navPad) Modifier.navigationBarsPadding() else Modifier)
             .padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = if (navPad) 8.dp else 0.dp)) {
-            Surface(shape = RoundedCornerShape(12.dp), color = Color.Transparent, modifier = Modifier.fillMaxWidth().glassEdge(RoundedCornerShape(12.dp))) {
+            Surface(shape = RoundedCornerShape(20.dp), color = Color.Transparent, modifier = Modifier.fillMaxWidth().glassEdge(RoundedCornerShape(20.dp))) {
                 Row(Modifier.heightIn(min = 44.dp).padding(start = 2.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (onAttach != null) {
                         Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onAttach), contentAlignment = Alignment.Center) {

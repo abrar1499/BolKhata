@@ -234,7 +234,7 @@ private fun SearchBox(q: String, hint: String, onChange: (String) -> Unit) {
     val sub = MaterialTheme.colorScheme.onSurfaceVariant
     Row(
         Modifier.padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 4.dp).fillMaxWidth()
-            .glassEdge(RoundedCornerShape(12.dp))
+            .glassEdge(RoundedCornerShape(14.dp))
             .padding(horizontal = 12.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -259,14 +259,16 @@ internal fun Initial(name: String) {
     }
 }
 
+private val ChipShape = RoundedCornerShape(9.dp)
+
 /** Small filter chip (All / Receivable / Payable). */
 @Composable
 internal fun SmallChip(label: String, on: Boolean, onClick: () -> Unit) {
     Text(
         label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = if (on) Color.White else MaterialTheme.colorScheme.onSurface,
-        // Glass like the theme: the chosen chip filled, the others with a glass edge.
-        modifier = (if (on) Modifier.glassFill(CircleShape) else Modifier.glassEdge(CircleShape))
-            .clickable { onClick() }.padding(horizontal = 11.dp, vertical = 6.dp)
+        // Small rounded pills like the Claude app's: the chosen one dark, the others cream with a hairline edge.
+        modifier = (if (on) Modifier.glassFill(ChipShape) else Modifier.glassEdge(ChipShape))
+            .clickable { onClick() }.padding(horizontal = 10.dp, vertical = 5.dp)
     )
 }
 

@@ -5,7 +5,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -44,6 +43,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -670,37 +670,19 @@ fun GlassLogo(size: Dp, modifier: Modifier = Modifier, onBand: Boolean = false) 
 }
 
 /**
- * Liquid glass, as in the mock-up: a clear capsule (white fading to see-through), a bright white rim, a shine across
- * the top and a soft halo in the theme's colour. Used by every search box, chip and the chat field.
+ * The calm field look of the Claude app: a soft cream fill, a hairline warm-grey edge and a barely-there shadow.
+ * Used by every search box, unselected chip and the chat field.
  */
 @Composable
 fun Modifier.glassEdge(shape: androidx.compose.ui.graphics.Shape, width: Dp = 1.dp): Modifier {
-    val c = glassColors(LocalHeader.current)
-    val base = MaterialTheme.colorScheme.surface
-    val top = androidx.compose.ui.graphics.lerp(base, Color.White, 0.6f)
-    return this.shadow(3.dp, shape, ambientColor = c[1].copy(alpha = 0.18f), spotColor = c[1].copy(alpha = 0.18f))
-        .clip(shape)
-        // Solid underneath, so the halo never shows through the clear part.
-        .background(base, shape).background(Brush.verticalGradient(listOf(top, androidx.compose.ui.graphics.lerp(base, c[1], 0.04f))), shape)
-        .then(glassShine(0.9f))
-        .border(width, Color.White.copy(alpha = 0.9f), shape)
+    val light = MaterialTheme.colorScheme.background.luminance() > 0.5f
+    val fill = if (light) Color(0xFFFBFAF8) else MaterialTheme.colorScheme.surface
+    val edge = if (light) Color(0xFFE4DFD8) else MaterialTheme.colorScheme.outlineVariant
+    return this.shadow(1.dp, shape, ambientColor = Color.Black.copy(alpha = 0.06f), spotColor = Color.Black.copy(alpha = 0.06f))
+        .clip(shape).background(fill, shape).border(width, edge, shape)
 }
 
-/** A chosen chip: filled with the theme's glass colours (white text on it), with the same rim and shine. */
+/** A chosen chip, as in the Claude app: a solid dark ink pill (white text on it). */
 @Composable
-fun Modifier.glassFill(shape: androidx.compose.ui.graphics.Shape): Modifier {
-    val c = glassColors(LocalHeader.current)
-    return this.shadow(4.dp, shape, ambientColor = c[1].copy(alpha = 0.3f), spotColor = c[1].copy(alpha = 0.3f))
-        .clip(shape).background(Brush.linearGradient(0f to c[0], 0.55f to c[1], 1f to c[2]), shape)
-        .then(glassShine(0.55f))
-        .border(1.dp, Color.White.copy(alpha = 0.6f), shape)
-}
-
-/** The shine across the top of a glass capsule: a soft white band over its upper 40%, fading down. */
-private fun glassShine(alpha: Float): Modifier = Modifier.drawBehind {
-    val h = size.height * 0.4f
-    drawRoundRect(
-        Brush.verticalGradient(listOf(Color.White.copy(alpha = alpha), Color.White.copy(alpha = 0f)), startY = 2f, endY = 2f + h),
-        topLeft = Offset(size.width * 0.12f, 2f), size = Size(size.width * 0.76f, h), cornerRadius = CornerRadius(h / 2, h / 2)
-    )
-}
+fun Modifier.glassFill(shape: androidx.compose.ui.graphics.Shape): Modifier =
+    this.shadow(1.dp, shape).clip(shape).background(Color(0xFF1F1D1B), shape)
