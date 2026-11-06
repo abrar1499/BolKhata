@@ -153,12 +153,16 @@ internal fun GlassHeader(modifier: Modifier) {
 @Composable
 private fun KhataTop(
     title: String, subtitle: String, onMenu: () -> Unit, back: Boolean = false,
-    business: String? = null, onBusiness: () -> Unit = {}, card: @Composable () -> Unit
+    business: String? = null, onBusiness: () -> Unit = {}, pinned: Boolean = false, card: @Composable () -> Unit
 ) {
     val theme = LocalHeader.current
     val banded = theme.name != "Clean"
     val ink = if (banded) theme.on else MaterialTheme.colorScheme.onSurface
-    Box(Modifier.fillMaxWidth().then(if (banded) Modifier.drawBehind { drawBand(theme, size.height + BandBelow.toPx()) } else Modifier)) {
+    // The head stays at the top while the list scrolls under it ([pinned]): then the band ends at its own edge
+    // and the page colour sits behind it, so rows never show through.
+    Box(Modifier.fillMaxWidth()
+        .then(if (pinned) Modifier.background(MaterialTheme.colorScheme.background) else Modifier)
+        .then(if (banded) Modifier.drawBehind { drawBand(theme, size.height + if (pinned) 0f else BandBelow.toPx()) } else Modifier)) {
         Column(Modifier.statusBarsPadding().padding(horizontal = 12.dp)) {
             if (business != null) BusinessPill(business, onMenu, onBusiness) else
             Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -350,8 +354,8 @@ fun PartiesScreen(
     val state = rememberLazyListState()
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
-            item {
-                KhataTop("", "", onMenu, business = business, onBusiness = onBusiness) {
+            stickyHeader {
+                KhataTop("", "", onMenu, business = business, onBusiness = onBusiness, pinned = state.canScrollBackward) {
                     SumCard(card.first, card.second, "Report ›") { onReport(card.third) }
                 }
             }
@@ -776,8 +780,8 @@ fun CashBookScreen(
     val state = rememberLazyListState()
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
-            item {
-                KhataTop("", "", onMenu, business = business, onBusiness = onBusiness) {
+            stickyHeader {
+                KhataTop("", "", onMenu, business = business, onBusiness = onBusiness, pinned = state.canScrollBackward) {
                     SumCard(
                         Triple(money(currency, hand), "Cash in hand", if (hand < 0) RedSpend else GreenIn),
                         Triple(money(currency, spentMonth), "Spent this month", RedSpend),
@@ -824,8 +828,8 @@ fun PartyKhataScreen(
     val state = rememberLazyListState()
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
-            item {
-                KhataTop(name, if (hist.size == 1) "1 entry" else "${hist.size} entries", onBack, back = true) {
+            stickyHeader {
+                KhataTop(name, if (hist.size == 1) "1 entry" else "${hist.size} entries", onBack, back = true, pinned = state.canScrollBackward) {
                     SumCard(
                         Triple(money(currency, kotlin.math.abs(bal)), if (bal > 0.005) "Receivable" else if (bal < -0.005) "Payable" else "Settled",
                             if (bal > 0.005) GreenIn else if (bal < -0.005) RedSpend else MaterialTheme.colorScheme.onSurfaceVariant),
@@ -882,8 +886,8 @@ fun TransactionsScreen(entries: List<Entry>, currency: String, onEdit: (Entry) -
     val state = rememberLazyListState()
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
-            item {
-                KhataTop("All entries", if (entries.size == 1) "1 entry" else "${entries.size} entries", onMenu) {
+            stickyHeader {
+                KhataTop("All entries", if (entries.size == 1) "1 entry" else "${entries.size} entries", onMenu, pinned = state.canScrollBackward) {
                     SumCard(Triple(money(currency, outT), "Out", RedSpend), Triple(money(currency, inT), "In", GreenIn), "Add", onAdd)
                 }
             }
@@ -916,9 +920,10 @@ fun TrashScreen(
     var askEmpty by remember { mutableStateOf(false) }
     val list = remember(trash) { trash.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt }) }
     fun out(e: Entry) = cashOut(e) || e.type == Type.PURCHASE
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = barSpace(24.dp))) {
-        item {
-            KhataTop("Trash", "Deleted entries stay here for 30 days", onMenu) {
+    val listState = rememberLazyListState()
+    LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = barSpace(24.dp))) {
+        stickyHeader {
+            KhataTop("Trash", "Deleted entries stay here for 30 days", onMenu, pinned = listState.canScrollBackward) {
                 SumCard(
                     Triple("${trash.size}", if (trash.size == 1) "Entry" else "Entries", MaterialTheme.colorScheme.onSurface),
                     Triple(money(currency, trash.sumOf { it.amount }), "Total", RedSpend),
@@ -985,9 +990,10 @@ fun MoneyScreen(
     val open = remember(income) { mutableStateListOf<String>() }
     val khataMenu = LocalKhataMenu.current
     Box(Modifier.fillMaxSize()) {
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
-            item {
-                KhataTop("", "", onMenu, business = business, onBusiness = onBusiness) {
+        val listState = rememberLazyListState()
+        LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
+            stickyHeader {
+                KhataTop("", "", onMenu, business = business, onBusiness = onBusiness, pinned = listState.canScrollBackward) {
                     SumCard(Triple(money(currency, thisYear), "Year $year", color), Triple(money(currency, thisMonth), "This month", color), "Report ›", onReport)
                 }
             }
