@@ -82,6 +82,40 @@ object Groq {
           is types [borrowed, received_back]. For anything else "query" is null.
     """.trimIndent()
 
+    /** How a message is written: "urdu" (Urdu script), "hindi" (Devanagari), "en" (English) or "roman" (Roman Urdu or a mix). */
+    fun styleOf(text: String): String = when {
+        text.any { it in '\u0600'..'\u06FF' } -> "urdu"
+        text.any { it in '\u0900'..'\u097F' } -> "hindi"
+        NativeChatEngine.isEnglish(text) -> "en"
+        else -> "roman"
+    }
+
+    /**
+     * The app's [reply] rewritten the way the person wrote [said]: English, Roman Urdu, Urdu or Hindi script, or the same
+     * mix. Null when Groq is unreachable or a number changed (the reply is then shown as it is).
+     */
+    suspend fun localize(key: String, reply: String, said: String): String? = withContext(Dispatchers.IO) {
+        runCatching {
+            val body = JSONObject()
+                .put("model", CHAT_MODEL)
+                .put("temperature", 0)
+                .put("max_tokens", 600)
+                .put("reasoning_effort", "low")
+                .put("messages", JSONArray()
+                    .put(JSONObject().put("role", "system").put("content",
+                        "Rewrite the app's reply in the same language, script and style as the person's message " +
+                            "(English, Roman Urdu, Urdu script, Hindi script, or the same mix). Keep it as short. Keep every " +
+                            "number, amount, date and name exactly. Reply with the rewritten text only."))
+                    .put(JSONObject().put("role", "user").put("content", "Message: " + said.take(300) + "\nReply: " + reply.take(800))))
+                .toString().toByteArray(Charsets.UTF_8)
+            val (code, text) = post(CHAT_URL, key, "application/json", body)
+            if (code !in 200..299) error(describe(code))
+            val out = JSONObject(text).getJSONArray("choices").getJSONObject(0).getJSONObject("message").optString("content").trim()
+            fun digits(s: String) = Regex("""\d+(?:[.,]\d+)?""").findAll(s).map { it.value.replace(",", "") }.toList().sorted()
+            out.takeIf { it.isNotBlank() && digits(it) == digits(reply) }
+        }.getOrNull()
+    }
+
     /** False when Groq's own [reply] holds a number that was not in the message [said] (an amount it made up). */
     fun replyIsSafe(reply: String, said: String): Boolean {
         fun numbers(s: String) = Regex("""\d+(?:[.,]\d+)*""").findAll(s).map { it.value.replace(",", "") }.toSet()
