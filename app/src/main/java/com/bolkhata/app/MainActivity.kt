@@ -1190,8 +1190,12 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
 
     chatRead = { chatViaReader(it) }
 
+    /** The last lookup Groq made (its JSON), so a follow-up ("income kya thi") changes only what it names. */
+    var lastGroqQuery by remember { mutableStateOf("") }
+
     /** Without AI (no key, or no internet): save clear entries, answer simple questions, never stay silent. */
     fun chatInput(raw: String) {
+        if (chatMessages.isEmpty()) lastGroqQuery = ""
         val text = raw.trim()
         if (text.isEmpty() || chatLoading) return
         val previousUser = chatMessages.lastOrNull { it.isUser }
@@ -1238,7 +1242,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     // The last few turns, so a follow-up ("detail dikhao", "sirf food") is read in context.
                     val recent = history.takeLast(6).joinToString("\n") { (if (it.isUser) "Person: " else "App: ") + it.text.take(160) }
                     // Groq answers within about 14 seconds (see Groq.send); else the app answers by itself, so the chat never hangs.
-                    val routed = Groq.route(groqKey, text, recent, names)
+                    val routed = Groq.route(groqKey, text, recent, names, lastQuery = lastGroqQuery)
                     when {
                         routed == null -> groqTrace = "; groq=unavailable"
                         // Groq's own reply is used only for talk the app itself does not understand, and never when it
@@ -1259,7 +1263,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                             return@launch
                         }
                         else -> {
-                            routed.query?.let { groqAsk = NativeChatEngine.Fixed(read, "ask", "", routed.what, it) }
+                            routed.query?.let { groqAsk = NativeChatEngine.Fixed(read, "ask", "", routed.what, it); lastGroqQuery = routed.queryJson }
                             groqTrace = "; groq=" + routed.command.ifBlank { "reply not used" }.take(120)
                             if (routed.command.isNotBlank()) read = runCatching { Translit.toRoman(routed.command) }.getOrDefault(routed.command)
                         }

@@ -125,7 +125,7 @@ object Query {
         if (f.from != null || f.to != null) {
             val a = f.from?.let { fmt.format(java.util.Date(it)) }
             val b = f.to?.let { fmt.format(java.util.Date(it)) }
-            parts += if (a != null && b != null && a != b) "$a – $b" else (a ?: b)!!
+            parts += if (a != null && b != null && a != b) "$a – $b" else if (b == null) "$a – today" else (a ?: b)!!
         }
         if (f.createdFrom != null || f.createdTo != null) {
             val a = f.createdFrom?.let { fmt.format(java.util.Date(it)) }

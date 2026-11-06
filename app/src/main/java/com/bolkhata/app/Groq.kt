@@ -71,8 +71,11 @@ object Groq {
           to leave out, e.g. "es me fees aur sent home nikal ke batao" keeps the previous query and leaves those out]}. "report" is where the money went (by
           category, e.g. "kahan kahan laga"); "list" shows the entries ("detail", "dikhao"); "sum" is a total.
           Always fill from/to for a period: "is mahine" is the 1st of this month to today, "aaj" is today, "kal"
-          is yesterday, "pichle mahine" is that whole month. "aaj tak"/"ab tak" with no start means no dates. A follow-up keeps the period and filters of the
-          conversation. For anything else "query" is null.
+          is yesterday, "pichle mahine" is that whole month. "aaj tak"/"ab tak" with no start means no dates.
+          A follow-up ("income kya thi", "aur food?", "ye 19 aug se aaj tak hai?", "logon se kitna liya") starts from
+          the Previous query and changes ONLY what the message changes: "income kya thi" after last month's spending
+          is last month's income; "ye 19 aug se hai?" keeps the categories and sets the dates. "logon se liya / mila"
+          is types [borrowed, received_back]. For anything else "query" is null.
     """.trimIndent()
 
     /** False when Groq's own [reply] holds a number that was not in the message [said] (an amount it made up). */
@@ -85,7 +88,7 @@ object Groq {
      *  [query] what to look up in the saved records ([what] is sum, list, count, report or highest). */
     data class Routed(
         val command: String, val reply: String, val entries: List<Entry> = emptyList(),
-        val what: String = "", val query: Query.Filter? = null
+        val what: String = "", val query: Query.Filter? = null, val queryJson: String = ""
     )
 
     private val QUERY_TYPES get() = TYPES + mapOf("sale" to Type.SALE, "purchase" to Type.PURCHASE)
@@ -169,12 +172,14 @@ object Groq {
      * words in the message, to keep tokens low.
      */
     suspend fun route(
-        key: String, said: String, lastAnswer: String, names: List<String>, now: Long = System.currentTimeMillis()
+        key: String, said: String, lastAnswer: String, names: List<String>, now: Long = System.currentTimeMillis(),
+        lastQuery: String = ""
     ): Routed? = withContext(Dispatchers.IO) {
         runCatching {
             val prompt = buildString {
                 if (names.isNotEmpty()) append("Saved names: ").append(names.joinToString(", ")).append('\n')
                 if (lastAnswer.isNotBlank()) append("Conversation so far:\n").append(lastAnswer.takeLast(1000)).append('\n')
+                if (lastQuery.isNotBlank()) append("Previous query: ").append(lastQuery.take(500)).append('\n')
                 append("Message: ").append(said.take(300))
             }
             val body = JSONObject()
@@ -200,7 +205,8 @@ object Groq {
                     val q = queryFrom(o.optJSONObject("query"))
                     Routed(
                         if (digits(command) == digits(said)) command else said, "",
-                        entriesFrom(o.optJSONArray("entries"), said, now).orEmpty(), q?.first.orEmpty(), q?.second
+                        entriesFrom(o.optJSONArray("entries"), said, now).orEmpty(), q?.first.orEmpty(), q?.second,
+                        if (q == null) "" else o.optJSONObject("query").toString()
                     )
                 }
                 reply.isNotBlank() -> Routed("", reply)
