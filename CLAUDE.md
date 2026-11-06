@@ -46,7 +46,7 @@ Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Packa
 
 ## Style
 - Clean look: Inter font, off-white page, white cards, coloured line icons, red money out / green money in.
-- Floating ChatGPT-style message bar (`AppParts.kt` `InputBar`); screens scroll under it, lists end with
+- Floating ChatGPT-style message bar (`AppParts.kt` `InputBar`) only on the Chat tab; lists end with
   `barSpace()`.
 - Match the surrounding code: short KDoc comments, no dead code, reuse helpers in `Ui.kt`.
 - When the owner changes the size/look of a common part (chips, search, business pill, cards), change it everywhere it
