@@ -576,7 +576,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         } else null
         val target = matched ?: if (st.keywords.isEmpty() && (latestRef || st.mentionsMoney)) candidates.firstOrNull() else null
         if (target == null) {
-            toast("I couldn't match that payment to an entry. Mention the item or person, e.g. \"payment for kachi eint not received\".")
+            toast("I couldn't match that payment to an entry. Mention the item or person, e.g. \"payment for the bricks not received\".")
             return true
         }
         val who = target.person.ifBlank { st.person }
@@ -694,7 +694,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         }
         if (Edits.looksLikeEdit(text) && entries.isNotEmpty()) {
             // The AI never changes entries itself: if the app's own reader couldn't place it, say so.
-            flash = Flash("Which entry? e.g. \"last entry 400 karo\" or \"aaj ki sari entries delete karo\"", Flash.Kind.ANSWER)
+            flash = Flash("Which entry? e.g. \"make the last entry 400\" or \"delete today's entries\"", Flash.Kind.ANSWER)
             return
         }
         val after = placeAfter[0].also { placeAfter[0] = null }
@@ -926,7 +926,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 }
             }
             "delete" -> {
-                if (q.isEmpty) return "Which entries? e.g. \"aaj ki sari entries delete karo\""
+                if (q.isEmpty) return "Which entries? e.g. \"delete today's entries\""
                 val hits = scoped(Query.select(entries, q))
                 if (hits.isEmpty()) return "Nothing found (${Query.label(q)})."
                 clarifyMultiple("delete", hits)?.let { return it }
@@ -938,7 +938,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 if (q.cats == setOf(Cat.OTHER) && (f.set["category"].isNullOrBlank() || f.set["category"].equals("expense", true))) {
                     openRecat(); return null
                 }
-                if (q.isEmpty) return "Which entry? e.g. \"laptop wali entry\""
+                if (q.isEmpty) return "Which entry? e.g. \"the laptop entry\""
                 if (f.set.isEmpty()) return runFixed(NativeChatEngine.Fixed("", "reread", "", "", q), said, inChat)
                 val hits = scoped(Query.select(entries, q))
                 if (hits.isEmpty()) return "Nothing found (${Query.label(q)})."
@@ -978,8 +978,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 }
                 // "Ye sari Abrar D360 ka khata bana do": these records become that khata's lene-dene, in date order,
                 // each one a loan or a repayment by the running balance (money out = they owe me, money in = back / I owe).
-                val name = f.set["person"]?.trim()?.takeIf { it.isNotEmpty() } ?: f.payer.ifBlank { return "Which khata? e.g. \"Abrar D360 ka khata\"" }
-                if (q.isEmpty) return "Which entries? e.g. \"d360 wali entries\""
+                val name = f.set["person"]?.trim()?.takeIf { it.isNotEmpty() } ?: f.payer.ifBlank { return "Which account? e.g. \"Hamid's account\"" }
+                if (q.isEmpty) return "Which entries? e.g. \"the D360 entries\""
                 val hits = scoped(Query.select(entries, q))
                     .filter { !it.person.equals(name, true) }.sortedWith(compareBy<Entry> { it.date }.thenBy { it.createdAt })
                 if (hits.isEmpty()) return "Nothing found (${Query.label(q)})."
@@ -1003,10 +1003,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             }
             "paid_by" -> {
                 // "Aaj jo khana khaya us ke paise Nadeem ne diye": find that meal and make it "Nadeem paid".
-                val payer = f.payer.ifBlank { return "Who paid? e.g. \"nadeem ne pay kiya\"" }
+                val payer = f.payer.ifBlank { return "Who paid? e.g. \"Nadeem paid\"" }
                 val q2 = Query.Filter(q.from, q.to, setOf(Type.KHARCHA), emptyList(), q.cats, q.items, q.min, q.max, q.last, q.noPeople, q.notItems, q.ids, q.createdFrom, q.createdTo)
                 if (q2.from == null && q2.to == null && q2.createdFrom == null && q2.createdTo == null &&
-                    q2.cats.isEmpty() && q2.items.isEmpty() && q2.ids.isEmpty()) return "Which one? e.g. \"aaj ka khana\""
+                    q2.cats.isEmpty() && q2.items.isEmpty() && q2.ids.isEmpty()) return "Which one? e.g. \"today's food\""
                 val hits = scoped(Query.select(entries, q2))
                 // The one that mentions the payer comes first ("Khana with nadeem").
                 val candidates = hits.filter { it.note.contains(payer, true) }.ifEmpty { hits }
@@ -1033,7 +1033,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             }
             "reread" -> {
                 // "Galat hai, theek karo": the app reads each entry's own note again with what it knows now.
-                if (q.isEmpty) return "Which entry? e.g. \"laptop wali entry\""
+                if (q.isEmpty) return "Which entry? e.g. \"the laptop entry\""
                 val hits = scoped(Query.select(entries, q))
                 if (hits.isEmpty()) return "Nothing found (${Query.label(q)})."
                 clarifyMultiple("re-read", hits)?.let { return it }
@@ -1048,7 +1048,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         list[0].item == old.item && list[0].amount == old.amount && list[0].person == old.person
                     if (list.isEmpty() || same) null else old to list
                 }
-                if (swaps.isEmpty()) return "Looks right to the app. Say what should change, e.g. \"laptop nahi khana tha\"."
+                if (swaps.isEmpty()) return "Looks right to the app. Say what should change, e.g. \"it was food, not laptop\"."
                 val before = entries
                 val gone = swaps.map { it.first.id }.toSet()
                 save(swaps.flatMap { it.second } + entries.filter { it.id !in gone })
