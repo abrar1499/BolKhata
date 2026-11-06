@@ -180,8 +180,8 @@ object Groq {
             val body = JSONObject()
                 .put("model", CHAT_MODEL)
                 .put("temperature", 0)
-                .put("max_tokens", 1200)
-                .put("reasoning_effort", "low")
+                .put("max_tokens", 2500)
+                .put("reasoning_effort", "medium") // thinks a little longer: fewer misreadings
                 .put("response_format", JSONObject().put("type", "json_object"))
                 .put("messages", JSONArray()
                     .put(JSONObject().put("role", "system").put("content", instructions
@@ -413,7 +413,7 @@ object Groq {
         conn.requestMethod = "POST"
         // A chat answer that takes longer than this is dropped and the app answers alone; voice clips get longer.
         conn.connectTimeout = 6_000
-        conn.readTimeout = if (url == VOICE_URL) 25_000 else 9_000
+        conn.readTimeout = if (url == VOICE_URL) 25_000 else 14_000
         conn.doOutput = true
         conn.setRequestProperty("Authorization", "Bearer " + if (key == SHARED) BuildConfig.GROQ_KEY else key)
         conn.setRequestProperty("Content-Type", type)

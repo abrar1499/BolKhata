@@ -63,6 +63,11 @@ class NativeChatEngineTest {
         assertEquals("Good, you?", read("hello how are you").reply)
         assertEquals("Wa alaikum assalam!", read("salam").reply)
         assertEquals("Theek, aap batao?", read("kya hal hai").reply)
+        assertEquals("Great! How can I help?", read("i am good").reply)
+        assertEquals("Good, you?", read("how r u").reply)
+        // A greeting right after a search is still a greeting, not a narrower search.
+        val after = listOf(ChatMessage("u1", true, "aj ka expense"), ChatMessage("a1", false, "Spent 50 SAR (1 entry, 6 Nov)"))
+        assertEquals("chat", NativeChatEngine.interpret("hi", emptyList(), history = after, now = now).kind)
     }
 
     @Test fun todaysDateIsAnsweredInOneLine() {
