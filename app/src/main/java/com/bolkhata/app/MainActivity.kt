@@ -1238,7 +1238,11 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 // What Groq understood the question to be, run straight on the saved records (no second reading).
                 var groqAsk: NativeChatEngine.Fixed? = null
                 if (groqKey.isNotBlank() && !NativeChatEngine.isSmallTalk(roman)) {
-                    val names = Understand.similarNames(roman.split(Regex("""\s+""")), contactNames())
+                    // Names that look like words in the message first, then the khata's people, so a misheard
+                    // voice name ("dalib") can be matched to the saved one by sound.
+                    val all = contactNames()
+                    val names = (Understand.similarNames(roman.split(Regex("""\s+""")), all) + all).distinctBy { it.lowercase() }.take(80)
+                    Groq.takeUsage() // count only this message's Groq time and tokens
                     // The last few turns, so a follow-up ("detail dikhao", "sirf food") is read in context.
                     val recent = history.takeLast(6).joinToString("\n") { (if (it.isUser) "Person: " else "App: ") + it.text.take(160) }
                     // Groq answers within about 14 seconds (see Groq.send); else the app answers by itself, so the chat never hangs.

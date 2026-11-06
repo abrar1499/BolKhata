@@ -62,7 +62,9 @@ object Groq {
           borrowed, received_back, paid_back. category (for expense) is one of $CATEGORY_NAMES. item is 1-3 words
           (e.g. "Petrol", "Chai"), person is the other person's name (saved name if it matches) or "", note is any
           extra detail or "", date is "YYYY-MM-DD" when a day is said (today is TODAY) else "", qty and unit only
-          when a quantity is said. Amounts exactly as said. For edits, questions and anything else, "entries" is [].
+          when a quantity is said. Amounts exactly as said. Messages often come from voice, so a name may be
+          misheard ("dalib", "undelib", "share your Nickel" for a saved "Talib"): use the saved name that SOUNDS
+          closest; a new name keeps the spelling that reads most like a real name. For edits, questions and anything else, "entries" is [].
         - When the message asks about saved money (a total, list, count, report, biggest), also fill "query":
           {"mode": "sum" | "list" | "count" | "report" | "highest", "types": [any of expense, income, lent,
           borrowed, received_back, paid_back, sale, purchase], "categories": [category names], "persons": [saved
