@@ -73,6 +73,8 @@ object NativeChatEngine {
         val raw = input.trim()
         if (raw.isBlank()) return chat("Please type a message and I'll help with your khata.")
         val roman = runCatching { Translit.toRoman(raw) }.getOrDefault(raw)
+        // "hi", "how r u", "i am good": small talk is answered first, never read as a follow-up to the last search.
+        if (isSmallTalk(roman, now)) return talk(roman.lowercase(Locale.ROOT), now)
         val prepared = NumberWords.convert(roman)
         val understood = runCatching { Understand.read(prepared, contacts, wordFixes) }.getOrNull()
         val text = understood?.text ?: prepared
@@ -565,7 +567,7 @@ object NativeChatEngine {
     /** Small talk, or the not-understood reply marked [Fixed.unsure]. */
     /** A greeting, thanks or bye the app answers itself ("hi", "salam"): no need to ask Groq or search. */
     fun isSmallTalk(text: String, now: Long = System.currentTimeMillis()): Boolean =
-        tokens(text).size <= 4 && smallTalk(text.lowercase(Locale.ROOT), now) != NOT_UNDERSTOOD
+        tokens(text).size <= 4 && text.none(Char::isDigit) && smallTalk(text.lowercase(Locale.ROOT), now) != NOT_UNDERSTOOD
 
     private fun talk(text: String, now: Long): Fixed = smallTalk(text, now).let {
         val reply = if (it == NOT_UNDERSTOOD && isEnglish(text)) "Sorry, I didn't get that. Try 'tea 5' or 'food this month'." else it
@@ -587,8 +589,10 @@ object NativeChatEngine {
         val en = isEnglish(text)
         fun say(english: String, urdu: String) = if (en) english else urdu
         return when {
-            has(w, setOf("how", "are", "you")) && en -> "Good, you?"
-            has(w, setOf("hi", "hello", "hey", "good", "morning", "evening", "salam", "assalam", "assalamualaikum", "aoa")) ->
+            (has(w, setOf("how")) && has(w, setOf("are", "r")) && has(w, setOf("you", "u"))) && en -> "Good, you?"
+            has(w, setOf("good", "fine", "great", "ok", "okay", "theek", "thik", "acha", "accha")) &&
+                has(w, setOf("i", "am", "im", "main", "mein", "hoon", "hun", "bhi")) -> say("Great! How can I help?", "Acha! Batayein?")
+            has(w, setOf("hi", "hello", "hey", "morning", "evening", "salam", "assalam", "assalamualaikum", "aoa")) ->
                 say("Hi!", "Wa alaikum assalam!")
             has(w, setOf("date", "tareekh", "tarikh", "din", "day")) && has(w, setOf("aaj", "aj", "today", "kya", "kia", "what", "konsa", "kaunsa")) ->
                 java.text.SimpleDateFormat(if (en) "'Today is' d MMM yyyy, EEEE." else "'Aaj' d MMM yyyy, EEEE.", Locale.ENGLISH).format(java.util.Date(now))
