@@ -36,6 +36,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -205,21 +206,14 @@ internal fun DrawerMenu(tab: Tab, name: String, currency: String, onCurrency: (S
         drawerShape = RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp),
         windowInsets = WindowInsets(0, 0, 0, 0)
     ) {
-        // The header follows the chosen theme: its colours, or the plain page colour for "Clean".
+        // The header in the chosen theme's glass colours, with the app logo.
         val header = LocalHeader.current
         Row(
-            Modifier.fillMaxWidth().background(header.brush).statusBarsPadding().padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 18.dp),
+            Modifier.fillMaxWidth().drawBehind { drawGlass(bandColors(header), size.height) }.statusBarsPadding()
+                .padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 18.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                Modifier.size(44.dp).clip(CircleShape).background(if (header.flat) EmberTop else Color.White),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    name.trim().take(1).uppercase().ifEmpty { "B" }, fontWeight = FontWeight.Bold, fontSize = 18.sp,
-                    color = if (header.flat) Color.White else header.c1
-                )
-            }
+            GlassLogo(40.dp, onBand = true)
             Spacer(Modifier.width(12.dp))
             Column {
                 Text("Smart Expense", fontWeight = FontWeight.Bold, fontSize = 17.sp, color = header.on)
@@ -229,7 +223,6 @@ internal fun DrawerMenu(tab: Tab, name: String, currency: String, onCurrency: (S
                 )
             }
         }
-        if (header.flat) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         Spacer(Modifier.height(8.dp))
         DrawerRow("All entries", Icons.Outlined.FormatListBulleted, tab == Tab.ENTRIES, Color(0xFF8B5CF6)) { onPick(Tab.ENTRIES) }
         DrawerRow("Reports", Icons.Outlined.BarChart, tab == Tab.REPORTS, Color(0xFF0EA5E9)) { onPick(Tab.REPORTS) }

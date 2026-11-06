@@ -33,6 +33,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -1530,9 +1532,30 @@ fun SettingsScreen(
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = barSpace())) {
         item {
-            Row(Modifier.fillMaxWidth().padding(start = 4.dp, top = 14.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onMenu) { Icon(Icons.Filled.Menu, contentDescription = "Menu") }
-                Text("Settings", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+            // The theme's glass band behind the title, down to the middle of the app card.
+            val theme = LocalHeader.current
+            var cardH by remember { mutableIntStateOf(0) }
+            Column(
+                Modifier.fillMaxWidth().drawBehind { drawGlass(bandColors(theme), size.height - cardH / 2f) }
+                    .statusBarsPadding().padding(bottom = 10.dp)
+            ) {
+                Row(Modifier.fillMaxWidth().padding(start = 4.dp, top = 8.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onMenu) { Icon(Icons.Filled.Menu, contentDescription = "Menu", tint = theme.on) }
+                    Text("Settings", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = theme.on)
+                }
+                Surface(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp).onSizeChanged { cardH = it.height },
+                    shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 2.dp
+                ) {
+                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        GlassLogo(44.dp)
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text("Smart Expense", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                            Text("Version $version · Speak it. Track it.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
             }
         }
         item {

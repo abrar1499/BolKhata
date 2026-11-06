@@ -127,24 +127,11 @@ private fun navItem(t: Tab): Pair<String, ImageVector> = when (t) {
     else -> "Chat" to Icons.Outlined.ChatBubbleOutline
 }
 
-/** Glassy orange header: a warm gradient with a soft white sheen and two faint light circles, flowing out of the status bar. */
+/** A glass header behind white text (Reports, To give / To get): the icon's look in the theme's colours. */
 @Composable
 internal fun GlassHeader(modifier: Modifier) {
-    Canvas(modifier.background(Brush.linearGradient(listOf(Color(0xFFF46B42), Color(0xFFEC4C35), Color(0xFFE3342F))))) {
-        val w = size.width
-        val h = size.height
-        drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.16f), Color.Transparent), endY = h * 0.7f))
-        drawRect(Brush.linearGradient(
-            0.30f to Color.Transparent, 0.45f to Color.White.copy(alpha = 0.18f), 0.60f to Color.Transparent,
-            start = Offset(0f, 0f), end = Offset(w, h)
-        ))
-        drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = 0.22f), Color.Transparent), center = Offset(w * 0.95f, 0f), radius = w * 0.35f),
-            radius = w * 0.35f, center = Offset(w * 0.95f, 0f))
-        drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = 0.14f), Color.Transparent), center = Offset(0f, h), radius = w * 0.25f),
-            radius = w * 0.25f, center = Offset(0f, h))
-        // Starts in the status bar's own colour, so the bar and the header read as one piece.
-        drawRect(Brush.verticalGradient(listOf(EmberTop, EmberTop.copy(alpha = 0f)), endY = 30.dp.toPx()))
-    }
+    val colors = glassColors(LocalHeader.current)
+    Canvas(modifier) { drawGlass(colors, size.height) }
 }
 
 /**
@@ -188,14 +175,10 @@ private fun KhataTop(
 private fun TabHead(content: @Composable ColumnScope.() -> Unit) =
     Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).padding(bottom = 4.dp), content = content)
 
-/** The theme band: its colours, a soft glossy top half, one white glow at the top right and a thin light bottom edge. */
+/** The theme band in the app icon's glass look, with a thin light bottom edge. */
 private fun DrawScope.drawBand(theme: HeaderTheme, h: Float) {
-    val w = size.width
-    val area = Size(w, h)
-    drawRect(Brush.linearGradient(listOf(theme.c1, theme.c2, theme.c3), start = Offset.Zero, end = Offset(w, h)), size = area)
-    drawRect(Brush.verticalGradient(0f to Color.White.copy(alpha = 0.12f), 0.48f to Color.White.copy(alpha = 0.04f), 0.52f to Color.Transparent, endY = h), size = area)
-    drawRect(Brush.radialGradient(listOf(Color.White.copy(alpha = 0.32f), Color.Transparent), center = Offset(w * 0.95f, 0f), radius = w * 0.5f), size = area)
-    drawRect(Color.White.copy(alpha = 0.35f), topLeft = Offset(0f, h - 1.dp.toPx()), size = Size(w, 1.dp.toPx()))
+    drawGlass(bandColors(theme), h)
+    drawRect(Color.White.copy(alpha = 0.35f), topLeft = Offset(0f, h - 1.dp.toPx()), size = Size(size.width, 1.dp.toPx()))
 }
 
 /** Compact frosted pill at the top: menu, then the open business with ▾ to switch or add one. */
@@ -205,8 +188,9 @@ internal fun BusinessPill(name: String, onMenu: () -> Unit, onBusiness: () -> Un
         Modifier.padding(top = 12.dp).shadow(1.dp, CircleShape).clip(CircleShape).background(Color.White).padding(end = 11.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(Modifier.size(38.dp).clip(CircleShape).clickable { onMenu() }, contentAlignment = Alignment.Center) {
-            Icon(Icons.Filled.Menu, contentDescription = "Menu", tint = Ember, modifier = Modifier.size(17.dp))
+        // The app's logo opens the side menu.
+        Box(Modifier.size(38.dp).clip(CircleShape).clickable(onClickLabel = "Menu") { onMenu() }, contentAlignment = Alignment.Center) {
+            GlassLogo(24.dp)
         }
         Row(Modifier.clickable { onBusiness() }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(name, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1C1917), maxLines = 1, overflow = TextOverflow.Ellipsis,
