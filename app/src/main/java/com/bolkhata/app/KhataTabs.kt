@@ -413,7 +413,8 @@ private fun LazyListScope.productionView(
         .map { (_, l) -> l.first().item.trim().ifBlank { "Other" } to l.sumOf { it.amount } }.sortedByDescending { it.second }
     item(key = "pdh") {
         LedgerHead("Cost of making", if (heads.size == 1) "1 head" else "${heads.size} heads",
-            listOf(LCol("Cost", fmt(cost), LKind.OUT)), heads.isEmpty(), WideColW)
+            // Never rounded below: the Made and Cost per unit rows always follow it.
+            listOf(LCol("Cost", fmt(cost), LKind.OUT)), false, WideColW)
     }
     items(heads, key = { "pd" + it.first.lowercase() }) { (n, v) ->
         GridRow(n, if (cost > 0) "${Math.round(v / cost * 100)}% of the cost" else "", listOf(GCell(fmt(v), LKind.OUT)), WideColW, false) {}
