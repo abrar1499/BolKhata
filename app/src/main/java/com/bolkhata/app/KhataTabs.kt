@@ -985,7 +985,7 @@ fun TransactionsScreen(entries: List<Entry>, currency: String, onEdit: (Entry) -
             )
         }
         UpButton(state)
-        PlusButton(onAdd)
+        PlusButton(onClick = onAdd)
     }
 }
 
