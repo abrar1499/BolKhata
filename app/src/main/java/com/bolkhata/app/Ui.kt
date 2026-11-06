@@ -196,12 +196,13 @@ fun BolTheme(dark: Boolean, content: @Composable () -> Unit) {
         onPrimaryContainer = Color(0xFFD1FAE5),
         secondaryContainer = Color(0xFF064E3B),
         onSecondaryContainer = Color(0xFFD1FAE5),
-        background = Color(0xFF0F0F0F),
-        surface = Color(0xFF181818),
-        surfaceVariant = Color(0xFF262626),
+        // Cards clearly lighter than the page, so they never blend into it.
+        background = Color(0xFF0A0A0A),
+        surface = Color(0xFF1F1F1F),
+        surfaceVariant = Color(0xFF2B2B2B),
         onSurfaceVariant = Color(0xFFA3A3A3),
-        outline = Color(0xFF333333),
-        outlineVariant = Color(0xFF2A2A2A)
+        outline = Color(0xFF3A3A3A),
+        outlineVariant = Color(0xFF333333)
     ) else lightColorScheme(
         primary = Color(0xFF059669),
         onPrimary = Color.White,
