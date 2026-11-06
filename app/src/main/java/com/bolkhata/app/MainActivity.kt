@@ -1237,7 +1237,20 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 var read = roman
                 // What Groq understood the question to be, run straight on the saved records (no second reading).
                 var groqAsk: NativeChatEngine.Fixed? = null
-                if (groqKey.isNotBlank() && !NativeChatEngine.isSmallTalk(roman)) {
+                // What Groq understood before is read by the app itself (no tokens); a 👎 makes it forget.
+                val learnKey = Groq.learnKey(roman)
+                val known = if (groqKey.isNotBlank()) store.learned[learnKey] else null
+                var learnAs: String? = null
+                if (known != null && known.startsWith("R|")) {
+                    lastSpeech = known.removePrefix("R|")
+                    postChat(lastSpeech, isUser = false, meta = "engine=Learned; intent=chat; usage=Learned · no tokens")
+                    return@launch
+                }
+                val knownCommand = known?.removePrefix("C|")?.let { Groq.learnFill(it, roman) }
+                if (knownCommand != null) {
+                    groqTrace = "; learned=" + knownCommand.take(120)
+                    read = runCatching { Translit.toRoman(knownCommand) }.getOrDefault(knownCommand)
+                } else if (groqKey.isNotBlank() && !NativeChatEngine.isSmallTalk(roman)) {
                     // Names that look like words in the message first, then the khata's people, so a misheard
                     // voice name ("dalib") can be matched to the saved one by sound.
                     val all = contactNames()
@@ -1254,7 +1267,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         routed.command.isBlank() && Groq.replyIsSafe(routed.reply, text) && offMain {
                             NativeChatEngine.interpret(roman, scoped, names0, wordFixes, history, currency = currency)
                         }.unsure -> {
-                            val usage = Groq.takeUsage()
+                            val usage = Groq.takeUsage().ifBlank { if (knownCommand != null) "Learned · no tokens" else "" }
+                            if (routed.standalone && text.none(Char::isDigit)) store.learned = store.learned + (learnKey to "R|" + routed.reply)
                             lastSpeech = routed.reply
                             postChat(routed.reply, isUser = false,
                                 meta = "engine=Groq; intent=chat" + (if (usage.isBlank()) "" else "; usage=" + usage))
@@ -1268,12 +1282,15 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         }
                         else -> {
                             routed.query?.let { groqAsk = NativeChatEngine.Fixed(read, "ask", "", routed.what, it); lastGroqQuery = routed.queryJson }
+                            if (routed.standalone && routed.command.isNotBlank()) learnAs = Groq.learnTemplate(routed.command, roman)
                             groqTrace = "; groq=" + routed.command.ifBlank { "reply not used" }.take(120)
                             if (routed.command.isNotBlank()) read = runCatching { Translit.toRoman(routed.command) }.getOrDefault(routed.command)
                         }
                     }
                 }
                 val local = offMain { NativeChatEngine.interpret(read, scoped, names0, wordFixes, history, currency = currency) }
+                // Learned only when the app's own reading of Groq's command works, so next time it gives the same answer.
+                if (learnAs != null && !local.unsure) store.learned = store.learned + (learnKey to "C|" + learnAs)
                 // Groq's lookup, with the app's own reading of the period when Groq left the dates out ("is mahine ka").
                 val intent = groqAsk?.let { g ->
                     val f = g.filter
@@ -2237,6 +2254,12 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         ratings = chatRatings,
                         onRate = { id, good ->
                             chatLog.rate(id, good)
+                            // 👎 on an answer: forget what was learned for the question before it.
+                            if (!good) chatMessages.indexOfFirst { it.id == id }.takeIf { it > 0 }?.let { i ->
+                                chatMessages.take(i).lastOrNull { it.isUser }?.let { q ->
+                                    store.learned = store.learned - Groq.learnKey(runCatching { Translit.toRoman(q.text) }.getOrDefault(q.text))
+                                }
+                            }
                             chatRatings = chatRatings + (id to good)
                             sendChatLog(force = logToken.isNotBlank())
                         },

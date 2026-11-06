@@ -539,12 +539,20 @@ class Store(context: Context) {
         get() = prefs.getString("elevenAgent", "") ?: ""
         set(v) = prefs.edit().putString("elevenAgent", v.trim()).apply()
 
-    /** Use Groq Whisper for the mic and the voice call instead of the phone's speech recognition. */
     /** True once the person turned Groq off, so the shared Groq server is not used either. */
     var groqOff: Boolean
         get() = prefs.getBoolean("groqOff", false)
         set(v) = prefs.edit().putBoolean("groqOff", v).apply()
 
+    /** Messages Groq understood once (key → "C|command" or "R|reply"), read by the app itself next time. */
+    var learned: Map<String, String>
+        get() = runCatching {
+            val o = org.json.JSONObject(prefs.getString("learned", "{}") ?: "{}")
+            o.keys().asSequence().associateWith { o.getString(it) }
+        }.getOrDefault(emptyMap())
+        set(v) = prefs.edit().putString("learned", org.json.JSONObject(v.entries.toList().takeLast(500).associate { it.key to it.value }).toString()).apply()
+
+    /** Use Groq Whisper for the mic and the voice call instead of the phone's speech recognition. */
     var groqVoice: Boolean
         get() = prefs.getBoolean("groqVoice", true)
         set(v) = prefs.edit().putBoolean("groqVoice", v).apply()
