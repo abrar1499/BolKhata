@@ -666,6 +666,7 @@ internal fun LazyListScope.ledger(
     title: String, cols: List<LCol>, rows: List<LRow>, keyPrefix: String = "", cards: Boolean = true, onHold: (() -> Unit)? = null
 ) {
     item(key = keyPrefix + "lh") { LedgerHead(title, entryCount(rows.size), cols, rows.isEmpty(), ids = rows.mapNotNull { it.entry?.id }, onHold = onHold) }
+    if (rows.isEmpty()) item(key = keyPrefix + "empty") { EmptyHint() }
     // Each day's rows, found in one pass (filtering the whole list for every day made long lists slow).
     val byDay = rows.groupBy { dayNumber(it.date) }
     rows.forEachIndexed { i, r ->
@@ -676,6 +677,17 @@ internal fun LazyListScope.ledger(
         // As cards, each day is one card: its day line and entries, the last entry closing it.
         val last = i == rows.lastIndex || (cards && !sameDay(rows[i + 1].date, r.date))
         item(key = keyPrefix + r.key) { LedgerRow(r, cols, last, cards) }
+    }
+}
+
+/** What an empty list shows instead of a blank page: the app logo and how to add the first entry. */
+@Composable
+private fun EmptyHint() {
+    Column(Modifier.fillMaxWidth().padding(vertical = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        GlassLogo(44.dp)
+        Spacer(Modifier.height(10.dp))
+        Text("No entries here yet", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        Text("Say \"tea 5\" in the chat, or tap Entry.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
