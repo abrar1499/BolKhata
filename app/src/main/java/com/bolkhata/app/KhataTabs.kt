@@ -413,7 +413,8 @@ private fun LazyListScope.productionView(
         .map { (_, l) -> l.first().item.trim().ifBlank { "Other" } to l.sumOf { it.amount } }.sortedByDescending { it.second }
     item(key = "pdh") {
         LedgerHead("Cost of making", if (heads.size == 1) "1 head" else "${heads.size} heads",
-            listOf(LCol("Cost", fmt(cost), LKind.OUT)), heads.isEmpty(), WideColW)
+            // Never rounded below: the Made and Cost per unit rows always follow it.
+            listOf(LCol("Cost", fmt(cost), LKind.OUT)), false, WideColW)
     }
     items(heads, key = { "pd" + it.first.lowercase() }) { (n, v) ->
         GridRow(n, if (cost > 0) "${Math.round(v / cost * 100)}% of the cost" else "", listOf(GCell(fmt(v), LKind.OUT)), WideColW, false) {}
@@ -427,7 +428,7 @@ private fun LazyListScope.productionView(
         GridRow("Cost per unit", if (made > 0 && perUnit < 100) "Per 1000: " + money(currency, perUnit * 1000) else "",
             listOf(GCell(if (made > 0) fmt(perUnit) else "—", LKind.OUT)), WideColW, true) {}
     }
-    if (list.isEmpty()) emptyNote("No production costs yet. Say: \"koila 42 ton 420000\" or \"thapai 180000\"")
+    if (list.isEmpty()) emptyNote("No production costs yet. Tap Entry, or say \"coal 4200\" in the chat.")
     else ledger(
         if (month == ALL_MONTHS) "All" else monthLabel(months, month) ?: "All",
         listOf(LCol("Cost", fmt(cost), LKind.OUT)),
@@ -479,7 +480,7 @@ private fun LazyListScope.partiesView(accts: List<PersonAcct>, picked: List<Entr
             WideColW, p === shown.last(), card = true, onLong = khataMenu?.let { { it("party", p.name) } }
         ) { onOpen(p) }
     }
-    if (shown.isEmpty()) emptyNote("No parties yet. Say \"Hamid ko 500 diye\" in the chat.")
+    if (shown.isEmpty()) emptyNote("No parties yet. Say \"gave Hamid 500\" in the chat.")
 }
 
 /** Items in stock with quantity and value; tap one to record a sale or a purchase of it. */

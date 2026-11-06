@@ -469,7 +469,7 @@ object NativeChatEngine {
                 "I can't see entry number $n in the last list (it has ${rows.size}). Which one do you mean?") }
             pointing.containsMatchIn(rest) && rest.none { it.isDigit() } ->
                 if (rows.size > 1 && !has(tokens(rest), plural))
-                    return chat("Which one of the ${rows.size}? Say its number, e.g. \"2 no entry\", or say \"sab\".")
+                    return chat("Which one of the ${rows.size}? Say its number, e.g. \"number 2\", or say \"all\".")
                 else rows
             // "2000 aur 5000 wali entry": the shown rows with those amounts.
             else -> {
