@@ -105,7 +105,7 @@ private fun h(name: String, a: Long, b: Long, c: Long, light: Boolean) = HeaderT
 /** All themes the person can pick in Settings. The first one is the default. */
 val HEADER_THEMES = listOf(
     h("Red", 0xFFE3342F, 0xFFE3342F, 0xFFDC2F2A, false),
-    h("Clean", 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, true),
+    h("Clean", 0xFFF3F1EF, 0xFFF3F1EF, 0xFFF3F1EF, true),
     h("Sand", 0xFFFED7AA, 0xFFFDE7CC, 0xFFFFF5EA, true),
     h("Mint", 0xFFA7F3D0, 0xFFC6F6E0, 0xFFE3FBF1, true),
     h("Sky", 0xFFBAE6FD, 0xFFD6EFFE, 0xFFEEF8FF, true),
@@ -208,7 +208,7 @@ fun BolTheme(dark: Boolean, content: @Composable () -> Unit) {
         onPrimaryContainer = Color(0xFF065F46),
         secondaryContainer = Color(0xFFD1FAE5),
         onSecondaryContainer = Color(0xFF065F46),
-        background = Color.White,
+        background = Color(0xFFF3F1EF),
         onBackground = Color(0xFF0D0D0D),
         surface = Color.White,
         onSurface = Color(0xFF0D0D0D),
