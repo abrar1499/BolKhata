@@ -95,16 +95,21 @@ fun EntryForm(
     var qty by remember(initial.id) { mutableStateOf(if (initial.qty > 0) plain(initial.qty) else "") }
     var person by remember(initial.id) { mutableStateOf(initial.person) }
     var paid by remember(initial.id) { mutableStateOf(initial.paid) }
+    /** Work mode: what a worker earned (qty × rate) or a salary, owed to the party; no cash moves until paid. */
+    var work by remember(initial.id) { mutableStateOf(isWork(initial)) }
+    var salary by remember(initial.id) { mutableStateOf(isWork(initial) && initial.qty <= 0) }
+    var rate by remember(initial.id) { mutableStateOf(if (initial.rate > 0) plain(initial.rate) else "") }
     var date by remember(initial.id) { mutableLongStateOf(initial.date) }
     var note by remember(initial.id) { mutableStateOf(initial.note) }
     var showDate by remember { mutableStateOf(false) }
     var askDelete by remember { mutableStateOf(false) }
 
     val amountValue = amount.toDoubleOrNull()
-    val accent = when (out) { true -> RedSpend; false -> GreenIn; null -> MaterialTheme.colorScheme.primary }
+    val accent = if (work) OrangeOwe else when (out) { true -> RedSpend; false -> GreenIn; null -> MaterialTheme.colorScheme.primary }
 
     /** The entry's kind from Cash out / in and the party (see the class comment). */
     fun kind(o: Boolean): Type {
+        if (work) return Type.KHARCHA
         when (khata) {
             "stock" -> return if (o) Type.PURCHASE else Type.SALE
             "income", "expense" -> return if (o) Type.KHARCHA else Type.AAMDANI
@@ -116,6 +121,16 @@ fun EntryForm(
         return if (o) (if (bal < -0.005) Type.WAPIS_DIYA else Type.DIYA) else (if (bal > 0.005) Type.WAPIS_MILA else Type.LIYA)
     }
     val chosen = out?.let { kind(it) }
+
+    /** Amount = qty × rate whenever both are filled in. */
+    fun fillAmount() {
+        val q = qty.toDoubleOrNull() ?: 0.0
+        val r = rate.toDoubleOrNull() ?: 0.0
+        if (q > 0 && r > 0) amount = plain(Math.round(q * r * 100) / 100.0)
+    }
+    /** The rate last used for this party's work, so the next entry fills it in. */
+    fun lastRate(p: String) = all.filter { isWork(it) && it.rate > 0 && it.person.trim().equals(p.trim(), true) }
+        .maxByOrNull { it.date }?.rate
 
     Column(
         Modifier
@@ -147,8 +162,13 @@ fun EntryForm(
             Modifier.fillMaxWidth().height(38.dp).clip(RoundedCornerShape(12.dp))
                 .background(MaterialTheme.colorScheme.background).padding(3.dp)
         ) {
-            Seg("↑ Cash out", out == true, RedSpend, Modifier.weight(1f)) { out = true }
-            Seg("↓ Cash in", out == false, GreenIn, Modifier.weight(1f)) { out = false }
+            Seg("↑ Cash out", out == true && !work, RedSpend, Modifier.weight(1f)) { out = true; work = false }
+            Seg("↓ Cash in", out == false, GreenIn, Modifier.weight(1f)) { out = false; work = false }
+            Seg("Work", work, OrangeOwe, Modifier.weight(1f)) {
+                if (khata != null) item = ""
+                khata = null; pickCat = null; out = true; work = true
+                if (rate.isBlank() && person.isNotBlank()) lastRate(person)?.let { rate = plain(it); fillAmount() }
+            }
         }
 
         // Amount + date side by side
@@ -172,9 +192,22 @@ fun EntryForm(
             }
         }
 
+        if (work) {
+            // Work = quantity × rate (bricks made, pieces sewn); Salary = a fixed amount. Both go in the party's khata.
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Pill("Work", !salary, OrangeOwe) { salary = false }
+                Pill("Salary", salary, OrangeOwe) { salary = true }
+            }
+            if (!salary) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Field(item, { item = it }, "Step (optional)", Modifier.weight(1f))
+                Field(qty, { v -> qty = v.filter { it.isDigit() || it == '.' }; fillAmount() }, "Qty", Modifier.width(80.dp), numeric = true)
+                Field(rate, { v -> rate = v.filter { it.isDigit() || it == '.' }; fillAmount() }, "Rate", Modifier.width(72.dp), numeric = true)
+            }
+        }
+
         Field(note, { note = it }, "Note (what for?)", Modifier.fillMaxWidth())
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (!work) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Field(item, { item = it }, "Goods (optional)", Modifier.weight(1f))
             Field(qty, { v -> qty = v.filter { it.isDigit() || it == '.' } }, "Qty", Modifier.width(72.dp), numeric = true)
         }
@@ -188,7 +221,7 @@ fun EntryForm(
         }
         Box {
             Field(
-                shown, { person = it }, "Khata (optional) · party, business, income, expense",
+                shown, { person = it }, if (work) "Party · who did the work" else "Khata (optional) · party, business, income, expense",
                 Modifier.fillMaxWidth(), readOnly = true
             ) {
                 if (shown.isNotBlank()) IconButton(onClick = { person = ""; if (khata != null) item = ""; khata = null; pickCat = null }, modifier = Modifier.size(36.dp)) {
@@ -202,11 +235,25 @@ fun EntryForm(
         if (picking) PartyPicker(
             people, "", "Select khata",
             confirm = { creating -> if (creating) "Create & select" else "Select" },
-            onPick = { person = it; khata = null; pickCat = null; picking = false }, onDismiss = { picking = false },
-            categories = expenseCats, onCategory = { pickCat = it; khata = "expense"; person = ""; out = true; picking = false },
-            stockNames = stockNames, onStock = { item = it; khata = "stock"; person = ""; picking = false },
-            incomeNames = incomeNames, onIncome = { item = it; khata = "income"; person = ""; out = false; picking = false }
+            onPick = {
+                person = it; khata = null; pickCat = null; picking = false
+                if (work) lastRate(it)?.let { r -> rate = plain(r); fillAmount() }
+            }, onDismiss = { picking = false },
+            categories = expenseCats, onCategory = { pickCat = it; khata = "expense"; person = ""; out = true; work = false; picking = false },
+            stockNames = stockNames, onStock = { item = it; khata = "stock"; person = ""; work = false; picking = false },
+            incomeNames = incomeNames, onIncome = { item = it; khata = "income"; person = ""; out = false; work = false; picking = false }
         )
+        if (work) {
+            val sum = amountValue ?: 0.0
+            val who = person.trim().ifBlank { "the party" }
+            val q = qty.toDoubleOrNull() ?: 0.0
+            val r = rate.toDoubleOrNull() ?: 0.0
+            Text(
+                (if (!salary && q > 0 && r > 0) "${fmt(q)} × ${plain(r)} = " else "") +
+                    "${fmt(sum)} owed to $who. It counts in Production cost; paying them is a Cash out to $who.",
+                fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
         if (chosen != null && isTrade(chosen) && person.isNotBlank()) {
             // On credit: the amount goes in To pay / To receive. Paid: settled in cash, khata unchanged.
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -240,6 +287,7 @@ fun EntryForm(
                         val guess = Parser.guessCategory((item + " " + note).trim())
                         val cat = pickCat ?: kept ?: guess?.first ?: Cat.OTHER
                         val finalCat = when {
+                            work -> Cat.PRODUCTION
                             t == Type.SALE -> Cat.SALES
                             t == Type.PURCHASE -> Cat.STOCK
                             isLoan(t) -> Cat.UDHAAR
@@ -249,6 +297,8 @@ fun EntryForm(
                             else -> cat
                         }
                         val finalItem = when {
+                            work && salary -> "Salary"
+                            work -> item.trim().ifBlank { "Work" }
                             isLoan(t) -> item.trim().ifBlank { "Loans" }
                             isTransfer(t) -> item.trim().ifBlank { "Transfer" }
                             isTrade(t) -> item.trim().ifBlank { if (t == Type.SALE) "Sale" else "Purchase" }
@@ -262,19 +312,21 @@ fun EntryForm(
                                 amount = amountValue ?: 0.0,
                                 category = finalCat,
                                 item = finalItem,
-                                qty = qty.toDoubleOrNull() ?: 0.0,
-                                person = if (isLoan(t) || isTrade(t) || isTransfer(t)) person.trim() else "",
+                                qty = if (work && salary) 0.0 else qty.toDoubleOrNull() ?: 0.0,
+                                rate = if (work) (if (salary) 0.0 else rate.toDoubleOrNull() ?: 0.0) else initial.rate,
+                                person = if (work || isLoan(t) || isTrade(t) || isTransfer(t)) person.trim() else "",
                                 paid = isTrade(t) && person.isNotBlank() && paid,
+                                credit = work,
                                 // A new "nashta" today after 9 AM is put at 7 AM, and so on (see Parser.partOfDayTime).
                                 date = if (initial.amount == 0.0 && date == initial.date)
                                     Parser.partOfDayTime(date, Parser.dayPartHour("$note $item"), System.currentTimeMillis()) else date,
-                                note = note.trim().ifBlank { finalItem }
+                                note = note.trim().ifBlank { if (work && finalItem != "Work" && !salary) "Work · $finalItem" else finalItem }
                             )
                         )
                     }
                 },
                 enabled = chosen != null && amountValue != null && amountValue > 0 &&
-                    (!isLoan(chosen) || person.isNotBlank()),
+                    (!isLoan(chosen) || person.isNotBlank()) && (!work || (person.isNotBlank() && khata == null)),
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = accent),
                 modifier = Modifier.weight(1f).height(44.dp)

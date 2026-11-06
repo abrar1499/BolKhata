@@ -68,6 +68,8 @@ data class Entry(
     val rate: Double = 0.0,
     /** Sale or purchase with a person that was settled in cash, so it does not go in the khata. */
     val paid: Boolean = false,
+    /** Work or salary owed to [person]: an expense that goes in their khata, no cash moved yet (see [isWork]). */
+    val credit: Boolean = false,
     /** Stable hash of a structured bank alert, used to prevent the same notification being saved twice. */
     val sourceFingerprint: String = ""
 )
@@ -394,6 +396,7 @@ class Store(context: Context) {
                         unit = o.optString("unit", ""),
                         rate = o.optDouble("rate", 0.0).let { if (it.isNaN()) 0.0 else it },
                         paid = o.optBoolean("paid", false),
+                        credit = o.optBoolean("credit", false),
                         sourceFingerprint = o.optString("sourceFingerprint", "")
                     )
                 } catch (e: Exception) {
@@ -506,6 +509,7 @@ class Store(context: Context) {
                     .put("unit", e.unit)
                     .put("rate", e.rate)
                     .put("paid", e.paid)
+                    .put("credit", e.credit)
                     .put("sourceFingerprint", e.sourceFingerprint)
             )
         }

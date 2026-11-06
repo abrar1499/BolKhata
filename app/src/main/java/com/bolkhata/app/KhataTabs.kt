@@ -87,7 +87,8 @@ internal fun glassBand(): Modifier {
 
 /** Money that left your hand. A sale or purchase on credit with a party moves no cash. */
 fun cashOut(e: Entry) = when (e.type) {
-    Type.KHARCHA, Type.DIYA, Type.WAPIS_DIYA, Type.TRANSFER_OUT -> true
+    Type.KHARCHA -> !isWork(e)
+    Type.DIYA, Type.WAPIS_DIYA, Type.TRANSFER_OUT -> true
     Type.PURCHASE -> e.paid || e.person.isBlank()
     else -> false
 }
@@ -475,7 +476,8 @@ private fun LazyListScope.partiesView(accts: List<PersonAcct>, picked: List<Entr
         val bal = p.balance
         val khataMenu = LocalKhataMenu.current
         GridRow(
-            p.name, p.history.lastOrNull()?.let { "Last " + lastSeen(it.first.date) } ?: "",
+            p.name, listOfNotNull(partyRole(p.history.map { it.first }).ifBlank { null },
+                p.history.lastOrNull()?.let { "Last " + lastSeen(it.first.date) }).joinToString(" · "),
             listOf(GCell(if (bal < -0.005) signed(LKind.OUT, -bal) else "", LKind.OUT), GCell(if (bal > 0.005) signed(LKind.IN, bal) else "", LKind.IN)),
             WideColW, p === shown.last(), card = true, onLong = khataMenu?.let { { it("party", p.name) } }
         ) { onOpen(p) }
@@ -928,7 +930,8 @@ fun PartyKhataScreen(
                 ),
                 list.map { (e, _) ->
                     val out = personHistoryIsOutflow(e)
-                    val note = e.item.takeIf { it != "Loans" && !it.equals(e.note, true) } ?: ""
+                    val note = if (isWork(e) && e.qty > 0 && e.rate > 0) "${plain(e.qty)} × ${plain(e.rate)}"
+                        else e.item.takeIf { it != "Loans" && !it.equals(e.note, true) } ?: ""
                     LRow(e.id, e.date, e.note.ifBlank { if (out) "Cash given" else "Cash received" }, note,
                         listOf(if (out) e.amount else 0.0, if (!out) e.amount else 0.0)) { onEdit(e) }
                 }

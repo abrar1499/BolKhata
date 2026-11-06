@@ -87,6 +87,7 @@ class PersonAcct(
 fun personEffect(e: Entry): Double = when (e.type) {
     Type.DIYA, Type.WAPIS_DIYA, Type.SALE, Type.TRANSFER_OUT -> e.amount
     Type.LIYA, Type.WAPIS_MILA, Type.PURCHASE, Type.TRANSFER_IN -> -e.amount
+    Type.KHARCHA -> if (isWork(e)) -e.amount else 0.0
     else -> 0.0
 }
 
@@ -180,11 +181,11 @@ fun movedTo(e: Entry, all: List<Entry>, cat: Cat?, income: Boolean, person: Stri
             .firstOrNull { it.name.equals(p, true) }?.balance ?: 0.0
         val type = if (isOutflow(e)) (if (bal < -0.005) Type.WAPIS_DIYA else Type.DIYA)
         else (if (bal > 0.005) Type.WAPIS_MILA else Type.LIYA)
-        return e.copy(type = type, person = p, category = Cat.UDHAAR, item = "Loans", paid = false)
+        return e.copy(type = type, person = p, category = Cat.UDHAAR, item = "Loans", paid = false, credit = false)
     }
     val c = cat ?: Cat.OTHER
     val item = if (e.item.isBlank() || e.item == "Loans") c.label else e.item
-    return e.copy(type = if (income) Type.AAMDANI else Type.KHARCHA, category = c, person = "", item = item, paid = false)
+    return e.copy(type = if (income) Type.AAMDANI else Type.KHARCHA, category = c, person = "", item = item, paid = false, credit = false)
 }
 
 /** Strip common bank-transfer metadata from names shown in the Move Entry picker. */
