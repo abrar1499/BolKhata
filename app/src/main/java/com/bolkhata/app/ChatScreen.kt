@@ -169,8 +169,8 @@ fun ChatScreen(
                             // After a total, the likely next questions as chips.
                             val hero = remember(message.text, currency) { Report.parse(message.text, currency)?.hero?.label.orEmpty() }
                             val asks = when {
-                                hero.startsWith("Spent") -> listOf("Detail dikhao", "Income kya thi?", "Kahan kahan laga?")
-                                hero.startsWith("Income") -> listOf("Detail dikhao", "Kharcha kitna tha?")
+                                hero.startsWith("Spent") -> listOf("Details", "Income?", "By category")
+                                hero.startsWith("Income") -> listOf("Details", "Spending?")
                                 else -> emptyList()
                             }
                             if (names.isEmpty() && asks.isNotEmpty()) FollowChips(asks, onSend)

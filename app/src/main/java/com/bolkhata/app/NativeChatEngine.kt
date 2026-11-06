@@ -948,7 +948,7 @@ object NativeChatEngine {
         val ask = setOf("kahan", "kahaan", "kahn", "kidhar", "where", "breakdown", "category", "categories", "categorywise")
         val filler = ask + setOf("kis", "cheez", "chez", "cheezon", "par", "pe", "laga", "lage", "lagi", "gaya", "gaye", "gya",
             "hua", "huwa", "hue", "kharch", "kharcha", "spent", "went", "did", "it", "go", "money", "paisa", "pese", "paise",
-            "wise", "wo", "ye", "batao", "btao", "dikhao", "kya", "the", "tha", "thi", "me", "mein", "aur", "or", "sab")
+            "wise", "wo", "ye", "batao", "btao", "dikhao", "kya", "the", "tha", "thi", "me", "mein", "aur", "or", "sab", "by", "show")
         return w.isNotEmpty() && w.size <= 7 && has(w, ask + "kis") && w.all { it in filler }
     }
 
