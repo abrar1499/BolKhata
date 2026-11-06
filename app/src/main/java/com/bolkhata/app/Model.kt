@@ -35,6 +35,8 @@ enum class Cat(val label: String, val icon: String) {
     ASSETS("Assets", "🏷️"),
     SALES("Sales", "🧾"),
     STOCK("Purchases", "📦"),
+    /** What it costs to make goods (a brick kiln, a factory, a bakery): labour, fuel, raw material… */
+    PRODUCTION("Production", "🏭"),
     OTHER("Other", "📝")
 }
 
@@ -168,6 +170,10 @@ class Store(context: Context) {
         set(v) = prefs.edit().putString("business", v).apply()
 
     private fun scoped(key: String, id: String = business) = if (id.isEmpty()) key else "$key@$id"
+
+    /** How many units were made in a month (Production), for this business; 0 when not said. */
+    fun made(month: Int): Double = prefs.getString(scoped("made:$month"), null)?.toDoubleOrNull() ?: 0.0
+    fun setMade(month: Int, qty: Double) = prefs.edit().putString(scoped("made:$month"), qty.toString()).apply()
 
     private fun businessNames(): JSONObject = try {
         JSONObject(prefs.getString("businessNames", "{}") ?: "{}")
@@ -465,6 +471,9 @@ class Store(context: Context) {
     }
 
     fun save(list: List<Entry>) = write(scoped("entries"), list)
+
+    /** Saves the entries of another business (an entry said for it while this one is open). */
+    fun saveFor(id: String, list: List<Entry>) = write(scoped("entries", id), list)
 
     /** Saving happens on one background thread, in order, so the screen never waits for it. */
     private val saver = java.util.concurrent.Executors.newSingleThreadExecutor()

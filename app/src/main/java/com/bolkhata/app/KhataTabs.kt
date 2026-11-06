@@ -17,7 +17,6 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -275,19 +274,22 @@ private fun lastSeen(ms: Long) = if (sameDay(ms, System.currentTimeMillis())) "T
 
 // ---------------------------------------------------------------- Business: Parties, Stock, Sale, Purchase, Profit
 
-private val BusinessViews = listOf("Parties", "Stock", "Sale", "Purchase", "Profit")
+private val BusinessViews = listOf("Parties", "Stock", "Sale", "Purchase", "Profit", "Production")
+/** The order the chips show in: Production sits before Profit. */
+private val ViewOrder = listOf(0, 1, 2, 3, 5, 4)
 
 /** The entries a Business view is about, newest first; their months make that view's month chips. */
 internal fun aboutView(view: Int, newest: List<Entry>) = when (view) {
     0 -> newest.filter { it.person.isNotBlank() }
     1 -> newest.filter { (it.type == Type.SALE || it.type == Type.PURCHASE) && it.item.isNotBlank() }
     2, 4 -> newest.filter { it.type == Type.SALE }
-    else -> newest.filter { it.type == Type.PURCHASE }
+    3 -> newest.filter { it.type == Type.PURCHASE }
+    else -> newest.filter { it.type == Type.KHARCHA && it.category == Cat.PRODUCTION }
 }
 
-/** Sale and Purchase open on their newest month like the Cash book; the other views on All. */
+/** Sale, Purchase and Production open on their newest month like the Cash book; the other views on All. */
 private fun firstMonth(view: Int, newest: List<Entry>) =
-    if (view == 2 || view == 3) monthsOf(aboutView(view, newest)).firstOrNull()?.first ?: ALL_MONTHS else ALL_MONTHS
+    if (view == 2 || view == 3 || view == 5) monthsOf(aboutView(view, newest)).firstOrNull()?.first ?: ALL_MONTHS else ALL_MONTHS
 
 private fun yearOf(ms: Long) = cal(ms).get(Calendar.YEAR)
 
@@ -303,7 +305,9 @@ internal fun plusMinus(v: Double) = (if (v > 0.005) "+" else if (v < -0.005) "�
 @Composable
 fun PartiesScreen(
     entries: List<Entry>, currency: String, onMenu: () -> Unit, business: String, onBusiness: () -> Unit,
-    onOpen: (PersonAcct) -> Unit, onReport: (ReportKind) -> Unit, onAdd: (Entry) -> Unit, onEdit: (Entry) -> Unit
+    onOpen: (PersonAcct) -> Unit, onReport: (ReportKind) -> Unit, onAdd: (Entry) -> Unit, onEdit: (Entry) -> Unit,
+    /** Units made in a month (Production) and saving it. */
+    made: (Int) -> Double = { 0.0 }, onSetMade: (Int, Double) -> Unit = { _, _ -> }
 ) {
     val newest = remember(entries) { entries.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt }) }
     var view by rememberSaveable { mutableIntStateOf(0) }
@@ -335,6 +339,7 @@ fun PartiesScreen(
                 if (view == 2) ReportKind.SALES else ReportKind.PURCHASES
             )
         }
+        5 -> Triple(Triple("", "", RedSpend), Triple("", "", GreenIn), ReportKind.CASH_OUT)
         else -> {
             val m = profitOf(entries, about.filter { monthKey(it.date) == monthKey(now) })
             val y = profitOf(entries, about.filter { yearOf(it.date) == yearOf(now) })
@@ -344,16 +349,28 @@ fun PartiesScreen(
             )
         }
     } }
+    // Production: what the picked month (or every month, on All) cost, how many were made, and the cost of one.
+    var madeTick by remember { mutableIntStateOf(0) }
+    var askMade by remember { mutableStateOf(false) }
+    val madeQty = remember(view, pick, months, madeTick) {
+        if (view != 5) 0.0 else if (pick == ALL_MONTHS) months.sumOf { made(it.first) } else made(pick)
+    }
+    val prodCost = if (view == 5) picked.sumOf { it.amount } else 0.0
+    val perUnit = if (madeQty > 0) prodCost / madeQty else 0.0
+    val shownCard = if (view != 5) card else Triple(
+        Triple(if (madeQty > 0) money(currency, perUnit) else "—", "Cost per unit", RedSpend),
+        Triple(if (madeQty > 0) fmt(madeQty) else "—", "Made", GreenIn), ReportKind.CASH_OUT
+    )
     val state = rememberLazyListState()
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
             stickyHeader { TabHead {
                 KhataTop("", "", onMenu, business = business, onBusiness = onBusiness) {
-                    SumCard(card.first, card.second, "Report ›") { onReport(card.third) }
+                    SumCard(shownCard.first, shownCard.second, "Report ›") { onReport(shownCard.third) }
                 }
-                SearchBox(q, when (view) { 0 -> "Search parties"; 1 -> "Search items"; 2 -> "Search sales"; 3 -> "Search purchases"; else -> "Search months" }) { q = it }
+                SearchBox(q, when (view) { 0 -> "Search parties"; 1 -> "Search items"; 2 -> "Search sales"; 3 -> "Search purchases"; 5 -> "Search costs"; else -> "Search months" }) { q = it }
                 LazyRow(contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    itemsIndexed(BusinessViews) { i, t -> SmallChip(t, view == i) { view = i; month = firstMonth(i, newest); q = "" } }
+                    items(ViewOrder) { i -> SmallChip(BusinessViews[i], view == i) { view = i; month = firstMonth(i, newest); q = "" } }
                 }
                 if (months.isNotEmpty()) MonthChips(months, pick) { month = it }
             } }
@@ -361,6 +378,7 @@ fun PartiesScreen(
                 0 -> partiesView(accts, picked, pick, q, onOpen)
                 1 -> stockView(stock, picked, pick, q, onAdd)
                 2, 3 -> tradeView(view == 2, picked, months, pick, q, onEdit)
+                5 -> productionView(picked, months, pick, q, madeQty, prodCost, perUnit, currency, onEdit) { askMade = true }
                 else -> profitView(entries, about, months, pick, q) { m -> view = 2; month = m; q = "" }
             }
         }
@@ -370,11 +388,69 @@ fun PartiesScreen(
                 when (view) {
                     0 -> template(Type.DIYA, "")
                     1, 3 -> template(Type.PURCHASE, "").copy(category = Cat.STOCK, item = "")
+                    5 -> template(Type.KHARCHA, "").copy(category = Cat.PRODUCTION, item = "")
                     else -> template(Type.SALE, "").copy(category = Cat.SALES, item = "")
                 }
             )
         }
     }
+    if (askMade) MadeDialog(madeQty.takeIf { pick != ALL_MONTHS }, onDismiss = { askMade = false }) { qty ->
+        val m = if (pick == ALL_MONTHS) monthKey(now) else pick
+        onSetMade(m, qty); madeTick++; askMade = false
+    }
+}
+
+/**
+ * Production for a month (or all months): each cost head (Moulding, Fuel, Labour… the entries' names) with its
+ * share, then how many were made and what one cost, then the entries themselves like the Cash book.
+ */
+private fun LazyListScope.productionView(
+    picked: List<Entry>, months: List<Pair<Int, Long>>, month: Int, q: String, made: Double, cost: Double, perUnit: Double,
+    currency: String, onEdit: (Entry) -> Unit, onMade: () -> Unit
+) {
+    val list = if (q.isBlank()) picked else picked.filter { matches(it, q) }
+    val heads = list.groupBy { it.item.trim().ifBlank { "Other" }.lowercase() }
+        .map { (_, l) -> l.first().item.trim().ifBlank { "Other" } to l.sumOf { it.amount } }.sortedByDescending { it.second }
+    item(key = "pdh") {
+        LedgerHead("Cost of making", if (heads.size == 1) "1 head" else "${heads.size} heads",
+            listOf(LCol("Cost", fmt(cost), LKind.OUT)), heads.isEmpty(), WideColW)
+    }
+    items(heads, key = { "pd" + it.first.lowercase() }) { (n, v) ->
+        GridRow(n, if (cost > 0) "${Math.round(v / cost * 100)}% of the cost" else "", listOf(GCell(fmt(v), LKind.OUT)), WideColW, false) {}
+    }
+    // How many were made (tap to say) and what one cost; per 1000 too, for bricks and other small things.
+    item(key = "pdm") {
+        GridRow("Made", if (made > 0) "Tap to change" else "Tap to say how many were made",
+            listOf(GCell(if (made > 0) fmt(made) else "—", LKind.PLAIN)), WideColW, false) { onMade() }
+    }
+    item(key = "pdu") {
+        GridRow("Cost per unit", if (made > 0 && perUnit < 100) "Per 1000: " + money(currency, perUnit * 1000) else "",
+            listOf(GCell(if (made > 0) fmt(perUnit) else "—", LKind.OUT)), WideColW, true) {}
+    }
+    if (list.isEmpty()) emptyNote("No production costs yet. Say: \"koila 42 ton 420000\" or \"thapai 180000\"")
+    else ledger(
+        if (month == ALL_MONTHS) "All" else monthLabel(months, month) ?: "All",
+        listOf(LCol("Cost", fmt(cost), LKind.OUT)),
+        list.map { e -> LRow(e.id, e.date, title(e), e.note, listOf(e.amount), e) { onEdit(e) } },
+        keyPrefix = "pde"
+    )
+}
+
+/** Asks how many units were made in the month. */
+@Composable
+private fun MadeDialog(current: Double?, onDismiss: () -> Unit, onSave: (Double) -> Unit) {
+    var text by remember { mutableStateOf(current?.takeIf { it > 0 }?.let { fmt(it).replace(",", "") } ?: "") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("How many were made?") },
+        text = {
+            OutlinedTextField(text, { t -> text = t.filter { it.isDigit() || it == '.' } }, singleLine = true,
+                label = { Text("Units made this month") },
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number))
+        },
+        confirmButton = { TextButton(onClick = { text.toDoubleOrNull()?.let(onSave) }) { Text("Save") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
 }
 
 /** Shown when a view has nothing to list. */
@@ -1076,11 +1152,23 @@ internal fun cashTemplate(income: Boolean): Entry =
 
 // ---------------------------------------------------------------- businesses
 
-/** Full-screen list of businesses: tick on the open one, ⋮ to rename or delete, and Add New Business. */
+/** This month's cash out and cash in of one book, for the book list. */
+internal fun monthCash(list: List<Entry>, now: Long = System.currentTimeMillis()): Pair<Double, Double> {
+    val m = monthKey(now)
+    val month = list.filter { monthKey(it.date) == m }
+    return month.filter(::cashOut).sumOf { it.amount } to month.filter(::cashIn).sumOf { it.amount }
+}
+
+/**
+ * Full-screen list of businesses: all books' cash this month on top, then each book with its own out / in,
+ * a tick on the open one, ⋮ to rename or delete, and Add New Business.
+ */
 @Composable
 fun BusinessPicker(
     list: List<Triple<String, String, Int>>, current: String, onBack: () -> Unit, onPick: (String) -> Unit,
-    onAdd: (String) -> Unit, onRename: (String, String) -> Unit, onDelete: (String) -> Unit
+    onAdd: (String) -> Unit, onRename: (String, String) -> Unit, onDelete: (String) -> Unit,
+    /** Book id to (cash out, cash in) this month. */
+    totals: Map<String, Pair<Double, Double>> = emptyMap(), currency: String = ""
 ) {
     var naming by remember { mutableStateOf<Pair<String?, String>?>(null) }   // (id or null for new, text)
     var deleting by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -1092,6 +1180,17 @@ fun BusinessPicker(
                     Text("Select Business", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
                 }
                 LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(top = 10.dp)) {
+                    // Every book together this month, so the kiln, the home and personal spending add up in one place.
+                    if (list.size > 1 && totals.isNotEmpty()) item(key = "all") {
+                        val out = totals.values.sumOf { it.first }
+                        val inn = totals.values.sumOf { it.second }
+                        Column(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 10.dp)) {
+                            Text("All books · this month", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(start = 4.dp, bottom = 6.dp))
+                            SumCard(Triple(money(currency, out), "Out", RedSpend), Triple(money(currency, inn), "In", GreenIn),
+                                plusMinus(inn - out)) {}
+                        }
+                    }
                     items(list, key = { it.first }) { (id, name, parties) ->
                         var more by remember { mutableStateOf(false) }
                         Row(
@@ -1103,7 +1202,12 @@ fun BusinessPicker(
                             Spacer(Modifier.width(14.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(if (parties == 1) "1 party" else "$parties parties", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                val t = totals[id]
+                                Text(
+                                    (if (parties == 1) "1 party" else "$parties parties") +
+                                        (if (t != null && (t.first > 0 || t.second > 0)) " · this month −" + fmt(t.first) + " / +" + fmt(t.second) else ""),
+                                    fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis
+                                )
                             }
                             if (id == current) Icon(Icons.Filled.Check, contentDescription = "Open", tint = Ember)
                             Box {

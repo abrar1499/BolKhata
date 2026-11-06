@@ -781,3 +781,34 @@ class NativeChatEngineMoveCategoryTest {
         assertEquals(setOf("m1", "m2"), r2.filter.ids)
     }
 }
+
+class ParserCashWordTest {
+    @Test fun cashLearnedByMistakeNeverMakesAPaymentAnExpense() {
+        val before = Parser.learned
+        val people = Parser.knownPeople
+        try {
+            Parser.learned = mapOf("cash" to (Cat.TRANSPORT to "Brake shoe"), "lakh" to (Cat.TRANSPORT to "Brake shoe"))
+            Parser.knownPeople = setOf("ashraf")
+            for (t in listOf("ashraf ne 100000 cash diya", "ashraf ne 1 lakh cash diya")) {
+                val e = (Parser.parse(t).entries + Parser.parse(t).unclear).single()
+                assertEquals(t, 100000.0, e.amount, 0.001)
+                assertEquals(t, "Ashraf", e.person)
+                assertTrue(t, e.type == Type.LIYA || e.type == Type.WAPIS_MILA)
+            }
+        } finally {
+            Parser.learned = before
+            Parser.knownPeople = people
+        }
+    }
+}
+
+class ParserProductionTest {
+    @Test fun kilnCostsGoToProductionUnderTheirStep() {
+        for ((t, item) in listOf("koila 42 ton 420000" to "Fuel", "thapai 180000" to "Moulding", "bharai 60000" to "Loading", "nikasi 45000" to "Unloading")) {
+            val e = (Parser.parse(t).entries + Parser.parse(t).unclear).single()
+            assertEquals(t, Cat.PRODUCTION, e.category)
+            assertEquals(t, item, e.item)
+            assertEquals(t, Type.KHARCHA, e.type)
+        }
+    }
+}
