@@ -589,7 +589,7 @@ fun Avatar(name: String) {
 
 // ======================= REPORTS =======================
 
-enum class Span(val label: String) { WEEK("Weekly"), MONTH("Monthly"), YEAR("Yearly") }
+enum class Span(val label: String) { WEEK("Weekly"), MONTH("Monthly"), YEAR("Yearly"), ALL("All time") }
 
 private fun spanRange(span: Span, offset: Int): Triple<Long, Long, String> {
     val c = Calendar.getInstance()
@@ -598,6 +598,7 @@ private fun spanRange(span: Span, offset: Int): Triple<Long, Long, String> {
     c.set(Calendar.SECOND, 0)
     c.set(Calendar.MILLISECOND, 0)
     return when (span) {
+        Span.ALL -> Triple(0L, Long.MAX_VALUE, "All time")
         Span.WEEK -> {
             val back = (c.get(Calendar.DAY_OF_WEEK) - Calendar.SUNDAY + 7) % 7
             c.add(Calendar.DAY_OF_YEAR, -back)
@@ -961,6 +962,7 @@ private fun reportData(entries: List<Entry>, span: Span, offset: Int): ReportDat
             Span.MONTH -> d.get(Calendar.YEAR) == startDay.get(Calendar.YEAR) && d.get(Calendar.MONTH) == startDay.get(Calendar.MONTH)
             Span.YEAR -> d.get(Calendar.YEAR) == startDay.get(Calendar.YEAR)
             Span.WEEK -> e.date >= start && e.date < end
+            Span.ALL -> true
         }
     }
     val cashInEntries = inRange.filter { it.isCashInFlow() }
@@ -1076,7 +1078,8 @@ fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit, st
                 }
             }
         }
-        item {
+        // All time has no earlier or later period to step to.
+        if (span != Span.ALL) item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { offset-- }, Modifier.size(32.dp)) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous") }
                 Text(label, Modifier.weight(1f), fontWeight = FontWeight.SemiBold, fontSize = 13.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
