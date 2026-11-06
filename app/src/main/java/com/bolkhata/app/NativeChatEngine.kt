@@ -600,8 +600,8 @@ object NativeChatEngine {
                 java.text.SimpleDateFormat("h:mm a", Locale.ENGLISH).format(java.util.Date(now))
             has(w, setOf("hal", "haal", "kaise", "kaisa", "kaisi")) || (has(w, setOf("kya", "kia")) && has(w, setOf("hal", "haal"))) ->
                 "Theek, aap batao?"
-            has(w, setOf("how", "are", "you")) -> "Theek, aap batao?"
-            has(w, setOf("what", "can", "you", "do")) -> say("Add entries, totals, search, edit and move khatas.", "Entry likhna, hisaab, search, edit aur khata move.")
+            "how" in w && has(w, setOf("are", "r")) && has(w, setOf("you", "u")) -> "Theek, aap batao?"
+            w.containsAll(listOf("what", "can", "do")) -> say("Add entries, totals, search, edit and move khatas.", "Entry likhna, hisaab, search, edit aur khata move.")
             has(w, setOf("thanks", "thank", "shukriya", "shukria", "jazakallah")) -> say("You're welcome!", "Koi baat nahi!")
             has(w, setOf("bye", "goodbye", "allahhafiz", "khuda")) -> say("Bye!", "Allah Hafiz!")
             has(w, setOf("help", "commands", "examples", "madad")) ->
