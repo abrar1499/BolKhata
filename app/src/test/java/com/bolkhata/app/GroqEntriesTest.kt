@@ -60,8 +60,11 @@ class GroqEntriesTest {
             Entry("b", Type.KHARCHA, 30.0, Cat.TRANSPORT, "Petrol", "", "", now, now)
         )
         val text = Query.answer(e, "report", Query.Filter(), "SAR")
-        assertEquals(true, text.startsWith("Spent: 100 SAR"))
-        assertEquals(true, text.indexOf("Food 70 SAR") < text.indexOf("Transport 30 SAR"))
+        assertEquals(true, text.startsWith("Spent 100 SAR"))
+        assertEquals(true, text.contains("\nFood · 1 · 70% · 70 SAR"))
+        assertEquals(true, text.indexOf("Food ·") < text.indexOf("Transport ·"))
+        // Each detail line is a card row: name, note, amount.
+        assertEquals(true, Report.parse(text, "SAR")!!.rows.any { it.title == "Food" && it.sub == "1 · 70%" })
     }
 
     @Test fun aLoanWithoutAPersonIsRefused() {
