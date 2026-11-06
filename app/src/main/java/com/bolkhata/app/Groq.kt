@@ -39,7 +39,7 @@ object Groq {
         .joinToString(", ") { it.label }
 
     private val instructions = """
-        You are the brain of a khata (ledger and expense) app. People type or speak Roman Urdu, Urdu or Hindi script,
+        Today is TODAY. You are the brain of a khata (ledger and expense) app. People type or speak Roman Urdu, Urdu or Hindi script,
         or English, often misspelled. Read every message and reply with JSON only: {"command": ..., "reply": ...}.
         - If it is about their money or the app's data (add, show, search, count, total, balance, report, cashbook,
           a khata, edit, move, rename, delete, undo), put ONE short clear message for the app in "command". A
@@ -50,8 +50,10 @@ object Groq {
           diye", "is mahine food kitna", "19 aug se aaj tak expense", "Ali ka khata", "cashbook", "expense report",
           "last 5 entries", "2800 wali entry", "petrol 50 nahi 40 tha", "other me kitni entries". Keep every number
           exactly and use the matching saved name. Leave "reply" empty: the app answers from its own records.
-        - Otherwise (greeting, general question, help, advice), leave "command" empty and answer in "reply" in 1 to 3
-          short lines, in the language they used. You cannot see their records: never state their amounts or totals.
+        - A greeting ("hi", "salam") is never a follow-up: leave "command" empty and greet back.
+        - Otherwise (greeting, general question, help, advice), leave "command" empty and answer in "reply" in ONE
+          short sentence (at most 15 words), as short as a friend would say it: "kya hal hai" → "Theek, aap batao?". Reply in the message's language: English gets English, Roman Urdu gets
+          Roman Urdu. You cannot see their records: never state their amounts or totals.
         - Any question about how much, totals, spending, income, balance or a day/month ("aaj tak kitna expense",
           "kal kitna huwa") is ALWAYS a "command", never a reply.
         - When the message records NEW money (one or more entries, e.g. "chai 50 aur petrol 60", "Ali ko 500 diye",
@@ -65,9 +67,11 @@ object Groq {
           {"mode": "sum" | "list" | "count" | "report" | "highest", "types": [any of expense, income, lent,
           borrowed, received_back, paid_back, sale, purchase], "categories": [category names], "persons": [saved
           names], "items": [words to search in entries, only real item words], "from": "YYYY-MM-DD" or "",
-          "to": "YYYY-MM-DD" or "", "last": number of latest entries or 0}. "report" is where the money went (by
+          "to": "YYYY-MM-DD" or "", "last": number of latest entries or 0, "exclude_categories": [category names
+          to leave out, e.g. "es me fees aur sent home nikal ke batao" keeps the previous query and leaves those out]}. "report" is where the money went (by
           category, e.g. "kahan kahan laga"); "list" shows the entries ("detail", "dikhao"); "sum" is a total.
-          "aaj tak"/"ab tak" with no start means no dates. A follow-up keeps the period and filters of the
+          Always fill from/to for a period: "is mahine" is the 1st of this month to today, "aaj" is today, "kal"
+          is yesterday, "pichle mahine" is that whole month. "aaj tak"/"ab tak" with no start means no dates. A follow-up keeps the period and filters of the
           conversation. For anything else "query" is null.
     """.trimIndent()
 
@@ -101,10 +105,12 @@ object Groq {
             if (end) d + 86_400_000L - 1 else d
         }.getOrNull()
         val types = strings("types").mapNotNull { QUERY_TYPES[it.lowercase()] }.toSet()
-        val cats = strings("categories").mapNotNull { n -> Cat.entries.firstOrNull { it.label.equals(n, true) } }.toSet()
+        fun cats(key: String) = strings(key).mapNotNull { n -> Cat.entries.firstOrNull { it.label.equals(n, true) } }.toSet()
+        val cats = cats("categories")
         return mode to Query.Filter(
             from = day("from", false), to = day("to", true), types = types, persons = strings("persons"),
-            cats = cats, items = strings("items").map { it.lowercase() }, last = o.optInt("last", 0).coerceIn(0, 100)
+            cats = cats, items = strings("items").map { it.lowercase() }, last = o.optInt("last", 0).coerceIn(0, 100),
+            notCats = cats("exclude_categories")
         )
     }
 
@@ -301,7 +307,8 @@ object Groq {
         to its own commands, so answer it yourself: general questions, how to use the app, advice, small talk.
         You cannot see their saved entries: never state or guess their amounts, balances or totals. If they ask
         about their own money, say in one line how to ask the app, e.g. "is mahine ka kharcha", "Ali ka khata".
-        Answer in 1 to 3 short lines, in the language they used (Roman Urdu for Urdu or Hindi, else English).
+        Answer in ONE short sentence (at most 15 words), in the message's language: English gets English, Roman Urdu
+        or Hindi gets Roman Urdu.
     """.trimIndent()
 
     /** Groq's own short answer to a message the app's engine did not understand. Null when Groq is unreachable. */

@@ -1233,7 +1233,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 var read = roman
                 // What Groq understood the question to be, run straight on the saved records (no second reading).
                 var groqAsk: NativeChatEngine.Fixed? = null
-                if (groqKey.isNotBlank()) {
+                if (groqKey.isNotBlank() && !NativeChatEngine.isSmallTalk(roman)) {
                     val names = Understand.similarNames(roman.split(Regex("""\s+""")), contactNames())
                     // The last few turns, so a follow-up ("detail dikhao", "sirf food") is read in context.
                     val recent = history.takeLast(6).joinToString("\n") { (if (it.isUser) "Person: " else "App: ") + it.text.take(160) }
@@ -1265,7 +1265,16 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         }
                     }
                 }
-                val intent = groqAsk ?: offMain { NativeChatEngine.interpret(read, scoped, names0, wordFixes, history, currency = currency) }
+                val local = offMain { NativeChatEngine.interpret(read, scoped, names0, wordFixes, history, currency = currency) }
+                // Groq's lookup, with the app's own reading of the period when Groq left the dates out ("is mahine ka").
+                val intent = groqAsk?.let { g ->
+                    val f = g.filter
+                    if (f.from != null || f.to != null || local.filter.from == null) g
+                    else NativeChatEngine.Fixed(g.text, g.kind, g.reply, g.what, Query.Filter(
+                        local.filter.from, local.filter.to, f.types, f.persons, f.cats, f.items, f.min, f.max, f.last,
+                        f.noPeople, f.notItems, f.ids, f.createdFrom, f.createdTo, f.notCats
+                    ))
+                } ?: local
                 if (intent.kind in setOf("delete", "clear_all", "change", "to_khata", "paid_by", "reread", "undo")) {
                     val actionSnapshot = entries
                     chatWatch = actionSnapshot

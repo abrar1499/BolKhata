@@ -44,6 +44,16 @@ class GroqEntriesTest {
         assertNull(Groq.queryFrom(org.json.JSONObject("""{"mode":"delete"}""")))
     }
 
+    @Test fun leftOutCategoriesAreNotCounted() {
+        val e = listOf(
+            Entry("a", Type.KHARCHA, 70.0, Cat.KHANA, "Chai", "", "", now, now),
+            Entry("b", Type.KHARCHA, 400.0, Cat.FEES, "Iqama fee", "", "", now, now)
+        )
+        val (_, f) = Groq.queryFrom(org.json.JSONObject("""{"mode":"report","types":["expense"],"exclude_categories":["Fees & Govt"]}"""))!!
+        assertEquals(listOf("a"), Query.select(e, f).map { it.id })
+        assertEquals(true, NativeChatEngine.isSmallTalk("hi"))
+    }
+
     @Test fun aReportShowsSpendingByCategory() {
         val e = listOf(
             Entry("a", Type.KHARCHA, 70.0, Cat.KHANA, "Chai", "", "", now, now),
