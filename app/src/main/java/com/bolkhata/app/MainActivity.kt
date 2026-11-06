@@ -348,16 +348,16 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         val to = newName.trim()
         if (from.isEmpty() || to.isEmpty() || from.equals(to, ignoreCase = true)) return
         val source = entries.filter { it.person.equals(from, ignoreCase = true) }
-        if (source.isEmpty()) { toast("Source khata not found"); return }
+        if (source.isEmpty()) { toast("Source account not found"); return }
         val targetExists = entries.any { it.person.equals(to, ignoreCase = true) }
-        if (merge && !targetExists) { toast("Choose an existing destination khata"); return }
-        if (!merge && targetExists) { toast("Khata exists. Use Move / merge."); return }
+        if (merge && !targetExists) { toast("Choose an existing destination account"); return }
+        if (!merge && targetExists) { toast("Account exists. Use Move / merge."); return }
         val after = entries.map { if (it.person.equals(from, ignoreCase = true)) it.copy(person = to) else it }
         val record = store.recordMove(entries, after) ?: return
         save(after)
         scope.launch {
             val response = snackbar.showSnackbar(
-                if (merge) "Merged ${source.size} entries into $to" else "Renamed khata to $to",
+                if (merge) "Merged ${source.size} entries into $to" else "Renamed account to $to",
                 actionLabel = "Undo", duration = SnackbarDuration.Long
             )
             if (response == SnackbarResult.ActionPerformed) {
@@ -801,7 +801,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             else account?.takeIf { it.main == PEOPLE }?.sub
         activePerson?.let { p ->
             val list = entries.filter { it.person.equals(p, true) }
-            return "$p's khata (${list.size} records)" to list
+            return "$p's account (${list.size} records)" to list
         }
         results?.let { (q, _) ->
             val person = entries.map { it.person.trim() }.firstOrNull { it.isNotEmpty() && it.equals(q.trim(), true) }
@@ -819,9 +819,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         if (!Accounts.isExplicitBulkKhataMoveRequest(roman)) return null
 
         val destination = Accounts.khataNameMentionedIn(roman, source, entries.map { it.person })
-            ?: return "I couldn't identify the destination khata. Please mention its exact saved name."
+            ?: return "I couldn't identify the destination account. Please mention its exact saved name."
         val sourceEntries = entries.filter { it.person.equals(source, ignoreCase = true) }
-        if (sourceEntries.isEmpty()) return "No entries found in $source's khata. Nothing was moved."
+        if (sourceEntries.isEmpty()) return "No entries found in $source's account. Nothing was moved."
         val changes = sourceEntries.map { old -> old to old.copy(person = destination) }
         if (!applyPlan(EditPlan(changes, emptyList(), "Moved ${changes.size} entries from $source to $destination"))) {
             return "Entries badal gayi thi, kuch move nahi hua. Dobara try karein."
@@ -844,12 +844,12 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         if (!all || !records || !directions || !action) return null
 
         val changed = convertPersonTransfersToLedgerEntries(entries, person)
-        if (changed.isEmpty()) return "No transfer entries found to convert in " + person + "'s khata."
-        val message = "Converted " + changed.size + " transfer entries in " + person + "'s khata to gave/received entries"
+        if (changed.isEmpty()) return "No transfer entries found to convert in " + person + "'s account."
+        val message = "Converted " + changed.size + " transfer entries in " + person + "'s account to gave/received entries"
         if (!applyPlan(EditPlan(changed, emptyList(), message))) {
-            return "Khata badal gaya tha, kuch nahi badla. Dobara try karein."
+            return "The account changed meanwhile, so nothing was changed. Please try again."
         }
-        return "Done. Converted " + changed.size + " transfer entries in " + person + "'s khata. The khata stays open."
+        return "Done. Converted " + changed.size + " transfer entries in " + person + "'s account. The account stays open."
     }
 
     // The rows the last answer listed, kept with that chat message ("3 no entry Hamid ke khata me bhej do").
@@ -984,7 +984,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     .filter { !it.person.equals(name, true) }.sortedWith(compareBy<Entry> { it.date }.thenBy { it.createdAt })
                 if (hits.isEmpty()) return "Nothing found (${Query.label(q)})."
                 // Entries picked one by one ("3 no entry", "ye entry") are meant exactly; no need to ask again.
-                if (f.filter.ids.isEmpty()) clarifyMultiple("move to $name khata", hits)?.let { return it }
+                if (f.filter.ids.isEmpty()) clarifyMultiple("move to $name account", hits)?.let { return it }
                 var work = entries
                 val changed = hits.map { e ->
                     val moved = movedTo(e, work, null, false, name).copy(item = e.item.ifBlank { "Loans" })
@@ -995,7 +995,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     return "Entries badal gayi thi, kuch move nahi hua. Dobara search karein."
                 }
                 val bal = personAccounts(work).firstOrNull { it.name.equals(name, true) }?.balance ?: 0.0
-                "${changed.size} entries → $name khata · " + when {
+                "${changed.size} entries → $name account · " + when {
                     bal > 0.005 -> "$name will give you ${fmt(bal)}"
                     bal < -0.005 -> "you will give $name ${fmt(-bal)}"
                     else -> "settled"
@@ -2520,13 +2520,13 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     onDelete = if (kind == "expense") null else ({
                         khataFor = null
                         val ids = khataEntries(kind, n).map { it.id }.toSet()
-                        confirm = "Move khata \"$n\" (${ids.size} " + (if (ids.size == 1) "entry" else "entries") + ") to Trash?" to ids
+                        confirm = "Move account \"$n\" (${ids.size} " + (if (ids.size == 1) "entry" else "entries") + ") to Trash?" to ids
                     }),
                     onDismiss = { khataFor = null }
                 )
             }
             khataRename?.let { (kind, n) ->
-                RenameDialog("Rename khata", n, khataEntries(kind, n).size.let { if (it == 1) "1 entry" else "$it entries" }, onRename = { newName ->
+                RenameDialog("Rename account", n, khataEntries(kind, n).size.let { if (it == 1) "1 entry" else "$it entries" }, onRename = { newName ->
                     khataRename = null
                     if (kind == "party") renameOrMergeKhata(n, newName, merge = false) else moveKhata(kind, n, kind, newName)
                 }, onDismiss = { khataRename = null })

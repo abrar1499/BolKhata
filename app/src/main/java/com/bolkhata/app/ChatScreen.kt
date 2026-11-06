@@ -171,7 +171,7 @@ fun ChatScreen(
                         if (message == messages.lastOrNull()) {
                             val names = NativeChatEngine.nameChoices(message.text)
                             // "Move to which khata: A or B?": the tap repeats the move with the full name.
-                            val moving = message.text.startsWith("Move to which khata")
+                            val moving = message.text.startsWith("Move to which account")
                             val asked = messages.lastOrNull { it.isUser }?.text.orEmpty()
                             if (names.isNotEmpty()) NameChoices(names) { name -> onSend(if (moving) "$asked $name" else "$name ka khata") }
                             // After a total, the likely next questions as chips.

@@ -188,11 +188,11 @@ fun EntryForm(
         }
         Box {
             Field(
-                shown, { person = it }, "Khata (optional) · party, business, income, expense",
+                shown, { person = it }, "Account (optional) · party, business, income, expense",
                 Modifier.fillMaxWidth(), readOnly = true
             ) {
                 if (shown.isNotBlank()) IconButton(onClick = { person = ""; if (khata != null) item = ""; khata = null; pickCat = null }, modifier = Modifier.size(36.dp)) {
-                    Icon(Icons.Filled.Close, contentDescription = "No khata", modifier = Modifier.size(18.dp))
+                    Icon(Icons.Filled.Close, contentDescription = "No account", modifier = Modifier.size(18.dp))
                 }
                 else Icon(Icons.Filled.ArrowDropDown, contentDescription = null, modifier = Modifier.padding(end = 6.dp))
             }
@@ -200,7 +200,7 @@ fun EntryForm(
             Box(Modifier.matchParentSize().padding(end = 40.dp).clip(RoundedCornerShape(12.dp)).clickable { picking = true })
         }
         if (picking) PartyPicker(
-            people, "", "Select khata",
+            people, "", "Select account",
             confirm = { creating -> if (creating) "Create & select" else "Select" },
             onPick = { person = it; khata = null; pickCat = null; picking = false }, onDismiss = { picking = false },
             categories = expenseCats, onCategory = { pickCat = it; khata = "expense"; person = ""; out = true; picking = false },

@@ -71,7 +71,7 @@ object NativeChatEngine {
         currency: String = "SAR", now: Long = System.currentTimeMillis()
     ): Fixed {
         val raw = input.trim()
-        if (raw.isBlank()) return chat("Please type a message and I'll help with your khata.")
+        if (raw.isBlank()) return chat("Please type a message and I'll help with your accounts.")
         val roman = runCatching { Translit.toRoman(raw) }.getOrDefault(raw)
         // "hi", "how r u", "i am good": small talk is answered first, never read as a follow-up to the last search.
         if (isSmallTalk(roman, now)) return talk(roman.lowercase(Locale.ROOT), now)
@@ -225,15 +225,15 @@ object NativeChatEngine {
         val said = prepared.lowercase(Locale.ROOT)
         // ("X wali entry ka naam Y kar do" renames one entry; that is an edit, below.)
         if (!has(words, setOf("entry", "entries", "wali", "wala", "wale"))) (renameUrdu.find(said) ?: renameEnglish.find(said))?.let { m ->
-            val from = findKhata(m.groupValues[1], contacts, entries) ?: return chat("Which khata should I rename? Say its saved name.")
+            val from = findKhata(m.groupValues[1], contacts, entries) ?: return chat("Which account should I rename? Say its saved name.")
             val to = tokens(m.groupValues[2]).filter { it !in khataFiller }.joinToString(" ") { it.replaceFirstChar(Char::uppercase) }
             if (to.isBlank()) return chat("What should the new name be?")
             return Fixed("", "rename_khata", "", set = mapOf("kind" to from.first, "from" to from.second, "to" to to))
         }
         // "Hamid ka khata Nargis me merge kar do": every entry of the first khata goes into the second.
         mergeKhata.find(said)?.let { m ->
-            val from = findKhata(m.groupValues[1], contacts, entries) ?: return chat("Which khata should I move? Say its saved name.")
-            val to = findKhata(m.groupValues[2], contacts, entries) ?: return chat("Move it into which khata? Say its saved name.")
+            val from = findKhata(m.groupValues[1], contacts, entries) ?: return chat("Which account should I move? Say its saved name.")
+            val to = findKhata(m.groupValues[2], contacts, entries) ?: return chat("Move it into which account? Say its saved name.")
             return Fixed("", "move_khata", "", set = mapOf("kind" to from.first, "from" to from.second, "toKind" to to.first, "to" to to.second))
         }
 
@@ -251,7 +251,7 @@ object NativeChatEngine {
         val moveWords = setOf("move", "shift", "transfer", "send", "bhejo", "dal", "daal")
         if (has(words, moveWords) && has(words, setOf("khata", "account"))) {
             val destination = Accounts.khataNameMentionedIn(text, "", contacts)
-            if (destination == null) return chat("Kis khata me daalun? Poora naam batayein.")
+            if (destination == null) return chat("Which account should it go to? Say its full name.")
             val selectionText = text.replace(destination, " ", ignoreCase = true)
             val selectionWords = tokens(selectionText)
             val screenSelection = has(selectionWords, setOf("all", "every", "sab", "sari", "saari", "these", "this", "inko", "ye", "yeh"))
@@ -487,10 +487,10 @@ object NativeChatEngine {
         }
         val destination = Accounts.khataNameMentionedIn(text, "", contacts)
             ?: Understand.matchContact(tokens(rest).filter { it !in moveVerbs }, contacts).let { (name, choices, _) ->
-                if (name == null && choices.size >= 2) return chat("Move to which khata: " + choices.joinToString(" or ") + "?")
+                if (name == null && choices.size >= 2) return chat("Move to which account: " + choices.joinToString(" or ") + "?")
                 name
             }
-            ?: return chat("Which khata should get it? Say the person's saved name.")
+            ?: return chat("Which account should get it? Say the person's saved name.")
         return Fixed("", "to_khata", "", filter = Query.Filter(ids = ids.toSet()), set = mapOf("person" to destination))
     }
 
@@ -578,7 +578,7 @@ object NativeChatEngine {
 
     private fun chat(reply: String) = Fixed("", "chat", reply)
 
-    private const val NOT_UNDERSTOOD = "Samajh nahi aaya. Jaise: 'chai 5', 'food is mahine', 'Ali ka khata'."
+    private const val NOT_UNDERSTOOD = "Sorry, I didn't get that. Try 'tea 5', 'food this month' or 'Ali's account'."
 
     /** Small talk, or the not-understood reply marked [Fixed.unsure]. */
     /** A greeting, thanks or bye the app answers itself ("hi", "salam"): no need to ask Groq or search. */
