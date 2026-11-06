@@ -50,6 +50,7 @@ object Groq {
           diye", "is mahine food kitna", "19 aug se aaj tak expense", "Ali ka khata", "cashbook", "expense report",
           "last 5 entries", "2800 wali entry", "petrol 50 nahi 40 tha", "other me kitni entries". Keep every number
           exactly and use the matching saved name. Leave "reply" empty: the app answers from its own records.
+        - A greeting ("hi", "salam") is never a follow-up: leave "command" empty and greet back.
         - Otherwise (greeting, general question, help, advice), leave "command" empty and answer in "reply" in 1 to 3
           short lines, in the language they used. You cannot see their records: never state their amounts or totals.
         - Any question about how much, totals, spending, income, balance or a day/month ("aaj tak kitna expense",
@@ -65,7 +66,8 @@ object Groq {
           {"mode": "sum" | "list" | "count" | "report" | "highest", "types": [any of expense, income, lent,
           borrowed, received_back, paid_back, sale, purchase], "categories": [category names], "persons": [saved
           names], "items": [words to search in entries, only real item words], "from": "YYYY-MM-DD" or "",
-          "to": "YYYY-MM-DD" or "", "last": number of latest entries or 0}. "report" is where the money went (by
+          "to": "YYYY-MM-DD" or "", "last": number of latest entries or 0, "exclude_categories": [category names
+          to leave out, e.g. "es me fees aur sent home nikal ke batao" keeps the previous query and leaves those out]}. "report" is where the money went (by
           category, e.g. "kahan kahan laga"); "list" shows the entries ("detail", "dikhao"); "sum" is a total.
           "aaj tak"/"ab tak" with no start means no dates. A follow-up keeps the period and filters of the
           conversation. For anything else "query" is null.
@@ -101,10 +103,12 @@ object Groq {
             if (end) d + 86_400_000L - 1 else d
         }.getOrNull()
         val types = strings("types").mapNotNull { QUERY_TYPES[it.lowercase()] }.toSet()
-        val cats = strings("categories").mapNotNull { n -> Cat.entries.firstOrNull { it.label.equals(n, true) } }.toSet()
+        fun cats(key: String) = strings(key).mapNotNull { n -> Cat.entries.firstOrNull { it.label.equals(n, true) } }.toSet()
+        val cats = cats("categories")
         return mode to Query.Filter(
             from = day("from", false), to = day("to", true), types = types, persons = strings("persons"),
-            cats = cats, items = strings("items").map { it.lowercase() }, last = o.optInt("last", 0).coerceIn(0, 100)
+            cats = cats, items = strings("items").map { it.lowercase() }, last = o.optInt("last", 0).coerceIn(0, 100),
+            notCats = cats("exclude_categories")
         )
     }
 

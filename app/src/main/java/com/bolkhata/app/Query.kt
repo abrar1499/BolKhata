@@ -26,12 +26,14 @@ object Query {
         val ids: Set<String> = emptySet(),
         /** When the record was entered into the app, distinct from the transaction date. */
         val createdFrom: Long? = null,
-        val createdTo: Long? = null
+        val createdTo: Long? = null,
+        /** Leave out these categories: "fees aur sent home nikal ke". */
+        val notCats: Set<Cat> = emptySet()
     ) {
         /** True when nothing narrows it down (then deleting or changing is refused). */
         val isEmpty get() = from == null && to == null && createdFrom == null && createdTo == null &&
             types.isEmpty() && persons.isEmpty() && cats.isEmpty() && items.isEmpty() && min == null && max == null &&
-            last == 0 && !noPeople && notItems.isEmpty() && ids.isEmpty()
+            last == 0 && !noPeople && notItems.isEmpty() && ids.isEmpty() && notCats.isEmpty()
     }
 
     val typeWords = mapOf(
@@ -68,7 +70,7 @@ object Query {
                 (f.types.isEmpty() || e.type in f.types) &&
                 // The person's khata, or a bank entry whose note names them ("To Saleem Butt · D360").
                 (f.persons.isEmpty() || f.persons.any { samePerson(e.person, it) || e.note.contains(it.trim(), true) }) &&
-                (f.cats.isEmpty() || e.category in f.cats) &&
+                (f.cats.isEmpty() || e.category in f.cats) && e.category !in f.notCats &&
                 // Spaces don't matter: "easypaisa" finds "Easy Paisa".
                 (f.items.isEmpty() || f.items.any { w -> val q = w.lowercase().replace(" ", ""); (e.item + e.note).lowercase().replace(" ", "").contains(q) }) &&
                 (f.min == null || e.amount >= f.min) && (f.max == null || e.amount <= f.max) &&
@@ -118,6 +120,7 @@ object Query {
         val parts = mutableListOf<String>()
         if (f.items.isNotEmpty()) parts += f.items.joinToString(", ")
         if (f.cats.isNotEmpty()) parts += f.cats.joinToString(", ") { it.label }
+        if (f.notCats.isNotEmpty()) parts += "without " + f.notCats.joinToString(", ") { it.label }
         if (f.persons.isNotEmpty()) parts += f.persons.joinToString(", ")
         if (f.from != null || f.to != null) {
             val a = f.from?.let { fmt.format(java.util.Date(it)) }

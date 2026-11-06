@@ -563,6 +563,10 @@ object NativeChatEngine {
     private const val NOT_UNDERSTOOD = "Samajh nahi aaya. Jaise: 'chai 5', 'food is mahine', 'Ali ka khata'."
 
     /** Small talk, or the not-understood reply marked [Fixed.unsure]. */
+    /** A greeting, thanks or bye the app answers itself ("hi", "salam"): no need to ask Groq or search. */
+    fun isSmallTalk(text: String, now: Long = System.currentTimeMillis()): Boolean =
+        tokens(text).size <= 4 && smallTalk(text.lowercase(Locale.ROOT), now) != NOT_UNDERSTOOD
+
     private fun talk(text: String, now: Long): Fixed = smallTalk(text, now).let { Fixed("", "chat", it, unsure = it == NOT_UNDERSTOOD) }
 
     private fun smallTalk(text: String, now: Long): String {
