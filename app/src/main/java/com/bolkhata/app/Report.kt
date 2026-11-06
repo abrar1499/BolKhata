@@ -88,8 +88,8 @@ data class Report(
         fun tone(label: String): Int {
             val l = label.lowercase()
             return when {
-                listOf("will pay you", "income", "got back", "sales", "sold", "profit").any { it in l } -> 1
-                listOf("you will pay", "spent", "lent", "you gave", "paid back", "bought", "purchases", "expense", "loss", "cash out")
+                listOf("will pay you", "to get", "income", "got back", "sales", "sold", "profit").any { it in l } -> 1
+                listOf("you will pay", "to give", "spent", "lent", "gave", "returned", "took", "paid back", "bought", "purchases", "expense", "loss", "cash out")
                     .any { it in l } -> -1
                 else -> 0
             }

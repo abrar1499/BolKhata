@@ -649,7 +649,7 @@ private data class StockReportRow(
 
 /** The report tabs, by main heading. [tab] false: opened only from elsewhere (Home's cash, the shop's profit). */
 enum class ReportKind(val label: String, val tab: Boolean = true) {
-    CASH_OUT("Expense"), CASH_IN("Income"), TO_PAY("To pay"), TO_RECEIVE("To receive"), SALES("Sales"),
+    CASH_OUT("Expense"), CASH_IN("Income"), TO_PAY("To give"), TO_RECEIVE("To get"), SALES("Sales"),
     PURCHASES("Purchases"), STOCK("Stock"), ASSETS("Assets"), PROFIT("Profit", false), CASH_BALANCE("Cash Balance", false)
 }
 
@@ -680,7 +680,7 @@ private fun cashFlowCategory(entry: Entry): Cat = when (entry.type) {
 private fun cashFlowGroupTitle(category: Cat, kind: ReportKind): String = when (category) {
     Cat.SALES -> if (kind == ReportKind.CASH_IN) "Sales collected" else "Sales"
     Cat.STOCK -> "Stock purchases"
-    Cat.UDHAAR -> if (kind == ReportKind.CASH_IN) "Borrowed / received back" else "Lent / paid back"
+    Cat.UDHAAR -> if (kind == ReportKind.CASH_IN) "Took / got back" else "Gave / returned"
     Cat.TANKHWAH -> "Other cash received"
     else -> category.label
 }
@@ -895,8 +895,8 @@ private fun OverviewSummary(
         }
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OweCell("Payable", pay, OrangeOwe, Modifier.weight(1f), onPay)
-            OweCell("Receivable", receive, GreenIn, Modifier.weight(1f), onReceive)
+            OweCell("To give", pay, OrangeOwe, Modifier.weight(1f), onPay)
+            OweCell("To get", receive, GreenIn, Modifier.weight(1f), onReceive)
         }
     }
 }
@@ -1309,7 +1309,7 @@ fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit, st
                 val owed = outstanding.filter { if (receive) it.second > 0 else it.second < 0 }
                 item {
                     Panel(Modifier.fillMaxWidth(), padding = 12.dp) {
-                        Text((if (receive) "To receive" else "To pay") + " · all time", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text((if (receive) "To get" else "To give") + " · all time", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text(moneyA(currency, if (receive) toReceive else toPay), fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = if (receive) GreenIn else OrangeOwe)
                         Text("${owed.size} people", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -1326,7 +1326,7 @@ fun ReportsScreen(entries: List<Entry>, currency: String, onMenu: () -> Unit, st
                             Spacer(Modifier.width(10.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(person, fontWeight = FontWeight.SemiBold)
-                                Text(if (balance > 0) "They owe you" else "You owe them", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(if (balance > 0) "You will get" else "You will give", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             Text(moneyA(currency, kotlin.math.abs(balance)), fontWeight = FontWeight.Bold,
                                 color = if (balance > 0) GreenIn else OrangeOwe)
@@ -1372,16 +1372,16 @@ fun PeopleScreen(entries: List<Entry>, currency: String, receive: Boolean, onBac
         contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = barSpace(16.dp)),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        item { ScreenTitle(if (receive) "To receive" else "To pay", onBack) }
+        item { ScreenTitle(if (receive) "To get" else "To give", onBack) }
         item {
             Panel(Modifier.fillMaxWidth(), padding = 16.dp) {
-                Text(if (receive) "People owe you" else "You owe people", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+                Text(if (receive) "You will get" else "You will give", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
                 Text(moneyA(currency, total), fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = color)
                 Text("${bal.size} " + if (bal.size == 1) "person" else "people", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         if (bal.isEmpty()) {
-            item { Text(if (receive) "Nobody owes you right now." else "You don't owe anyone right now.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            item { Text(if (receive) "Nothing to get right now." else "Nothing to give right now.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
         items(bal, key = { it.first }) { (person, v) ->
             val expanded = person in open
@@ -1822,7 +1822,7 @@ fun ResultsScreen(
                     Spacer(Modifier.height(8.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         KhataStat("You took", sum(Type.LIYA), currency, OrangeOwe, Modifier.weight(1f))
-                        KhataStat("Paid back", sum(Type.WAPIS_DIYA), currency, RedSpend, Modifier.weight(1f))
+                        KhataStat("Returned", sum(Type.WAPIS_DIYA), currency, RedSpend, Modifier.weight(1f))
                     }
                     if (found.any { isTrade(it.type) }) {
                         Spacer(Modifier.height(8.dp))

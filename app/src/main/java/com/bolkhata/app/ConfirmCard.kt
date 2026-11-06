@@ -35,7 +35,7 @@ fun understoodLine(e: Entry, currency: String): String {
         Type.DIYA -> "Gave ${e.person}"
         Type.LIYA -> "Money in from ${e.person}"
         Type.WAPIS_MILA -> "${e.person} paid back"
-        Type.WAPIS_DIYA -> "Paid back ${e.person}"
+        Type.WAPIS_DIYA -> "Returned to ${e.person}"
         Type.AAMDANI -> "Income · " + e.item
         else -> entryTitle(e)
     }

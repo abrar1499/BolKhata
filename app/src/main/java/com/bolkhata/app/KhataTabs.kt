@@ -332,8 +332,8 @@ fun PartiesScreen(
     // The card: the two figures that matter most for this view (worked out again only when the data or view changes).
     val card: Triple<Triple<String, String, Color>, Triple<String, String, Color>, ReportKind> = remember(about, accts, stock, view, currency) { when (view) {
         0 -> Triple(
-            Triple(money(currency, accts.filter { it.balance < -0.005 }.sumOf { -it.balance }), "Payable", RedSpend),
-            Triple(money(currency, accts.filter { it.balance > 0.005 }.sumOf { it.balance }), "Receivable", GreenIn), ReportKind.TO_RECEIVE
+            Triple(money(currency, accts.filter { it.balance < -0.005 }.sumOf { -it.balance }), "To give", RedSpend),
+            Triple(money(currency, accts.filter { it.balance > 0.005 }.sumOf { it.balance }), "To get", GreenIn), ReportKind.TO_RECEIVE
         )
         1 -> Triple(
             Triple(money(currency, stock.sumOf { if (it.line.qty > 0) it.line.qty * it.buyRate else 0.0 }), "Stock value", GreenIn),
@@ -404,7 +404,7 @@ private fun LazyListScope.partiesView(accts: List<PersonAcct>, picked: List<Entr
     item(key = "ph") {
         LedgerHead("Parties", if (shown.size == 1) "1 · A–Z" else "${shown.size} · A–Z",
             // Only this head is rounded, at the top; every party below is its own raised square card with the same columns.
-            listOf(LCol("Payable", fmt(pay), LKind.OUT), LCol("Receivable", fmt(rec), LKind.IN)), shown.isEmpty(), WideColW)
+            listOf(LCol("To give", fmt(pay), LKind.OUT), LCol("To get", fmt(rec), LKind.IN)), shown.isEmpty(), WideColW)
     }
     items(shown, key = { "p" + it.name.lowercase() }) { p ->
         val bal = p.balance
@@ -832,7 +832,7 @@ fun PartyKhataScreen(
             stickyHeader { TabHead {
                 KhataTop(name, if (hist.size == 1) "1 entry" else "${hist.size} entries", onBack, back = true) {
                     SumCard(
-                        Triple(money(currency, kotlin.math.abs(bal)), if (bal > 0.005) "Receivable" else if (bal < -0.005) "Payable" else "Settled",
+                        Triple(money(currency, kotlin.math.abs(bal)), if (bal > 0.005) "To get" else if (bal < -0.005) "To give" else "Settled",
                             if (bal > 0.005) GreenIn else if (bal < -0.005) RedSpend else MaterialTheme.colorScheme.onSurfaceVariant),
                         Triple(money(currency, p?.gave ?: 0.0), "You paid", RedSpend),
                         "Report ›", onReport

@@ -1012,7 +1012,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     val res = snackbar.showSnackbar("✓ $payer paid", actionLabel = "Undo", duration = SnackbarDuration.Long)
                     if (res == SnackbarResult.ActionPerformed) save(before)
                 }
-                "${entryTitle(h)} ${fmt(total)} paid by $payer → your share ${fmt(mine)} · you owe $payer ${fmt(mine)}"
+                "${entryTitle(h)} ${fmt(total)} paid by $payer → your share ${fmt(mine)} · you will give $payer ${fmt(mine)}"
             }
             "reread" -> {
                 // "Galat hai, theek karo": the app reads each entry's own note again with what it knows now.

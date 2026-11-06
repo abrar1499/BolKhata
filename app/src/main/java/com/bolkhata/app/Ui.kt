@@ -409,8 +409,8 @@ fun typeLabel(t: Type, person: String): String {
     return when (t) {
         Type.KHARCHA -> "Cash Out"
         Type.AAMDANI -> "Cash In"
-        Type.DIYA -> if (p.isEmpty()) "Lent (they owe me)" else "Gave to $p"
-        Type.LIYA -> if (p.isEmpty()) "Borrowed (I owe)" else "Took from $p"
+        Type.DIYA -> if (p.isEmpty()) "Gave (to get back)" else "Gave to $p"
+        Type.LIYA -> if (p.isEmpty()) "Took (to give back)" else "Took from $p"
         Type.WAPIS_MILA -> if (p.isEmpty()) "Got money back" else "$p returned"
         Type.WAPIS_DIYA -> if (p.isEmpty()) "Paid back" else "Returned to $p"
         Type.SALE -> if (p.isEmpty()) "Sale" else "Sold to $p"

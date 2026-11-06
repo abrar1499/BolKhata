@@ -215,7 +215,7 @@ private fun Totals(inn: Double, out: Double, currency: String, people: Boolean, 
         Figure("Total in", "+" + fmt(inn), GreenIn, Modifier.weight(1f), big)
         Figure("Total out", "−" + fmt(out), RedSpend, Modifier.weight(1f), big)
         Figure(
-            if (people) (if (bal < -0.005) "They owe you" else if (bal > 0.005) "You owe" else "Balance") else "Balance",
+            if (people) (if (bal < -0.005) "You will get" else if (bal > 0.005) "You will give" else "Balance") else "Balance",
             if (people) fmt(kotlin.math.abs(bal)) else (if (bal > 0.005) "+" else if (bal < -0.005) "−" else "") + fmt(kotlin.math.abs(bal)),
             if (people && bal < -0.005) OrangeOwe else MaterialTheme.colorScheme.onSurface,
             Modifier.weight(1f), big
@@ -244,7 +244,7 @@ private fun Figure(label: String, value: String, color: androidx.compose.ui.grap
 private fun BalanceChip(bal: Double, currency: String, people: Boolean) {
     val text = when {
         people && bal < -0.005 -> "Owes you " + fmt(-bal)
-        people && bal > 0.005 -> "You owe " + fmt(bal)
+        people && bal > 0.005 -> "You will give " + fmt(bal)
         people -> "Settled"
         else -> (if (bal > 0.005) "+" else if (bal < -0.005) "−" else "") + fmt(kotlin.math.abs(bal))
     }

@@ -360,10 +360,10 @@ internal fun AskDialog(entry: Entry, currency: String, onPick: (Entry) -> Unit, 
                         }
                         Spacer(Modifier.height(10.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            ChoiceTile("To pay", "I owe $who", "💸", OrangeOwe, Modifier.weight(1f)) {
+                            ChoiceTile("To give", "I will give $who", "💸", OrangeOwe, Modifier.weight(1f)) {
                                 onPick(entry.copy(type = Type.LIYA, category = Cat.UDHAAR, item = "Loans", person = who))
                             }
-                            ChoiceTile("To receive", "$who owes me", "🤝", GreenIn, Modifier.weight(1f)) {
+                            ChoiceTile("To get", "$who will give me", "🤝", GreenIn, Modifier.weight(1f)) {
                                 onPick(entry.copy(type = Type.DIYA, category = Cat.UDHAAR, item = "Loans", person = who))
                             }
                         }
