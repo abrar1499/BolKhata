@@ -60,8 +60,9 @@ class NativeChatEngineTest {
     }
 
     @Test fun englishGetsEnglish() {
-        assertEquals("I'm good, thanks! How can I help?", read("hello how are you").reply)
-        assertEquals("Wa alaikum assalam! Batayein?", read("salam").reply)
+        assertEquals("Good, you?", read("hello how are you").reply)
+        assertEquals("Wa alaikum assalam!", read("salam").reply)
+        assertEquals("Theek, aap batao?", read("kya hal hai").reply)
     }
 
     @Test fun todaysDateIsAnsweredInOneLine() {

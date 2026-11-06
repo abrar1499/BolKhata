@@ -587,16 +587,16 @@ object NativeChatEngine {
         val en = isEnglish(text)
         fun say(english: String, urdu: String) = if (en) english else urdu
         return when {
-            has(w, setOf("how", "are", "you")) && en -> "I'm good, thanks! How can I help?"
+            has(w, setOf("how", "are", "you")) && en -> "Good, you?"
             has(w, setOf("hi", "hello", "hey", "good", "morning", "evening", "salam", "assalam", "assalamualaikum", "aoa")) ->
-                say("Hi! How can I help?", "Wa alaikum assalam! Batayein?")
+                say("Hi!", "Wa alaikum assalam!")
             has(w, setOf("date", "tareekh", "tarikh", "din", "day")) && has(w, setOf("aaj", "aj", "today", "kya", "kia", "what", "konsa", "kaunsa")) ->
                 java.text.SimpleDateFormat(if (en) "'Today is' d MMM yyyy, EEEE." else "'Aaj' d MMM yyyy, EEEE.", Locale.ENGLISH).format(java.util.Date(now))
             has(w, setOf("time", "waqt", "baje", "bje")) && has(w, setOf("kya", "kia", "what", "kitne", "kitny")) ->
                 java.text.SimpleDateFormat("h:mm a", Locale.ENGLISH).format(java.util.Date(now))
             has(w, setOf("hal", "haal", "kaise", "kaisa", "kaisi")) || (has(w, setOf("kya", "kia")) && has(w, setOf("hal", "haal"))) ->
-                "Theek hoon, shukriya! Batayein?"
-            has(w, setOf("how", "are", "you")) -> "Theek hoon! Batayein?"
+                "Theek, aap batao?"
+            has(w, setOf("how", "are", "you")) -> "Theek, aap batao?"
             has(w, setOf("what", "can", "you", "do")) -> say("Add entries, totals, search, edit and move khatas.", "Entry likhna, hisaab, search, edit aur khata move.")
             has(w, setOf("thanks", "thank", "shukriya", "shukria", "jazakallah")) -> say("You're welcome!", "Koi baat nahi!")
             has(w, setOf("bye", "goodbye", "allahhafiz", "khuda")) -> say("Bye!", "Allah Hafiz!")

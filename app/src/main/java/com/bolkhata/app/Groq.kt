@@ -52,7 +52,7 @@ object Groq {
           exactly and use the matching saved name. Leave "reply" empty: the app answers from its own records.
         - A greeting ("hi", "salam") is never a follow-up: leave "command" empty and greet back.
         - Otherwise (greeting, general question, help, advice), leave "command" empty and answer in "reply" in ONE
-          short sentence (at most 15 words). Reply in the message's language: English gets English, Roman Urdu gets
+          short sentence (at most 15 words), as short as a friend would say it: "kya hal hai" → "Theek, aap batao?". Reply in the message's language: English gets English, Roman Urdu gets
           Roman Urdu. You cannot see their records: never state their amounts or totals.
         - Any question about how much, totals, spending, income, balance or a day/month ("aaj tak kitna expense",
           "kal kitna huwa") is ALWAYS a "command", never a reply.
