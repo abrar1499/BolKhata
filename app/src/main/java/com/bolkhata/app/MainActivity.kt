@@ -1267,7 +1267,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         routed.command.isBlank() && Groq.replyIsSafe(routed.reply, text) && offMain {
                             NativeChatEngine.interpret(roman, scoped, names0, wordFixes, history, currency = currency)
                         }.unsure -> {
-                            val usage = Groq.takeUsage().ifBlank { if (knownCommand != null) "Learned · no tokens" else "" }
+                            val usage = Groq.takeUsage()
                             if (routed.standalone && text.none(Char::isDigit)) store.learned = store.learned + (learnKey to "R|" + routed.reply)
                             lastSpeech = routed.reply
                             postChat(routed.reply, isUser = false,
@@ -1320,7 +1320,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     val recent = history.takeLast(6).joinToString("\n") { (if (it.isUser) "Person: " else "App: ") + it.text.take(200) }
                     Groq.answer(groqKey, read, recent)?.let { reply = it; executionStatus = "groq_answer" }
                 }
-                val usage = Groq.takeUsage()
+                val usage = Groq.takeUsage().ifBlank { if (knownCommand != null) "Learned · no tokens" else "" }
                 if (reply == null && executionStatus == "returned") executionStatus = "awaiting_confirmation"
                 val matchCount = if (intent.kind in setOf("ask", "open", "delete", "change", "to_khata", "paid_by", "reread")) {
                     offMain { runCatching { Query.select(scoped, intent.filter).size }.getOrNull() }
