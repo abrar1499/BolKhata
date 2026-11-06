@@ -667,3 +667,21 @@ fun GlassLogo(size: Dp, modifier: Modifier = Modifier, onBand: Boolean = false) 
         drawCircle(c[1], radius = l(3f), center = p(67f, 58.5f))
     }
 }
+
+/**
+ * The glass edge of a field or chip, as in the mock-up: a thin border in the theme's glass colours over a faint
+ * tint of them (light pink on Red).
+ */
+@Composable
+fun Modifier.glassEdge(shape: androidx.compose.ui.graphics.Shape, width: Dp = 1.5.dp): Modifier {
+    val c = glassColors(LocalHeader.current)
+    val fill = androidx.compose.ui.graphics.lerp(MaterialTheme.colorScheme.surface, c[1], 0.05f)
+    return this.clip(shape).background(fill, shape).border(width, Brush.linearGradient(c), shape)
+}
+
+/** A chosen chip: filled with the theme's glass colours (white text on it). */
+@Composable
+fun Modifier.glassFill(shape: androidx.compose.ui.graphics.Shape): Modifier {
+    val c = glassColors(LocalHeader.current)
+    return this.shadow(2.dp, shape).clip(shape).background(Brush.linearGradient(0f to c[0], 0.55f to c[1], 1f to c[2]), shape)
+}

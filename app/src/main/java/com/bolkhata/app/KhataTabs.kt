@@ -233,9 +233,8 @@ private fun SumCard(a: Triple<String, String, Color>, b: Triple<String, String, 
 private fun SearchBox(q: String, hint: String, onChange: (String) -> Unit) {
     val sub = MaterialTheme.colorScheme.onSurfaceVariant
     Row(
-        Modifier.padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 4.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
+        Modifier.padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 4.dp).fillMaxWidth()
+            .glassEdge(RoundedCornerShape(12.dp))
             .padding(horizontal = 12.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -265,8 +264,8 @@ internal fun Initial(name: String) {
 internal fun SmallChip(label: String, on: Boolean, onClick: () -> Unit) {
     Text(
         label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = if (on) Color.White else MaterialTheme.colorScheme.onSurface,
-        modifier = Modifier.clip(CircleShape).background(if (on) Ember else MaterialTheme.colorScheme.surface)
-            .border(1.dp, if (on) Ember else MaterialTheme.colorScheme.outlineVariant, CircleShape)
+        // Glass like the theme: the chosen chip filled, the others with a glass edge.
+        modifier = (if (on) Modifier.glassFill(CircleShape) else Modifier.glassEdge(CircleShape))
             .clickable { onClick() }.padding(horizontal = 11.dp, vertical = 6.dp)
     )
 }

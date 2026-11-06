@@ -147,10 +147,11 @@ fun ChatScreen(
                             "How much did I spend this month?",
                             "Who owes me money?"
                         ).forEach { suggestion ->
-                            OutlinedButton(
-                                onClick = { onSend(suggestion) },
-                                modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp)
-                            ) { Text(suggestion) }
+                            Text(
+                                suggestion, fontSize = 13.sp, textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp).glassEdge(RoundedCornerShape(16.dp))
+                                    .clickable { onSend(suggestion) }.padding(vertical = 10.dp)
+                            )
                         }
                     }
                 }
@@ -492,9 +493,7 @@ private fun FollowChips(asks: List<String>, onPick: (String) -> Unit) {
         asks.forEach { a ->
             Text(
                 a, fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surface)
-                    .border(1.dp, MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.18f), RoundedCornerShape(14.dp))
-                    .clickable { onPick(a) }.padding(horizontal = 10.dp, vertical = 5.dp)
+                modifier = Modifier.glassEdge(RoundedCornerShape(14.dp)).clickable { onPick(a) }.padding(horizontal = 10.dp, vertical = 5.dp)
             )
         }
     }
