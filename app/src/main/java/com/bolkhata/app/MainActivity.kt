@@ -82,7 +82,7 @@ class MainActivity : ComponentActivity() {
 enum class Tab { HOME, STOCK, CHAT, ENTRIES, REPORTS, TRASH, SETTINGS, PARTIES, CASHBOOK, EXPENSE, INCOME }
 
 /** Tabs whose top (KhataTop) sits on the theme's coloured band. */
-val BAND_TABS = setOf(Tab.PARTIES, Tab.CASHBOOK, Tab.EXPENSE, Tab.INCOME, Tab.ENTRIES, Tab.TRASH, Tab.SETTINGS)
+val BAND_TABS = setOf(Tab.CHAT, Tab.PARTIES, Tab.CASHBOOK, Tab.EXPENSE, Tab.INCOME, Tab.ENTRIES, Tab.TRASH, Tab.SETTINGS)
 
 /** The open tab and the tabs it was reached from, so Back returns the same way. Chat (the first tab) starts over. */
 class TabNav {

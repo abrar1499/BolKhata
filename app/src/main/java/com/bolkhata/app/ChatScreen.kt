@@ -26,6 +26,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -87,17 +88,18 @@ fun ChatScreen(
     }
 
     Column(Modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxWidth()) {
-            // No coloured header here: one slim line with the business pill, so the chat starts near the top.
-            Column(Modifier.statusBarsPadding().padding(horizontal = 12.dp).padding(bottom = 4.dp)) {
+        // The theme's glass band behind one slim line with the business pill, from the status bar down.
+        val theme = LocalHeader.current
+        Box(Modifier.fillMaxWidth().drawBehind { drawGlass(bandColors(theme), size.height) }) {
+            Column(Modifier.statusBarsPadding().padding(horizontal = 12.dp).padding(bottom = 10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     BusinessPill(business.ifBlank { "Chat" }, onMenu, onBusiness)
-                    Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp, maxLines = 1,
+                    Text(subtitle, color = theme.on.copy(alpha = 0.8f), fontSize = 11.sp, maxLines = 1,
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 10.dp, top = 10.dp))
                     Box {
                         var more by remember { mutableStateOf(false) }
                         IconButton(onClick = { more = true }) {
-                            Icon(Icons.Filled.MoreVert, contentDescription = "More options", tint = MaterialTheme.colorScheme.onSurface)
+                            Icon(Icons.Filled.MoreVert, contentDescription = "More options", tint = theme.on)
                         }
                         DropdownMenu(expanded = more, onDismissRequest = { more = false }) {
                             DropdownMenuItem(
