@@ -828,16 +828,16 @@ private fun Set<String>.toggle(k: String) = if (k in this) this - k else this + 
 private fun DepthRow(name: String, count: Int, total: Double, currency: String, depth: Int, open: Boolean, onClick: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(onClick = onClick)
-            .padding(start = (depth * 16).dp, top = 7.dp, bottom = 7.dp),
+            .padding(start = (depth * 14).dp, top = 5.dp, bottom = 5.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(if (open) "▾" else "▸", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(if (open) "▾" else "▸", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.width(8.dp))
         Text(name, Modifier.weight(1f), fontWeight = if (depth == 0) FontWeight.SemiBold else FontWeight.Medium,
-            fontSize = if (depth == 0) 14.sp else 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text("${count}×", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            fontSize = if (depth == 0) 12.sp else 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text("${count}×", fontSize = 9.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.width(10.dp))
-        Text(moneyA(currency, total), fontWeight = FontWeight.SemiBold, fontSize = if (depth == 0) 14.sp else 13.sp)
+        Text(moneyA(currency, total), fontWeight = FontWeight.SemiBold, fontSize = if (depth == 0) 12.sp else 11.sp)
     }
 }
 
@@ -913,10 +913,10 @@ private fun OweCell(label: String, amount: Double, color: Color, modifier: Modif
 /** One entry under a report row: date, what it was, amount. */
 @Composable
 private fun ReportLine(e: Entry, detail: String, currency: String) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(shortDate(e.date), Modifier.width(56.dp), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(detail, Modifier.weight(1f), fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        Text(moneyA(currency, e.amount), fontSize = 12.sp)
+    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(shortDate(e.date), Modifier.width(42.dp), fontSize = 9.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(detail, Modifier.weight(1f), fontSize = 10.sp, lineHeight = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(moneyA(currency, e.amount), fontSize = 10.5.sp)
     }
 }
 
