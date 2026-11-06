@@ -140,7 +140,10 @@ object Query {
     }
 
     /** The rows a "list" answer shows, in order (the chat remembers them for "3 no entry"). */
-    fun shown(list: List<Entry>): List<Entry> = list.take(10)
+    /** How many entries a list answer shows: all of them, up to a long month's worth. */
+    const val SHOWN = 300
+
+    fun shown(list: List<Entry>): List<Entry> = list.take(SHOWN)
 
     /** The answer, worked out by the app: a total, a count or a short list. */
     fun answer(list: List<Entry>, what: String, f: Filter, currency: String): String {
@@ -153,7 +156,7 @@ object Query {
                 val rows = shown(list).joinToString("\n") { e ->
                     dateFmt.format(java.util.Date(e.date)) + " · " + (e.item.ifBlank { e.category.label }) +
                         (if (e.person.isNotBlank()) " · " + e.person else "") + " · " + fmt(e.amount) + " " + currency
-                } + if (list.size > 10) "\n+${list.size - 10} more" else ""
+                } + if (list.size > SHOWN) "\n+${list.size - SHOWN} more" else ""
                 rows + "\nTotal: " + totals(list, head, currency)
             }
             // "Where did it go": the totals with every category.
