@@ -323,9 +323,15 @@ class Store(context: Context) {
         emptyList()
     }
 
+    /** Saved on the background saver, so a long answer never makes the chat stutter. */
     fun saveChatMessages(messages: List<ChatMessage>) {
+        val last = messages.takeLast(100)
+        saver.execute { writeChat(last) }
+    }
+
+    private fun writeChat(messages: List<ChatMessage>) {
         val arr = JSONArray()
-        messages.takeLast(100).forEach { message ->
+        messages.forEach { message ->
             arr.put(
                 JSONObject()
                     .put("id", message.id)

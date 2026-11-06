@@ -324,13 +324,13 @@ fun PartiesScreen(
     val about = remember(newest, view) { aboutView(view, newest) }
     val months = remember(about) { monthsOf(about) }
     val pick = if (month == ALL_MONTHS || months.any { it.first == month }) month else ALL_MONTHS
-    val picked = about.filter { inMonth(it.date, pick) }
+    val picked = remember(about, pick) { about.filter { inMonth(it.date, pick) } }
     val now = System.currentTimeMillis()
     val accts = remember(entries) { personAccounts(entries) }
     val stock = remember(entries) { stockItems(entries) }
 
-    // The card: the two figures that matter most for this view.
-    val card: Triple<Triple<String, String, Color>, Triple<String, String, Color>, ReportKind> = when (view) {
+    // The card: the two figures that matter most for this view (worked out again only when the data or view changes).
+    val card: Triple<Triple<String, String, Color>, Triple<String, String, Color>, ReportKind> = remember(about, accts, stock, view, currency) { when (view) {
         0 -> Triple(
             Triple(money(currency, accts.filter { it.balance < -0.005 }.sumOf { -it.balance }), "Payable", RedSpend),
             Triple(money(currency, accts.filter { it.balance > 0.005 }.sumOf { it.balance }), "Receivable", GreenIn), ReportKind.TO_RECEIVE
@@ -355,7 +355,7 @@ fun PartiesScreen(
                 Triple(plusMinus(y), "Year ${yearOf(now)}", if (y < 0) RedSpend else GreenIn), ReportKind.PROFIT
             )
         }
-    }
+    } }
     val state = rememberLazyListState()
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
