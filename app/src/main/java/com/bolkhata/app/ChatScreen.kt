@@ -147,10 +147,11 @@ fun ChatScreen(
                             "How much did I spend this month?",
                             "Who owes me money?"
                         ).forEach { suggestion ->
-                            OutlinedButton(
-                                onClick = { onSend(suggestion) },
-                                modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp)
-                            ) { Text(suggestion) }
+                            Text(
+                                suggestion, fontSize = 13.sp, textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp).glassEdge(RoundedCornerShape(16.dp))
+                                    .clickable { onSend(suggestion) }.padding(vertical = 10.dp)
+                            )
                         }
                     }
                 }
