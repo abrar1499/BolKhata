@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -128,6 +129,11 @@ fun EntryForm(
         val r = rate.toDoubleOrNull() ?: 0.0
         if (q > 0 && r > 0) amount = plain(Math.round(q * r * 100) / 100.0)
     }
+    /** Work types used before, newest first, one spelling each (Moulding and moulding are the same). */
+    val workTypes = remember(all) {
+        all.filter { isWork(it) && it.qty > 0 }.sortedByDescending { it.date }.map { it.item.trim() }
+            .filter { it.isNotBlank() && it != "Work" }.distinctBy { it.lowercase() }
+    }
     /** The rate last used for this party's work, so the next entry fills it in. */
     fun lastRate(p: String) = all.filter { isWork(it) && it.rate > 0 && it.person.trim().equals(p.trim(), true) }
         .maxByOrNull { it.date }?.rate
@@ -171,6 +177,27 @@ fun EntryForm(
             }
         }
 
+        if (work) {
+            // Work = quantity × rate (bricks made, pieces sewn); Salary = a fixed amount. Both go in the party's khata.
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Pill("Work", !salary, OrangeOwe) { salary = false }
+                Pill("Salary", salary, OrangeOwe) { salary = true }
+            }
+            if (!salary) {
+                Field(item, { item = it }, "Work type · e.g. Moulding", Modifier.fillMaxWidth())
+                // Work types already used: tap one so the same work is never spelt two ways.
+                val typed = item.trim()
+                val offered = workTypes.filter { !it.equals(typed, true) && (typed.isEmpty() || it.contains(typed, true)) }
+                if (offered.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    offered.forEach { w -> Pill(w, false, OrangeOwe) { item = w } }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Field(qty, { v -> qty = v.filter { it.isDigit() || it == '.' }; fillAmount() }, "Qty", Modifier.weight(1f), numeric = true)
+                    Field(rate, { v -> rate = v.filter { it.isDigit() || it == '.' }; fillAmount() }, "Rate", Modifier.weight(1f), numeric = true)
+                }
+            }
+        }
+
         // Amount + date side by side
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Field(
@@ -192,20 +219,7 @@ fun EntryForm(
             }
         }
 
-        if (work) {
-            // Work = quantity × rate (bricks made, pieces sewn); Salary = a fixed amount. Both go in the party's khata.
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Pill("Work", !salary, OrangeOwe) { salary = false }
-                Pill("Salary", salary, OrangeOwe) { salary = true }
-            }
-            if (!salary) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Field(item, { item = it }, "Step (optional)", Modifier.weight(1f))
-                Field(qty, { v -> qty = v.filter { it.isDigit() || it == '.' }; fillAmount() }, "Qty", Modifier.width(80.dp), numeric = true)
-                Field(rate, { v -> rate = v.filter { it.isDigit() || it == '.' }; fillAmount() }, "Rate", Modifier.width(72.dp), numeric = true)
-            }
-        }
-
-        Field(note, { note = it }, "Note (what for?)", Modifier.fillMaxWidth())
+        if (!work) Field(note, { note = it }, "Note (what for?)", Modifier.fillMaxWidth())
 
         if (!work) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Field(item, { item = it }, "Goods (optional)", Modifier.weight(1f))
@@ -232,6 +246,7 @@ fun EntryForm(
             // The field (not its × button) opens the khata list.
             Box(Modifier.matchParentSize().padding(end = 40.dp).clip(RoundedCornerShape(12.dp)).clickable { picking = true })
         }
+        if (work) Field(note, { note = it }, "Note (what for?)", Modifier.fillMaxWidth())
         if (picking) PartyPicker(
             people, "", "Select khata",
             confirm = { creating -> if (creating) "Create & select" else "Select" },
@@ -298,7 +313,7 @@ fun EntryForm(
                         }
                         val finalItem = when {
                             work && salary -> "Salary"
-                            work -> item.trim().ifBlank { "Work" }
+                            work -> item.trim().let { t -> workTypes.firstOrNull { it.equals(t, true) } ?: t }.ifBlank { "Work" }
                             isLoan(t) -> item.trim().ifBlank { "Loans" }
                             isTransfer(t) -> item.trim().ifBlank { "Transfer" }
                             isTrade(t) -> item.trim().ifBlank { if (t == Type.SALE) "Sale" else "Purchase" }
