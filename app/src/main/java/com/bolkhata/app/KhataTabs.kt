@@ -105,32 +105,19 @@ val KHATA_TABS = listOf(Tab.CHAT, Tab.PARTIES, Tab.CASHBOOK, Tab.EXPENSE, Tab.IN
 
 @Composable
 fun KhataNav(tab: Tab, onTab: (Tab) -> Unit) {
-    // No shadow: it joins the white chat strip above into one bottom panel. A Box, not a Surface, so the raised
-    // Cashbook button is not clipped at the top edge.
-    Box(Modifier.background(MaterialTheme.colorScheme.surface)) {
+    // No shadow: it joins the white chat strip above into one bottom panel.
+    Surface(color = MaterialTheme.colorScheme.surface) {
         Row(Modifier.fillMaxWidth().navigationBarsPadding().height(58.dp)) {
             KHATA_TABS.forEach { t ->
                 val (label, icon) = navItem(t)
                 val on = t == tab
                 val tint = if (on) Ember else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                // Cashbook is where the day starts: a raised red round button, lifted above the bar.
-                val raised = t == Tab.CASHBOOK
                 Column(
                     Modifier.weight(1f).fillMaxHeight().clickable { onTab(t) },
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = if (raised) Arrangement.Bottom else Arrangement.Center
+                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
                 ) {
-                    if (raised) {
-                        Box(
-                            Modifier.offset(y = (-4).dp).size(42.dp).shadow(4.dp, CircleShape).clip(CircleShape).background(Ember),
-                            contentAlignment = Alignment.Center
-                        ) { Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(22.dp)) }
-                        Text(label, fontSize = 10.sp, color = tint, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium,
-                            modifier = Modifier.padding(bottom = 7.dp))
-                    } else {
-                        Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(22.dp))
-                        Text(label, fontSize = 10.sp, color = tint, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium)
-                    }
+                    Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(22.dp))
+                    Text(label, fontSize = 10.sp, color = tint, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium)
                 }
             }
         }
