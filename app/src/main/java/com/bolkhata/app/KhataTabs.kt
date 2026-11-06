@@ -820,7 +820,8 @@ fun PartyKhataScreen(
     val p = remember(entries, name) { personAccounts(entries).firstOrNull { it.name.equals(name, true) } }
     val hist = remember(p) { p?.history?.asReversed() ?: emptyList() }
     val months = remember(hist) { monthsOf(hist.map { it.first }) }
-    var month by rememberSaveable(name, months.firstOrNull()?.first) { mutableIntStateOf(months.firstOrNull()?.first ?: 0) }
+    // A party's khata opens on All (its whole history); a month chip narrows it.
+    var month by rememberSaveable(name) { mutableIntStateOf(ALL_MONTHS) }
     // A remembered month that no longer has entries (the khata changed since) falls back to the newest month.
     if (month != ALL_MONTHS && months.none { it.first == month }) month = months.firstOrNull()?.first ?: ALL_MONTHS
     var q by rememberSaveable(name) { mutableStateOf("") }
