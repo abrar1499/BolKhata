@@ -50,6 +50,8 @@ object Groq {
           diye", "is mahine food kitna", "19 aug se aaj tak expense", "Ali ka khata", "cashbook", "expense report",
           "last 5 entries", "2800 wali entry", "petrol 50 nahi 40 tha", "other me kitni entries". Keep every number
           exactly and use the matching saved name. Leave "reply" empty: the app answers from its own records.
+        - Always add "standalone": true when the message means the same without the conversation ("pichle mahine
+          kitna kharcha", "chai 50"), false when it leans on it ("income kya thi", "detail do", "aur food?").
         - A greeting ("hi", "salam") is never a follow-up: leave "command" empty and greet back.
         - Otherwise (greeting, general question, help, advice), leave "command" empty and answer in "reply" in ONE
           short sentence (at most 15 words), as short as a friend would say it: "kya hal hai" → "Theek, aap batao?". Reply in the message's language: English gets English, Roman Urdu gets
@@ -62,7 +64,9 @@ object Groq {
           borrowed, received_back, paid_back. category (for expense) is one of $CATEGORY_NAMES. item is 1-3 words
           (e.g. "Petrol", "Chai"), person is the other person's name (saved name if it matches) or "", note is any
           extra detail or "", date is "YYYY-MM-DD" when a day is said (today is TODAY) else "", qty and unit only
-          when a quantity is said. Amounts exactly as said. For edits, questions and anything else, "entries" is [].
+          when a quantity is said. Amounts exactly as said. Messages often come from voice, so a name may be
+          misheard ("dalib", "undelib", "share your Nickel" for a saved "Talib"): use the saved name that SOUNDS
+          closest; a new name keeps the spelling that reads most like a real name. For edits, questions and anything else, "entries" is [].
         - When the message asks about saved money (a total, list, count, report, biggest), also fill "query":
           {"mode": "sum" | "list" | "count" | "report" | "highest", "types": [any of expense, income, lent,
           borrowed, received_back, paid_back, sale, purchase], "categories": [category names], "persons": [saved
@@ -88,8 +92,34 @@ object Groq {
      *  [query] what to look up in the saved records ([what] is sum, list, count, report or highest). */
     data class Routed(
         val command: String, val reply: String, val entries: List<Entry> = emptyList(),
-        val what: String = "", val query: Query.Filter? = null, val queryJson: String = ""
+        val what: String = "", val query: Query.Filter? = null, val queryJson: String = "",
+        /** The message means the same without the conversation, so the app may learn it (see [learnKey]). */
+        val standalone: Boolean = false
     )
+
+    // ---- Learning: what Groq understood once, the app reads by itself next time (no tokens).
+
+    private val numberRe = Regex("""\d+(?:[.,]\d+)*""")
+
+    /** The message as a key: lower case, words only, every number as "#" ("chai 50 likho" → "chai # likho"). */
+    fun learnKey(said: String): String =
+        said.lowercase().replace(numberRe, " # ").split(Regex("""[^\p{L}\p{N}#]+""")).filter { it.isNotBlank() }.joinToString(" ")
+
+    /** Groq's [command] with the message's numbers as ⟨1⟩, ⟨2⟩…; null when it holds a number the message did not. */
+    fun learnTemplate(command: String, said: String): String? {
+        val nums = numberRe.findAll(said).map { it.value }.toList()
+        var bad = false
+        val t = numberRe.replace(command) { m -> nums.indexOf(m.value).let { i -> if (i < 0) { bad = true; m.value } else "⟨${i + 1}⟩" } }
+        return if (bad) null else t
+    }
+
+    /** A learned [template] filled with this message's numbers; null when they don't fit. */
+    fun learnFill(template: String, said: String): String? {
+        val nums = numberRe.findAll(said).map { it.value }.toList()
+        var bad = false
+        val out = Regex("""⟨(\d+)⟩""").replace(template) { m -> nums.getOrNull(m.groupValues[1].toInt() - 1) ?: run { bad = true; "" } }
+        return if (bad) null else out
+    }
 
     private val QUERY_TYPES get() = TYPES + mapOf("sale" to Type.SALE, "purchase" to Type.PURCHASE)
 
@@ -206,10 +236,10 @@ object Groq {
                     Routed(
                         if (digits(command) == digits(said)) command else said, "",
                         entriesFrom(o.optJSONArray("entries"), said, now).orEmpty(), q?.first.orEmpty(), q?.second,
-                        if (q == null) "" else o.optJSONObject("query").toString()
+                        if (q == null) "" else o.optJSONObject("query").toString(), o.optBoolean("standalone", false)
                     )
                 }
-                reply.isNotBlank() -> Routed("", reply)
+                reply.isNotBlank() -> Routed("", reply, standalone = o.optBoolean("standalone", false))
                 else -> error("empty")
             }
         }.getOrNull()

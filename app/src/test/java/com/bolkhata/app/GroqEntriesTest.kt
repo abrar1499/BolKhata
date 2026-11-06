@@ -67,6 +67,15 @@ class GroqEntriesTest {
         assertEquals(true, Report.parse(text, "SAR")!!.rows.any { it.title == "Food" && it.sub == "1 · 70%" })
     }
 
+    @Test fun aLearnedCommandTakesTheNewNumbers() {
+        assertEquals("chai # likho", Groq.learnKey("Chai 50 likho!"))
+        assertEquals(Groq.learnKey("chai 50 likho"), Groq.learnKey("chai 70 likho"))
+        val t = Groq.learnTemplate("chai 50", "chai 50 likho")!!
+        assertEquals("chai ⟨1⟩", t)
+        assertEquals("chai 70", Groq.learnFill(t, "chai 70 likho"))
+        assertNull(Groq.learnTemplate("chai 60", "chai 50 likho"))
+    }
+
     @Test fun aLoanWithoutAPersonIsRefused() {
         val list = JSONArray("""[{"type":"lent","amount":200,"person":""}]""")
         assertNull(Groq.entriesFrom(list, "200 udhaar diye", now))
