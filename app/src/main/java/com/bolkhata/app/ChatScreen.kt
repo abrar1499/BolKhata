@@ -130,7 +130,9 @@ fun ChatScreen(
                         Modifier.fillMaxWidth().padding(vertical = 20.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text("Your money assistant", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        GlassLogo(64.dp)
+                        Spacer(Modifier.height(10.dp))
+                        Text("Smart Expense", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                         Spacer(Modifier.height(6.dp))
                         Text(
                             "Speak or type an entry and it is saved right away. You can also ask questions, in English or Roman Urdu.",
@@ -155,7 +157,10 @@ fun ChatScreen(
                 if (message.isUser) {
                     UserBubble(message.text, message.attachment)
                 } else {
-                    Column(Modifier.fillMaxWidth()) {
+                    // Each answer starts with the app's small logo, like a chat assistant's picture.
+                    Row(Modifier.fillMaxWidth()) {
+                    GlassLogo(20.dp, Modifier.padding(top = 8.dp))
+                    Column(Modifier.weight(1f)) {
                         if (message.entryIds.isNotEmpty()) SavedCard(message, byId, currency, onUndo, onEditEntry)
                         else remember(message.text, currency) { Report.parse(message.text, currency) }
                             ?.let { ReportCard(it, message.text) } ?: AssistantBubble(message.text)
@@ -181,6 +186,7 @@ fun ChatScreen(
                             Text(it.groupValues[1], fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(start = 14.dp).offset(y = (-6).dp))
                         }
+                    }
                     }
                 }
             }

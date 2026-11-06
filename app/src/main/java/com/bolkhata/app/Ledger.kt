@@ -26,6 +26,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.graphics.Color
@@ -501,9 +502,10 @@ fun LedgerScreen(
 
 @Composable
 private fun Header(title: String, subtitle: String, onBack: () -> Unit) {
-    // Same orange band as the khata screens.
+    // The same glass band as the khata screens (white text, so the icon's colours on light themes).
     Row(
-        Modifier.fillMaxWidth().background(EmberBrush).statusBarsPadding().padding(start = 4.dp, end = 16.dp, top = 6.dp, bottom = 10.dp),
+        Modifier.fillMaxWidth().then(LocalHeader.current.let { t -> Modifier.drawBehind { drawGlass(glassColors(t), size.height) } })
+            .statusBarsPadding().padding(start = 4.dp, end = 16.dp, top = 6.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White) }

@@ -4,6 +4,8 @@ import androidx.compose.foundation.BorderStroke
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
@@ -43,6 +45,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -608,5 +612,58 @@ fun BoxScope.PickMenu(open: Boolean, onDismiss: () -> Unit, content: @Composable
             containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp, shadowElevation = 6.dp,
             content = content
         )
+    }
+}
+
+// ---------- the glass look of the app icon ----------
+
+/** The app icon's colours: red-orange to deep red. */
+val BrandGlass = listOf(Color(0xFFFF7A45), Color(0xFFE3342F), Color(0xFF9F1239))
+
+/** Colours of a header band: the icon's for Red, else the theme's own. */
+fun bandColors(theme: HeaderTheme) = if (theme.name == "Red") BrandGlass else listOf(theme.c1, theme.c2, theme.c3)
+
+/** Colours behind white marks (the logo, headers with white text): the icon's on Red and the light themes. */
+fun glassColors(theme: HeaderTheme) = if (theme.light || theme.name == "Red") BrandGlass else listOf(theme.c1, theme.c2, theme.c3)
+
+/** A header band like the icon: the colours on a diagonal and one soft round light at the top right, [h] tall. */
+fun DrawScope.drawGlass(colors: List<Color>, h: Float) {
+    val w = size.width
+    drawRect(Brush.linearGradient(0f to colors[0], 0.55f to colors[1], 1f to colors[2], start = Offset.Zero, end = Offset(w, h)), size = Size(w, h))
+    clipRect(right = w, bottom = h) {
+        drawCircle(Color.White.copy(alpha = 0.2f), radius = w * 0.42f, center = Offset(w * 0.92f, -w * 0.12f))
+    }
+}
+
+/**
+ * The app icon (a frosted wallet on the glass colours) as a small logo, in the theme's colours. [onBand]: it sits on a
+ * band of the same colours, so it gets a white edge and a deeper shadow to stand apart.
+ */
+@Composable
+fun GlassLogo(size: Dp, modifier: Modifier = Modifier, onBand: Boolean = false) {
+    val c = glassColors(LocalHeader.current)
+    val shape = RoundedCornerShape(size * 0.26f)
+    Canvas(
+        modifier.size(size)
+            .shadow(if (onBand) size * 0.12f else 2.dp, shape)
+            .then(if (onBand) Modifier.border(1.dp, Color.White.copy(alpha = 0.95f), shape) else Modifier)
+            .clip(shape)
+    ) {
+        val s = this.size.width / 108f
+        // The wallet is drawn 1.25× around the middle, as in the launcher icon's artwork.
+        fun p(x: Float, y: Float) = Offset((54 + 1.25f * (x - 56)) * s, (54 + 1.25f * (y - 51)) * s)
+        fun l(v: Float) = v * 1.25f * s
+        drawRect(Brush.linearGradient(0f to c[0], 0.55f to c[1], 1f to c[2], start = Offset.Zero, end = Offset(this.size.width, this.size.height)))
+        drawCircle(Color.White.copy(alpha = 0.18f), radius = 26 * s, center = Offset(84 * s, 22 * s))
+        drawPath(androidx.compose.ui.graphics.Path().apply {
+            p(42f, 30f).let { moveTo(it.x, it.y) }; p(68f, 26f).let { lineTo(it.x, it.y) }
+            p(72.7f, 43f).let { lineTo(it.x, it.y) }; p(42f, 43f).let { lineTo(it.x, it.y) }; close()
+        }, Color.White.copy(alpha = 0.45f))
+        drawRoundRect(Color.White.copy(alpha = 0.7f), topLeft = p(36f, 33f), size = Size(l(32f), l(10f)), cornerRadius = CornerRadius(l(2f)))
+        drawRoundRect(Color.White.copy(alpha = 0.35f), topLeft = p(29f, 40f), size = Size(l(54f), l(36f)), cornerRadius = CornerRadius(l(7f)))
+        drawRoundRect(Color.White.copy(alpha = 0.8f), topLeft = p(29f, 40f), size = Size(l(54f), l(36f)), cornerRadius = CornerRadius(l(7f)),
+            style = Stroke(l(1.5f)))
+        drawRoundRect(Color.White, topLeft = p(59f, 51f), size = Size(l(22f), l(15f)), cornerRadius = CornerRadius(l(5f)))
+        drawCircle(c[1], radius = l(3f), center = p(67f, 58.5f))
     }
 }
