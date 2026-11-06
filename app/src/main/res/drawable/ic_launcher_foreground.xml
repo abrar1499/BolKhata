@@ -1,22 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Wallet with bills on the app's red. Kept inside the 66dp safe zone. -->
+<!-- Wallet with bills as frosted glass on the red gradient. Kept inside the 66dp safe zone. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- shadow -->
-    <path android:fillColor="#33000000" android:pathData="M37,43 h40 a7,7 0 0 1 7,7 v22 a7,7 0 0 1 -7,7 h-40 a7,7 0 0 1 -7,-7 v-22 a7,7 0 0 1 7,-7 z" />
-    <!-- bill2 -->
-    <path android:fillColor="#FFC9C4" android:pathData="M42,30 l26,-4 a2,2 0 0 1 2.3,1.7 l2.4,15.3 h-30 z" />
+    <!-- bill behind -->
+    <path android:fillColor="#73FFFFFF" android:pathData="M42,30 l26,-4 a2,2 0 0 1 2.3,1.7 l2.4,15.3 h-30 z" />
     <!-- bill -->
-    <path android:fillColor="#FFE7E4" android:pathData="M38,33 h28 a2,2 0 0 1 2,2 v8 h-32 v-8 a2,2 0 0 1 2,-2 z" />
-    <!-- billline -->
-    <path android:fillColor="#E3342F" android:pathData="M42,37 h12 v2.4 h-12 z" />
-    <!-- wallet -->
-    <path android:fillColor="#FFFFFF" android:pathData="M36,40 h40 a7,7 0 0 1 7,7 v22 a7,7 0 0 1 -7,7 h-40 a7,7 0 0 1 -7,-7 v-22 a7,7 0 0 1 7,-7 z" />
+    <path android:fillColor="#B3FFFFFF" android:pathData="M38,33 h28 a2,2 0 0 1 2,2 v8 h-32 v-8 a2,2 0 0 1 2,-2 z" />
+    <!-- wallet: frosted glass with a light edge -->
+    <path android:fillColor="#59FFFFFF" android:strokeColor="#CCFFFFFF" android:strokeWidth="1.5"
+        android:pathData="M36,40 h40 a7,7 0 0 1 7,7 v22 a7,7 0 0 1 -7,7 h-40 a7,7 0 0 1 -7,-7 v-22 a7,7 0 0 1 7,-7 z" />
     <!-- flap -->
-    <path android:fillColor="#FFE7E4" android:pathData="M64,51 h17 v15 h-17 a5,5 0 0 1 -5,-5 v-5 a5,5 0 0 1 5,-5 z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M64,51 h17 v15 h-17 a5,5 0 0 1 -5,-5 v-5 a5,5 0 0 1 5,-5 z" />
     <!-- clasp -->
-    <path android:fillColor="#E3342F" android:pathData="M67,58.5 m-3,0 a3,3 0 1 0 6,0 a3,3 0 1 0 -6,0" />
+    <path android:fillColor="#FFE3342F" android:pathData="M67,58.5 m-3,0 a3,3 0 1 0 6,0 a3,3 0 1 0 -6,0" />
 </vector>
