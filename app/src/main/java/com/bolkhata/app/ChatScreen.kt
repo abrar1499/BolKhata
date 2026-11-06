@@ -2,6 +2,7 @@ package com.bolkhata.app
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -165,6 +166,14 @@ fun ChatScreen(
                             val moving = message.text.startsWith("Move to which khata")
                             val asked = messages.lastOrNull { it.isUser }?.text.orEmpty()
                             if (names.isNotEmpty()) NameChoices(names) { name -> onSend(if (moving) "$asked $name" else "$name ka khata") }
+                            // After a total, the likely next questions as chips.
+                            val hero = remember(message.text, currency) { Report.parse(message.text, currency)?.hero?.label.orEmpty() }
+                            val asks = when {
+                                hero.startsWith("Spent") -> listOf("Detail dikhao", "Income kya thi?", "Kahan kahan laga?")
+                                hero.startsWith("Income") -> listOf("Detail dikhao", "Kharcha kitna tha?")
+                                else -> emptyList()
+                            }
+                            if (names.isEmpty() && asks.isNotEmpty()) FollowChips(asks, onSend)
                         }
                         AnswerActions(ratings[message.id]) { good -> onRate(message.id, good) }
                         // "Groq · 1.2s · 340 tokens" under an answer Groq helped with.
@@ -316,15 +325,15 @@ private fun UserBubble(text: String, attachment: String = "") {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
         Text(
             text,
-            color = MaterialTheme.colorScheme.onSurface,
+            // The question in a dark bubble, the answer in a white card (like the Yaad mock-up).
+            color = MaterialTheme.colorScheme.surface,
             fontSize = 14.sp,
             lineHeight = 18.sp,
             modifier = Modifier
                 .widthIn(max = 300.dp)
-                .shadow(1.dp, MeShape)
                 .clip(MeShape)
                 .copyable(text)
-                .background(MaterialTheme.colorScheme.surface)
+                .background(MaterialTheme.colorScheme.onSurface)
                 .padding(horizontal = 12.dp, vertical = 8.dp)
         )
     }
@@ -404,57 +413,70 @@ private fun AssistantBubble(text: String) {
 /** A khata, report or list answer as a card: the main amount big, every other amount on its own line. */
 @Composable
 private fun ReportCard(r: Report, text: String) {
+    // Like the Yaad mock-up: a small headline amount, then the detail rows in one bordered box.
     val grey = MaterialTheme.colorScheme.onSurfaceVariant
+    val line = grey.copy(alpha = 0.14f)
     fun color(tone: Int) = when (tone) { 1 -> GreenIn; -1 -> RedSpend; else -> Color.Unspecified }
     val hero = r.hero
     Column(
         Modifier
             .fillMaxWidth(0.92f)
             .padding(horizontal = 8.dp, vertical = 4.dp)
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp, bottomEnd = 14.dp, bottomStart = 4.dp))
             .copyable(text)
             .background(MaterialTheme.colorScheme.surface)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(5.dp)
+            .border(1.dp, line, RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp, bottomEnd = 14.dp, bottomStart = 4.dp))
+            .padding(horizontal = 10.dp, vertical = 9.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
-        if (r.title.isNotBlank() && r.title != hero?.label) Text(r.title, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+        if (r.title.isNotBlank() && r.title != hero?.label) Text(r.title, fontWeight = FontWeight.SemiBold, fontSize = 11.sp)
         if (hero != null) {
-            Text(hero.label, fontSize = 12.sp, color = grey)
-            Text(hero.amount, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = color(hero.tone))
+            Text(hero.label, fontSize = 10.sp, color = grey)
+            Text(hero.amount, fontSize = 15.sp, fontWeight = FontWeight.Black, color = color(hero.tone))
         }
-        val others = r.stats.filter { it !== hero }
-        if (others.isNotEmpty()) HorizontalDivider(Modifier.padding(vertical = 4.dp), color = grey.copy(alpha = 0.15f))
-        others.forEach { s ->
+        r.stats.filter { it !== hero }.forEach { s ->
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(s.label, Modifier.weight(1f), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
-                Text(s.amount, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = color(s.tone))
+                Text(s.label, Modifier.weight(1f), fontSize = 10.5.sp, color = MaterialTheme.colorScheme.onSurface)
+                Text(s.amount, fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold, color = color(s.tone))
             }
         }
-        r.rows.forEachIndexed { i, l ->
-            if (i > 0 || hero != null) HorizontalDivider(color = grey.copy(alpha = 0.12f))
-            // One compact line per entry: name (· note in grey), date, amount.
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    buildAnnotatedString {
-                        append(l.title)
-                        if (l.sub.isNotBlank()) withStyle(SpanStyle(color = grey, fontWeight = FontWeight.Normal)) { append(" · " + l.sub) }
-                    },
-                    Modifier.weight(1f), fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis
-                )
-                if (l.date.isNotBlank()) Text(l.date, Modifier.padding(horizontal = 8.dp), fontSize = 11.sp, color = grey, maxLines = 1)
-                Text(l.amount, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        if (r.notes.isNotEmpty()) Text(r.notes.joinToString(" · "), fontSize = 9.5.sp, color = grey, lineHeight = 12.sp)
+        if (r.rows.isNotEmpty() || r.total.isNotEmpty()) Column(
+            Modifier.padding(top = 4.dp).fillMaxWidth().clip(RoundedCornerShape(10.dp)).border(1.dp, line, RoundedCornerShape(10.dp))
+        ) {
+            r.rows.forEachIndexed { i, l ->
+                if (i > 0) HorizontalDivider(color = line)
+                // One line per row: name, its note (count · share, a date) in small grey, the amount.
+                Row(Modifier.padding(horizontal = 8.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(l.title, Modifier.weight(1f), fontSize = 9.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    val note = listOf(l.date, l.sub).filter { it.isNotBlank() }.joinToString(" · ")
+                    if (note.isNotBlank()) Text(note, Modifier.padding(horizontal = 6.dp), fontSize = 8.5.sp, color = grey, maxLines = 1)
+                    Text(l.amount, fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = color(hero?.tone ?: 0))
+                }
             }
-        }
-        if (r.total.isNotEmpty()) {
-            HorizontalDivider(Modifier.padding(vertical = 2.dp), color = grey.copy(alpha = 0.3f))
             r.total.forEach { s ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (s.label == "Total") "Total" else "Total · " + s.label, Modifier.weight(1f), fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                    Text(s.amount, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = color(s.tone))
+                HorizontalDivider(color = line)
+                Row(Modifier.background(grey.copy(alpha = 0.06f)).padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(if (s.label == "Total") "Total" else "Total · " + s.label, Modifier.weight(1f), fontWeight = FontWeight.Bold, fontSize = 10.sp)
+                    Text(s.amount, fontWeight = FontWeight.Bold, fontSize = 10.5.sp, color = color(s.tone))
                 }
             }
         }
-        if (r.notes.isNotEmpty()) Text(r.notes.joinToString(" · "), fontSize = 11.sp, color = grey, lineHeight = 14.sp)
+    }
+}
+
+/** Next questions under the last answer, one tap each ("Income kya thi?", "Detail dikhao"). */
+@Composable
+private fun FollowChips(asks: List<String>, onPick: (String) -> Unit) {
+    Row(Modifier.padding(start = 8.dp, top = 2.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        asks.forEach { a ->
+            Text(
+                a, fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surface)
+                    .border(1.dp, MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.18f), RoundedCornerShape(14.dp))
+                    .clickable { onPick(a) }.padding(horizontal = 10.dp, vertical = 5.dp)
+            )
+        }
     }
 }
 

@@ -154,17 +154,10 @@ object Query {
                     dateFmt.format(java.util.Date(e.date)) + " · " + (e.item.ifBlank { e.category.label }) +
                         (if (e.person.isNotBlank()) " · " + e.person else "") + " · " + fmt(e.amount) + " " + currency
                 } + if (list.size > 10) "\n+${list.size - 10} more" else ""
-                rows + "\nTotal: " + answer(list, "sum", f, currency)
+                rows + "\nTotal: " + totals(list, head, currency)
             }
-            // "Where did it go": the spending by category, biggest first, as one card.
-            "report" -> {
-                val spent = list.filter { it.type == Type.KHARCHA }
-                if (spent.isEmpty()) answer(list, "sum", f, currency)
-                else "Spent: " + fmt(spent.sumOf { it.amount }) + " " + currency +
-                    " (${spent.size} " + (if (spent.size == 1) "entry" else "entries") + ", $head)" +
-                    spent.groupBy { it.category }.map { (c, v) -> c.label to v.sumOf { it.amount } }
-                        .sortedByDescending { it.second }.joinToString("") { " · " + it.first + " " + fmt(it.second) + " " + currency }
-            }
+            // "Where did it go": the totals with every category.
+            "report" -> totals(list, head, currency) + details(list, f, currency, 20)
             "highest" -> {
                 val expenses = list.filter { it.type == Type.KHARCHA }
                 val top = expenses.sortedWith(compareByDescending<Entry> { it.amount }.thenByDescending { it.date }).take(5)
@@ -178,15 +171,55 @@ object Query {
                         " (${expenses.size} entries)"
                 }
             }
-            else -> {
-                // Totals by kind: "Spent 120 SAR · Lent 50 SAR (4 entries, 25 Oct)".
-                val byType = list.groupBy { it.type }.mapValues { (_, v) -> v.sumOf { it.amount } }
-                val names = mapOf(Type.KHARCHA to "Spent", Type.AAMDANI to "Income", Type.DIYA to "Lent", Type.LIYA to "Borrowed",
-                    Type.WAPIS_MILA to "Got back", Type.WAPIS_DIYA to "Paid back", Type.SALE to "Sales", Type.PURCHASE to "Bought")
-                Type.entries.filter { it in byType }.joinToString(" · ") { (names[it] ?: it.label) + " " + fmt(byType[it]!!) + " " + currency } +
-                    " (${list.size} " + (if (list.size == 1) "entry" else "entries") + ", $head)"
+            else -> totals(list, head, currency) + details(list, f, currency, 6)
+        }
+    }
+
+    /** Totals by kind: "Spent 120 SAR · Lent 50 SAR (4 entries, 25 Oct)". */
+    private fun totals(list: List<Entry>, head: String, currency: String): String {
+        val byType = list.groupBy { it.type }.mapValues { (_, v) -> v.sumOf { it.amount } }
+        val names = mapOf(Type.KHARCHA to "Spent", Type.AAMDANI to "Income", Type.DIYA to "Lent", Type.LIYA to "Borrowed",
+            Type.WAPIS_MILA to "Got back", Type.WAPIS_DIYA to "Paid back", Type.SALE to "Sales", Type.PURCHASE to "Bought")
+        return Type.entries.filter { it in byType }.joinToString(" · ") { (names[it] ?: it.label) + " " + fmt(byType[it]!!) + " " + currency } +
+            " (${list.size} " + (if (list.size == 1) "entry" else "entries") + ", $head)"
+    }
+
+    /**
+     * The detail rows under a total, one per line as "name · note · amount": spending by category ([top] of them, with
+     * entry count and share), the biggest expense, the daily average, a few income entries and what was saved.
+     */
+    private fun details(list: List<Entry>, f: Filter, currency: String, top: Int): String {
+        val out = StringBuilder()
+        val dateFmt = java.text.SimpleDateFormat("d MMM", java.util.Locale.US)
+        val spent = list.filter { it.type == Type.KHARCHA }
+        val spentSum = spent.sumOf { it.amount }
+        if (spent.isNotEmpty()) {
+            spent.groupBy { it.category }.map { (c, v) -> Triple(c, v.size, v.sumOf { it.amount }) }
+                .sortedByDescending { it.third }.take(top).forEach { (c, n, sum) ->
+                    val pct = if (spentSum > 0) Math.round(sum * 100 / spentSum) else 0
+                    out.append("\n").append(c.label).append(" · ").append(n).append(" · ").append(pct).append("% · ")
+                        .append(fmt(sum)).append(" ").append(currency)
+                }
+            if (spent.size > 1) spent.maxByOrNull { it.amount }?.let { b ->
+                out.append("\nBiggest: ").append(b.item.ifBlank { b.category.label }).append(" · ")
+                    .append(dateFmt.format(java.util.Date(b.date))).append(" · ").append(fmt(b.amount)).append(" ").append(currency)
+            }
+            if (f.from != null) {
+                val end = minOf(f.to ?: System.currentTimeMillis(), System.currentTimeMillis())
+                val days = ((end - f.from) / 86_400_000L + 1).coerceAtLeast(1)
+                if (days > 1) out.append("\nDaily average · ").append(days).append(" days · ")
+                    .append(fmt(spentSum / days)).append(" ").append(currency)
             }
         }
+        val income = list.filter { it.type == Type.AAMDANI }
+        if (income.isNotEmpty() && income.size <= 3) income.forEach { e ->
+            out.append("\n").append(dateFmt.format(java.util.Date(e.date))).append(" · ").append(e.item.ifBlank { "Income" })
+                .append(if (e.person.isNotBlank()) " · " + e.person else "").append(" · ").append(fmt(e.amount)).append(" ").append(currency)
+        }
+        if (income.isNotEmpty() && spent.isNotEmpty()) {
+            out.append("\nSaved · income − spent · ").append(fmt(income.sumOf { it.amount } - spentSum)).append(" ").append(currency)
+        }
+        return out.toString()
     }
 
     private fun fmt(x: Double): String = if (x == Math.floor(x)) String.format(java.util.Locale.US, "%,d", x.toLong())
