@@ -43,6 +43,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -195,7 +196,8 @@ fun BolTheme(dark: Boolean, content: @Composable () -> Unit) {
         onPrimaryContainer = Color(0xFFD1FAE5),
         secondaryContainer = Color(0xFF064E3B),
         onSecondaryContainer = Color(0xFFD1FAE5),
-        background = Color(0xFF0F0F0F),
+        // A slate-grey page, so the dark cards stand out on it.
+        background = Color(0xFF2A2F36),
         surface = Color(0xFF181818),
         surfaceVariant = Color(0xFF262626),
         onSurfaceVariant = Color(0xFFA3A3A3),
@@ -670,11 +672,20 @@ fun GlassLogo(size: Dp, modifier: Modifier = Modifier, onBand: Boolean = false) 
 
 /**
  * The glass edge of a field, as in the mock-up: a thin border in the theme's glass colours over a faint
- * tint of them (light pink on Red). Used by the chat field and the search box.
+ * tint of them (light pink on Red).
  */
 @Composable
 fun Modifier.glassEdge(shape: androidx.compose.ui.graphics.Shape, width: Dp = 1.5.dp): Modifier {
     val c = glassColors(LocalHeader.current)
     val fill = androidx.compose.ui.graphics.lerp(MaterialTheme.colorScheme.surface, c[1], 0.05f)
     return this.clip(shape).background(fill, shape).border(width, Brush.linearGradient(c), shape)
+}
+
+/** The chat field and search box, as in the Claude app: a soft cream fill with a hairline warm-grey edge. */
+@Composable
+fun Modifier.fieldEdge(shape: androidx.compose.ui.graphics.Shape): Modifier {
+    val light = MaterialTheme.colorScheme.background.luminance() > 0.5f
+    val fill = if (light) Color(0xFFFBFAF8) else MaterialTheme.colorScheme.surface
+    val edge = if (light) Color(0xFFDCD6CF) else MaterialTheme.colorScheme.outlineVariant
+    return this.clip(shape).background(fill, shape).border(1.dp, edge, shape)
 }
