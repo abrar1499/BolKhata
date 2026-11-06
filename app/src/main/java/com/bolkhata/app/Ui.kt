@@ -671,7 +671,7 @@ fun GlassLogo(size: Dp, modifier: Modifier = Modifier, onBand: Boolean = false) 
 
 /**
  * The calm field look of the Claude app: a soft cream fill, a hairline warm-grey edge and a barely-there shadow.
- * Used by every search box, unselected chip and the chat field.
+ * Used by the search box.
  */
 @Composable
 fun Modifier.glassEdge(shape: androidx.compose.ui.graphics.Shape, width: Dp = 1.dp): Modifier {
@@ -681,8 +681,3 @@ fun Modifier.glassEdge(shape: androidx.compose.ui.graphics.Shape, width: Dp = 1.
     return this.shadow(1.dp, shape, ambientColor = Color.Black.copy(alpha = 0.06f), spotColor = Color.Black.copy(alpha = 0.06f))
         .clip(shape).background(fill, shape).border(width, edge, shape)
 }
-
-/** A chosen chip, as in the Claude app: a solid dark ink pill (white text on it). */
-@Composable
-fun Modifier.glassFill(shape: androidx.compose.ui.graphics.Shape): Modifier =
-    this.shadow(1.dp, shape).clip(shape).background(Color(0xFF1F1D1B), shape)

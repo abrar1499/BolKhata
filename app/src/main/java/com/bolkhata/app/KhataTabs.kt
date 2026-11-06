@@ -259,16 +259,14 @@ internal fun Initial(name: String) {
     }
 }
 
-private val ChipShape = RoundedCornerShape(9.dp)
-
 /** Small filter chip (All / Receivable / Payable). */
 @Composable
 internal fun SmallChip(label: String, on: Boolean, onClick: () -> Unit) {
     Text(
         label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = if (on) Color.White else MaterialTheme.colorScheme.onSurface,
-        // Small rounded pills like the Claude app's: the chosen one dark, the others cream with a hairline edge.
-        modifier = (if (on) Modifier.glassFill(ChipShape) else Modifier.glassEdge(ChipShape))
-            .clickable { onClick() }.padding(horizontal = 10.dp, vertical = 5.dp)
+        modifier = Modifier.clip(CircleShape).background(if (on) Ember else MaterialTheme.colorScheme.surface)
+            .border(1.dp, if (on) Ember else MaterialTheme.colorScheme.outlineVariant, CircleShape)
+            .clickable { onClick() }.padding(horizontal = 11.dp, vertical = 6.dp)
     )
 }
 
