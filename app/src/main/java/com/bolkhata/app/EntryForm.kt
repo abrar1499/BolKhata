@@ -184,7 +184,7 @@ fun EntryForm(
                 Pill("Salary", salary, OrangeOwe) { salary = true }
             }
             if (!salary) {
-                Field(item, { item = it }, "Work type · e.g. Moulding", Modifier.fillMaxWidth())
+                Field(item, { item = it }, "Work type", Modifier.fillMaxWidth())
                 // Work types already used: tap one so the same work is never spelt two ways.
                 val typed = item.trim()
                 val offered = workTypes.filter { !it.equals(typed, true) && (typed.isEmpty() || it.contains(typed, true)) }

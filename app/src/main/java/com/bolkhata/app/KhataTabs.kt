@@ -429,7 +429,7 @@ private fun LazyListScope.productionView(
         GridRow("Cost per unit", if (made > 0 && perUnit < 100) "Per 1000: " + money(currency, perUnit * 1000) else "",
             listOf(GCell(if (made > 0) fmt(perUnit) else "—", LKind.OUT)), WideColW, true) {}
     }
-    if (list.isEmpty()) emptyNote("No production costs yet. Tap Entry, or say \"coal 4200\" in the chat.")
+    if (list.isEmpty()) emptyNote("No production costs yet. Tap Entry to add one.")
     else ledger(
         if (month == ALL_MONTHS) "All" else monthLabel(months, month) ?: "All",
         listOf(LCol("Cost", fmt(cost), LKind.OUT)),
