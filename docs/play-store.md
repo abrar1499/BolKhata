@@ -35,8 +35,8 @@
 - **Notification access:** not used. The Play build leaves out bank alerts, chat review, ElevenLabs voice and the self-updater.
 
 ## Data safety form
-- **Does the app collect or share user data?** Collects: yes (sent to Groq, our service provider, to read messages).
-  Shares with third parties: no (a service provider acting for the app is not "sharing").
+- **Does the app collect or share user data?** Only when the person adds their own Groq key (Groq AI is off by
+  default). Then: collected: yes (sent to Groq to read messages); shared with third parties: no.
   - **Messages → Other in-app messages:** chat text. Purpose: app functionality. Optional (Groq AI can be turned off).
   - **Audio → Voice or sound recordings:** when the mic is used. Purpose: app functionality. Optional.
   - **Financial info → Other financial info:** amounts written in chat messages. Purpose: app functionality. Optional.
