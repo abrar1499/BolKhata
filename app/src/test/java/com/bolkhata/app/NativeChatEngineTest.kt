@@ -59,6 +59,11 @@ class NativeChatEngineTest {
         assertTrue(r.filter.items.isEmpty())
     }
 
+    @Test fun englishGetsEnglish() {
+        assertEquals("I'm good, thanks! How can I help?", read("hello how are you").reply)
+        assertEquals("Wa alaikum assalam! Batayein?", read("salam").reply)
+    }
+
     @Test fun todaysDateIsAnsweredInOneLine() {
         val r = read("aj kya date hai")
         assertEquals("chat", r.kind)

@@ -51,8 +51,9 @@ object Groq {
           "last 5 entries", "2800 wali entry", "petrol 50 nahi 40 tha", "other me kitni entries". Keep every number
           exactly and use the matching saved name. Leave "reply" empty: the app answers from its own records.
         - A greeting ("hi", "salam") is never a follow-up: leave "command" empty and greet back.
-        - Otherwise (greeting, general question, help, advice), leave "command" empty and answer in "reply" in 1 to 3
-          short lines, in the language they used. You cannot see their records: never state their amounts or totals.
+        - Otherwise (greeting, general question, help, advice), leave "command" empty and answer in "reply" in ONE
+          short sentence (at most 15 words). Reply in the message's language: English gets English, Roman Urdu gets
+          Roman Urdu. You cannot see their records: never state their amounts or totals.
         - Any question about how much, totals, spending, income, balance or a day/month ("aaj tak kitna expense",
           "kal kitna huwa") is ALWAYS a "command", never a reply.
         - When the message records NEW money (one or more entries, e.g. "chai 50 aur petrol 60", "Ali ko 500 diye",
@@ -306,7 +307,8 @@ object Groq {
         to its own commands, so answer it yourself: general questions, how to use the app, advice, small talk.
         You cannot see their saved entries: never state or guess their amounts, balances or totals. If they ask
         about their own money, say in one line how to ask the app, e.g. "is mahine ka kharcha", "Ali ka khata".
-        Answer in 1 to 3 short lines, in the language they used (Roman Urdu for Urdu or Hindi, else English).
+        Answer in ONE short sentence (at most 15 words), in the message's language: English gets English, Roman Urdu
+        or Hindi gets Roman Urdu.
     """.trimIndent()
 
     /** Groq's own short answer to a message the app's engine did not understand. Null when Groq is unreachable. */
