@@ -1547,7 +1547,7 @@ fun SettingsScreen(
                         var open by remember { mutableStateOf(false) }
                         ListRow("Currency", "$currency ▾") { open = true }
                         PickMenu(open, { open = false }) {
-                            CURRENCIES.forEach { c -> DropdownMenuItem(text = { Text(c, fontWeight = if (c == currency) FontWeight.SemiBold else FontWeight.Normal) }, onClick = { onCurrency(c); open = false }) }
+                            CURRENCIES.forEach { c -> DropdownMenuItem(text = { Text(currencyLabel(c), fontSize = 13.sp, fontWeight = if (c == currency) FontWeight.SemiBold else FontWeight.Normal) }, onClick = { onCurrency(c); open = false }) }
                         }
                     }
                     ListDivider()

@@ -38,7 +38,15 @@ enum class Cat(val label: String, val icon: String) {
     OTHER("Other", "📝")
 }
 
-val CURRENCIES = listOf("SAR", "PKR", "AED", "QAR", "KWD", "OMR", "BHD", "INR", "USD", "EUR", "GBP")
+/** Every currency: the Gulf, South Asia and the big ones first, then all others A–Z. */
+val CURRENCIES: List<String> = run {
+    val first = listOf("SAR", "PKR", "AED", "QAR", "KWD", "OMR", "BHD", "INR", "BDT", "NPR", "LKR", "USD", "EUR", "GBP")
+    first + java.util.Currency.getAvailableCurrencies().map { it.currencyCode }.filter { it !in first }.sorted()
+}
+
+/** "SAR · Saudi Riyal": the code with its English name, for the currency menus. */
+fun currencyLabel(code: String): String =
+    runCatching { code + " · " + java.util.Currency.getInstance(code).getDisplayName(java.util.Locale.ENGLISH) }.getOrDefault(code)
 
 data class Entry(
     val id: String,
