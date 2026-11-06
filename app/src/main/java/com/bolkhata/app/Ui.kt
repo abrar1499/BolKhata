@@ -5,6 +5,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -669,19 +670,37 @@ fun GlassLogo(size: Dp, modifier: Modifier = Modifier, onBand: Boolean = false) 
 }
 
 /**
- * The glass edge of a field or chip, as in the mock-up: a thin border in the theme's glass colours over a faint
- * tint of them (light pink on Red).
+ * Liquid glass, as in the mock-up: a clear capsule (white fading to see-through), a bright white rim, a shine across
+ * the top and a soft halo in the theme's colour. Used by every search box, chip and the chat field.
  */
 @Composable
-fun Modifier.glassEdge(shape: androidx.compose.ui.graphics.Shape, width: Dp = 1.5.dp): Modifier {
+fun Modifier.glassEdge(shape: androidx.compose.ui.graphics.Shape, width: Dp = 1.dp): Modifier {
     val c = glassColors(LocalHeader.current)
-    val fill = androidx.compose.ui.graphics.lerp(MaterialTheme.colorScheme.surface, c[1], 0.05f)
-    return this.clip(shape).background(fill, shape).border(width, Brush.linearGradient(c), shape)
+    val base = MaterialTheme.colorScheme.surface
+    val top = androidx.compose.ui.graphics.lerp(base, Color.White, 0.6f)
+    return this.shadow(3.dp, shape, ambientColor = c[1].copy(alpha = 0.18f), spotColor = c[1].copy(alpha = 0.18f))
+        .clip(shape)
+        // Solid underneath, so the halo never shows through the clear part.
+        .background(base, shape).background(Brush.verticalGradient(listOf(top, androidx.compose.ui.graphics.lerp(base, c[1], 0.04f))), shape)
+        .then(glassShine(0.9f))
+        .border(width, Color.White.copy(alpha = 0.9f), shape)
 }
 
-/** A chosen chip: filled with the theme's glass colours (white text on it). */
+/** A chosen chip: filled with the theme's glass colours (white text on it), with the same rim and shine. */
 @Composable
 fun Modifier.glassFill(shape: androidx.compose.ui.graphics.Shape): Modifier {
     val c = glassColors(LocalHeader.current)
-    return this.shadow(2.dp, shape).clip(shape).background(Brush.linearGradient(0f to c[0], 0.55f to c[1], 1f to c[2]), shape)
+    return this.shadow(4.dp, shape, ambientColor = c[1].copy(alpha = 0.3f), spotColor = c[1].copy(alpha = 0.3f))
+        .clip(shape).background(Brush.linearGradient(0f to c[0], 0.55f to c[1], 1f to c[2]), shape)
+        .then(glassShine(0.55f))
+        .border(1.dp, Color.White.copy(alpha = 0.6f), shape)
+}
+
+/** The shine across the top of a glass capsule: a soft white band over its upper 40%, fading down. */
+private fun glassShine(alpha: Float): Modifier = Modifier.drawBehind {
+    val h = size.height * 0.4f
+    drawRoundRect(
+        Brush.verticalGradient(listOf(Color.White.copy(alpha = alpha), Color.White.copy(alpha = 0f)), startY = 2f, endY = 2f + h),
+        topLeft = Offset(size.width * 0.12f, 2f), size = Size(size.width * 0.76f, h), cornerRadius = CornerRadius(h / 2, h / 2)
+    )
 }
