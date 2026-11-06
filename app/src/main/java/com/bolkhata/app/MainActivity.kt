@@ -1265,7 +1265,16 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         }
                     }
                 }
-                val intent = groqAsk ?: offMain { NativeChatEngine.interpret(read, scoped, names0, wordFixes, history, currency = currency) }
+                val local = offMain { NativeChatEngine.interpret(read, scoped, names0, wordFixes, history, currency = currency) }
+                // Groq's lookup, with the app's own reading of the period when Groq left the dates out ("is mahine ka").
+                val intent = groqAsk?.let { g ->
+                    val f = g.filter
+                    if (f.from != null || f.to != null || local.filter.from == null) g
+                    else NativeChatEngine.Fixed(g.text, g.kind, g.reply, g.what, Query.Filter(
+                        local.filter.from, local.filter.to, f.types, f.persons, f.cats, f.items, f.min, f.max, f.last,
+                        f.noPeople, f.notItems, f.ids, f.createdFrom, f.createdTo, f.notCats
+                    ))
+                } ?: local
                 if (intent.kind in setOf("delete", "clear_all", "change", "to_khata", "paid_by", "reread", "undo")) {
                     val actionSnapshot = entries
                     chatWatch = actionSnapshot

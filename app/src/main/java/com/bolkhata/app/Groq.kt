@@ -39,7 +39,7 @@ object Groq {
         .joinToString(", ") { it.label }
 
     private val instructions = """
-        You are the brain of a khata (ledger and expense) app. People type or speak Roman Urdu, Urdu or Hindi script,
+        Today is TODAY. You are the brain of a khata (ledger and expense) app. People type or speak Roman Urdu, Urdu or Hindi script,
         or English, often misspelled. Read every message and reply with JSON only: {"command": ..., "reply": ...}.
         - If it is about their money or the app's data (add, show, search, count, total, balance, report, cashbook,
           a khata, edit, move, rename, delete, undo), put ONE short clear message for the app in "command". A
@@ -69,7 +69,8 @@ object Groq {
           "to": "YYYY-MM-DD" or "", "last": number of latest entries or 0, "exclude_categories": [category names
           to leave out, e.g. "es me fees aur sent home nikal ke batao" keeps the previous query and leaves those out]}. "report" is where the money went (by
           category, e.g. "kahan kahan laga"); "list" shows the entries ("detail", "dikhao"); "sum" is a total.
-          "aaj tak"/"ab tak" with no start means no dates. A follow-up keeps the period and filters of the
+          Always fill from/to for a period: "is mahine" is the 1st of this month to today, "aaj" is today, "kal"
+          is yesterday, "pichle mahine" is that whole month. "aaj tak"/"ab tak" with no start means no dates. A follow-up keeps the period and filters of the
           conversation. For anything else "query" is null.
     """.trimIndent()
 
