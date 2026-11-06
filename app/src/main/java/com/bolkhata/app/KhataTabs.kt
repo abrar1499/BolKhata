@@ -264,8 +264,8 @@ internal fun Initial(name: String) {
 internal fun SmallChip(label: String, on: Boolean, onClick: () -> Unit) {
     Text(
         label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = if (on) Color.White else MaterialTheme.colorScheme.onSurface,
-        // Glass like the theme: the chosen chip filled, the others with a glass edge.
-        modifier = (if (on) Modifier.glassFill(CircleShape) else Modifier.glassEdge(CircleShape))
+        modifier = Modifier.clip(CircleShape).background(if (on) Ember else MaterialTheme.colorScheme.surface)
+            .border(1.dp, if (on) Ember else MaterialTheme.colorScheme.outlineVariant, CircleShape)
             .clickable { onClick() }.padding(horizontal = 11.dp, vertical = 6.dp)
     )
 }

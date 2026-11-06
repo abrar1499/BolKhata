@@ -493,7 +493,9 @@ private fun FollowChips(asks: List<String>, onPick: (String) -> Unit) {
         asks.forEach { a ->
             Text(
                 a, fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.glassEdge(RoundedCornerShape(14.dp)).clickable { onPick(a) }.padding(horizontal = 10.dp, vertical = 5.dp)
+                modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surface)
+                    .border(1.dp, MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.18f), RoundedCornerShape(14.dp))
+                    .clickable { onPick(a) }.padding(horizontal = 10.dp, vertical = 5.dp)
             )
         }
     }
