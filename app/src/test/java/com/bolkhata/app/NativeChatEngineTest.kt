@@ -801,3 +801,14 @@ class ParserCashWordTest {
         }
     }
 }
+
+class ParserProductionTest {
+    @Test fun kilnCostsGoToProductionUnderTheirStep() {
+        for ((t, item) in listOf("koila 42 ton 420000" to "Fuel", "thapai 180000" to "Moulding", "bharai 60000" to "Loading", "nikasi 45000" to "Unloading")) {
+            val e = (Parser.parse(t).entries + Parser.parse(t).unclear).single()
+            assertEquals(t, Cat.PRODUCTION, e.category)
+            assertEquals(t, item, e.item)
+            assertEquals(t, Type.KHARCHA, e.type)
+        }
+    }
+}

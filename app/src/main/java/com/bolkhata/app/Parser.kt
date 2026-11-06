@@ -23,6 +23,11 @@ object Parser {
     /** Checked in this order; the first rule that matches wins. */
     private val rules = listOf(
         r(Cat.GHAR, "Sent home", "ghar bhej", "bheje", "bheja", "bhejay", "bhejy", "bheji", "send home", "sent home", "بھیجے", "بھیجا"),
+        // A brick kiln's (or any maker's) costs go to Production, under the step they paid for.
+        r(Cat.PRODUCTION, "Moulding", "thapai", "thapaai", "thapayi", "تھپائی"),
+        r(Cat.PRODUCTION, "Loading", "bharai", "bharaai", "bharayi", "بھرائی"),
+        r(Cat.PRODUCTION, "Unloading", "nikasi", "nikaasi", "nakasi", "نکاسی"),
+        r(Cat.PRODUCTION, "Fuel", "koila", "koela", "koyla", "coal", "کوئلہ"),
 
         r(Cat.EDU, "School fees", "school fee", "school fees", "tuition", "tution", "admission"),
         r(Cat.EDU, "Books & study", "books", "kitab", "kitaab", "kitabein", "copy", "stationery", "course", "college", "university", "uniform", "school"),

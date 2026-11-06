@@ -15,6 +15,7 @@ import androidx.compose.material.icons.outlined.Category
 import androidx.compose.material.icons.outlined.Chair
 import androidx.compose.material.icons.outlined.Handshake
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Factory
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.LocalGasStation
 import androidx.compose.material.icons.outlined.MedicalServices
@@ -161,6 +162,7 @@ fun catColor(c: Cat): Color = when (c) {
     Cat.ASSETS -> Color(0xFF7C3AED)
     Cat.SALES -> Color(0xFF16A34A)
     Cat.STOCK -> Color(0xFF0891B2)
+    Cat.PRODUCTION -> Color(0xFFB45309)
     Cat.OTHER -> Color(0xFF94A3B8)
 }
 
@@ -495,6 +497,7 @@ fun catIcon(c: Cat): ImageVector = when (c) {
     Cat.ASSETS -> Icons.Outlined.Sell
     Cat.SALES -> Icons.Outlined.ReceiptLong
     Cat.STOCK -> Icons.Outlined.Inventory2
+    Cat.PRODUCTION -> Icons.Outlined.Factory
     Cat.OTHER -> Icons.Outlined.Category
 }
 
