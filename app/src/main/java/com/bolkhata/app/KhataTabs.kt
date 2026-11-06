@@ -39,6 +39,7 @@ import androidx.compose.material.icons.outlined.ReceiptLong
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -153,16 +154,15 @@ internal fun GlassHeader(modifier: Modifier) {
 @Composable
 private fun KhataTop(
     title: String, subtitle: String, onMenu: () -> Unit, back: Boolean = false,
-    business: String? = null, onBusiness: () -> Unit = {}, pinned: Boolean = false, card: @Composable () -> Unit
+    business: String? = null, onBusiness: () -> Unit = {}, card: @Composable () -> Unit
 ) {
     val theme = LocalHeader.current
     val banded = theme.name != "Clean"
     val ink = if (banded) theme.on else MaterialTheme.colorScheme.onSurface
-    // The head stays at the top while the list scrolls under it ([pinned]): then the band ends at its own edge
-    // and the page colour sits behind it, so rows never show through.
+    // The theme band runs from the top of the screen to the middle of the summary card.
+    var cardH by remember { mutableIntStateOf(0) }
     Box(Modifier.fillMaxWidth()
-        .then(if (pinned) Modifier.background(MaterialTheme.colorScheme.background) else Modifier)
-        .then(if (banded) Modifier.drawBehind { drawBand(theme, size.height + if (pinned) 0f else BandBelow.toPx()) } else Modifier)) {
+        .then(if (banded) Modifier.drawBehind { drawBand(theme, size.height - cardH / 2f) } else Modifier)) {
         Column(Modifier.statusBarsPadding().padding(horizontal = 12.dp)) {
             if (business != null) BusinessPill(business, onMenu, onBusiness) else
             Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -175,13 +175,18 @@ private fun KhataTop(
                 }
             }
             Spacer(Modifier.height(10.dp))
-            card()
+            Box(Modifier.onSizeChanged { cardH = it.height }) { card() }
         }
     }
 }
 
-/** How far the band reaches past the header: the search box's top gap and half its height. */
-private val BandBelow = 30.dp
+/**
+ * The fixed top of a khata tab: the head with its card, then search and chips. It stays put; only the list under it
+ * scrolls, and the page colour behind it keeps rows from showing through.
+ */
+@Composable
+private fun TabHead(content: @Composable ColumnScope.() -> Unit) =
+    Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).padding(bottom = 4.dp), content = content)
 
 /** The theme band: its colours, a soft glossy top half, one white glow at the top right and a thin light bottom edge. */
 private fun DrawScope.drawBand(theme: HeaderTheme, h: Float) {
@@ -354,20 +359,16 @@ fun PartiesScreen(
     val state = rememberLazyListState()
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
-            stickyHeader {
-                KhataTop("", "", onMenu, business = business, onBusiness = onBusiness, pinned = state.canScrollBackward) {
+            stickyHeader { TabHead {
+                KhataTop("", "", onMenu, business = business, onBusiness = onBusiness) {
                     SumCard(card.first, card.second, "Report ›") { onReport(card.third) }
                 }
-            }
-            item {
                 SearchBox(q, when (view) { 0 -> "Search parties"; 1 -> "Search items"; 2 -> "Search sales"; 3 -> "Search purchases"; else -> "Search months" }) { q = it }
-            }
-            item {
                 LazyRow(contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     itemsIndexed(BusinessViews) { i, t -> SmallChip(t, view == i) { view = i; month = firstMonth(i, newest); q = "" } }
                 }
-            }
-            if (months.isNotEmpty()) item { MonthChips(months, pick) { month = it } }
+                if (months.isNotEmpty()) MonthChips(months, pick) { month = it }
+            } }
             when (view) {
                 0 -> partiesView(accts, picked, pick, q, onOpen)
                 1 -> stockView(stock, picked, pick, q, onAdd)
@@ -780,17 +781,17 @@ fun CashBookScreen(
     val state = rememberLazyListState()
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
-            stickyHeader {
-                KhataTop("", "", onMenu, business = business, onBusiness = onBusiness, pinned = state.canScrollBackward) {
+            stickyHeader { TabHead {
+                KhataTop("", "", onMenu, business = business, onBusiness = onBusiness) {
                     SumCard(
                         Triple(money(currency, hand), "Cash in hand", if (hand < 0) RedSpend else GreenIn),
                         Triple(money(currency, spentMonth), "Spent this month", RedSpend),
                         "History", onHistory
                     )
                 }
-            }
-            item { SearchBox(q, "Search") { q = it } }
-            if (q.isBlank() && months.isNotEmpty()) stickyHeader { MonthChips(months, month) { month = it } }
+                SearchBox(q, "Search") { q = it }
+                if (q.isBlank() && months.isNotEmpty()) MonthChips(months, month) { month = it }
+            } }
             val label = if (q.isNotBlank()) "Found" else monthLabel(months, month) ?: ""
             ledger(
                 label,
@@ -828,8 +829,8 @@ fun PartyKhataScreen(
     val state = rememberLazyListState()
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
-            stickyHeader {
-                KhataTop(name, if (hist.size == 1) "1 entry" else "${hist.size} entries", onBack, back = true, pinned = state.canScrollBackward) {
+            stickyHeader { TabHead {
+                KhataTop(name, if (hist.size == 1) "1 entry" else "${hist.size} entries", onBack, back = true) {
                     SumCard(
                         Triple(money(currency, kotlin.math.abs(bal)), if (bal > 0.005) "Receivable" else if (bal < -0.005) "Payable" else "Settled",
                             if (bal > 0.005) GreenIn else if (bal < -0.005) RedSpend else MaterialTheme.colorScheme.onSurfaceVariant),
@@ -837,9 +838,9 @@ fun PartyKhataScreen(
                         "Report ›", onReport
                     )
                 }
-            }
-            item { SearchBox(q, "Search") { q = it } }
-            if (q.isBlank() && months.size > 1) stickyHeader { MonthChips(months, month) { month = it } }
+                SearchBox(q, "Search") { q = it }
+                if (q.isBlank() && months.size > 1) MonthChips(months, month) { month = it }
+            } }
             val label = if (q.isNotBlank()) "Found" else if (month == ALL_MONTHS) name else monthLabel(months, month) ?: name
             ledger(
                 label,
@@ -886,18 +887,16 @@ fun TransactionsScreen(entries: List<Entry>, currency: String, onEdit: (Entry) -
     val state = rememberLazyListState()
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
-            stickyHeader {
-                KhataTop("All entries", if (entries.size == 1) "1 entry" else "${entries.size} entries", onMenu, pinned = state.canScrollBackward) {
+            stickyHeader { TabHead {
+                KhataTop("All entries", if (entries.size == 1) "1 entry" else "${entries.size} entries", onMenu) {
                     SumCard(Triple(money(currency, outT), "Out", RedSpend), Triple(money(currency, inT), "In", GreenIn), "Add", onAdd)
                 }
-            }
-            item {
                 Row(Modifier.horizontalScroll(rememberScrollState()).padding(start = 14.dp, end = 14.dp, top = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     kinds.forEachIndexed { i, t -> SmallChip(t, filter == i) { filter = i } }
                 }
-            }
-            item { SearchBox(q, "Search") { q = it } }
-            if (q.isBlank() && months.isNotEmpty()) stickyHeader { MonthChips(months, month) { month = it } }
+                SearchBox(q, "Search") { q = it }
+                if (q.isBlank() && months.isNotEmpty()) MonthChips(months, month) { month = it }
+            } }
             val label = if (q.isNotBlank()) "Found" else monthLabel(months, month) ?: ""
             ledger(
                 label, listOf(LCol("Out", fmt(outT), LKind.OUT), LCol("In", fmt(inT), LKind.IN)),
@@ -922,15 +921,15 @@ fun TrashScreen(
     fun out(e: Entry) = cashOut(e) || e.type == Type.PURCHASE
     val listState = rememberLazyListState()
     LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = barSpace(24.dp))) {
-        stickyHeader {
-            KhataTop("Trash", "Deleted entries stay here for 30 days", onMenu, pinned = listState.canScrollBackward) {
+        stickyHeader { TabHead {
+            KhataTop("Trash", "Deleted entries stay here for 30 days", onMenu) {
                 SumCard(
                     Triple("${trash.size}", if (trash.size == 1) "Entry" else "Entries", MaterialTheme.colorScheme.onSurface),
                     Triple(money(currency, trash.sumOf { it.amount }), "Total", RedSpend),
                     "Restore all", onRestoreAll
                 )
             }
-        }
+        } }
         if (trash.isNotEmpty()) item {
             TextButton(onClick = { askEmpty = true }, modifier = Modifier.padding(start = 6.dp, top = 6.dp)) { Text("Empty trash", color = RedSpend) }
         }
@@ -992,13 +991,13 @@ fun MoneyScreen(
     Box(Modifier.fillMaxSize()) {
         val listState = rememberLazyListState()
         LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
-            stickyHeader {
-                KhataTop("", "", onMenu, business = business, onBusiness = onBusiness, pinned = listState.canScrollBackward) {
+            stickyHeader { TabHead {
+                KhataTop("", "", onMenu, business = business, onBusiness = onBusiness) {
                     SumCard(Triple(money(currency, thisYear), "Year $year", color), Triple(money(currency, thisMonth), "This month", color), "Report ›", onReport)
                 }
-            }
-            item { SearchBox(q, "Search") { q = it } }
-            if (months.isNotEmpty()) item { MonthChips(months, pick) { pick = it } }
+                SearchBox(q, "Search") { q = it }
+                if (months.isNotEmpty()) MonthChips(months, pick) { pick = it }
+            } }
             val kind = if (income) LKind.IN else LKind.OUT
             if (groups.isNotEmpty()) item {
                 LedgerHead(if (income) "Income" else "Expense", if (groups.size == 1) "1 group" else "${groups.size} groups",

@@ -1329,6 +1329,11 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     (if (intent.what.isBlank()) "" else "; query=" + intent.what) +
                     (matchCount?.let { "; matched=" + it } ?: "") + "; execution=" + executionStatus + groqTrace +
                     (if (usage.isBlank()) "" else "; usage=" + usage)
+                // A sentence answer in another language than the question is rewritten in the person's own way
+                // (English stays English, Roman Urdu Roman Urdu, a mix a mix); cards keep their numbers as they are.
+                val askStyle = Groq.styleOf(text)
+                if (groqKey.isNotBlank() && !reply.isNullOrBlank() && Report.parse(reply!!, currency) == null && Groq.styleOf(reply!!) != askStyle)
+                    Groq.localize(groqKey, reply!!, text)?.let { reply = it }
                 if (!reply.isNullOrBlank()) {
                     lastSpeech = reply
                     postChat(reply, isUser = false, meta = trace, listIds = listedRows[0])

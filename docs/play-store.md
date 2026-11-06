@@ -35,14 +35,23 @@
 - **Notification access:** not used. The Play build leaves out bank alerts, chat review, ElevenLabs voice and the self-updater.
 
 ## Data safety form
-- **Does the app collect or share user data?** Yes, but only through optional features the user turns on:
-  - **Audio (voice recordings):** shared with Groq only when the user adds their own key. Purpose: app
-    functionality. Not stored by the app developer. Optional.
-  - **Messages / app activity (chat text):** sent to Groq only when the user adds their key. Purpose: app functionality.
-    Optional.
+- **Does the app collect or share user data?** Collects: yes (sent to Groq, our service provider, to read messages).
+  Shares with third parties: no (a service provider acting for the app is not "sharing").
+  - **Messages → Other in-app messages:** chat text. Purpose: app functionality. Optional (Groq AI can be turned off).
+  - **Audio → Voice or sound recordings:** when the mic is used. Purpose: app functionality. Optional.
+  - **Financial info → Other financial info:** amounts written in chat messages. Purpose: app functionality. Optional.
+  - **Personal info → Name:** names of people in the khatas, sent with a message. Purpose: app functionality. Optional.
+- **Processed ephemerally?** No (Groq may keep requests for a short time under its policy).
 - **Encrypted in transit:** Yes (HTTPS).
-- **Can users delete their data?** Yes: in the app, or by uninstalling it.
-- **Financial info:** stays on the device and is never collected or shared.
+- **Can users ask for deletion?** Data on the phone: yes, in the app or by uninstalling.
+- **Saved entries and balances:** stay on the device and are never sent.
+
+## Things that can get the account in trouble (keep it this way)
+- Upload only `SmartExpense-play.aab` (no self-updater, no notification reading). Never the GitHub APK.
+- Keep the privacy policy and the Data safety form matching what the app really sends (update both when that changes).
+- No other brands' names or logos in the listing (ChatGPT, Claude, banks); no fake reviews; no misleading claims.
+- Name, address and contact details in the console must stay true; one developer account only; no VPN tricks.
+- Answer every policy email from Google within its deadline.
 
 ## Release steps
 1. Create a Play Console account ($25) and verify your identity.

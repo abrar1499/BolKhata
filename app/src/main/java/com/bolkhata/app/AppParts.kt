@@ -222,7 +222,7 @@ internal fun DrawerMenu(tab: Tab, name: String, currency: String, onCurrency: (S
             }
             Spacer(Modifier.width(12.dp))
             Column {
-                Text("BolKhata", fontWeight = FontWeight.Bold, fontSize = 17.sp, color = header.on)
+                Text("Smart Expense", fontWeight = FontWeight.Bold, fontSize = 17.sp, color = header.on)
                 Text(
                     if (name.isBlank()) "Speak it. Track it." else "Hello, ${name.trim()}",
                     fontSize = 12.sp, color = header.on.copy(alpha = 0.75f)
