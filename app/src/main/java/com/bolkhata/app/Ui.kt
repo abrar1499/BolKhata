@@ -43,7 +43,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -670,14 +669,12 @@ fun GlassLogo(size: Dp, modifier: Modifier = Modifier, onBand: Boolean = false) 
 }
 
 /**
- * The calm field look of the Claude app: a soft cream fill, a hairline warm-grey edge and a barely-there shadow.
- * Used by the search box.
+ * The glass edge of a field, as in the mock-up: a thin border in the theme's glass colours over a faint
+ * tint of them (light pink on Red). Used by the chat field and the search box.
  */
 @Composable
-fun Modifier.glassEdge(shape: androidx.compose.ui.graphics.Shape, width: Dp = 1.dp): Modifier {
-    val light = MaterialTheme.colorScheme.background.luminance() > 0.5f
-    val fill = if (light) Color(0xFFFBFAF8) else MaterialTheme.colorScheme.surface
-    val edge = if (light) Color(0xFFE4DFD8) else MaterialTheme.colorScheme.outlineVariant
-    return this.shadow(1.dp, shape, ambientColor = Color.Black.copy(alpha = 0.06f), spotColor = Color.Black.copy(alpha = 0.06f))
-        .clip(shape).background(fill, shape).border(width, edge, shape)
+fun Modifier.glassEdge(shape: androidx.compose.ui.graphics.Shape, width: Dp = 1.5.dp): Modifier {
+    val c = glassColors(LocalHeader.current)
+    val fill = androidx.compose.ui.graphics.lerp(MaterialTheme.colorScheme.surface, c[1], 0.05f)
+    return this.clip(shape).background(fill, shape).border(width, Brush.linearGradient(c), shape)
 }
