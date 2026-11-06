@@ -636,6 +636,16 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     val placeAfter = remember { arrayOf<Long?>(null) }
 
     fun handleTextSafely(text: String, clock: Understand.Clock? = null, original: String? = null) {
+        // "ghar ka bijli 3000": the entry goes to the book it names, without switching books.
+        Books.route(text, store.businesses())?.let { (id, rest) ->
+            if (id == store.business) { handleTextSafely(rest, clock, original); return }
+            val name = store.businesses().firstOrNull { it.first == id }?.second ?: "that book"
+            val found = Parser.parse(rest).entries
+            if (found.isEmpty()) { toast("Open $name to add this one"); return }
+            store.saveFor(id, found + store.loadFor(id))
+            toast("✓ Saved in $name: " + found.joinToString(", ") { understoodLine(it, currency) })
+            return
+        }
         // "Other wali entries theek karo": the app sorts them itself (the local engine only fixed the wording).
         if (Recat.isCommand(text)) { openRecat(); return }
         // A vague "change an entry" is not enough information to edit safely; ask what to change.
@@ -2902,7 +2912,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             current = store.business, onBack = { pickingBusiness = false }, onPick = { open(it) },
             onAdd = { open(store.addBusiness(it)) },
             onRename = { id, n -> store.renameBusiness(id, n); if (id == store.business) businessName = n; businessTick++ },
-            onDelete = { id -> val wasOpen = id == store.business; store.deleteBusiness(id); if (wasOpen) open("") else businessTick++ }
+            onDelete = { id -> val wasOpen = id == store.business; store.deleteBusiness(id); if (wasOpen) open("") else businessTick++ },
+            totals = remember(businessTick, entries) { store.businesses().associate { (id, _) -> id to monthCash(if (id == store.business) entries else store.loadFor(id)) } },
+            currency = currency
         )
     }
 

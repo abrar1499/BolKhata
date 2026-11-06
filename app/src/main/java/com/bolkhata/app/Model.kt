@@ -472,6 +472,9 @@ class Store(context: Context) {
 
     fun save(list: List<Entry>) = write(scoped("entries"), list)
 
+    /** Saves the entries of another business (an entry said for it while this one is open). */
+    fun saveFor(id: String, list: List<Entry>) = write(scoped("entries", id), list)
+
     /** Saving happens on one background thread, in order, so the screen never waits for it. */
     private val saver = java.util.concurrent.Executors.newSingleThreadExecutor()
 
