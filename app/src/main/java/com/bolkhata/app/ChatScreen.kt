@@ -336,14 +336,14 @@ private fun UserBubble(text: String, attachment: String = "") {
             text,
             // The question in a dark bubble, the answer in a white card (like the Yaad mock-up).
             color = MaterialTheme.colorScheme.surface,
-            fontSize = 14.sp,
-            lineHeight = 18.sp,
+            fontSize = 13.sp,
+            lineHeight = 17.sp,
             modifier = Modifier
                 .widthIn(max = 300.dp)
                 .clip(MeShape)
                 .copyable(text)
                 .background(MaterialTheme.colorScheme.onSurface)
-                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .padding(horizontal = 11.dp, vertical = 6.dp)
         )
     }
 }
@@ -406,8 +406,8 @@ private fun AssistantBubble(text: String) {
     Text(
         text,
         color = MaterialTheme.colorScheme.onSurface,
-        fontSize = 14.sp,
-        lineHeight = 18.sp,
+        fontSize = 13.sp,
+        lineHeight = 17.sp,
         modifier = Modifier
             .padding(start = 8.dp)
             .widthIn(max = 320.dp)
@@ -415,7 +415,7 @@ private fun AssistantBubble(text: String) {
             .clip(BotShape)
             .copyable(text)
             .background(MaterialTheme.colorScheme.surface)
-            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .padding(horizontal = 11.dp, vertical = 6.dp)
     )
 }
 
@@ -517,41 +517,45 @@ private fun SavedCard(
             .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 6.dp, bottomEnd = 18.dp))
             .copyable(copyText)
             .background(MaterialTheme.colorScheme.surface)
-            .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp)
     ) {
-        Text(
-            if (live.isEmpty()) "Removed" else "✓ " + live.size + (if (live.size == 1) " entry saved" else " entries saved"),
-            color = if (live.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else GreenIn,
-            fontWeight = FontWeight.Bold, fontSize = 13.sp
-        )
+        // One line on top: what happened, and Undo at the right.
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                if (live.isEmpty()) "Removed" else "✓ " + live.size + (if (live.size == 1) " saved · tap to edit" else " saved · tap one to edit"),
+                color = if (live.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else GreenIn,
+                fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.weight(1f)
+            )
+            if (live.isNotEmpty()) Text(
+                "Undo", color = GreenIn, fontWeight = FontWeight.Bold, fontSize = 12.sp,
+                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { onUndo(live.map { it.id }) }.padding(horizontal = 6.dp, vertical = 2.dp)
+            )
+        }
         // The assistant's own short line ("Saved: breakfast 7 SAR"), when it wrote one.
         if (live.isNotEmpty() && !message.text.startsWith("✓")) {
-            Text(message.text, fontSize = 14.sp, lineHeight = 19.sp, color = MaterialTheme.colorScheme.onSurface)
+            Text(message.text, fontSize = 12.sp, lineHeight = 16.sp, color = MaterialTheme.colorScheme.onSurface)
         }
         live.forEach { e ->
+            // Full title on the first line, category · date · time under it, amount at the right.
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(10.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
                     .clickable { onEditEntry(e) }
-                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                    .padding(horizontal = 9.dp, vertical = 5.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(
-                    Modifier.clip(CircleShape).background(catColor(e.category).copy(alpha = 0.16f))
-                        .padding(horizontal = 8.dp, vertical = 3.dp)
-                ) { Text(e.category.label, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1) }
+                Column(Modifier.weight(1f)) {
+                    Text(entryTitle(e), fontSize = 12.sp, lineHeight = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        e.category.label + " · " + dayLabel(e.date) + " " + timeLabel(e.date),
+                        fontSize = 10.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1
+                    )
+                }
                 Spacer(Modifier.width(8.dp))
-                Text(entryTitle(e), Modifier.weight(1f), fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(moneyA(currency, e.amount, prefix(e.type)), color = signColor(e.type), fontWeight = FontWeight.Bold, fontSize = 14.sp)
-            }
-        }
-        if (live.isNotEmpty()) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Tap an entry to change it", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-                TextButton(onClick = { onUndo(live.map { it.id }) }) { Text("Undo", fontWeight = FontWeight.Bold) }
+                Text(moneyA(currency, e.amount, prefix(e.type)), color = signColor(e.type), fontWeight = FontWeight.Bold, fontSize = 13.sp)
             }
         }
     }
