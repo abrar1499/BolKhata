@@ -576,7 +576,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         } else null
         val target = matched ?: if (st.keywords.isEmpty() && (latestRef || st.mentionsMoney)) candidates.firstOrNull() else null
         if (target == null) {
-            toast("I couldn't match that payment to an entry. Mention the item or person, e.g. \"payment for the bricks not received\".")
+            toast("I couldn't match that payment to an entry. Mention the item or person, e.g. \"payment for the goods not received\".")
             return true
         }
         val who = target.person.ifBlank { st.person }
