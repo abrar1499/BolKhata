@@ -55,7 +55,6 @@ fun ChatScreen(
     suggestions: List<Entry>,
     onMenu: () -> Unit,
     business: String = "",
-    onBusiness: () -> Unit = {},
     onSend: (String) -> Unit,
     onClear: () -> Unit,
     onShareDiagnostics: () -> Unit = {},
@@ -88,18 +87,18 @@ fun ChatScreen(
     }
 
     Column(Modifier.fillMaxSize()) {
-        // The theme's glass band behind one slim line with the business pill, from the status bar down.
-        val theme = LocalHeader.current
-        Box(Modifier.fillMaxWidth().drawBehind { drawGlass(bandColors(theme), size.height) }) {
+        // One slim line with the business pill on the page colour (no band on Chat).
+        val ink = MaterialTheme.colorScheme.onSurfaceVariant
+        Box(Modifier.fillMaxWidth()) {
             Column(Modifier.statusBarsPadding().padding(horizontal = 12.dp).padding(bottom = 10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    BusinessPill(business.ifBlank { "Chat" }, onMenu, onBusiness)
-                    Text(subtitle, color = theme.on.copy(alpha = 0.8f), fontSize = 11.sp, maxLines = 1,
+                    BusinessPill(business.ifBlank { "Chat" }, onMenu)
+                    Text(subtitle, color = ink, fontSize = 11.sp, maxLines = 1,
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 10.dp, top = 10.dp))
                     Box {
                         var more by remember { mutableStateOf(false) }
                         IconButton(onClick = { more = true }) {
-                            Icon(Icons.Filled.MoreVert, contentDescription = "More options", tint = theme.on)
+                            Icon(Icons.Filled.MoreVert, contentDescription = "More options", tint = ink)
                         }
                         DropdownMenu(expanded = more, onDismissRequest = { more = false }) {
                             DropdownMenuItem(
