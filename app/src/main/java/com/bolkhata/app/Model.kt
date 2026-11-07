@@ -176,6 +176,9 @@ class Store(context: Context) {
     /** How many units were made in a month (Production), for this business; 0 when not said. */
     fun made(month: Int): Double = prefs.getString(scoped("made:$month"), null)?.toDoubleOrNull() ?: 0.0
     fun setMade(month: Int, qty: Double) = prefs.edit().putString(scoped("made:$month"), qty.toString()).apply()
+    /** What was made that month (the stock item it adds to); "" when not said. */
+    fun madeItem(month: Int): String = prefs.getString(scoped("madeItem:$month"), null) ?: ""
+    fun setMadeItem(month: Int, item: String) = prefs.edit().putString(scoped("madeItem:$month"), item.trim()).apply()
 
     private fun businessNames(): JSONObject = try {
         JSONObject(prefs.getString("businessNames", "{}") ?: "{}")

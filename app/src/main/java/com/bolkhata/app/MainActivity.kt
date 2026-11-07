@@ -2220,6 +2220,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     onReport = { reportStart = it; tab = Tab.REPORTS },
                     onAdd = { trade = it }, onEdit = { editing = it },
                     made = { store.made(it) }, onSetMade = { m, qty -> store.setMade(m, qty) },
+                    madeItem = { store.madeItem(it) }, onSetMadeItem = { m, item -> store.setMadeItem(m, item) },
                     section = businessSection, onSection = { goSection(it) }
                 )
                 tab == Tab.CASHBOOK -> CashBookScreen(

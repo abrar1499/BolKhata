@@ -145,4 +145,21 @@ class PersonAccountsTest {
         assertEquals("Put in business", OWNER_MOVES["From home"])
         assertEquals(null, ownerMove("Fuel"))
     }
+
+    /** 100 made for 1,000 (10 each), 20 sold at 15: profit 100, not 300 − 1,000. */
+    @Test
+    fun madeGoodsCostOnlyWhatIsSold() {
+        val nov = java.util.Calendar.getInstance().apply { clear(); set(2026, 10, 15) }.timeInMillis
+        val k = 2026 * 12 + 10
+        fun spend(id: String, item: String, a: Double) = Entry(id, Type.KHARCHA, a, Cat.PRODUCTION, item, "", item, nov, nov)
+        val all = listOf(
+            spend("1", "Thaper", 600.0), spend("2", "Mitti", 300.0), spend("3", "Fuel", 100.0),
+            Entry("s", Type.SALE, 300.0, Cat.SALES, "Item A", "", "", nov, nov, qty = 20.0)
+        )
+        val lots = madeLots(all, mapOf(k to (100.0 to "Item A")))
+        assertEquals(10.0, lots.single().rate, 0.001)
+        val net = netOf(all + lots, all, setOf(k))
+        assertEquals(200.0, net.cost, 0.001)
+        assertEquals(100.0, net.profit, 0.001)
+    }
 }
