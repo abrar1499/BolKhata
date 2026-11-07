@@ -509,49 +509,45 @@ private fun SavedCard(
     onEditEntry: (Entry) -> Unit
 ) {
     val live = message.entryIds.mapNotNull { byId[it] }
+    val sub = MaterialTheme.colorScheme.onSurfaceVariant
+    // Deleted since: one small grey line, no card.
+    if (live.isEmpty()) {
+        Text("Entry deleted", fontSize = 11.sp, color = sub, modifier = Modifier.padding(start = 10.dp, top = 10.dp))
+        return
+    }
     val copyText = (listOf(message.text) + live.map { entryTitle(it) + " " + fmt(it.amount) + " " + currency }).joinToString("\n")
+    // A compact white card: "✓ Saved", one small line per entry, then Undo.
     Column(
         Modifier
-            .fillMaxWidth(0.88f)
-            .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 6.dp, bottomEnd = 18.dp))
+            .padding(start = 8.dp)
+            .fillMaxWidth(0.85f)
+            .shadow(1.dp, BotShape)
+            .clip(BotShape)
             .copyable(copyText)
             .background(MaterialTheme.colorScheme.surface)
-            .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Text(
-            if (live.isEmpty()) "Entry deleted later" else "✓ " + live.size + (if (live.size == 1) " entry saved" else " entries saved"),
-            color = if (live.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else GreenIn,
-            fontWeight = FontWeight.Bold, fontSize = 13.sp
-        )
+        Text("✓ " + (if (live.size == 1) "Saved" else "${live.size} entries saved"), color = GreenIn, fontWeight = FontWeight.Bold, fontSize = 11.sp)
         // The assistant's own short line ("Saved: breakfast 7 SAR"), when it wrote one.
-        if (!message.text.startsWith("✓")) {
-            Text(message.text, fontSize = 13.sp, lineHeight = 17.sp, color = MaterialTheme.colorScheme.onSurface)
-        }
+        if (!message.text.startsWith("✓")) Text(message.text, fontSize = 12.sp, lineHeight = 16.sp, color = MaterialTheme.colorScheme.onSurface)
         live.forEach { e ->
             Row(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
-                    .clickable { onEditEntry(e) }
-                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                    .clickable { onEditEntry(e) }.padding(horizontal = 8.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(
-                    Modifier.clip(CircleShape).background(catColor(e.category).copy(alpha = 0.16f))
-                        .padding(horizontal = 8.dp, vertical = 3.dp)
-                ) { Text(e.category.label, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1) }
-                Spacer(Modifier.width(8.dp))
-                Text(entryTitle(e), Modifier.weight(1f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(moneyA(currency, e.amount, prefix(e.type)), color = signColor(e.type), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                Text(e.category.label, fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1,
+                    modifier = Modifier.clip(CircleShape).background(catColor(e.category).copy(alpha = 0.16f)).padding(horizontal = 6.dp, vertical = 2.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(entryTitle(e), Modifier.weight(1f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(moneyA(currency, e.amount, prefix(e.type)), color = signColor(e.type), fontWeight = FontWeight.Bold, fontSize = 12.sp)
             }
         }
-        if (live.isNotEmpty()) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Tap an entry to change it", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-                TextButton(onClick = { onUndo(live.map { it.id }) }) { Text("Undo", fontWeight = FontWeight.Bold) }
-            }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Tap to change", fontSize = 10.sp, color = sub, modifier = Modifier.weight(1f))
+            Text("Undo", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = GreenIn,
+                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { onUndo(live.map { it.id }) }.padding(horizontal = 6.dp, vertical = 2.dp))
         }
     }
 }

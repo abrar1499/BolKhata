@@ -634,7 +634,8 @@ object NativeChatEngine {
             "aug", "august", "sep", "sept", "september", "oct", "october", "nov", "november", "dec", "december")
         val categoryMentioned = w.any { token -> categories.values.any { token in it } }
         val broadTypeMentioned = has(w, expense + income)
-        val simpleLedgerLookup = (categoryMentioned || broadTypeMentioned) &&
+        // "petrol", "food": that ledger; but "petrol 60" (a bare amount) is a new entry, never a lookup.
+        val simpleLedgerLookup = (categoryMentioned || broadTypeMentioned) && text.none(Char::isDigit) &&
             !has(w, setOf("how", "much", "many", "kitna", "kitne", "kitni", "total", "sum", "count")) &&
             !has(w, setOf("today", "yesterday", "aaj", "aj", "kal", "this", "last", "month", "week", "year",
                 "mahina", "mahine", "saal", "time", "overall", "lifetime", "ever", "alltime"))
