@@ -303,8 +303,8 @@ internal fun aboutView(view: Int, newest: List<Entry>) = when (view) {
     1 -> newest.filter { (it.type == Type.SALE || it.type == Type.PURCHASE) && it.item.isNotBlank() }
     2 -> newest.filter { it.type == Type.SALE }
     3 -> newest.filter { it.type == Type.PURCHASE }
-    // Profit: sales and every expense, so the months of either show.
-    else -> newest.filter { it.type == Type.SALE || it.type == Type.KHARCHA }
+    // Profit: sales, income and every expense, so the months of any show.
+    else -> newest.filter { it.type == Type.SALE || it.type == Type.AAMDANI || it.type == Type.KHARCHA }
 }
 
 /** Sale and Purchase open on their newest month like the Cash book; the other views on All. */
@@ -313,13 +313,16 @@ private fun firstMonth(view: Int, newest: List<Entry>) =
 
 private fun yearOf(ms: Long) = cal(ms).get(Calendar.YEAR)
 
-/** A period's sales, cost and profit: cost = what the sold goods cost plus every expense of the period. */
-internal class Net(val sale: Double, val cost: Double, val profit: Double)
+/**
+ * A period's income (every sale, made or bought, plus other income), expense (what the bought goods that were sold
+ * cost, plus every expense) and profit = income − expense.
+ */
+internal class Net(val income: Double, val cost: Double) { val profit get() = income - cost }
 internal fun netOf(all: List<Entry>, list: List<Entry>): Net {
     val sales = list.filter { it.type == Type.SALE }
+    val income = sales.sumOf { it.amount } + list.filter { it.type == Type.AAMDANI }.sumOf { it.amount }
     val spent = list.filter { it.type == Type.KHARCHA }.sumOf { it.amount }
-    val pb = profitBreakdown(all, sales)
-    return Net(sales.sumOf { it.amount }, pb.costOfGoods + spent, pb.costedSalesAmount - pb.costOfGoods - spent)
+    return Net(income, profitBreakdown(all, sales).costOfGoods + spent)
 }
 
 internal fun plusMinus(v: Double) = (if (v > 0.005) "+" else if (v < -0.005) "−" else "") + fmt(kotlin.math.abs(v))
@@ -519,47 +522,51 @@ private fun LazyListScope.tradeView(sale: Boolean, picked: List<Entry>, months: 
 }
 
 /**
- * Profit for the picked month (or All): sales, what the sold goods cost, each kind of expense, the profit, and, for
- * a month, how many were made (tap to say) and what one cost.
+ * Profit for the picked month (or All) in two columns like the Cash book, Expense | Income: each item sold and each
+ * other income, what the bought goods that were sold cost, each kind of expense; then the profit and, for a month,
+ * how many were made (tap to say) and what one cost.
  */
 private fun LazyListScope.profitView(
     all: List<Entry>, about: List<Entry>, months: List<Pair<Int, Long>>, month: Int, q: String,
     made: (Int) -> Double, currency: String, onMade: (Int) -> Unit
 ) {
+    class Line(val name: String, val sub: String, val out: Double, val inn: Double)
     val list = about.filter { inMonth(it.date, month) }
     val sales = list.filter { it.type == Type.SALE }
-    val goods = profitBreakdown(all, sales).costOfGoods
     val net = netOf(all, list)
-    val spent = list.filter { it.type == Type.KHARCHA }.groupBy { it.category }
-        .map { (c, l) -> c.label to l.sumOf { it.amount } }.sortedByDescending { it.second }
-        .filter { q.isBlank() || it.first.contains(q.trim(), true) }
+    val goods = profitBreakdown(all, sales).costOfGoods
+    val lines = buildList {
+        sales.groupBy { it.item.trim().ifBlank { "Sale" } }.forEach { (n, l) ->
+            val qty = l.sumOf { it.qty }
+            add(Line(n, if (qty > 0) "sold " + fmt(qty) else if (l.size == 1) "1 sale" else "${l.size} sales", 0.0, l.sumOf { it.amount }))
+        }
+        list.filter { it.type == Type.AAMDANI }.groupBy { source(it).trim().ifBlank { "Income" } }
+            .forEach { (n, l) -> add(Line(n, "income", 0.0, l.sumOf { it.amount })) }
+        if (goods > 0) add(Line("Cost of goods sold", "what the sold items cost", goods, 0.0))
+        list.filter { it.type == Type.KHARCHA }.groupBy { it.category.label }.map { (n, l) -> n to l.sumOf { it.amount } }
+            .sortedByDescending { it.second }.forEach { (n, v) -> add(Line(n, "expense", v, 0.0)) }
+    }.filter { q.isBlank() || it.name.contains(q.trim(), true) }
     val madeQty = if (month == ALL_MONTHS) 0.0 else made(month)
-    val color = if (net.profit < 0) RedSpend else GreenIn
     item(key = "fh") {
-        LedgerHead(if (month == ALL_MONTHS) "All" else monthLabel(months, month) ?: "All", "sales − cost − expenses",
-            listOf(LCol("Profit", plusMinus(net.profit), LKind.PLAIN)), false, WideColW)
+        LedgerHead(if (month == ALL_MONTHS) "All" else monthLabel(months, month) ?: "All", "income − expense",
+            listOf(LCol("Expense", fmt(net.cost), LKind.OUT), LCol("Income", fmt(net.income), LKind.IN)), false, WideColW)
     }
-    item(key = "fs") {
-        GridRow("Sales", if (sales.size == 1) "1 sale" else "${sales.size} sales", listOf(GCell(signed(LKind.IN, net.sale), LKind.IN)), WideColW, false) {}
+    items(lines, key = { "fl" + it.name + it.sub }) { l ->
+        GridRow(l.name, l.sub, listOf(GCell(signed(LKind.OUT, l.out), LKind.OUT), GCell(signed(LKind.IN, l.inn), LKind.IN)), WideColW, false) {}
     }
-    if (goods > 0) item(key = "fg") {
-        GridRow("Cost of goods sold", "what the sold items cost", listOf(GCell(signed(LKind.OUT, goods), LKind.OUT)), WideColW, false) {}
-    }
-    items(spent, key = { "fe" + it.first }) { (name, v) ->
-        GridRow(name, "expense", listOf(GCell(signed(LKind.OUT, v), LKind.OUT)), WideColW, false) {}
-    }
+    // The profit in the Income column (a loss in red), then how many were made and what one cost, for a month.
     item(key = "fp") {
-        GridRow("Profit", if (net.profit < 0) "loss" else "", listOf(GCell(plusMinus(net.profit), LKind.PLAIN, color)), WideColW, month == ALL_MONTHS) {}
+        GridRow("Profit", if (net.profit < 0) "loss" else "income − expense",
+            listOf(GCell("", LKind.OUT), GCell(plusMinus(net.profit), LKind.IN, if (net.profit < 0) RedSpend else GreenIn)), WideColW, month == ALL_MONTHS) {}
     }
-    // How many were made this month (tap to say) and what one cost: every cost of the month over that number.
     if (month != ALL_MONTHS) {
         item(key = "fm") {
             GridRow("Made", if (madeQty > 0) "tap to change" else "tap to say how many were made",
-                listOf(GCell(if (madeQty > 0) fmt(madeQty) else "—", LKind.PLAIN)), WideColW, false) { onMade(month) }
+                listOf(GCell("", LKind.OUT), GCell(if (madeQty > 0) fmt(madeQty) else "—", LKind.IN, AmountInk)), WideColW, false) { onMade(month) }
         }
         item(key = "fu") {
-            GridRow("Cost per unit", if (madeQty > 0) "all costs ÷ made" else "",
-                listOf(GCell(if (madeQty > 0) money(currency, net.cost / madeQty) else "—", LKind.OUT)), WideColW, true) {}
+            GridRow("Cost per unit", if (madeQty > 0) "all expense ÷ made" else "",
+                listOf(GCell(if (madeQty > 0) money(currency, net.cost / madeQty) else "—", LKind.OUT), GCell("", LKind.IN)), WideColW, true) {}
         }
     }
 }

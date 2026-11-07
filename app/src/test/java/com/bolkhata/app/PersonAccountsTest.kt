@@ -132,6 +132,9 @@ class PersonAccountsTest {
         val net = netOf(listOf(fuel), listOf(fuel))
         assertEquals(3200.0, net.cost, 0.001)
         assertEquals(-3200.0, net.profit, 0.001)
+        // A sale of something made, never bought, counts in full.
+        val sale = Entry("s", Type.SALE, 875000.0, Cat.SALES, "Item A", "", "", 1L, 1L, qty = 5000.0)
+        assertEquals(871800.0, netOf(listOf(fuel, sale), listOf(fuel, sale)).profit, 0.001)
     }
 
     /** Taking money home is a transfer with its other side in Personal, so it is never a business expense. */
