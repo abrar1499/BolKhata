@@ -1319,7 +1319,7 @@ fun SideScreen(
             val n = name.trim()
             if (n.isNotEmpty()) onSetup(when {
                 what == "book" -> setup.copy(books = setup.books + Book(side, n, people))
-                book?.people == true -> setup.copy(people = setup.people + (n to book.name))
+                book != null && book.people -> setup.copy(people = setup.people + (n to book.name))
                 book != null -> setup.copy(kids = setup.kids + (book.name to (setup.kids[book.name].orEmpty() + n)))
                 else -> setup
             })
