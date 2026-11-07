@@ -184,7 +184,7 @@ fun App(
     var menuFor by remember { mutableStateOf<Entry?>(null) }
     // A long-pressed khata (kind to name), and the khata being renamed or moved.
     // Entries a long-press Move is moving (what they are called, their ids), and what a Delete does once confirmed.
-    var moving by remember { mutableStateOf<Pair<String, Set<String>>?>(null) }
+    var movingAll by remember { mutableStateOf<Pair<String, Set<String>>?>(null) }
     var afterTrash by remember { mutableStateOf<(() -> Unit)?>(null) }
     var renamingEntry by remember { mutableStateOf<Entry?>(null) }
     // Entries picked for a move, and whether the move picker for them is open.
@@ -2242,7 +2242,7 @@ fun App(
                         onReport = { profitOpen = true },
                         jump = sideJump, onJumped = { sideJump = null },
                         onUpdate = { changed -> val m = changed.associateBy { it.id }; save(entries.map { m[it.id] ?: it }) },
-                        onMoveEntries = { n, ids -> if (ids.isEmpty()) toast("Nothing to move") else moving = n to ids },
+                        onMoveEntries = { n, ids -> if (ids.isEmpty()) toast("Nothing to move") else movingAll = n to ids },
                         onDeleteEntries = { n, ids, after ->
                             afterTrash = after
                             confirm = "Move all of \"$n\" (${ids.size} " + (if (ids.size == 1) "entry" else "entries") + ") to Trash?" to ids
@@ -2564,9 +2564,9 @@ fun App(
                     toast("Renamed to $newName")
                 }, onDismiss = { renamingEntry = null })
             }
-            moving?.let { (n, ids) ->
+            movingAll?.let { (n, ids) ->
                 MoveToKhata((if (ids.size == 1) "1 entry" else "${ids.size} entries") + " · all of $n", entries, n,
-                    onMove = { toKind, to -> moving = null; moveEntries(ids, toKind, to) }, onDismiss = { moving = null })
+                    onMove = { toKind, to -> movingAll = null; moveEntries(ids, toKind, to) }, onDismiss = { movingAll = null })
             }
             if (movingPicked) MoveToKhata(
                 "${selection.ids.size} selected " + (if (selection.ids.size == 1) "entry" else "entries"), entries, "",
