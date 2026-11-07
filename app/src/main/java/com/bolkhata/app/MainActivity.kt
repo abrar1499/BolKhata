@@ -2975,8 +2975,6 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             onAdd = { open(store.addBusiness(it)) },
             onRename = { id, n -> store.renameBusiness(id, n); if (id == store.business) businessName = n; businessTick++ },
             onDelete = { id -> val wasOpen = id == store.business; store.deleteBusiness(id); if (wasOpen) open("") else businessTick++ },
-            totals = remember(businessTick, entries) { store.businesses().associate { (id, _) -> id to monthCash(if (id == store.business) entries else store.loadFor(id)) } },
-            currency = currency
         )
     }
 

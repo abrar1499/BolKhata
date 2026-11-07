@@ -1325,23 +1325,11 @@ internal fun cashTemplate(income: Boolean): Entry =
 
 // ---------------------------------------------------------------- businesses
 
-/** This month's cash out and cash in of one book, for the book list. */
-internal fun monthCash(list: List<Entry>, now: Long = System.currentTimeMillis()): Pair<Double, Double> {
-    val m = monthKey(now)
-    val month = list.filter { monthKey(it.date) == m }
-    return month.filter(::cashOut).sumOf { it.amount } to month.filter(::cashIn).sumOf { it.amount }
-}
-
-/**
- * Full-screen list of businesses: all books' cash this month on top, then each book with its own out / in,
- * a tick on the open one, ⋮ to rename or delete, and Add New Business.
- */
+/** Full-screen list of businesses: each with its parties, a tick on the open one, ⋮ to rename or delete, and Add New Business. */
 @Composable
 fun BusinessPicker(
     list: List<Triple<String, String, Int>>, current: String, onBack: () -> Unit, onPick: (String) -> Unit,
-    onAdd: (String) -> Unit, onRename: (String, String) -> Unit, onDelete: (String) -> Unit,
-    /** Book id to (cash out, cash in) this month. */
-    totals: Map<String, Pair<Double, Double>> = emptyMap(), currency: String = ""
+    onAdd: (String) -> Unit, onRename: (String, String) -> Unit, onDelete: (String) -> Unit
 ) {
     var naming by remember { mutableStateOf<Pair<String?, String>?>(null) }   // (id or null for new, text)
     var deleting by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -1353,17 +1341,6 @@ fun BusinessPicker(
                     Text("Select Business", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
                 }
                 LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(top = 10.dp)) {
-                    // Every book together this month, so the kiln, the home and personal spending add up in one place.
-                    if (list.size > 1 && totals.isNotEmpty()) item(key = "all") {
-                        val out = totals.values.sumOf { it.first }
-                        val inn = totals.values.sumOf { it.second }
-                        Column(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 10.dp)) {
-                            Text("All books · this month", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(start = 4.dp, bottom = 6.dp))
-                            SumCard(Triple(money(currency, out), "Out", RedSpend), Triple(money(currency, inn), "In", GreenIn),
-                                plusMinus(inn - out)) {}
-                        }
-                    }
                     items(list, key = { it.first }) { (id, name, parties) ->
                         var more by remember { mutableStateOf(false) }
                         Row(
@@ -1375,10 +1352,8 @@ fun BusinessPicker(
                             Spacer(Modifier.width(14.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                val t = totals[id]
                                 Text(
-                                    (if (parties == 1) "1 party" else "$parties parties") +
-                                        (if (t != null && (t.first > 0 || t.second > 0)) " · this month −" + fmt(t.first) + " / +" + fmt(t.second) else ""),
+                                    if (parties == 1) "1 party" else "$parties parties",
                                     fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis
                                 )
                             }
