@@ -62,6 +62,14 @@ class SidesTest {
         assertEquals(listOf("Item A"), Sides.items(raw, setup).map { it.name })
     }
 
+    @Test fun aRenamedAccountTakesItsThingsAndOtherGoesAway() {
+        val moved = listOf(en(Type.KHARCHA, 700.0, item = "Groceries", cat = Cat.OTHER))
+        val own = SideSetup(books = listOf(Book(Side.EXP, "Kitchen", false)), kids = mapOf("Kitchen" to listOf("Groceries")))
+        val books = Sides.books(Side.EXP, moved, own)
+        assertEquals(listOf("Kitchen"), books.map { it.name })
+        assertEquals(700.0, Sides.done(books.single(), moved, own) { true }, 0.0)
+    }
+
     @Test fun assetsAreNotAnExpenseButCountInNetWorth() {
         val withAsset = all + en(Type.KHARCHA, 9000.0, item = "Laptop", cat = Cat.ASSETS)
         assertEquals(60500.0, Sides.profit(withAsset).profit, 0.0)

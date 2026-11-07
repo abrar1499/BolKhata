@@ -63,20 +63,22 @@ class MainActivity : ComponentActivity() {
             var dark by remember { mutableStateOf(store.dark) }
             var themeName by remember { mutableStateOf(store.theme) }
             var photo by remember { mutableStateOf(store.bgPhoto) }
+            var page by remember { mutableLongStateOf(store.page) }
             val bg = remember(photo) { photo.takeIf { it.isNotBlank() }?.let { android.graphics.BitmapFactory.decodeFile(it)?.asImageBitmap() } }
             val header = headerTheme(themeName, dark)
             // Every phone shows the design 1:1: the screen is 350 units wide (the 390 mock-up, everything a bit bigger) and the phone's
             // font-size and display-size settings don't blow the compact ledgers up.
             val m = resources.displayMetrics
             CompositionLocalProvider(LocalHeader provides header, LocalDensity provides Density(minOf(m.widthPixels, m.heightPixels) / 350f, 1f)) {
-                BolTheme(dark, clear = bg != null) {
+                BolTheme(dark, clear = bg != null, page = page) {
                     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                         // A picked photo sits behind every screen; the plain colour otherwise.
                         if (bg != null) androidx.compose.foundation.Image(bg, null, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
                         App(
                             store, dark, { dark = it; store.dark = it },
                             themeName = themeName, onTheme = { themeName = it; store.theme = it },
-                            photo = bg != null, onPhoto = { photo = it; store.bgPhoto = it }
+                            photo = bg != null, onPhoto = { photo = it; store.bgPhoto = it },
+                            page = page, onPage = { page = it; store.page = it }
                         )
                     }
                 }
@@ -113,7 +115,8 @@ private suspend fun <T> offMain(block: () -> T): T = kotlinx.coroutines.withCont
 @Composable
 fun App(
     store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: String, onTheme: (String) -> Unit,
-    photo: Boolean = false, onPhoto: (String) -> Unit = {}
+    photo: Boolean = false, onPhoto: (String) -> Unit = {},
+    page: Long = PAGE_COLORS[0], onPage: (Long) -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -180,9 +183,9 @@ fun App(
     var ledger by remember { mutableStateOf<MainAcct?>(null) }
     var menuFor by remember { mutableStateOf<Entry?>(null) }
     // A long-pressed khata (kind to name), and the khata being renamed or moved.
-    var khataFor by remember { mutableStateOf<Pair<String, String>?>(null) }
-    var khataRename by remember { mutableStateOf<Pair<String, String>?>(null) }
-    var khataMove by remember { mutableStateOf<Pair<String, String>?>(null) }
+    // Entries a long-press Move is moving (what they are called, their ids), and what a Delete does once confirmed.
+    var moving by remember { mutableStateOf<Pair<String, Set<String>>?>(null) }
+    var afterTrash by remember { mutableStateOf<(() -> Unit)?>(null) }
     var renamingEntry by remember { mutableStateOf<Entry?>(null) }
     // Entries picked for a move, and whether the move picker for them is open.
     val selection = remember { Selection() }
@@ -2144,7 +2147,7 @@ fun App(
                 onCurrency = { c -> currency = c; store.currency = c; toast("✓ Currency set to $c") },
                 onLang = { lang = it; store.language = it },
                 onTheme = onTheme,
-                onGray = { onPhoto(""); onDark(false) },
+                page = page, onPage = { onPhoto(""); onDark(false); onPage(it) },
                 onDark = { onPhoto(""); onDark(true) },
                 onPhoto = { pickBg.launch("image/*") },
                 onExport = {
@@ -2206,7 +2209,6 @@ fun App(
                 LocalBarSpace provides pad.calculateBottomPadding(),
                 LocalMainOpener provides { a: MainAcct -> ledger = a },
                 LocalEntryMenu provides { e: Entry -> menuFor = e },
-                LocalKhataMenu provides { kind: String, n: String -> khataFor = kind to n },
                 LocalSelection provides selection
             ) {
             // Each screen keeps its own scroll and picks when another opens over it (a party, a report…),
@@ -2239,11 +2241,13 @@ fun App(
                         onSave = { e -> save(listOf(e) + entries); lastAdded = listOf(e.id); toast("✓ Saved") },
                         onReport = { profitOpen = true },
                         jump = sideJump, onJumped = { sideJump = null },
-                        onMoveKhata = { n -> khataMove = "expense" to n },
-                        onDeleteKhata = { n ->
-                            val ids = khataEntries("expense", n).map { it.id }.toSet()
+                        onUpdate = { changed -> val m = changed.associateBy { it.id }; save(entries.map { m[it.id] ?: it }) },
+                        onMoveEntries = { n, ids -> if (ids.isEmpty()) toast("Nothing to move") else moving = n to ids },
+                        onDeleteEntries = { n, ids, after ->
+                            afterTrash = after
                             confirm = "Move all of \"$n\" (${ids.size} " + (if (ids.size == 1) "entry" else "entries") + ") to Trash?" to ids
-                        }
+                        },
+                        onRenamePerson = { from, to -> renameOrMergeKhata(from, to, merge = entries.any { it.person.equals(to, true) }) }
                     )
                 }
                 tab == Tab.HOME -> HomeScreen(
@@ -2552,26 +2556,6 @@ fun App(
                     onDismiss = { showMoveHistory = false }
                 )
             }
-            khataFor?.let { (kind, n) ->
-                GroupMenu(
-                    n, khataEntries(kind, n).size,
-                    onRename = if (kind == "expense" || kind == "expense-name") null else ({ khataFor = null; khataRename = kind to n }),
-                    onMove = { khataFor = null; khataMove = kind to n },
-                    // A whole expense category is not deleted from here; a party, payer or name khata is (to Trash).
-                    onDelete = if (kind == "expense") null else ({
-                        khataFor = null
-                        val ids = khataEntries(kind, n).map { it.id }.toSet()
-                        confirm = "Move khata \"$n\" (${ids.size} " + (if (ids.size == 1) "entry" else "entries") + ") to Trash?" to ids
-                    }),
-                    onDismiss = { khataFor = null }
-                )
-            }
-            khataRename?.let { (kind, n) ->
-                RenameDialog("Rename khata", n, khataEntries(kind, n).size.let { if (it == 1) "1 entry" else "$it entries" }, onRename = { newName ->
-                    khataRename = null
-                    if (kind == "party") renameOrMergeKhata(n, newName, merge = false) else moveKhata(kind, n, kind, newName)
-                }, onDismiss = { khataRename = null })
-            }
             renamingEntry?.let { e ->
                 RenameDialog("Rename entry", entryTitle(e), onRename = { newName ->
                     renamingEntry = null
@@ -2580,9 +2564,9 @@ fun App(
                     toast("Renamed to $newName")
                 }, onDismiss = { renamingEntry = null })
             }
-            khataMove?.let { (kind, n) ->
-                MoveToKhata(khataEntries(kind, n).size.let { if (it == 1) "1 entry" else "$it entries" } + " · all of $n", entries, n,
-                    onMove = { toKind, to -> khataMove = null; moveKhata(kind, n, toKind, to) }, onDismiss = { khataMove = null })
+            moving?.let { (n, ids) ->
+                MoveToKhata((if (ids.size == 1) "1 entry" else "${ids.size} entries") + " · all of $n", entries, n,
+                    onMove = { toKind, to -> moving = null; moveEntries(ids, toKind, to) }, onDismiss = { moving = null })
             }
             if (movingPicked) MoveToKhata(
                 "${selection.ids.size} selected " + (if (selection.ids.size == 1) "entry" else "entries"), entries, "",
@@ -2923,7 +2907,7 @@ fun App(
 
     confirm?.let { (msg, ids) ->
         AlertDialog(
-            onDismissRequest = { confirm = null },
+            onDismissRequest = { confirm = null; afterTrash = null },
             title = { Text("Are you sure?") },
             text = { Text(msg) },
             confirmButton = {
@@ -2931,11 +2915,12 @@ fun App(
                     onClick = {
                         confirm = null
                         moveToTrash(ids)
+                        afterTrash?.invoke(); afterTrash = null
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = RedSpend)
                 ) { Text("Delete") }
             },
-            dismissButton = { TextButton(onClick = { confirm = null }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { confirm = null; afterTrash = null }) { Text("Cancel") } }
         )
     }
 

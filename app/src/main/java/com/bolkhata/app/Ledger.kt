@@ -61,9 +61,6 @@ class Selection {
 
 val LocalSelection = staticCompositionLocalOf<Selection?> { null }
 
-/** Long-press on a khata row opens Rename / Move: kind "party", "expense" (name = category label) or "income" (who paid). */
-val LocalKhataMenu = staticCompositionLocalOf<((kind: String, name: String) -> Unit)?> { null }
-
 // ---------------------------------------------------------------- people
 
 /**

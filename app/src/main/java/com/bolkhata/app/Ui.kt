@@ -190,8 +190,11 @@ val AppTypography: Typography = Typography().run {
 }
 
 @Composable
-/** [clear]: a background photo shows through, so the page colour is see-through. */
-fun BolTheme(dark: Boolean, clear: Boolean = false, content: @Composable () -> Unit) {
+/** Light page colours offered in the side menu (Background): grey first, then half white, off-white, light slate, warm grey. */
+val PAGE_COLORS = listOf(0xFFEDEDED, 0xFFF5F5F3, 0xFFF1F0ED, 0xFFE6E8EB, 0xFFE9E6E1)
+
+/** [clear]: a background photo shows through, so the page colour is see-through. [page]: the light page colour. */
+fun BolTheme(dark: Boolean, clear: Boolean = false, page: Long = PAGE_COLORS[0], content: @Composable () -> Unit) {
     val scheme = if (dark) darkColorScheme(
         primary = Color(0xFF34D399),
         onPrimary = Color(0xFF00210F),
@@ -213,8 +216,8 @@ fun BolTheme(dark: Boolean, clear: Boolean = false, content: @Composable () -> U
         onPrimaryContainer = Color(0xFF065F46),
         secondaryContainer = Color(0xFFD1FAE5),
         onSecondaryContainer = Color(0xFF065F46),
-        // Plain light grey page (Settings › Background › Gray); cards stay white on it.
-        background = Color(0xFFEDEDED),
+        // The light page colour picked in the side menu (grey by default); cards stay white on it.
+        background = Color(page),
         onBackground = Color(0xFF0D0D0D),
         surface = Color.White,
         onSurface = Color(0xFF0D0D0D),
