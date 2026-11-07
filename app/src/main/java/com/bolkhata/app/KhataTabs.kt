@@ -301,8 +301,9 @@ private fun monthLabel(months: List<Pair<Int, Long>>, month: Int) =
 /** Month chips; only one month is listed at a time so the page stays short. */
 @Composable
 private fun MonthChips(months: List<Pair<Int, Long>>, current: Int, onPick: (Int) -> Unit) {
+    // No background of its own: the header behind it already has one, and a fill here would cut the card's shadow above.
     LazyRow(
-        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background),
+        Modifier.fillMaxWidth(),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         item(key = ALL_MONTHS) { SmallChip("All", current == ALL_MONTHS) { onPick(ALL_MONTHS) } }
@@ -351,8 +352,9 @@ internal fun PeriodChips(newest: List<Entry>, period: Period, onPick: (Period) -
     val year = period.year.takeIf { it > 0 } ?: years.firstOrNull() ?: yearOf(System.currentTimeMillis())
     val months = remember(newest, year) { monthsOf(newest.filter { yearOf(it.date) == year }) }
     val first = (if (period.from > 0) period.label() else if (period.year > 0) period.year.toString() else "All") + " ▾"
+    // No background of its own: the header behind it already has one, and a fill here would cut the card's shadow above.
     LazyRow(
-        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background),
+        Modifier.fillMaxWidth(),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         item(key = "first") {
