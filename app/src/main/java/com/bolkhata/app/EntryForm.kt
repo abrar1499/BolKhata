@@ -109,7 +109,9 @@ fun EntryForm(
     val isStock = newStock || stockNames.any { it.equals(itemT, true) }
     // An old loan keeps its goods name ("Loans" aside) without turning into an expense.
     val loanItem = isLoan(initial.type) && itemT.equals(initial.item.trim(), true)
-    val withItem = itemT.isNotEmpty() && !loanItem
+    // "Advance" / "Loan" with a party is money lent or taken (it goes in their khata), never an expense.
+    val loanWord = itemT.lowercase() in LOAN_WORDS
+    val withItem = itemT.isNotEmpty() && !loanItem && !loanWord
 
     /**
      * The entry's kind, worked out from Out / In, the item and the party: a stock item is a sale or purchase; an item
@@ -265,7 +267,7 @@ fun EntryForm(
                             else -> cat
                         }
                         val finalItem = when {
-                            isLoan(t) -> if (loanItem) initial.item else "Loans"
+                            isLoan(t) -> if (loanItem) initial.item else if (loanWord) itemT else "Loans"
                             isTransfer(t) -> ownerMove(itemT) ?: initial.item.ifBlank { "Transfer" }
                             isTrade(t) -> spelled(item, stockNames).ifBlank { if (t == Type.SALE) "Sale" else "Purchase" }
                             itemT.isNotEmpty() -> spelled(item, if (t == Type.AAMDANI) usedIn else usedOut)
@@ -400,14 +402,19 @@ private val OUT_GROUPS: List<Pair<String, List<Pair<String, Cat>>>> = listOf(
         "Commission" to Cat.OTHER, "Bank charges" to Cat.FEES, "Taxes & fees" to Cat.FEES
     ),
     "Other" to listOf("Entertainment" to Cat.OTHER, "Subscriptions" to Cat.MOBILE, "Insurance" to Cat.FEES, "Other" to Cat.OTHER),
-    "Owner" to listOf("Taken for home" to Cat.OTHER, "Put in business" to Cat.OTHER)
+    "Owner" to listOf("Taken for home" to Cat.OTHER, "Put in business" to Cat.OTHER),
+    "Party" to listOf("Advance" to Cat.UDHAAR, "Loan" to Cat.UDHAAR)
 )
+
+/** Names that mean money lent or taken, not spent: with a party they go in the party's khata. */
+private val LOAN_WORDS = setOf("advance", "loan", "udhaar", "udhar", "qarz", "advance received", "loan received")
 
 /** Every common kind of income. */
 private val IN_GROUPS: List<Pair<String, List<Pair<String, Cat>>>> = listOf(
     "Income" to listOf("Salary", "Sale", "Business income", "Rent received", "Commission", "Profit", "Bonus", "Gift received", "Refund", "Other")
         .map { it to Cat.TANKHWAH },
-    "Owner" to listOf("From business" to Cat.OTHER, "From home" to Cat.OTHER)
+    "Owner" to listOf("From business" to Cat.OTHER, "From home" to Cat.OTHER),
+    "Party" to listOf("Advance received" to Cat.UDHAAR, "Loan received" to Cat.UDHAAR)
 )
 
 /**
