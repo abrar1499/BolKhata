@@ -186,7 +186,7 @@ private fun VoiceWave(color: Color, strength: Float, modifier: Modifier) {
 }
 
 /** Header themes offered in the side menu (the app's glossy bands), in this order. */
-private val MENU_THEMES = listOf("Clean", "Red", "Green", "Sky Blue", "Violet", "Navy")
+private val MENU_THEMES = listOf("Clean", "Red", "Green", "Navy")
 
 /**
  * The side menu, which is also Settings: the app logo, the businesses (+ Add business), then every setting in plain
@@ -287,18 +287,12 @@ internal fun SideMenu(
                     }
                 }
                 MenuRow(onClick = null, last = true) {
-                    // The label on top, then five light colours, five dull dark ones and a photo.
-                    Column(Modifier.weight(1f)) {
-                        Text("🎨 Background", fontSize = 13.sp, maxLines = 1)
-                        Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                            PAGE_COLORS.forEach { c -> Dot(SolidColor(Color(c)), !dark && !photo && page == c) { onPage(c) } }
-                        }
-                        Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                            DARK_PAGES.forEach { c -> Dot(SolidColor(Color(c)), dark && !photo && (page == c || (c == DARK_PAGES[0] && page !in DARK_PAGES))) { onDark(c) } }
-                            Text("🖼", fontSize = 16.sp, modifier = Modifier.padding(start = 5.dp).clip(CircleShape).clickable(onClick = onPhoto)
+                    // Like Header: the label, the light colours, the dull dark ones, then a photo.
+                    MenuLabel("🎨", "Background")
+                    PAGE_COLORS.forEach { c -> Dot(SolidColor(Color(c)), !dark && !photo && page == c) { onPage(c) } }
+                    DARK_PAGES.forEach { c -> Dot(SolidColor(Color(c)), dark && !photo && (page == c || (c == DARK_PAGES[0] && page !in DARK_PAGES))) { onDark(c) } }
+                    Text("🖼", fontSize = 16.sp, modifier = Modifier.padding(start = 5.dp).clip(CircleShape).clickable(onClick = onPhoto)
                                 .then(if (photo) Modifier.border(2.dp, EmberTop, CircleShape) else Modifier).padding(2.dp))
-                        }
-                    }
                 }
             }
             Spacer(Modifier.height(8.dp))

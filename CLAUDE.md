@@ -92,9 +92,9 @@ Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Packa
 
 ## Look the owner likes (keep it)
 - Mock-up of record: Artifact https://claude.ai/artifact/KaEp1kbD1q82ARWJdB9zhr (copied 1:1 into Compose).
-- Page colour: grey #EDEDED by default; side menu Background offers 5 light pages (`PAGE_COLORS`, cards stay white),
-  4 dull dark looks (`DARK_LOOKS`: Black/slate, Graphite, Charcoal, Navy; each changes page, cards, wells, edges, day
-  strip and field) and an own photo. No glass on cards; only the app icon (`GlassLogo`) and the optional header band are glossy.
+- Page colour: light slate #E6E8EB by default; side menu Background offers light slate and warm grey (`PAGE_COLORS`,
+  cards stay white), two dull dark looks (`DARK_LOOKS`: Graphite, Navy; each changes page, cards, wells, edges, day
+  strip and field) and an own photo. Header dots: Clean, Red, Green, Navy. No glass on cards; only the app icon (`GlassLogo`) and the optional header band are glossy.
 - Search box and chat bar (`fieldEdge`): as in the Claude app, white (dark: a shade lighter than the page), soft
   see-through edge, faint shadow, radius 16 (chat 19).
 - App text is plain English only (account, not khata); no country-specific words (ID card, not Iqama). Chat answers in
