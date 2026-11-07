@@ -183,7 +183,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     /** The party khata open from the Parties tab. */
     var partyOpen by remember { mutableStateOf<String?>(null) }
     /** The open business's name, and whether the business list is showing. */
-    var businessName by remember { mutableStateOf(store.businesses().firstOrNull { it.first == store.business }?.second ?: "My business") }
+    var businessName by remember { mutableStateOf(if (store.business == PERSONAL) "Personal" else store.businesses().firstOrNull { it.first == store.business }?.second ?: "My business") }
     var pickingBusiness by remember { mutableStateOf(false) }
     var businessTick by remember { mutableIntStateOf(0) }
     // Smart understanding: entries the local engine read (shown before saving), a name to pick, what was just added (Undo),
@@ -296,6 +296,32 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     LaunchedEffect(Unit) { sendChatLog() }
 
     var trash by remember { mutableStateOf(store.loadTrash()) }
+    /** The open book: a business, or [PERSONAL]; the Business button goes back to the last business. */
+    var book by remember { mutableStateOf(store.business) }
+    var lastBusiness by remember { mutableStateOf(store.business.takeIf { it != PERSONAL } ?: "") }
+    /** The Business section chip to open on (Parties, Stock…). */
+    var businessSection by remember { mutableStateOf("Parties") }
+    fun bookName(id: String) = if (id == PERSONAL) "Personal" else store.businesses().firstOrNull { it.first == id }?.second ?: "My business"
+    /** Opens a book and loads its entries. */
+    fun openBook(id: String) {
+        store.business = id
+        book = id
+        if (id != PERSONAL) lastBusiness = id
+        entries = store.load()
+        trash = store.loadTrash()
+        businessName = bookName(id)
+        partyOpen = null
+    }
+    /** A section chip: Cashbook / Expense / Income are their own screens, the rest are Business views. */
+    fun goSection(name: String) {
+        tab = when (name) {
+            "Cashbook" -> Tab.CASHBOOK
+            "Expense" -> Tab.EXPENSE
+            "Income" -> Tab.INCOME
+            else -> { businessSection = name; Tab.PARTIES }
+        }
+    }
+    val sectionNames = if (book == PERSONAL) PERSONAL_SECTIONS else BUSINESS_SECTIONS
 
     fun saveTrash(list: List<Entry>) {
         trash = list
@@ -2123,14 +2149,26 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         voice = if (recorder != null) VoiceState(true, "Listening…", "sends when you stop", level = voiceLevel) { finishRecording() } else null,
                         navPad = false
                     )
-                    KhataNav(tab) { tab = it }
+                    KhataNav(
+                        tab, book == PERSONAL,
+                        onChat = { tab = Tab.CHAT },
+                        onBusiness = { if (book == PERSONAL) openBook(lastBusiness); if (tab != Tab.PARTIES) tab = Tab.CASHBOOK },
+                        onPersonal = { if (book != PERSONAL) openBook(PERSONAL); if (tab == Tab.CHAT || tab == Tab.PARTIES) tab = Tab.CASHBOOK },
+                        onAdd = { trade = cashTemplate(false) }
+                    )
                 }
             } else {
                 // The chat box lives only on the Chat tab; the other screens show just the tabs.
                 val nav = main && tab in KHATA_TABS && partyOpen == null
                 Column {
                     FlashStrip(flash) { flash = null }
-                    if (nav) KhataNav(tab) { tab = it } else Spacer(Modifier.navigationBarsPadding())
+                    if (nav) KhataNav(
+                        tab, book == PERSONAL,
+                        onChat = { tab = Tab.CHAT },
+                        onBusiness = { if (book == PERSONAL) openBook(lastBusiness); if (tab != Tab.PARTIES) tab = Tab.CASHBOOK },
+                        onPersonal = { if (book != PERSONAL) openBook(PERSONAL); if (tab == Tab.CHAT || tab == Tab.PARTIES) tab = Tab.CASHBOOK },
+                        onAdd = { trade = cashTemplate(false) }
+                    ) else Spacer(Modifier.navigationBarsPadding())
                 }
             }
         },
@@ -2181,19 +2219,20 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     onOpen = { p -> partyOpen = p.name; activeLedgerPerson = p.name },
                     onReport = { reportStart = it; tab = Tab.REPORTS },
                     onAdd = { trade = it }, onEdit = { editing = it },
-                    made = { store.made(it) }, onSetMade = { m, qty -> store.setMade(m, qty) }
+                    made = { store.made(it) }, onSetMade = { m, qty -> store.setMade(m, qty) },
+                    section = businessSection, onSection = { goSection(it) }
                 )
                 tab == Tab.CASHBOOK -> CashBookScreen(
                     entries, currency, onMenu = { openMenu() }, business = businessName, onBusiness = { pickingBusiness = true },
                     onEdit = { editing = it }, onHistory = { tab = Tab.ENTRIES },
-                    onAdd = { inc -> trade = cashTemplate(inc) }
+                    sections = { SectionChips(sectionNames, "Cashbook") { goSection(it) } }
                 )
                 tab == Tab.EXPENSE || tab == Tab.INCOME -> {
                     val inc = tab == Tab.INCOME
                     MoneyScreen(
                         inc, entries, currency, onMenu = { openMenu() }, business = businessName, onBusiness = { pickingBusiness = true }, onEdit = { editing = it },
                         onReport = { reportStart = if (inc) ReportKind.CASH_IN else ReportKind.CASH_OUT; tab = Tab.REPORTS },
-                        onAdd = { trade = cashTemplate(inc) }
+                        sections = { SectionChips(sectionNames, if (inc) "Income" else "Expense") { goSection(it) } }
                     )
                 }
                 tab == Tab.HOME -> HomeScreen(
@@ -2891,11 +2930,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
 
     if (pickingBusiness) {
         fun open(id: String) {
-            store.business = id
-            entries = store.load()
-            trash = store.loadTrash()
-            businessName = store.businesses().firstOrNull { it.first == id }?.second ?: "My business"
-            partyOpen = null
+            openBook(id)
             pickingBusiness = false
         }
         BusinessPicker(
