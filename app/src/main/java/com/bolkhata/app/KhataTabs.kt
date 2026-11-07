@@ -1170,7 +1170,7 @@ private val Well: Color
 
 /** A picture for a name (see [NameIcon]); nothing fits: 💸 for money out, 💵 for money in. */
 private fun iconFor(name: String, income: Boolean = false) = NameIcon.of(name, income)
-private fun bookIcon(b: Book) = if (b.people) "👤" else b.cat?.icon ?: iconFor(b.name, b.side == Side.INC)
+private fun bookIcon(b: Book) = if (b.people) "👤" else if (b.name == Sides.MY_ACCOUNTS) "🏦" else b.cat?.icon ?: iconFor(b.name, b.side == Side.INC)
 
 /** Shape of row [i] of [n] in a white rounded sheet: the first and last rows round the sheet's corners. */
 private fun sheetRow(i: Int, n: Int) = RoundedCornerShape(
@@ -1399,11 +1399,12 @@ fun SideScreen(
                             if (book.people) {
                                 val (amt, what) = Sides.balanceText(book, kid.balance)
                                 SumCard(Triple(amt, what.lowercase(), balanceColor(what)), null, "", {})
-                            } else SumCard(Triple(fmt(kid.total), if (income) "income" else "spent", ink), null, "", {})
+                            } else if (book.name == Sides.MY_ACCOUNTS) SumCard(Triple(fmt(kid.balance), "kept here · not income", MaterialTheme.colorScheme.onSurface), null, "", {})
+                            else SumCard(Triple(fmt(kid.total), if (income) "income" else "spent", ink), null, "", {})
                         }
                     }
-                    if (book.people) {
-                        val (plus, minus) = Sides.columns(book)
+                    if (book.people || book.name == Sides.MY_ACCOUNTS) {
+                        val (plus, minus) = if (book.people) Sides.columns(book) else "Sent" to "Back"
                         val rows = kid.entries.map { e -> e to (if (personEffect(e) > 0) listOf(e.amount, 0.0) else listOf(0.0, e.amount)) }
                         simpleLedger(listOf(plus to RedSpend, minus to GreenIn), listOf(rows.sumOf { it.second[0] }, rows.sumOf { it.second[1] }), rows, ::personLine, onEdit)
                     } else {
@@ -1422,15 +1423,20 @@ fun SideScreen(
                                 val neg = kids.filter { it.balance < -0.5 }.sumOf { -it.balance }
                                 SumCard(Triple(fmt(pos), Sides.balanceText(book, 1.0).second, if (income) GreenIn else OweInk),
                                     Triple(fmt(neg), Sides.balanceText(book, -1.0).second, if (income) OweInk else RedSpend), "", {})
-                            } else SumCard(Triple(fmt(kids.sumOf { it.total }), if (income) "Income" else "Spent", ink), null, "", {})
+                            } else if (book.name == Sides.MY_ACCOUNTS) SumCard(Triple(fmt(kids.sumOf { it.balance }), "Kept in your accounts · not income", MaterialTheme.colorScheme.onSurface), null, "", {})
+                            else SumCard(Triple(fmt(kids.sumOf { it.total }), if (income) "Income" else "Spent", ink), null, "", {})
                         }
                     } }
                     kids.forEachIndexed { i, k ->
                         item(key = "k" + k.name.lowercase()) {
-                            val (amt, what) = if (book.people) Sides.balanceText(book, k.balance) else fmt(k.total) to (if (income) "income" else "spent")
+                            val (amt, what) = when {
+                                book.people -> Sides.balanceText(book, k.balance)
+                                book.name == Sides.MY_ACCOUNTS -> fmt(k.balance) to "kept"
+                                else -> fmt(k.total) to (if (income) "income" else "spent")
+                            }
                             ItRow(
                                 if (book.people) "👤" else iconFor(k.name, income), k.name, entryCount(k.entries.size), amt, what.lowercase(),
-                                if (book.people) balanceColor(what) else ink, i, kids.size,
+                                if (book.people) balanceColor(what) else if (book.name == Sides.MY_ACCOUNTS) MaterialTheme.colorScheme.onSurface else ink, i, kids.size,
                                 onLong = khataMenu?.let { m -> { m(if (book.people) "party" else if (income) "income" else "expense-name", k.name) } }
                             ) { kidName = k.name }
                         }
@@ -1527,7 +1533,9 @@ fun SideScreen(
                             // All time, the same figure the account shows inside; the card on top has this month.
                             val owe = if (!b.people) "" else (if (p > 0.5) " · " + fmt(p) + " " + Sides.balanceText(b, 1.0).second.lowercase() else "") +
                                 (if (m > 0.5) " · " + fmt(m) + " " + Sides.balanceText(b, -1.0).second.lowercase() else "")
-                            ItRow(bookIcon(b), b.name, sub, fmt(Sides.done(b, entries, setup) { true }), (if (income) "income" else "spent") + owe, ink, i, shown.size,
+                            val mine = b.name == Sides.MY_ACCOUNTS
+                            ItRow(bookIcon(b), b.name, sub, fmt(if (mine) kids.sumOf { it.balance } else Sides.done(b, entries, setup) { true }),
+                                if (mine) "kept · not income" else (if (income) "income" else "spent") + owe, if (mine) MaterialTheme.colorScheme.onSurface else ink, i, shown.size,
                                 onLong = { acct = b }) { bookName = b.name; q = "" }
                         }
                     }
@@ -1543,6 +1551,7 @@ fun SideScreen(
             val crumbs = "${book.name} › $name"
             fun add(t: Entry, label: String, color: Color, qty: Boolean = false) { sheet = AddReq(t, label, color, crumbs, qty) }
             when {
+                book.name == Sides.MY_ACCOUNTS -> Unit
                 !book.people -> SolidButtons(listOf((if (income) "+ In" else "+ Out") to ink)) {
                     add(cashTemplate(income).copy(category = if (income) Cat.TANKHWAH else book.cat ?: Cat.OTHER, item = name), if (income) "In" else "Out", ink)
                 }

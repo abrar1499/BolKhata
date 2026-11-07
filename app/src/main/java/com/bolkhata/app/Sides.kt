@@ -33,6 +33,11 @@ object Sides {
     /** People with only loans (gave / took), who are neither staff, suppliers nor customers. */
     const val PEOPLE = "People"
     const val INCOME = "Income received"
+    /** Money moved to your own other accounts (D360, a wallet): still yours, shown on Income but never counted as income. */
+    const val MY_ACCOUNTS = "My accounts"
+
+    /** A transfer with nobody named: between your own accounts. */
+    fun isOwnTransfer(e: Entry) = (e.type == Type.TRANSFER_OUT || e.type == Type.TRANSFER_IN) && e.person.isBlank()
 
     /** Expense categories offered as ready-made accounts, in this order. */
     private val expenseCats = listOf(Cat.KHANA, Cat.TRANSPORT, Cat.BIJLI, Cat.RENT, Cat.MOBILE, Cat.SEHAT, Cat.EDU, Cat.SHOPPING,
@@ -53,7 +58,8 @@ object Sides {
         val things = if (side == Side.EXP) {
             val used = all.filter { it.type == Type.KHARCHA }.map { it.category }.toSet()
             expenseCats.filter { it in used }.map { Book(side, it.label, false, it) }
-        } else listOfNotNull(Book(side, INCOME, false).takeIf { all.any { it.type == Type.AAMDANI } })
+        } else listOfNotNull(Book(side, INCOME, false).takeIf { all.any { it.type == Type.AAMDANI } },
+            Book(side, MY_ACCOUNTS, false).takeIf { all.any(::isOwnTransfer) })
         // Expense lists its things (Food, Bills…) first and the people after; Income starts with Customers.
         val p = people + own.filter { it.people }
         val t = things + own.filter { !it.people }
@@ -101,7 +107,9 @@ object Sides {
 
     /** What a thing entry is called inside its account: the payer for income, else its item ("Sent home" stays itself). */
     fun thingName(e: Entry): String =
-        if (e.type == Type.AAMDANI) source(e) else e.item.trim().ifBlank { "Other" }
+        if (e.type == Type.AAMDANI) source(e)
+        else if (isOwnTransfer(e)) e.item.trim().removePrefix("To ").removePrefix("to ").ifBlank { "Own account" }
+        else e.item.trim().ifBlank { "Other" }
 
     /** Things inside the owner's own accounts, by lowercase name, so their entries leave Other. */
     private fun ownThings(side: Side, setup: SideSetup): Map<String, String> =
@@ -109,7 +117,8 @@ object Sides {
 
     private fun thingEntries(book: Book, newest: List<Entry>, setup: SideSetup): List<Entry> {
         val own = ownThings(book.side, setup)
-        return if (book.side == Side.INC) {
+        return if (book.name == MY_ACCOUNTS) newest.filter(::isOwnTransfer)
+        else if (book.side == Side.INC) {
             val inc = newest.filter { it.type == Type.AAMDANI }
             if (book.cat == null && book.name != INCOME) inc.filter { own[thingName(it).lowercase()] == book.name }
             else inc.filter { own[thingName(it).lowercase()] == null }
@@ -128,10 +137,10 @@ object Sides {
         kids(book, all, setup).sumOf { k -> k.entries.filter { inMonth(it.date) && counts(book, it) }.sumOf { it.amount } }
 
     /** Whether an entry is a cost (Expense) or an earning (Income): a person's work or goods given, a thing's amount. */
-    fun counts(book: Book, e: Entry): Boolean = !book.people || when (book.side) {
+    fun counts(book: Book, e: Entry): Boolean = book.name != MY_ACCOUNTS && (!book.people || when (book.side) {
         Side.EXP -> book.name != PEOPLE && e.type == Type.PURCHASE
         Side.INC -> e.type == Type.SALE
-    }
+    })
 
     /** What the people accounts on [side] hold: (advance left or to get, to pay or advance taken), both as plus figures. */
     fun owed(side: Side, all: List<Entry>, setup: SideSetup): Pair<Double, Double> {
