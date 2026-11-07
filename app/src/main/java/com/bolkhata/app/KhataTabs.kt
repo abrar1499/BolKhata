@@ -931,15 +931,18 @@ private fun LedgerRow(r: LRow, cols: List<LCol>, last: Boolean, card: Boolean = 
             }
     ) {
         Column(Modifier.weight(1f).padding(start = 10.dp, end = 4.dp, top = 5.dp, bottom = 5.dp), verticalArrangement = Arrangement.Center) {
-            Text(r.title, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val title = loanWord(r.title, r.entry)
+            val khata = loanWord(r.khata, r.entry)
+            val note = loanWord(r.note, r.entry)
+            Text(title, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
                 buildAnnotatedString {
                     withStyle(SpanStyle(fontSize = 8.sp)) { append(clockFmt.format(Date(r.date)).lowercase()) }
-                    if (r.khata.isNotBlank() && !r.khata.equals(r.title, true)) {
+                    if (khata.isNotBlank() && !khata.equals(title, true)) {
                         append(" · ")
-                        withStyle(SpanStyle(fontSize = 8.sp, fontWeight = FontWeight.SemiBold, color = KhataBlue)) { append(r.khata) }
+                        withStyle(SpanStyle(fontSize = 8.sp, fontWeight = FontWeight.SemiBold, color = KhataBlue)) { append(khata) }
                     }
-                    if (r.note.isNotBlank() && !r.note.equals(r.title, true)) append(" · " + r.note)
+                    if (note.isNotBlank() && !note.equals(title, true) && !note.equals(khata, true)) append(" · " + note)
                 },
                 fontSize = 9.sp, color = sub, maxLines = 1, overflow = TextOverflow.Ellipsis
             )
