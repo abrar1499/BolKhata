@@ -49,4 +49,12 @@ class SidesTest {
         val raw = all + en(Type.PURCHASE, 30000.0, "Sabir Coal Co", "Kachi eint", Cat.PRODUCTION, 50000.0)
         assertEquals(listOf("Item A"), Sides.items(raw, setup).map { it.name })
     }
+
+    @Test fun workAddsUpByKindAndWorker() {
+        val w = Sides.works(all, setup).single()
+        assertEquals("Task A", w.name)
+        assertEquals(200.0, w.qty, 0.0)
+        assertEquals(8000.0, w.amount, 0.0)
+        assertEquals("Hamid Akram", w.who.single().first)
+    }
 }

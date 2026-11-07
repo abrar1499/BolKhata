@@ -1165,17 +1165,9 @@ private val OweButton = Color(0xFFE8892B)
 private val Well: Color
     @Composable @ReadOnlyComposable get() = if (MaterialTheme.colorScheme.surface.luminance() < 0.5f) Color(0xFF262626) else Color(0xFFEFECE8)
 
-/** An emoji for a name (Groceries 🛒, Petrol ⛽…), 🗂️ when nothing fits. */
-private val nameIcons = listOf(
-    "grocer" to "🛒", "restaurant" to "🍽", "tea" to "☕", "bread" to "🍞", "fruit" to "🍎", "water" to "💧", "food" to "🍛",
-    "petrol" to "⛽", "fuel" to "⛽", "repair" to "🔧", "oil" to "🛢", "tyre" to "🛞", "wash" to "🚿", "parking" to "🅿️", "taxi" to "🚕",
-    "bus" to "🚌", "car" to "🚗", "transport" to "🚌", "electric" to "💡", "gas" to "🔥", "internet" to "🌐", "mobile" to "📱", "bill" to "🧾",
-    "rent" to "🏠", "home" to "🏠", "doctor" to "🩺", "medicine" to "💊", "school" to "🏫", "book" to "📚", "cloth" to "👕", "gift" to "🎁",
-    "charity" to "🤲", "labour" to "👷", "raw" to "🧱", "loading" to "🚚", "unloading" to "🚚", "salary" to "💼", "eint" to "🧱", "brick" to "🧱",
-    "coal" to "⚫", "koila" to "⚫", "cement" to "🏗", "staff" to "👥", "supplier" to "🚚", "customer" to "🤝", "people" to "🤝", "income" to "💰"
-)
-private fun iconFor(name: String): String = name.lowercase().let { n -> nameIcons.firstOrNull { n.contains(it.first) }?.second } ?: "🗂️"
-private fun bookIcon(b: Book) = if (b.people) "👤" else b.cat?.icon ?: iconFor(b.name)
+/** A picture for a name (see [NameIcon]); nothing fits: 💸 for money out, 💵 for money in. */
+private fun iconFor(name: String, income: Boolean = false) = NameIcon.of(name, income)
+private fun bookIcon(b: Book) = if (b.people) "👤" else b.cat?.icon ?: iconFor(b.name, b.side == Side.INC)
 
 /** Shape of row [i] of [n] in a white rounded sheet: the first and last rows round the sheet's corners. */
 private fun sheetRow(i: Int, n: Int) = RoundedCornerShape(
@@ -1228,11 +1220,11 @@ private fun DashedAdd(label: String, onClick: () -> Unit) {
     )
 }
 
-/** Accounts | Items, the two views of Income, as a grey track with the picked half in white. */
+/** Accounts | Items (Income) or Accounts | Work (Expense), as a grey track with the picked half in white. */
 @Composable
-private fun Seg(items: Boolean, onPick: (Boolean) -> Unit) {
+private fun Seg(items: Boolean, second: String = "Items", onPick: (Boolean) -> Unit) {
     Row(Modifier.padding(start = 10.dp, end = 10.dp, top = 10.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Well).padding(3.dp)) {
-        listOf("Accounts" to false, "Items" to true).forEach { (label, v) ->
+        listOf("Accounts" to false, second to true).forEach { (label, v) ->
             val on = items == v
             Text(
                 label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
@@ -1374,6 +1366,7 @@ fun SideScreen(
     var kidName by rememberSaveable(income) { mutableStateOf<String?>(null) }
     var items by rememberSaveable(income) { mutableStateOf(false) }
     var itemName by rememberSaveable(income) { mutableStateOf<String?>(null) }
+    var workMonth by rememberSaveable(income) { mutableIntStateOf(ALL_MONTHS) }
     var q by rememberSaveable(income) { mutableStateOf("") }
     var adding by remember { mutableStateOf<String?>(null) }   // "book" or "kid"
     var stockIn by remember { mutableStateOf(false) }
@@ -1433,13 +1426,44 @@ fun SideScreen(
                         item(key = "k" + k.name.lowercase()) {
                             val (amt, what) = if (book.people) Sides.balanceText(book, k.balance) else fmt(k.total) to (if (income) "income" else "spent")
                             ItRow(
-                                if (book.people) "👤" else iconFor(k.name), k.name, entryCount(k.entries.size), amt, what.lowercase(),
+                                if (book.people) "👤" else iconFor(k.name, income), k.name, entryCount(k.entries.size), amt, what.lowercase(),
                                 if (book.people) balanceColor(what) else ink, i, kids.size,
                                 onLong = khataMenu?.let { m -> { m(if (book.people) "party" else if (income) "income" else "expense-name", k.name) } }
                             ) { kidName = k.name }
                         }
                     }
                     item(key = "addkid") { DashedAdd("+ Add in ${book.name}") { adding = "kid" } }
+                }
+                items && !income -> {
+                    val wMonths = monthsOf(entries.filter { it.type == Type.PURCHASE && it.qty > 0 }.sortedByDescending { it.date })
+                    val all = Sides.works(entries, setup) { inMonth(it, workMonth) }
+                    val w0 = all.firstOrNull { it.name == itemName }
+                    if (w0 == null) {
+                        stickyHeader { TabHead {
+                            KhataTop("", "", onMenu, business = business) {
+                                SumCard(Triple(fmt(all.sumOf { it.amount }), "Work", RedSpend), Triple(all.size.toString(), "Kinds of work", MaterialTheme.colorScheme.onSurface), "Report ›", onReport)
+                            }
+                            Seg(true, "Work") { items = it; itemName = null }
+                            if (wMonths.isNotEmpty()) MonthChips(wMonths, workMonth) { workMonth = it }
+                        } }
+                        if (all.isEmpty()) emptyNote("No work yet. Add + Work in a staff account, with the work and qty.")
+                        all.forEachIndexed { i, w ->
+                            item(key = "w" + w.name) {
+                                ItRow(iconFor(w.name), w.name, "By " + (if (w.who.size == 1) "1 worker" else "${w.who.size} workers"),
+                                    fmt(w.qty), fmt(w.amount) + " cost", MaterialTheme.colorScheme.onSurface, i, all.size) { itemName = w.name }
+                            }
+                        }
+                    } else {
+                        item(key = "wh") {
+                            BackHead(w0.name, "Expense › Work ›", { itemName = null }) {
+                                SumCard(Triple(fmt(w0.qty), "Done", MaterialTheme.colorScheme.onSurface), Triple(fmt(w0.amount), "Cost", RedSpend), "", {},
+                                    Triple(fmt(w0.amount / w0.qty * 1000), "Per 1000", MaterialTheme.colorScheme.onSurfaceVariant))
+                            }
+                        }
+                        w0.who.forEachIndexed { i, (who, q, a) ->
+                            item(key = "ww$who") { ItRow("👤", who, fmt(q) + " done", fmt(a), "cost", RedSpend, i, w0.who.size, onClick = null) }
+                        }
+                    }
                 }
                 items -> {
                     val all = Sides.items(entries, setup)
@@ -1486,7 +1510,7 @@ fun SideScreen(
                                 Triple(fmt(pos), if (income) "To get" else "Advance left", if (income) GreenIn else OweInk),
                                 "Report ›", onReport, Triple(fmt(neg), if (income) "Advance taken" else "To pay", if (income) OweInk else RedSpend))
                         }
-                        if (income) Seg(false) { items = it }
+                        Seg(false, if (income) "Items" else "Work") { items = it }
                         SearchBox(q, "Search") { q = it }
                     } }
                     val shown = books.filter { q.isBlank() || it.name.contains(q.trim(), true) ||
@@ -1530,7 +1554,7 @@ fun SideScreen(
                     else add(template(Type.PURCHASE, name).copy(category = if (staff) Cat.PRODUCTION else Cat.STOCK, item = ""), "Work", OweButton, qty = true)
                 }
             }
-        } else if (items && itemName != null) {
+        } else if (items && itemName != null && income) {
             SolidButtons(listOf("+ Stock in (made or bought)" to Color(0xFF1C1917)), full = true) { stockIn = true }
         } else UpButton(state)
     }

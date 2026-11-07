@@ -172,6 +172,18 @@ object Sides {
         }.sortedByDescending { it.amount }
     }
 
+    /** Work done by staff, by kind (kachi eint, bharai…): how much, what it cost, and who did how much. */
+    class Work(val name: String, val qty: Double, val amount: Double, val who: List<Triple<String, Double, Double>>)
+
+    fun works(all: List<Entry>, setup: SideSetup, inMonth: (Long) -> Boolean = { true }): List<Work> =
+        all.filter { it.type == Type.PURCHASE && it.qty > 0 && it.item.isNotBlank() && it.person.isNotBlank() &&
+            inMonth(it.date) && bookOf(it.person, all, setup) == STAFF }
+            .groupBy { it.item.trim().lowercase() }.values
+            .map { l ->
+                Work(l.first().item.trim(), l.sumOf { it.qty }, l.sumOf { it.amount },
+                    l.groupBy { it.person.trim() }.map { (p, w) -> Triple(p, w.sumOf { it.qty }, w.sumOf { it.amount }) }.sortedByDescending { it.third })
+            }.sortedByDescending { it.amount }
+
     /** The profit report: sale, other income, work and purchases, expenses, and what is left. */
     class Profit(val sale: Double, val income: Double, val work: Double, val spent: Double) {
         val profit = sale + income - work - spent
