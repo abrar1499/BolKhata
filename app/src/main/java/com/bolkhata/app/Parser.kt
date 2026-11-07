@@ -63,7 +63,8 @@ object Parser {
 
         r(Cat.PERSONAL, "Haircut", "haircut", "barber", "nai", "hajam", "baal", "حجام"),
         r(Cat.PERSONAL, "Laundry", "laundry", "dhobi", "dhulai"),
-        r(Cat.PERSONAL, "Toiletries", "soap", "sabun", "shampoo", "toothpaste", "perfume"),
+        r(Cat.PERSONAL, "Toiletries", "soap", "sabun", "saban", "saboon", "shampoo", "shampu", "shampo", "shampoe", "shempoo", "shempu", "sampoo", "shampoos",
+            "toothpaste", "manjan", "perfume", "itar", "attar", "lotion", "facewash", "razor"),
 
         r(Cat.SHOPPING, "Clothes", "kapre", "kapray", "kapde", "kapry", "clothes", "shirt", "pant", "kurta", "کپڑے"),
         r(Cat.SHOPPING, "Shoes", "joote", "jootay", "joota", "shoes", "chappal", "جوتے"),

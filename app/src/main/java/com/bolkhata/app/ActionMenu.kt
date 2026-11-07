@@ -32,7 +32,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 
-private val MoveBlue = Color(0xFF5B5FF0)
 
 /** One button of an [ActionMenu]. The first action is the main one and is filled. */
 class MenuAction(val label: String, val icon: ImageVector, val danger: Boolean = false, val onClick: () -> Unit)
@@ -47,73 +46,39 @@ fun ActionMenu(
     subtitle: String,
     amount: String,
     amountColor: Color,
-    badge: @Composable () -> Unit,
     actions: List<MenuAction>,
     onDismiss: () -> Unit
 ) {
+    // One small white card: the name and its line (amount at the end), then one plain row per action, Delete in red.
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Box(
             Modifier.fillMaxSize().clickable(remember { MutableInteractionSource() }, indication = null, onClick = onDismiss),
             contentAlignment = Alignment.Center
         ) {
-            // Taps on the card itself must not close the menu.
-            Column(Modifier.padding(horizontal = 20.dp).clickable(remember { MutableInteractionSource() }, indication = null) {}) {
-                Surface(shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 10.dp) {
-                    Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        badge()
-                        Spacer(Modifier.width(12.dp))
+            Surface(
+                Modifier.width(240.dp).clickable(remember { MutableInteractionSource() }, indication = null) {},
+                shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 8.dp
+            ) {
+                Column(Modifier.padding(vertical = 4.dp)) {
+                    Row(Modifier.padding(start = 14.dp, end = 14.dp, top = 8.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text(title, fontWeight = FontWeight.Bold, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(subtitle, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(title, fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(subtitle, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
-                        Spacer(Modifier.width(8.dp))
-                        Text(amount, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, color = amountColor)
+                        if (amount.isNotBlank()) Text(amount, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp, color = amountColor, modifier = Modifier.padding(start = 8.dp))
                     }
-                }
-                Spacer(Modifier.height(10.dp))
-                Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 2.dp) {
-                    Row(Modifier.fillMaxWidth().padding(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        actions.forEachIndexed { i, a -> ActionPill(a, main = i == 0, Modifier.weight(1f), stacked = actions.size > 3) }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    actions.forEach { a ->
+                        val tint = if (a.danger) RedSpend else MaterialTheme.colorScheme.onSurface
+                        Row(Modifier.fillMaxWidth().clickable(onClick = a.onClick).padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(a.icon, contentDescription = null, tint = if (a.danger) RedSpend else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(10.dp))
+                            Text(a.label, color = tint, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, maxLines = 1)
+                        }
                     }
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun ActionPill(a: MenuAction, main: Boolean, modifier: Modifier, stacked: Boolean = false) {
-    val tint = when {
-        main -> GreenDeep
-        a.danger -> RedSpend
-        else -> MoveBlue
-    }
-    val content = if (main) Color.White else tint
-    // Many actions: icon over a small label, so all of them fit in one row.
-    if (stacked) {
-        Column(
-            modifier.clip(RoundedCornerShape(14.dp)).background(if (main) tint else tint.copy(alpha = 0.12f))
-                .clickable(onClick = a.onClick).padding(vertical = 9.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Icon(a.icon, contentDescription = null, tint = content, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.height(3.dp))
-            Text(a.label, color = content, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, maxLines = 1)
-        }
-        return
-    }
-    Row(
-        modifier
-            .clip(RoundedCornerShape(14.dp))
-            .background(if (main) tint else tint.copy(alpha = 0.12f))
-            .clickable(onClick = a.onClick)
-            .padding(vertical = 12.dp),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(a.icon, contentDescription = null, tint = content, modifier = Modifier.size(17.dp))
-        Spacer(Modifier.width(6.dp))
-        Text(a.label, color = content, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, maxLines = 1)
     }
 }
 
@@ -126,7 +91,6 @@ fun EntryMenu(e: Entry, currency: String, onEdit: () -> Unit, onRename: () -> Un
         subtitle = listOf(shortDateYear(e.date), e.category.label).joinToString(" · "),
         amount = (if (out) "−" else "+") + money(currency, e.amount),
         amountColor = if (out) RedSpend else GreenIn,
-        badge = { CatBubble(e.category) },
         actions = listOf(
             MenuAction("Edit", Icons.Filled.Edit, onClick = onEdit),
             MenuAction("Rename", Icons.Filled.DriveFileRenameOutline, onClick = onRename),
@@ -178,7 +142,6 @@ fun GroupMenu(name: String, entryCount: Int, onRename: (() -> Unit)?, onMove: ()
         subtitle = if (entryCount == 1) "1 entry" else "$entryCount entries",
         amount = "",
         amountColor = Color.Unspecified,
-        badge = { Initial(name) },
         actions = listOfNotNull(
             onRename?.let { MenuAction("Rename", Icons.Filled.DriveFileRenameOutline, onClick = it) },
             MenuAction("Move", Icons.Filled.SwapHoriz, onClick = onMove),
@@ -203,12 +166,6 @@ fun KhataMenu(
             when { settled -> " · settled"; receive -> " · you'll receive"; else -> " · you'll pay" },
         amount = if (settled) "0" else money(currency, kotlin.math.abs(balance)),
         amountColor = if (settled) MaterialTheme.colorScheme.onSurfaceVariant else color,
-        badge = {
-            Box(
-                Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(color.copy(alpha = 0.16f)),
-                contentAlignment = Alignment.Center
-            ) { Text(name.trim().take(1).uppercase(), fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, color = color) }
-        },
         actions = listOf(
             MenuAction("Rename", Icons.Filled.DriveFileRenameOutline, onClick = onRename),
             MenuAction("Merge", Icons.Filled.MergeType, onClick = onMerge),

@@ -2259,7 +2259,12 @@ fun App(
                         onSave = { e -> save(listOf(e) + entries); lastAdded = listOf(e.id); toast("✓ Saved") },
                         onStockIn = { item, qty -> val e = madeEntry(item, qty, madeRate(entries, qty), System.currentTimeMillis()); save(listOf(e) + entries); toast("✓ Stock added") },
                         onReport = { profitOpen = true },
-                        jump = sideJump, onJumped = { sideJump = null }
+                        jump = sideJump, onJumped = { sideJump = null },
+                        onMoveKhata = { n -> khataMove = "expense" to n },
+                        onDeleteKhata = { n ->
+                            val ids = khataEntries("expense", n).map { it.id }.toSet()
+                            confirm = "Move all of \"$n\" (${ids.size} " + (if (ids.size == 1) "entry" else "entries") + ") to Trash?" to ids
+                        }
                     )
                 }
                 tab == Tab.HOME -> HomeScreen(

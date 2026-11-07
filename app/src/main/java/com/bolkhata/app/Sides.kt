@@ -99,9 +99,9 @@ object Sides {
             .sortedWith(compareByDescending<Kid> { it.entries.firstOrNull()?.date ?: 0L })
     }
 
-    /** What a thing entry is called inside its account: the payer for income, else its item (or "Other"). */
+    /** What a thing entry is called inside its account: the payer for income, else its item ("Sent home" stays itself). */
     fun thingName(e: Entry): String =
-        if (e.type == Type.AAMDANI) source(e) else e.item.trim().takeIf { it.isNotBlank() && !it.equals(e.category.label, true) } ?: "Other"
+        if (e.type == Type.AAMDANI) source(e) else e.item.trim().ifBlank { "Other" }
 
     /** Things inside the owner's own accounts, by lowercase name, so their entries leave Other. */
     private fun ownThings(side: Side, setup: SideSetup): Map<String, String> =
@@ -154,7 +154,7 @@ object Sides {
         else -> fmt(kotlin.math.abs(v)) to if (v > 0) "Advance left" else "To pay"
     }
 
-    /** Items: each one sold (goods given), to whom, and what is left of what came in (made or bought). */
+    /** Items: each one sold or made, to whom it was given, and what is left of what came in (made or bought). */
     class Item(val name: String, val given: Double, val amount: Double, val inStock: Double, val who: List<Pair<String, Double>>, val stockIn: List<Entry>)
 
     fun items(all: List<Entry>, setup: SideSetup): List<Item> {
@@ -162,7 +162,8 @@ object Sides {
         val sales = all.filter { it.type == Type.SALE && it.qty > 0 && it.item.isNotBlank() && !it.item.equals("Sale", true) }
         val ins = all.filter { it.type == Type.PURCHASE && it.qty > 0 && it.item.isNotBlank() && it.id !in staff && !it.item.equals("Purchase", true) }
             .sortedByDescending { it.date }
-        val names = (sales.map { it.item.trim() } + ins.map { it.item.trim() }).distinctBy { it.lowercase() }
+        // Only goods you sell or make show here: raw material (kachi eint, coal…) used up in making is a cost, not stock.
+        val names = (sales.map { it.item.trim() } + ins.filter(::isMade).map { it.item.trim() }).distinctBy { it.lowercase() }
         return names.map { n ->
             val s = sales.filter { it.item.trim().equals(n, true) }
             val i = ins.filter { it.item.trim().equals(n, true) }
@@ -170,6 +171,18 @@ object Sides {
                 s.groupBy { it.person.trim().ifBlank { "Cash sale" } }.map { (p, l) -> p to l.sumOf { it.qty } }.sortedByDescending { it.second }, i)
         }.sortedByDescending { it.amount }
     }
+
+    /** Work done by staff, by kind (kachi eint, bharai…): how much, what it cost, and who did how much. */
+    class Work(val name: String, val qty: Double, val amount: Double, val who: List<Triple<String, Double, Double>>)
+
+    fun works(all: List<Entry>, setup: SideSetup, inMonth: (Long) -> Boolean = { true }): List<Work> =
+        all.filter { it.type == Type.PURCHASE && it.qty > 0 && it.item.isNotBlank() && it.person.isNotBlank() &&
+            inMonth(it.date) && bookOf(it.person, all, setup) == STAFF }
+            .groupBy { it.item.trim().lowercase() }.values
+            .map { l ->
+                Work(l.first().item.trim(), l.sumOf { it.qty }, l.sumOf { it.amount },
+                    l.groupBy { it.person.trim() }.map { (p, w) -> Triple(p, w.sumOf { it.qty }, w.sumOf { it.amount }) }.sortedByDescending { it.third })
+            }.sortedByDescending { it.amount }
 
     /** The profit report: sale, other income, work and purchases, expenses, and what is left. */
     class Profit(val sale: Double, val income: Double, val work: Double, val spent: Double) {
