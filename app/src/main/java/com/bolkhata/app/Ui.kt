@@ -294,6 +294,16 @@ fun isTransfer(t: Type) = t == Type.TRANSFER_IN || t == Type.TRANSFER_OUT
 /** True when this entry belongs in a named person history: loans, trades, and transfers. */
 fun withPerson(e: Entry) = e.person.isNotBlank() && (isLoan(e.type) || isTrade(e.type) || isTransfer(e.type)) || isDue(e)
 
+/**
+ * Money the owner moves between the Business and Personal books, each name with the name on the other side. It is a
+ * transfer, not an expense or income, so profit stays right; saving one adds the other side to the other book.
+ */
+val OWNER_MOVES = mapOf(
+    "Taken for home" to "From business", "From business" to "Taken for home",
+    "Put in business" to "From home", "From home" to "Put in business"
+)
+fun ownerMove(item: String): String? = OWNER_MOVES.keys.firstOrNull { it.equals(item.trim(), true) }
+
 /** An expense or income left Due with a party: it goes in their khata and moves no cash. */
 fun isDue(e: Entry) = (e.type == Type.KHARCHA || e.type == Type.AAMDANI) && e.credit && e.person.isNotBlank()
 

@@ -193,6 +193,9 @@ class Store(context: Context) {
     /** Entries of any business, for counts on the business list. */
     fun loadFor(id: String): List<Entry> = read(scoped("entries", id))
 
+    /** Adds an entry to another book: the other side of money the owner moved between Business and Personal. */
+    fun addTo(id: String, e: Entry) = write(scoped("entries", id), listOf(e) + read(scoped("entries", id)))
+
     fun addBusiness(name: String): String {
         val id = "b" + System.currentTimeMillis()
         prefs.edit().putString("businessNames", businessNames().put(id, name.trim()).toString()).apply()

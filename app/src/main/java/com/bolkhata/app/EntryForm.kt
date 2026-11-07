@@ -87,7 +87,7 @@ fun EntryForm(
     val usedOut = remember(all) { usedNames(all.filter { it.type == Type.KHARCHA }) }
     val usedIn = remember(all) { usedNames(all.filter { it.type == Type.AAMDANI }) }
     var amount by remember(initial.id) { mutableStateOf(if (initial.amount > 0) plain(initial.amount) else "") }
-    var item by remember(initial.id) { mutableStateOf(if (initial.item == "Loans" || isTransfer(initial.type)) "" else initial.item) }
+    var item by remember(initial.id) { mutableStateOf(if (initial.item == "Loans" || isTransfer(initial.type) && ownerMove(initial.item) == null) "" else initial.item) }
     /** The category of a name picked from the list; null when typed (then guessed from the words). */
     var pickedCat by remember(initial.id) { mutableStateOf<Cat?>(null) }
     /** A new name added as a stock item, so it is bought or sold rather than spent. */
@@ -118,6 +118,7 @@ fun EntryForm(
      */
     fun kind(o: Boolean): Type {
         val p = person.trim()
+        if (ownerMove(itemT) != null) return if (o) Type.TRANSFER_OUT else Type.TRANSFER_IN
         if (!askType && isTransfer(initial.type) && o == isOut(initial.type)) return initial.type
         if (withItem && isStock) return if (o) Type.PURCHASE else Type.SALE
         if (p.isEmpty() || withItem) return if (o) Type.KHARCHA else Type.AAMDANI
@@ -265,7 +266,7 @@ fun EntryForm(
                         }
                         val finalItem = when {
                             isLoan(t) -> if (loanItem) initial.item else "Loans"
-                            isTransfer(t) -> initial.item.ifBlank { "Transfer" }
+                            isTransfer(t) -> ownerMove(itemT) ?: initial.item.ifBlank { "Transfer" }
                             isTrade(t) -> spelled(item, stockNames).ifBlank { if (t == Type.SALE) "Sale" else "Purchase" }
                             itemT.isNotEmpty() -> spelled(item, if (t == Type.AAMDANI) usedIn else usedOut)
                             t == Type.AAMDANI -> "Income"
@@ -280,7 +281,7 @@ fun EntryForm(
                                 item = finalItem,
                                 qty = qty.toDoubleOrNull() ?: 0.0,
                                 rate = rate.toDoubleOrNull() ?: 0.0,
-                                person = person.trim(),
+                                person = if (ownerMove(itemT) != null) "" else person.trim(),
                                 paid = isTrade(t) && withParty && !due,
                                 credit = (t == Type.KHARCHA || t == Type.AAMDANI) && withParty && due,
                                 // A new "nashta" today after 9 AM is put at 7 AM, and so on (see Parser.partOfDayTime).
@@ -398,13 +399,15 @@ private val OUT_GROUPS: List<Pair<String, List<Pair<String, Cat>>>> = listOf(
         "Packing" to Cat.PRODUCTION, "Tools" to Cat.ASSETS, "Office" to Cat.OTHER, "Marketing" to Cat.OTHER,
         "Commission" to Cat.OTHER, "Bank charges" to Cat.FEES, "Taxes & fees" to Cat.FEES
     ),
-    "Other" to listOf("Entertainment" to Cat.OTHER, "Subscriptions" to Cat.MOBILE, "Insurance" to Cat.FEES, "Other" to Cat.OTHER)
+    "Other" to listOf("Entertainment" to Cat.OTHER, "Subscriptions" to Cat.MOBILE, "Insurance" to Cat.FEES, "Other" to Cat.OTHER),
+    "Owner" to listOf("Taken for home" to Cat.OTHER, "Put in business" to Cat.OTHER)
 )
 
 /** Every common kind of income. */
 private val IN_GROUPS: List<Pair<String, List<Pair<String, Cat>>>> = listOf(
     "Income" to listOf("Salary", "Sale", "Business income", "Rent received", "Commission", "Profit", "Bonus", "Gift received", "Refund", "Other")
-        .map { it to Cat.TANKHWAH }
+        .map { it to Cat.TANKHWAH },
+    "Owner" to listOf("From business" to Cat.OTHER, "From home" to Cat.OTHER)
 )
 
 /**
