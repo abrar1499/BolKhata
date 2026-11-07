@@ -1258,7 +1258,8 @@ fun MoneyScreen(
                     subs.forEach { list ->
                         ledger(
                             if (subs.size == 1) g.name else title(list.first()), listOf(LCol("Amount", fmt(list.sumOf { it.amount }), kind)),
-                            list.map { e -> LRow(e.id, e.date, title(e), e.note, listOf(e.amount), e) { onEdit(e) } },
+                            // The note only when it adds something: not the group's own name again ("Salary" under Salary).
+                            list.map { e -> LRow(e.id, e.date, title(e), e.note.takeUnless { it.equals(g.name, true) || it.equals(title(e), true) } ?: "", listOf(e.amount), e) { onEdit(e) } },
                             keyPrefix = "g${g.name}:${title(list.first()).lowercase()}:",
                             // Hold the head to move the whole name khata (all of Muhammad Bin Saeed) to another category.
                             onHold = khataMenu?.let { m ->
