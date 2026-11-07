@@ -202,7 +202,7 @@ private fun cleanMoveKhataName(value: String): String {
 /** Ready sub-categories (an expense's item) offered under each category when moving or filling an entry. */
 val defaultSubs: Map<Cat, List<String>> = mapOf(
     Cat.TRANSPORT to listOf("Petrol", "Car repair", "Oil change", "Tyres", "Car wash", "Parking", "Taxi", "Bus"),
-    Cat.KHANA to listOf("Groceries", "Restaurant", "Bread", "Tea", "Fruit & veg", "Water"),
+    Cat.KHANA to listOf("Groceries", "Restaurant", "Bread", "Sweets", "Tea", "Fruit & veg", "Water"),
     Cat.BIJLI to listOf("Electricity", "Water bill", "Gas"),
     Cat.MOBILE to listOf("Recharge", "Internet"),
     Cat.SEHAT to listOf("Medicine", "Doctor"),

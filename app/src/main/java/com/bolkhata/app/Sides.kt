@@ -99,9 +99,9 @@ object Sides {
             .sortedWith(compareByDescending<Kid> { it.entries.firstOrNull()?.date ?: 0L })
     }
 
-    /** What a thing entry is called inside its account: the payer for income, else its item (or "Other"). */
+    /** What a thing entry is called inside its account: the payer for income, else its item ("Sent home" stays itself). */
     fun thingName(e: Entry): String =
-        if (e.type == Type.AAMDANI) source(e) else e.item.trim().takeIf { it.isNotBlank() && !it.equals(e.category.label, true) } ?: "Other"
+        if (e.type == Type.AAMDANI) source(e) else e.item.trim().ifBlank { "Other" }
 
     /** Things inside the owner's own accounts, by lowercase name, so their entries leave Other. */
     private fun ownThings(side: Side, setup: SideSetup): Map<String, String> =

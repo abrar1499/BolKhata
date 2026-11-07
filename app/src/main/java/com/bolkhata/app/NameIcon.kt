@@ -57,7 +57,13 @@ object NameIcon {
         // Money in
         "salary" to "💼", "tankhwah" to "💼", "job" to "💼", "pay" to "💼", "business" to "🏪", "sale" to "🧾", "sales" to "🧾", "customer" to "👤",
         "profit" to "📈", "commission" to "💹", "bonus" to "🎉", "rent received" to "🏘️", "rental" to "🏘️", "interest" to "🏦", "freelance" to "💻",
-        "income" to "💰", "other income" to "💰", "refund" to "↩️", "cashback" to "↩️"
+        "income" to "💰", "other income" to "💰", "refund" to "↩️", "cashback" to "↩️",
+        // Seen in real books: wallets, buy-now-pay-later, visas, fines
+        "wallet" to "👛", "barq" to "👛", "easypaisa" to "👛", "jazzcash" to "👛", "stcpay" to "👛", "tamara" to "💳", "tabby" to "💳",
+        "transfer" to "🔁", "metro" to "🚇", "exit" to "🛂", "reentry" to "🛂", "traffic" to "🚨", "diploma" to "🎓", "council" to "🏛️",
+        "voucher" to "📱", "zain" to "📱", "stc" to "📱", "mobily" to "📱", "jazz" to "📱", "telenor" to "📱", "zong" to "📱", "ufone" to "📱",
+        "laundries" to "🧺", "sweets" to "🍬", "haircut" to "💈", "air" to "✈️",
+        "asset" to "🏷️", "contract" to "🏗️", "thaper" to "🧱", "pathera" to "🧱"
     )
 
     /** The picture for [name]; [income] picks the fallback when no word fits. */
