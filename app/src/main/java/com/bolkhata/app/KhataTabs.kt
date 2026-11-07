@@ -1521,9 +1521,10 @@ fun SideScreen(
                             val sub = if (b.people) (if (kids.size == 1) "1 person" else "${kids.size} people") else kids.take(4).joinToString(", ") { it.name }
                             val p = kids.filter { it.balance > 0.5 }.sumOf { it.balance }
                             val m = kids.filter { it.balance < -0.5 }.sumOf { -it.balance }
+                            // All time, the same figure the account shows inside; the card on top has this month.
                             val owe = if (!b.people) "" else (if (p > 0.5) " · " + fmt(p) + " " + Sides.balanceText(b, 1.0).second.lowercase() else "") +
                                 (if (m > 0.5) " · " + fmt(m) + " " + Sides.balanceText(b, -1.0).second.lowercase() else "")
-                            ItRow(bookIcon(b), b.name, sub, fmt(Sides.done(b, entries, setup, thisMonth)), (if (income) "this month" else "spent") + owe, ink, i, shown.size,
+                            ItRow(bookIcon(b), b.name, sub, fmt(Sides.done(b, entries, setup) { true }), (if (income) "income" else "spent") + owe, ink, i, shown.size,
                                 onLong = { acct = b }) { bookName = b.name; q = "" }
                         }
                     }
