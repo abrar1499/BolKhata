@@ -196,7 +196,6 @@ fun App(
     var partyOpen by remember { mutableStateOf<String?>(null) }
     /** The open business's name, and whether the business list is showing. */
     var businessName by remember { mutableStateOf(store.businesses().firstOrNull { it.first == store.business }?.second ?: "My business") }
-    var pickingBusiness by remember { mutableStateOf(false) }
     var businessTick by remember { mutableIntStateOf(0) }
     // Smart understanding: entries the local engine read (shown before saving), a name to pick, what was just added (Undo),
     // the entry being edited from the card (to learn from), and words the person corrected before.
@@ -365,16 +364,16 @@ fun App(
         val to = newName.trim()
         if (from.isEmpty() || to.isEmpty() || from.equals(to, ignoreCase = true)) return
         val source = entries.filter { it.person.equals(from, ignoreCase = true) }
-        if (source.isEmpty()) { toast("Source khata not found"); return }
+        if (source.isEmpty()) { toast("Account not found"); return }
         val targetExists = entries.any { it.person.equals(to, ignoreCase = true) }
-        if (merge && !targetExists) { toast("Choose an existing destination khata"); return }
-        if (!merge && targetExists) { toast("Khata exists. Use Move / merge."); return }
+        if (merge && !targetExists) { toast("Choose an existing account"); return }
+        if (!merge && targetExists) { toast("That account exists. Use Move."); return }
         val after = entries.map { if (it.person.equals(from, ignoreCase = true)) it.copy(person = to) else it }
         val record = store.recordMove(entries, after) ?: return
         save(after)
         scope.launch {
             val response = snackbar.showSnackbar(
-                if (merge) "Merged ${source.size} entries into $to" else "Renamed khata to $to",
+                if (merge) "Merged ${source.size} entries into $to" else "Renamed to $to",
                 actionLabel = "Undo", duration = SnackbarDuration.Long
             )
             if (response == SnackbarResult.ActionPerformed) {
@@ -709,7 +708,7 @@ fun App(
                 }
                 return
             }
-            flash = Flash("Samajh nahi aaya. Jaise: 'food is mahine'.", Flash.Kind.ANSWER)
+            flash = Flash("Sorry, I didn't get that. Try 'food this month'.", Flash.Kind.ANSWER)
             return
         }
         // Simple changes (date, amount) are done offline straight away, with Undo.
@@ -826,7 +825,7 @@ fun App(
             else account?.takeIf { it.main == PEOPLE }?.sub
         activePerson?.let { p ->
             val list = entries.filter { it.person.equals(p, true) }
-            return "$p's khata (${list.size} records)" to list
+            return "$p's account (${list.size} records)" to list
         }
         results?.let { (q, _) ->
             val person = entries.map { it.person.trim() }.firstOrNull { it.isNotEmpty() && it.equals(q.trim(), true) }
@@ -844,12 +843,12 @@ fun App(
         if (!Accounts.isExplicitBulkKhataMoveRequest(roman)) return null
 
         val destination = Accounts.khataNameMentionedIn(roman, source, entries.map { it.person })
-            ?: return "I couldn't identify the destination khata. Please mention its exact saved name."
+            ?: return "I couldn't find that account. Please say its exact saved name."
         val sourceEntries = entries.filter { it.person.equals(source, ignoreCase = true) }
-        if (sourceEntries.isEmpty()) return "No entries found in $source's khata. Nothing was moved."
+        if (sourceEntries.isEmpty()) return "No entries found in $source's account. Nothing was moved."
         val changes = sourceEntries.map { old -> old to old.copy(person = destination) }
         if (!applyPlan(EditPlan(changes, emptyList(), "Moved ${changes.size} entries from $source to $destination"))) {
-            return "Entries badal gayi thi, kuch move nahi hua. Dobara try karein."
+            return "The entries changed meanwhile, so nothing was moved. Please try again."
         }
         return "${changes.size} entries $source se $destination me move ho gayi."
     }
@@ -869,12 +868,12 @@ fun App(
         if (!all || !records || !directions || !action) return null
 
         val changed = convertPersonTransfersToLedgerEntries(entries, person)
-        if (changed.isEmpty()) return "No transfer entries found to convert in " + person + "'s khata."
-        val message = "Converted " + changed.size + " transfer entries in " + person + "'s khata to gave/received entries"
+        if (changed.isEmpty()) return "No transfer entries found to convert in " + person + "'s account."
+        val message = "Converted " + changed.size + " transfer entries in " + person + "'s account to gave/received entries"
         if (!applyPlan(EditPlan(changed, emptyList(), message))) {
-            return "Khata badal gaya tha, kuch nahi badla. Dobara try karein."
+            return "The account changed meanwhile, so nothing was changed. Please try again."
         }
-        return "Done. Converted " + changed.size + " transfer entries in " + person + "'s khata. The khata stays open."
+        return "Done. Converted " + changed.size + " transfer entries in " + person + "'s account."
     }
 
     // The rows the last answer listed, kept with that chat message ("3 no entry Hamid ke khata me bhej do").
@@ -903,7 +902,7 @@ fun App(
                 shortDate(e.date) + " · " + entryTitle(e) + " · " + fmt(e.amount) + " " + currency
             }
             listedRows[0] = hits.take(4).map { it.id }
-            return "${hits.size} matching entries for $action:\n$preview\nWhich one do you mean? Date/amount ya 'all entries'."
+            return "${hits.size} matching entries for $action:\n$preview\nWhich one do you mean? Say the date or amount, or 'all entries'."
         }
         return when (f.kind) {
             "entry" -> {
@@ -972,7 +971,7 @@ fun App(
                 val changed = hits.map { it to Query.change(it, f.set) }.filter { (a, b) -> a != b }
                 if (changed.isEmpty()) return "Already like that."
                 if (!applyPlan(EditPlan(changed, emptyList(), "Changed ${changed.size} " + (if (changed.size == 1) "entry" else "entries")))) {
-                    return "Entries badal gayi thi, kuch nahi badla. Dobara search karein."
+                    return "The entries changed meanwhile, so nothing was changed. Please search again."
                 }
                 changed.take(3).joinToString("; ") { (a, b) -> entryTitle(a) + " " + fmt(a.amount) + " → " + entryTitle(b) + " " + fmt(b.amount) } +
                     if (changed.size > 3) " +${changed.size - 3} more" else ""
@@ -1009,7 +1008,7 @@ fun App(
                     .filter { !it.person.equals(name, true) }.sortedWith(compareBy<Entry> { it.date }.thenBy { it.createdAt })
                 if (hits.isEmpty()) return "Nothing found (${Query.label(q)})."
                 // Entries picked one by one ("3 no entry", "ye entry") are meant exactly; no need to ask again.
-                if (f.filter.ids.isEmpty()) clarifyMultiple("move to $name khata", hits)?.let { return it }
+                if (f.filter.ids.isEmpty()) clarifyMultiple("move to $name", hits)?.let { return it }
                 var work = entries
                 val changed = hits.map { e ->
                     val moved = movedTo(e, work, null, false, name).copy(item = e.item.ifBlank { "Loans" })
@@ -1017,10 +1016,10 @@ fun App(
                     e to moved
                 }
                 if (!applyPlan(EditPlan(changed, emptyList(), "Moved ${changed.size} to $name"))) {
-                    return "Entries badal gayi thi, kuch move nahi hua. Dobara search karein."
+                    return "The entries changed meanwhile, so nothing was moved. Please search again."
                 }
                 val bal = personAccounts(work).firstOrNull { it.name.equals(name, true) }?.balance ?: 0.0
-                "${changed.size} entries → $name khata · " + when {
+                "${changed.size} entries → $name · " + when {
                     bal > 0.005 -> "$name will give you ${fmt(bal)}"
                     bal < -0.005 -> "you will give $name ${fmt(-bal)}"
                     else -> "settled"
@@ -1248,7 +1247,7 @@ fun App(
             )
         ) {
             postChat(text, isUser = true)
-            postChat("Ye abhi ho chuka hai. Dobara chahiye to 'add another' kahein.", isUser = false)
+            postChat("That's already done. Say 'add another' for one more.", isUser = false)
             return
         }
         val roman = runCatching { Translit.toRoman(text) }.getOrDefault(text)
@@ -1354,7 +1353,7 @@ fun App(
                 var reply = runCatching { runFixed(intent, text, inChat = true) }
                     .onFailure { executionStatus = "exception:" + it.javaClass.simpleName }
                     .getOrElse {
-                        "Kuch nahi badla. Date, amount ya naam batayein."
+                        "Nothing changed. Say the date, amount or name."
                     }
                 // What the app's engine did not understand, Groq answers itself (never with the person's amounts).
                 if (intent.unsure && groqKey.isNotBlank()) {
@@ -1380,7 +1379,7 @@ fun App(
                     postChat(reply, isUser = false, meta = trace, listIds = listedRows[0])
                 }
             } catch (e: Exception) {
-                val safe = "Samajh nahi aaya. Jaise: 'chai 5', 'food is mahine'."
+                val safe = "Sorry, I didn't get that. Try 'tea 5' or 'food this month'."
                 lastSpeech = safe
                 postChat(safe, isUser = false, meta = "engine=NativeChatEngine; stage=interpret; failure=" + e.javaClass.simpleName)
             } finally {
@@ -2095,7 +2094,6 @@ fun App(
         businessName = store.businesses().firstOrNull { it.first == id }?.second ?: "My business"
         sides = store.loadSides()
         partyOpen = null
-        pickingBusiness = false
     }
     // A photo picked for the background is copied into the app's own storage (the old one is removed).
     val pickBg = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
@@ -2140,15 +2138,16 @@ fun App(
                 name = name, currency = currency, lang = lang, dark = dark, photo = photo, themeName = themeName,
                 version = BuildConfig.VERSION_NAME,
                 businesses = remember(businessTick, businessName) { store.businesses() }, current = store.business,
-                onBusiness = { id -> openBusiness(id); close() },
-                onManage = { pickingBusiness = true; close() },
+                onBusiness = { id -> if (id != store.business) openBusiness(id); close() },
+                onRenameBusiness = { id, n -> store.renameBusiness(id, n); if (id == store.business) businessName = n; businessTick++ },
+                onDeleteBusiness = { id -> val wasOpen = id == store.business; store.deleteBusiness(id); if (wasOpen) openBusiness("") else businessTick++ },
                 onAddBusiness = { n -> openBusiness(store.addBusiness(n)); businessTick++; close() },
                 onName = { name = it; store.name = it; toast("✓ Name saved") },
                 onCurrency = { c -> currency = c; store.currency = c; toast("✓ Currency set to $c") },
                 onLang = { lang = it; store.language = it },
                 onTheme = onTheme,
                 page = page, onPage = { onPhoto(""); onDark(false); onPage(it) },
-                onDark = { onPhoto(""); onDark(true) },
+                onDark = { c -> onPhoto(""); onDark(true); onPage(c) },
                 onPhoto = { pickBg.launch("image/*") },
                 onExport = {
                     val day = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
@@ -2921,19 +2920,6 @@ fun App(
                 ) { Text("Delete") }
             },
             dismissButton = { TextButton(onClick = { confirm = null; afterTrash = null }) { Text("Cancel") } }
-        )
-    }
-
-    if (pickingBusiness) {
-        fun open(id: String) = openBusiness(id)
-        BusinessPicker(
-            list = remember(businessTick, entries) { store.businesses().map { (id, n) -> Triple(id, n, personAccounts(store.loadFor(id)).size) } },
-            current = store.business, onBack = { pickingBusiness = false }, onPick = { open(it) },
-            onAdd = { open(store.addBusiness(it)) },
-            onRename = { id, n -> store.renameBusiness(id, n); if (id == store.business) businessName = n; businessTick++ },
-            onDelete = { id -> val wasOpen = id == store.business; store.deleteBusiness(id); if (wasOpen) open("") else businessTick++ },
-            totals = remember(businessTick, entries) { store.businesses().associate { (id, _) -> id to monthCash(if (id == store.business) entries else store.loadFor(id)) } },
-            currency = currency
         )
     }
 

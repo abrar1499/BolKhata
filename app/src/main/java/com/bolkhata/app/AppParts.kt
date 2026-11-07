@@ -17,7 +17,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -27,6 +29,8 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DriveFileRenameOutline
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.FormatListBulleted
@@ -192,13 +196,40 @@ private val MENU_THEMES = listOf("Clean", "Red", "Green", "Sky Blue", "Violet", 
 internal fun SideMenu(
     name: String, currency: String, lang: String, dark: Boolean, photo: Boolean, themeName: String, version: String,
     businesses: List<Pair<String, String>>, current: String,
-    onBusiness: (String) -> Unit, onManage: () -> Unit, onAddBusiness: (String) -> Unit,
+    onBusiness: (String) -> Unit, onAddBusiness: (String) -> Unit,
+    onRenameBusiness: (id: String, name: String) -> Unit, onDeleteBusiness: (id: String) -> Unit,
     onName: (String) -> Unit, onCurrency: (String) -> Unit, onLang: (String) -> Unit, onTheme: (String) -> Unit,
-    page: Long, onPage: (Long) -> Unit, onDark: () -> Unit, onPhoto: () -> Unit,
+    page: Long, onPage: (Long) -> Unit, onDark: (Long) -> Unit, onPhoto: () -> Unit,
     onExport: () -> Unit, onImport: () -> Unit, onTrash: () -> Unit, onVersion: () -> Unit
 ) {
     var naming by remember { mutableStateOf(false) }
     var addingBusiness by remember { mutableStateOf(false) }
+    var bizMenu by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var bizRename by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var bizDelete by remember { mutableStateOf<Pair<String, String>?>(null) }
+    bizMenu?.let { (id, n) ->
+        // The first business holds the app's main data and stays; it can still be renamed.
+        ActionMenu(
+            title = n, subtitle = if (id.isEmpty()) "Main business" else "Business", amount = "", amountColor = Color.Unspecified,
+            actions = listOfNotNull(
+                MenuAction("Rename", Icons.Filled.DriveFileRenameOutline) { bizMenu = null; bizRename = id to n },
+                if (id.isEmpty()) null else MenuAction("Delete", Icons.Filled.Delete, danger = true) { bizMenu = null; bizDelete = id to n }
+            ),
+            onDismiss = { bizMenu = null }
+        )
+    }
+    bizRename?.let { (id, n) ->
+        RenameDialog("Rename business", n, onRename = { onRenameBusiness(id, it.trim()); bizRename = null }, onDismiss = { bizRename = null })
+    }
+    bizDelete?.let { (id, n) ->
+        AlertDialog(
+            onDismissRequest = { bizDelete = null },
+            title = { Text("Delete \"$n\"?") },
+            text = { Text("All its entries are deleted too. This can't be undone.") },
+            confirmButton = { TextButton(onClick = { bizDelete = null; onDeleteBusiness(id) }) { Text("Delete", color = RedSpend) } },
+            dismissButton = { TextButton(onClick = { bizDelete = null }) { Text("Cancel") } }
+        )
+    }
     ModalDrawerSheet(
         modifier = Modifier.width(252.dp),
         drawerContainerColor = MaterialTheme.colorScheme.background,
@@ -216,7 +247,8 @@ internal fun SideMenu(
             }
             MenuCard {
                 businesses.forEach { (id, n) ->
-                    MenuRow(onClick = { if (id == current) onManage() else onBusiness(id) }) {
+                    // Tap opens the business; long-press: Rename / Delete, the same menu as accounts.
+                    MenuRow(onClick = { onBusiness(id) }, onLong = { bizMenu = id to n }) {
                         GlassLogo(20.dp)
                         Spacer(Modifier.width(10.dp))
                         Text(n, fontSize = 13.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -255,12 +287,14 @@ internal fun SideMenu(
                     }
                 }
                 MenuRow(onClick = null, last = true) {
-                    // The label on top and the colours under it: five light ones, dark, then a photo.
+                    // The label on top, then five light colours, five dull dark ones and a photo.
                     Column(Modifier.weight(1f)) {
                         Text("🎨 Background", fontSize = 13.sp, maxLines = 1)
                         Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                             PAGE_COLORS.forEach { c -> Dot(SolidColor(Color(c)), !dark && !photo && page == c) { onPage(c) } }
-                            Dot(SolidColor(Color(0xFF2A2F36)), dark && !photo, onDark)
+                        }
+                        Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            DARK_PAGES.forEach { c -> Dot(SolidColor(Color(c)), dark && !photo && (page == c || (c == DARK_PAGES[0] && page !in DARK_PAGES))) { onDark(c) } }
                             Text("🖼", fontSize = 16.sp, modifier = Modifier.padding(start = 5.dp).clip(CircleShape).clickable(onClick = onPhoto)
                                 .then(if (photo) Modifier.border(2.dp, EmberTop, CircleShape) else Modifier).padding(2.dp))
                         }
@@ -302,9 +336,13 @@ private fun MenuCard(content: @Composable ColumnScope.() -> Unit) =
 
 /** One side-menu row with a faint line under it (none under the [last]). */
 @Composable
-private fun MenuRow(onClick: (() -> Unit)?, last: Boolean = false, content: @Composable RowScope.() -> Unit) {
+@OptIn(ExperimentalFoundationApi::class)
+private fun MenuRow(onClick: (() -> Unit)?, last: Boolean = false, onLong: (() -> Unit)? = null, content: @Composable RowScope.() -> Unit) {
     Row(
-        Modifier.fillMaxWidth().then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier).padding(horizontal = 12.dp, vertical = 9.dp),
+        Modifier.fillMaxWidth().then(
+            if (onLong != null) Modifier.combinedClickable(onLongClick = onLong) { onClick?.invoke() }
+            else if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
+        ).padding(horizontal = 12.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically, content = content
     )
     if (!last) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))

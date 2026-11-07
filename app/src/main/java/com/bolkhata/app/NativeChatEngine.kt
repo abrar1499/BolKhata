@@ -71,7 +71,7 @@ object NativeChatEngine {
         currency: String = "SAR", now: Long = System.currentTimeMillis()
     ): Fixed {
         val raw = input.trim()
-        if (raw.isBlank()) return chat("Please type a message and I'll help with your khata.")
+        if (raw.isBlank()) return chat("Please type a message and I'll help with your accounts.")
         val roman = runCatching { Translit.toRoman(raw) }.getOrDefault(raw)
         // "hi", "how r u", "i am good": small talk is answered first, never read as a follow-up to the last search.
         if (isSmallTalk(roman, now)) return talk(roman.lowercase(Locale.ROOT), now)
@@ -225,15 +225,15 @@ object NativeChatEngine {
         val said = prepared.lowercase(Locale.ROOT)
         // ("X wali entry ka naam Y kar do" renames one entry; that is an edit, below.)
         if (!has(words, setOf("entry", "entries", "wali", "wala", "wale"))) (renameUrdu.find(said) ?: renameEnglish.find(said))?.let { m ->
-            val from = findKhata(m.groupValues[1], contacts, entries) ?: return chat("Which khata should I rename? Say its saved name.")
+            val from = findKhata(m.groupValues[1], contacts, entries) ?: return chat("Which account should I rename? Say its saved name.")
             val to = tokens(m.groupValues[2]).filter { it !in khataFiller }.joinToString(" ") { it.replaceFirstChar(Char::uppercase) }
             if (to.isBlank()) return chat("What should the new name be?")
             return Fixed("", "rename_khata", "", set = mapOf("kind" to from.first, "from" to from.second, "to" to to))
         }
         // "Hamid ka khata Nargis me merge kar do": every entry of the first khata goes into the second.
         mergeKhata.find(said)?.let { m ->
-            val from = findKhata(m.groupValues[1], contacts, entries) ?: return chat("Which khata should I move? Say its saved name.")
-            val to = findKhata(m.groupValues[2], contacts, entries) ?: return chat("Move it into which khata? Say its saved name.")
+            val from = findKhata(m.groupValues[1], contacts, entries) ?: return chat("Which account should I move? Say its saved name.")
+            val to = findKhata(m.groupValues[2], contacts, entries) ?: return chat("Move it into which account? Say its saved name.")
             return Fixed("", "move_khata", "", set = mapOf("kind" to from.first, "from" to from.second, "toKind" to to.first, "to" to to.second))
         }
 
@@ -251,7 +251,7 @@ object NativeChatEngine {
         val moveWords = setOf("move", "shift", "transfer", "send", "bhejo", "dal", "daal")
         if (has(words, moveWords) && has(words, setOf("khata", "account"))) {
             val destination = Accounts.khataNameMentionedIn(text, "", contacts)
-            if (destination == null) return chat("Kis khata me daalun? Poora naam batayein.")
+            if (destination == null) return chat("Which account should they go to? Say its full name.")
             val selectionText = text.replace(destination, " ", ignoreCase = true)
             val selectionWords = tokens(selectionText)
             val screenSelection = has(selectionWords, setOf("all", "every", "sab", "sari", "saari", "these", "this", "inko", "ye", "yeh"))
@@ -311,7 +311,7 @@ object NativeChatEngine {
         if ((delete || clear) && !has(words, setOf("nahi", "nahin", "nhi", "not", "mat"))) {
             val f = buildFilter(text, contacts, now, false)
             if ((all || clear) && f.isEmpty) return Fixed("", "clear_all", "")
-            return if (f.isEmpty) chat("Kaun si entries delete karun? Naam, cheez ya date batayein.")
+            return if (f.isEmpty) chat("Which entries should I delete? Say a name, item or date.")
             else Fixed("", "delete", "", filter = f)
         }
 
@@ -370,7 +370,7 @@ object NativeChatEngine {
                 "khata", "qarz", "udhar", "udhaar", "report", "summary", "overview", "total", "hisab", "hisaab", "cashbook"
             )) || words.any { token -> categories.values.any { token in it } } || dateBounds(lower, now) != null
             if (!knownDomain)
-                return Fixed("", "chat", "Samajh nahi aaya. Jaise: 'food is mahine', 'last 5 entries'.", unsure = true)
+                return Fixed("", "chat", "Sorry, I didn't get that. Try 'food this month' or 'last 5 entries'.", unsure = true)
             val periodWords = setOf("today", "yesterday", "aaj", "aj", "kal", "this", "last", "month", "week", "year",
                 "mahina", "mahine", "saal", "all", "time", "overall", "lifetime", "ever", "alltime")
             val simpleLookup = (words.any { token -> categories.values.any { token in it } } || has(words, expense + income)) &&
@@ -487,10 +487,10 @@ object NativeChatEngine {
         }
         val destination = Accounts.khataNameMentionedIn(text, "", contacts)
             ?: Understand.matchContact(tokens(rest).filter { it !in moveVerbs }, contacts).let { (name, choices, _) ->
-                if (name == null && choices.size >= 2) return chat("Move to which khata: " + choices.joinToString(" or ") + "?")
+                if (name == null && choices.size >= 2) return chat("Move to which account: " + choices.joinToString(" or ") + "?")
                 name
             }
-            ?: return chat("Which khata should get it? Say the person's saved name.")
+            ?: return chat("Which account should get it? Say the person's saved name.")
         return Fixed("", "to_khata", "", filter = Query.Filter(ids = ids.toSet()), set = mapOf("person" to destination))
     }
 
@@ -578,7 +578,7 @@ object NativeChatEngine {
 
     private fun chat(reply: String) = Fixed("", "chat", reply)
 
-    private const val NOT_UNDERSTOOD = "Samajh nahi aaya. Jaise: 'chai 5', 'food is mahine', 'Ali ka khata'."
+    private const val NOT_UNDERSTOOD = "Sorry, I didn't get that. Try 'tea 5' or 'food this month'."
 
     /** Small talk, or the not-understood reply marked [Fixed.unsure]. */
     /** A greeting, thanks or bye the app answers itself ("hi", "salam"): no need to ask Groq or search. */
@@ -586,7 +586,7 @@ object NativeChatEngine {
         tokens(text).size <= 4 && text.none(Char::isDigit) && smallTalk(text.lowercase(Locale.ROOT), now) != NOT_UNDERSTOOD
 
     private fun talk(text: String, now: Long): Fixed = smallTalk(text, now).let {
-        val reply = if (it == NOT_UNDERSTOOD && isEnglish(text)) "Sorry, I didn't get that. Try 'tea 5' or 'food this month'." else it
+        val reply = it
         Fixed("", "chat", reply, unsure = it == NOT_UNDERSTOOD)
     }
 
@@ -602,26 +602,21 @@ object NativeChatEngine {
 
     private fun smallTalk(text: String, now: Long): String {
         val w = tokens(text)
-        val en = isEnglish(text)
-        fun say(english: String, urdu: String) = if (en) english else urdu
+        // The app answers in plain English whatever language the message is in.
         return when {
-            (has(w, setOf("how")) && has(w, setOf("are", "r")) && has(w, setOf("you", "u"))) && en -> "Good, you?"
+            has(w, setOf("how")) && has(w, setOf("are", "r")) && has(w, setOf("you", "u")) -> "Good, you?"
             has(w, setOf("good", "fine", "great", "ok", "okay", "theek", "thik", "acha", "accha")) &&
-                has(w, setOf("i", "am", "im", "main", "mein", "hoon", "hun", "bhi")) -> say("Great! How can I help?", "Acha! Batayein?")
-            has(w, setOf("hi", "hello", "hey", "morning", "evening", "salam", "assalam", "assalamualaikum", "aoa")) ->
-                say("Hi!", "Wa alaikum assalam!")
+                has(w, setOf("i", "am", "im", "main", "mein", "hoon", "hun", "bhi")) -> "Great! How can I help?"
+            has(w, setOf("hi", "hello", "hey", "morning", "evening", "salam", "assalam", "assalamualaikum", "aoa")) -> "Hi! How can I help?"
             has(w, setOf("date", "tareekh", "tarikh", "din", "day")) && has(w, setOf("aaj", "aj", "today", "kya", "kia", "what", "konsa", "kaunsa")) ->
-                java.text.SimpleDateFormat(if (en) "'Today is' d MMM yyyy, EEEE." else "'Aaj' d MMM yyyy, EEEE.", Locale.ENGLISH).format(java.util.Date(now))
+                java.text.SimpleDateFormat("'Today is' d MMM yyyy, EEEE.", Locale.ENGLISH).format(java.util.Date(now))
             has(w, setOf("time", "waqt", "baje", "bje")) && has(w, setOf("kya", "kia", "what", "kitne", "kitny")) ->
                 java.text.SimpleDateFormat("h:mm a", Locale.ENGLISH).format(java.util.Date(now))
-            has(w, setOf("hal", "haal", "kaise", "kaisa", "kaisi")) || (has(w, setOf("kya", "kia")) && has(w, setOf("hal", "haal"))) ->
-                "Theek, aap batao?"
-            "how" in w && has(w, setOf("are", "r")) && has(w, setOf("you", "u")) -> "Theek, aap batao?"
-            w.containsAll(listOf("what", "can", "do")) -> say("Add entries, totals, search, edit and move khatas.", "Entry likhna, hisaab, search, edit aur khata move.")
-            has(w, setOf("thanks", "thank", "shukriya", "shukria", "jazakallah")) -> say("You're welcome!", "Koi baat nahi!")
-            has(w, setOf("bye", "goodbye", "allahhafiz", "khuda")) -> say("Bye!", "Allah Hafiz!")
-            has(w, setOf("help", "commands", "examples", "madad")) ->
-                say("Try: 'tea 5', 'gave Ali 100', 'food this month'.", "Jaise: 'chai 5', 'Ali ko 100 diye', 'food kitna'.")
+            has(w, setOf("hal", "haal", "kaise", "kaisa", "kaisi")) || (has(w, setOf("kya", "kia")) && has(w, setOf("hal", "haal"))) -> "Good, you?"
+            w.containsAll(listOf("what", "can", "do")) -> "Add entries, see totals, search, edit and move them."
+            has(w, setOf("thanks", "thank", "shukriya", "shukria", "jazakallah")) -> "You're welcome!"
+            has(w, setOf("bye", "goodbye", "allahhafiz", "khuda")) -> "Bye!"
+            has(w, setOf("help", "commands", "examples", "madad")) -> "Try: 'tea 5', 'gave Ali 100', 'food this month'."
             else -> NOT_UNDERSTOOD
         }
     }

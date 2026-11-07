@@ -68,8 +68,9 @@ class NativeChatEngineTest {
 
     @Test fun englishGetsEnglish() {
         assertEquals("Good, you?", read("hello how are you").reply)
-        assertEquals("Wa alaikum assalam!", read("salam").reply)
-        assertEquals("Theek, aap batao?", read("kya hal hai").reply)
+        // Whatever the language, the answer is plain English.
+        assertEquals("Hi! How can I help?", read("salam").reply)
+        assertEquals("Good, you?", read("kya hal hai").reply)
         assertEquals("Great! How can I help?", read("i am good").reply)
         assertEquals("Good, you?", read("how r u").reply)
         // A greeting right after a search is still a greeting, not a narrower search.
@@ -102,7 +103,7 @@ class NativeChatEngineTest {
     @Test fun todaysDateIsAnsweredInOneLine() {
         val r = read("aj kya date hai")
         assertEquals("chat", r.kind)
-        assertTrue(r.reply.startsWith("Aaj "))
+        assertTrue(r.reply.startsWith("Today is "))
     }
 
     @Test fun aReportWithItsOwnDatesAsksOverThoseDates() {

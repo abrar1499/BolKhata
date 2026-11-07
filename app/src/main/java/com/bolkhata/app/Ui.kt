@@ -192,23 +192,41 @@ val AppTypography: Typography = Typography().run {
 /** Light page colours offered in the side menu (Background): grey first, then half white, off-white, light slate, warm grey. */
 val PAGE_COLORS = listOf(0xFFEDEDED, 0xFFF5F5F3, 0xFFF1F0ED, 0xFFE6E8EB, 0xFFE9E6E1)
 
+/** One dark look; it changes the whole app: page, cards, wells, edges, the ledger's day strip and the search / chat field. */
+class DarkLook(val page: Long, val card: Long, val well: Long, val edge: Long, val day: Long, val field: Long)
+
+/** Dark looks, dull rather than pure black: Black (slate), Graphite, Charcoal, Navy. */
+val DARK_LOOKS = listOf(
+    DarkLook(0xFF2A2F36, 0xFF181818, 0xFF262626, 0xFF3A3A3A, 0xFF2B2F3A, 0xFF34383F),
+    DarkLook(0xFF3A3D42, 0xFF2A2C30, 0xFF34373C, 0xFF4A4E54, 0xFF33373E, 0xFF45484D),
+    DarkLook(0xFF2E2C2A, 0xFF1F1E1C, 0xFF2A2826, 0xFF403D3A, 0xFF34302C, 0xFF393633),
+    DarkLook(0xFF1B2230, 0xFF121826, 0xFF1D2535, 0xFF2C3648, 0xFF222B3C, 0xFF252D3D)
+)
+val DARK_PAGES = DARK_LOOKS.map { it.page }
+
+/** The dark look in use, or null in light mode. */
+val LocalLook = staticCompositionLocalOf<DarkLook?> { null }
+
 @Composable
 /** [clear]: a background photo shows through, so the page colour is see-through. [page]: the light page colour. */
 fun BolTheme(dark: Boolean, clear: Boolean = false, page: Long = PAGE_COLORS[0], content: @Composable () -> Unit) {
-    val scheme = if (dark) darkColorScheme(
+    // [page] is one light or one dark colour; a light one in dark mode (or the other way) falls back to the first.
+    val look = if (dark) DARK_LOOKS.firstOrNull { it.page == page } ?: DARK_LOOKS[0] else null
+    val bg = Color(look?.page ?: page.takeIf { it in PAGE_COLORS } ?: PAGE_COLORS[0])
+    val scheme = if (look != null) darkColorScheme(
         primary = Color(0xFF34D399),
         onPrimary = Color(0xFF00210F),
         primaryContainer = Color(0xFF064E3B),
         onPrimaryContainer = Color(0xFFD1FAE5),
         secondaryContainer = Color(0xFF064E3B),
         onSecondaryContainer = Color(0xFFD1FAE5),
-        // A slate-grey page, so the dark cards stand out on it.
-        background = Color(0xFF2A2F36),
-        surface = Color(0xFF181818),
-        surfaceVariant = Color(0xFF262626),
+        // The dark look's page, cards and lines (Black by default).
+        background = bg,
+        surface = Color(look.card),
+        surfaceVariant = Color(look.well),
         onSurfaceVariant = Color(0xFFA3A3A3),
-        outline = Color(0xFF333333),
-        outlineVariant = Color(0xFF2A2A2A)
+        outline = Color(look.edge),
+        outlineVariant = Color(look.well)
     ) else lightColorScheme(
         primary = Color(0xFF059669),
         onPrimary = Color.White,
@@ -217,7 +235,7 @@ fun BolTheme(dark: Boolean, clear: Boolean = false, page: Long = PAGE_COLORS[0],
         secondaryContainer = Color(0xFFD1FAE5),
         onSecondaryContainer = Color(0xFF065F46),
         // The light page colour picked in the side menu (grey by default); cards stay white on it.
-        background = Color(page),
+        background = bg,
         onBackground = Color(0xFF0D0D0D),
         surface = Color.White,
         onSurface = Color(0xFF0D0D0D),
@@ -226,7 +244,9 @@ fun BolTheme(dark: Boolean, clear: Boolean = false, page: Long = PAGE_COLORS[0],
         outline = Color(0xFFE6E3DF),
         outlineVariant = Color(0xFFECE7E3)
     )
-    MaterialTheme(colorScheme = if (clear) scheme.copy(background = Color.Transparent) else scheme, typography = AppTypography, content = content)
+    androidx.compose.runtime.CompositionLocalProvider(LocalLook provides look) {
+        MaterialTheme(colorScheme = if (clear) scheme.copy(background = Color.Transparent) else scheme, typography = AppTypography, content = content)
+    }
 }
 
 // ---------- formatting ----------
@@ -713,11 +733,15 @@ fun Modifier.glassEdge(shape: androidx.compose.ui.graphics.Shape, width: Dp = 1.
     return this.clip(shape).background(fill, shape).border(width, Brush.linearGradient(c), shape)
 }
 
-/** The chat field and search box, as in the Claude app: a soft cream fill with a hairline warm-grey edge. */
+/**
+ * The chat field and search box, as in the Claude app: white (in dark, a shade lighter than the page), a soft
+ * see-through edge and a faint shadow.
+ */
 @Composable
 fun Modifier.fieldEdge(shape: androidx.compose.ui.graphics.Shape): Modifier {
-    val light = MaterialTheme.colorScheme.background.luminance() > 0.5f
-    val fill = if (light) Color(0xFFFBFAF8) else MaterialTheme.colorScheme.surface
-    val edge = if (light) Color(0xFFDCD6CF) else MaterialTheme.colorScheme.outlineVariant
-    return this.clip(shape).background(fill, shape).border(1.dp, edge, shape)
+    val look = LocalLook.current
+    val fill = look?.let { Color(it.field) } ?: Color.White
+    val edge = if (look != null) Color(0x26DEDCD1) else Color(0x261F1E1D)
+    return this.shadow(3.dp, shape, ambientColor = Color.Black.copy(alpha = 0.05f), spotColor = Color.Black.copy(alpha = 0.05f))
+        .clip(shape).background(fill, shape).border(1.dp, edge, shape)
 }

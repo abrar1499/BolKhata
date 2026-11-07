@@ -92,8 +92,15 @@ Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Packa
 
 ## Look the owner likes (keep it)
 - Mock-up of record: Artifact https://claude.ai/artifact/KaEp1kbD1q82ARWJdB9zhr (copied 1:1 into Compose).
-- Page colour: plain grey #EDEDED (Background: Gray / Dark / own photo, in the side menu). Cards white, no glass on
-  cards; only the app icon (`GlassLogo`) and the optional header band are glossy.
+- Page colour: grey #EDEDED by default; side menu Background offers 5 light pages (`PAGE_COLORS`, cards stay white),
+  4 dull dark looks (`DARK_LOOKS`: Black/slate, Graphite, Charcoal, Navy; each changes page, cards, wells, edges, day
+  strip and field) and an own photo. No glass on cards; only the app icon (`GlassLogo`) and the optional header band are glossy.
+- Search box and chat bar (`fieldEdge`): as in the Claude app, white (dark: a shade lighter than the page), soft
+  see-through edge, faint shadow, radius 16 (chat 19).
+- App text is plain English only (account, not khata); no country-specific words (ID card, not Iqama). Chat answers in
+  short English; people may still type in their own language.
+- Report › Sales / Other income / Purchases / Expenses: a share bar (5 biggest in colours, rest grey) and rows with %,
+  then the things inside (Expenses), then the entries. Long-press a business in the side menu: Rename / Delete.
 - White business pill (`BusinessPill`: glossy logo + name, no arrow); tapping it opens the side menu, which is also
   Settings: businesses (+ Add business), Name, Currency, Language, Header dots, Background dots + photo, Backup, Trash,
   Version. No separate Settings page.

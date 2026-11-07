@@ -707,7 +707,7 @@ private fun PeopleView(
             title = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text(if (editAction == "Rename") "Rename khata" else "Move / merge", fontWeight = FontWeight.Bold)
+                        Text(if (editAction == "Rename") "Rename account" else "Move / merge", fontWeight = FontWeight.Bold)
                         Text(oldName, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     if (editAction != "Rename") IconButton(onClick = {
@@ -722,18 +722,18 @@ private fun PeopleView(
                         OutlinedTextField(actionName, { actionName = it }, modifier = Modifier.fillMaxWidth(),
                             label = { Text("New name") }, singleLine = true, shape = RoundedCornerShape(16.dp))
                         if (targets.any { it.equals(actionName.trim(), true) }) {
-                            Text("This khata already exists. Use Move / merge instead.", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+                            Text("This account already exists. Use Move / merge instead.", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
                         }
                     } else if (confirmMerge) {
                         Text("Merge $oldName into ${actionName.trim()}?")
-                        Text("${entries.count { it.person.equals(oldName, true) }} entries will move into a khata with ${entries.count { it.person.equals(actionName.trim(), true) }} existing entries.",
+                        Text("${entries.count { it.person.equals(oldName, true) }} entries will move into an account with ${entries.count { it.person.equals(actionName.trim(), true) }} existing entries.",
                             fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     } else if (!searchOpen) {
-                        Text("Tap the search icon to find a khata.",
+                        Text("Tap the search icon to find an account.",
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     } else {
                         OutlinedTextField(actionName, { actionName = it }, modifier = Modifier.fillMaxWidth(),
-                            label = { Text("Search khata") }, singleLine = true, shape = RoundedCornerShape(16.dp),
+                            label = { Text("Search account") }, singleLine = true, shape = RoundedCornerShape(16.dp),
                             leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) })
                         Text("${filtered.size} results · A–Z", fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
