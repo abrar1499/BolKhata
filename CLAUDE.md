@@ -46,10 +46,12 @@ Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Packa
 
 ## Style
 - Clean look: Inter font, off-white page, white cards, coloured line icons, red money out / green money in.
-- Floating ChatGPT-style message bar (`AppParts.kt` `InputBar`) only on the Chat tab; lists end with
+- Floating ChatGPT-style message bar (`AppParts.kt` `InputBar`); screens scroll under it, lists end with
   `barSpace()`.
 - Match the surrounding code: short KDoc comments, no dead code, reuse helpers in `Ui.kt`.
 - UI words: plain, common English everyone knows (Paid / Due, not "On credit"); one word where possible.
+- Keep it simple: the owner asked to go back to 1.391 (Business chips with Production) after the Business/Personal
+  redesign got too complex. Add new things only one small step at a time, mock first.
 - When the owner changes the size/look of a common part (chips, search, business pill, cards), change it everywhere it
   appears (one shared composable), not just on the screen in the screenshot.
 
@@ -91,7 +93,7 @@ Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Packa
 ## Look the owner likes (keep it)
 - No coloured header band: page colour up to the status bar (status bar = page colour), white business pill
   (`BusinessPill`: menu, name ▾) and the white summary card on the page; bottom tabs Chat · Business · Cashbook ·
-  Expense · Income; chat bar only on the Chat tab; "Entry" add button (`PlusButton`).
+  Expense · Income; chat bar on every screen; "Entry" add button (`PlusButton`).
 - Lists sit in white rounded sheets with faint lines. Business tab chips Parties · Stock · Sale · Purchase · Profit,
   each with month chips (All first). Parties list = ledger columns Party | Payable | Receivable
   (totals in the head, same tints as Cash) so dues show at a glance; tapping a party opens its Paid | Received khata.
