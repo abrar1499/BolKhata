@@ -177,7 +177,7 @@ private fun KhataTop(
         .then(if (banded) Modifier.drawBehind { drawBand(theme, size.height - cardH / 2f) } else Modifier)) {
         Column(Modifier.statusBarsPadding().padding(horizontal = 12.dp)) {
             if (business != null) Row(verticalAlignment = Alignment.CenterVertically) {
-                BusinessPill(business, onMenu, onBusiness)
+                BusinessPill(business, onMenu, onBusiness, switchable = LocalTopMenu.current?.personal != true)
                 Spacer(Modifier.weight(1f))
                 LocalTopMenu.current?.let { TopMenuButton(it) }
             } else
@@ -211,7 +211,11 @@ private fun DrawScope.drawBand(theme: HeaderTheme, h: Float) {
 }
 
 /** The ⋮ menu at the top right of Business and Personal: import / export of that book alone, and currency. */
-class TopMenu(val currency: String, val onImport: () -> Unit, val onExport: () -> Unit, val onCurrency: (String) -> Unit)
+class TopMenu(
+    val currency: String, val onImport: () -> Unit, val onExport: () -> Unit, val onCurrency: (String) -> Unit,
+    /** The Personal book is open: its pill has no ▾ (there is one Personal; businesses switch from the Business tab). */
+    val personal: Boolean = false
+)
 val LocalTopMenu = compositionLocalOf<TopMenu?> { null }
 
 /** A white round ⋮ next to the business pill, same look as the pill. */
@@ -237,7 +241,7 @@ private fun TopMenuButton(m: TopMenu) {
 
 /** Compact frosted pill at the top: menu, then the open business with ▾ to switch or add one. */
 @Composable
-internal fun BusinessPill(name: String, onMenu: () -> Unit, onBusiness: () -> Unit) {
+internal fun BusinessPill(name: String, onMenu: () -> Unit, onBusiness: () -> Unit, switchable: Boolean = true) {
     Row(
         Modifier.padding(top = 12.dp).shadow(1.dp, CircleShape).clip(CircleShape).background(Color.White).padding(end = 11.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -246,10 +250,10 @@ internal fun BusinessPill(name: String, onMenu: () -> Unit, onBusiness: () -> Un
         Box(Modifier.size(38.dp).clip(CircleShape).clickable(onClickLabel = "Menu") { onMenu() }, contentAlignment = Alignment.Center) {
             GlassLogo(24.dp)
         }
-        Row(Modifier.clickable { onBusiness() }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.clickable(enabled = switchable) { onBusiness() }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(name, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1C1917), maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.widthIn(max = 170.dp))
-            Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Switch business", tint = Ember, modifier = Modifier.padding(start = 3.dp).size(16.dp))
+            if (switchable) Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Switch business", tint = Ember, modifier = Modifier.padding(start = 3.dp).size(16.dp))
         }
     }
 }

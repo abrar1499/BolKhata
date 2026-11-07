@@ -2219,7 +2219,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         val day = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
                         bookExport.launch("SmartExpense-${businessName.replace(Regex("[^A-Za-z0-9]+"), "-")}-$day.json")
                     },
-                    onCurrency = { c -> currency = c; store.currency = c; toast("✓ Currency set to $c") }
+                    onCurrency = { c -> currency = c; store.currency = c; toast("✓ Currency set to $c") },
+                    personal = book == PERSONAL
                 )
             ) {
             // Each screen keeps its own scroll and picks when another opens over it (a party, a report…),
