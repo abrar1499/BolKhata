@@ -356,6 +356,9 @@ fun PartiesScreen(
     var madeTick by remember { mutableIntStateOf(0) }
     var madeMonth by remember { mutableStateOf<Int?>(null) }
     var stockOpen by rememberSaveable { mutableStateOf<String?>(null) }
+    // Profit: a line tapped open (its people), then one person tapped open (their entries).
+    var profitOpen by rememberSaveable { mutableStateOf<String?>(null) }
+    var profitPerson by rememberSaveable { mutableStateOf<String?>(null) }
     // The card: the two figures that matter most for this view (worked out again only when the data or view changes).
     val card: Triple<Triple<String, String, Color>, Triple<String, String, Color>, ReportKind> = remember(about, accts, stock, view, currency, madeTick) { when (view) {
         0 -> Triple(
@@ -404,7 +407,10 @@ fun PartiesScreen(
                     newest.filter { isTrade(it.type) && it.item.trim().equals(stockOpen, true) }, { stockOpen = it }, onEdit
                 )
                 2, 3 -> tradeView(view == 2, picked, months, pick, q, onEdit)
-                else -> profitView(entries, about, months, pick, q, made, currency) { m -> madeMonth = m }
+                else -> profitView(
+                    entries, about, months, pick, q, made, currency, { m -> madeMonth = m },
+                    profitOpen, profitPerson, { profitOpen = it; profitPerson = null }, { profitPerson = it }, onEdit
+                )
             }
         }
         UpButton(state)
@@ -522,15 +528,16 @@ private fun LazyListScope.tradeView(sale: Boolean, picked: List<Entry>, months: 
 }
 
 /**
- * Profit for the picked month (or All) in two columns like the Cash book, Expense | Income: each item sold and each
- * other income, what the bought goods that were sold cost, each kind of expense; then the profit and, for a month,
- * how many were made (tap to say) and what one cost.
+ * Profit for the picked month (or All) in two columns, Cost | Sale: each item sold and each other income, what the
+ * bought goods that were sold cost, each expense by its name; then the profit and, for a month, how many were made
+ * (tap to say) and what one cost. Tap a line to see who it was with, then a name to see those entries.
  */
 private fun LazyListScope.profitView(
     all: List<Entry>, about: List<Entry>, months: List<Pair<Int, Long>>, month: Int, q: String,
-    made: (Int) -> Double, currency: String, onMade: (Int) -> Unit
+    made: (Int) -> Double, currency: String, onMade: (Int) -> Unit,
+    open: String?, person: String?, onOpen: (String?) -> Unit, onPerson: (String?) -> Unit, onEdit: (Entry) -> Unit
 ) {
-    class Line(val name: String, val sub: String, val out: Double, val inn: Double)
+    class Line(val key: String, val name: String, val sub: String, val out: Double, val inn: Double, val list: List<Entry>)
     val list = about.filter { inMonth(it.date, month) }
     val sales = list.filter { it.type == Type.SALE }
     val net = netOf(all, list)
@@ -538,25 +545,68 @@ private fun LazyListScope.profitView(
     val lines = buildList {
         sales.groupBy { it.item.trim().ifBlank { "Sale" } }.forEach { (n, l) ->
             val qty = l.sumOf { it.qty }
-            add(Line(n, if (qty > 0) "sold " + fmt(qty) else if (l.size == 1) "1 sale" else "${l.size} sales", 0.0, l.sumOf { it.amount }))
+            add(Line("s" + n.lowercase(), n, if (qty > 0) "sold " + fmt(qty) else if (l.size == 1) "1 sale" else "${l.size} sales", 0.0, l.sumOf { it.amount }, l))
         }
         list.filter { it.type == Type.AAMDANI }.groupBy { source(it).trim().ifBlank { "Income" } }
-            .forEach { (n, l) -> add(Line(n, "income", 0.0, l.sumOf { it.amount })) }
-        if (goods > 0) add(Line("Cost of goods sold", "what the sold items cost", goods, 0.0))
-        list.filter { it.type == Type.KHARCHA }.groupBy { it.category.label }.map { (n, l) -> n to l.sumOf { it.amount } }
-            .sortedByDescending { it.second }.forEach { (n, v) -> add(Line(n, "expense", v, 0.0)) }
-    }.filter { q.isBlank() || it.name.contains(q.trim(), true) }
+            .forEach { (n, l) -> add(Line("i" + n.lowercase(), n, "income", 0.0, l.sumOf { it.amount }, l)) }
+        if (goods > 0) add(Line("g", "Cost of goods sold", "what the sold items cost", goods, 0.0, emptyList()))
+        // Each expense under its own name (thaper, fuel…), its category under it.
+        list.filter { it.type == Type.KHARCHA }.groupBy { it.item.trim().ifBlank { it.category.label }.lowercase() }
+            .map { (k, l) -> Line("e$k", l.first().item.trim().ifBlank { l.first().category.label }, l.first().category.label, l.sumOf { it.amount }, 0.0, l) }
+            .sortedByDescending { it.out }.forEach { add(it) }
+    }
+    fun cells(l: List<Entry>): List<GCell> {
+        val c = l.filter { it.type == Type.KHARCHA }.sumOf { it.amount }
+        val s = l.filter { it.type != Type.KHARCHA }.sumOf { it.amount }
+        return listOf(GCell(signed(LKind.OUT, c), LKind.OUT), GCell(signed(LKind.IN, s), LKind.IN))
+    }
+    val line = lines.firstOrNull { it.key == open }
+    if (line != null) {
+        // One line opened: who it was with, each name's total; a name opens their entries.
+        val people = line.list.groupBy { it.person.trim().ifBlank { "No name" } }.toList().sortedByDescending { (_, l) -> l.sumOf { it.amount } }
+        item(key = "fb") { GridRow("← " + line.name, "back to profit", listOf(GCell("", LKind.OUT), GCell("", LKind.IN)), WideColW, false) { onOpen(null) } }
+        if (person == null) {
+            item(key = "fph") {
+                LedgerHead(line.name, if (people.size == 1) "1 name" else "${people.size} names",
+                    listOf(LCol("Cost", fmt(line.out), LKind.OUT), LCol("Sale", fmt(line.inn), LKind.IN)), people.isEmpty(), WideColW)
+            }
+            items(people, key = { "fn" + it.first }) { (n, l) ->
+                val qty = l.sumOf { it.qty }
+                GridRow(n, (if (l.size == 1) "1 entry" else "${l.size} entries") + (if (qty > 0) " · qty " + fmt(qty) else ""), cells(l), WideColW, n == people.last().first) { onPerson(n) }
+            }
+        } else {
+            val mine = people.firstOrNull { it.first == person }?.second.orEmpty()
+            item(key = "fpb") { GridRow("← " + person, "back to names", listOf(GCell("", LKind.OUT), GCell("", LKind.IN)), WideColW, false) { onPerson(null) } }
+            ledger(
+                "$person · ${line.name}",
+                listOf(
+                    LCol("Cost", fmt(mine.filter { it.type == Type.KHARCHA }.sumOf { it.amount }), LKind.OUT),
+                    LCol("Sale", fmt(mine.filter { it.type != Type.KHARCHA }.sumOf { it.amount }), LKind.IN)
+                ),
+                mine.map { e ->
+                    val cost = e.type == Type.KHARCHA
+                    LRow(e.id, e.date, e.item.ifBlank { line.name }, if (e.qty > 0) fmt(e.qty) + (if (e.rate > 0) " × " + fmt(e.rate) else "") else e.note,
+                        listOf(if (cost) e.amount else 0.0, if (cost) 0.0 else e.amount), e) { onEdit(e) }
+                },
+                keyPrefix = "fe"
+            )
+        }
+        return
+    }
+    val shown = lines.filter { q.isBlank() || it.name.contains(q.trim(), true) }
     val madeQty = if (month == ALL_MONTHS) 0.0 else made(month)
     item(key = "fh") {
-        LedgerHead(if (month == ALL_MONTHS) "All" else monthLabel(months, month) ?: "All", "income − expense",
-            listOf(LCol("Expense", fmt(net.cost), LKind.OUT), LCol("Income", fmt(net.income), LKind.IN)), false, WideColW)
+        LedgerHead(if (month == ALL_MONTHS) "All" else monthLabel(months, month) ?: "All", "sale − cost · tap a line",
+            listOf(LCol("Cost", fmt(net.cost), LKind.OUT), LCol("Sale", fmt(net.income), LKind.IN)), false, WideColW)
     }
-    items(lines, key = { "fl" + it.name + it.sub }) { l ->
-        GridRow(l.name, l.sub, listOf(GCell(signed(LKind.OUT, l.out), LKind.OUT), GCell(signed(LKind.IN, l.inn), LKind.IN)), WideColW, false) {}
+    items(shown, key = { "fl" + it.key }) { l ->
+        GridRow(l.name, l.sub, listOf(GCell(signed(LKind.OUT, l.out), LKind.OUT), GCell(signed(LKind.IN, l.inn), LKind.IN)), WideColW, false) {
+            if (l.list.isNotEmpty()) onOpen(l.key)
+        }
     }
-    // The profit in the Income column (a loss in red), then how many were made and what one cost, for a month.
+    // The profit in the Sale column (a loss in red), then how many were made and what one cost, for a month.
     item(key = "fp") {
-        GridRow("Profit", if (net.profit < 0) "loss" else "income − expense",
+        GridRow("Profit", if (net.profit < 0) "loss" else "sale − cost",
             listOf(GCell("", LKind.OUT), GCell(plusMinus(net.profit), LKind.IN, if (net.profit < 0) RedSpend else GreenIn)), WideColW, month == ALL_MONTHS) {}
     }
     if (month != ALL_MONTHS) {
@@ -565,7 +615,7 @@ private fun LazyListScope.profitView(
                 listOf(GCell("", LKind.OUT), GCell(if (madeQty > 0) fmt(madeQty) else "—", LKind.IN, AmountInk)), WideColW, false) { onMade(month) }
         }
         item(key = "fu") {
-            GridRow("Cost per unit", if (madeQty > 0) "all expense ÷ made" else "",
+            GridRow("Cost per unit", if (madeQty > 0) "all cost ÷ made" else "",
                 listOf(GCell(if (madeQty > 0) money(currency, net.cost / madeQty) else "—", LKind.OUT), GCell("", LKind.IN)), WideColW, true) {}
         }
     }
