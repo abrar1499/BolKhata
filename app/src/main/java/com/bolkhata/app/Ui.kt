@@ -6,6 +6,9 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.ui.draw.shadow
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
@@ -731,6 +734,24 @@ fun Modifier.glassEdge(shape: androidx.compose.ui.graphics.Shape, width: Dp = 1.
     val c = glassColors(LocalHeader.current)
     val fill = androidx.compose.ui.graphics.lerp(MaterialTheme.colorScheme.surface, c[1], 0.05f)
     return this.clip(shape).background(fill, shape).border(width, Brush.linearGradient(c), shape)
+}
+
+/**
+ * One line of text (an amount) that shrinks until it fits its space, so lakhs and crores are never cut off; it is
+ * drawn only once it fits, so it never flickers.
+ */
+@Composable
+fun FitText(
+    text: String, fontSize: androidx.compose.ui.unit.TextUnit, fontWeight: FontWeight, color: Color = Color.Unspecified,
+    modifier: Modifier = Modifier, textAlign: androidx.compose.ui.text.style.TextAlign? = null
+) {
+    var size by androidx.compose.runtime.remember(text, fontSize) { androidx.compose.runtime.mutableStateOf(fontSize) }
+    var ready by androidx.compose.runtime.remember(text, fontSize) { androidx.compose.runtime.mutableStateOf(false) }
+    Text(
+        text, modifier.drawWithContent { if (ready) drawContent() }, color = color, fontSize = size, fontWeight = fontWeight,
+        maxLines = 1, softWrap = false, textAlign = textAlign,
+        onTextLayout = { r -> if (r.didOverflowWidth && size.value > 7f) size *= 0.9f else ready = true }
+    )
 }
 
 /**

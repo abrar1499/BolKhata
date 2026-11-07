@@ -221,7 +221,7 @@ private fun SumCard(
             listOfNotNull(a, b, c).forEachIndexed { i, (value, label, color) ->
                 if (i > 0) VerticalDivider(Modifier.fillMaxHeight(), color = MaterialTheme.colorScheme.outlineVariant)
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(value, color = color, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+                    FitText(value, 12.sp, FontWeight.ExtraBold, color, Modifier.padding(horizontal = 4.dp))
                     Text(label, fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
@@ -522,7 +522,7 @@ private fun LedgerHead(
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
             ) {
                 Text(c.label.uppercase(), fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp, maxLines = 1, color = sub)
-                Text(c.total, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, softWrap = false, color = kindColor(c.kind))
+                FitText(c.total, 13.sp, FontWeight.ExtraBold, kindColor(c.kind), Modifier.padding(horizontal = 3.dp))
             }
         }
     }
@@ -542,7 +542,7 @@ private fun DayLine(date: Long, cols: List<LCol>, day: List<LRow>, card: Boolean
             modifier = Modifier.weight(1f).padding(start = 12.dp, top = 4.dp, bottom = 4.dp))
         cols.forEachIndexed { k, c ->
             Box(Modifier.width(w).fillMaxHeight(), contentAlignment = Alignment.Center) {
-                Text(if (totals[k] == 0.0) "" else fmt(totals[k]), fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = kindColor(c.kind), maxLines = 1, softWrap = false)
+                FitText(if (totals[k] == 0.0) "" else fmt(totals[k]), 12.sp, FontWeight.ExtraBold, kindColor(c.kind), Modifier.padding(horizontal = 3.dp))
             }
         }
     }
@@ -583,7 +583,7 @@ private fun LedgerRow(r: LRow, cols: List<LCol>, last: Boolean, card: Boolean = 
             VerticalDivider(Modifier.fillMaxHeight(), color = Faint)
             Box(Modifier.width(w).fillMaxHeight(), contentAlignment = Alignment.Center) {
                 val v = r.amounts.getOrElse(i) { 0.0 }
-                Text(if (v == 0.0) "" else fmt(v), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = AmountInk, maxLines = 1, softWrap = false)
+                FitText(if (v == 0.0) "" else fmt(v), 12.sp, FontWeight.Bold, AmountInk, Modifier.padding(horizontal = 3.dp))
             }
         }
     }
@@ -822,8 +822,9 @@ private fun ItRow(
             if (sub.isNotBlank()) Text(sub, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Spacer(Modifier.width(8.dp))
-        Column(horizontalAlignment = Alignment.End) {
-            Text(amount, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = color, maxLines = 1)
+        // The amount takes at most 130 wide: a big one gets smaller instead of pushing the name out.
+        Column(Modifier.widthIn(max = 130.dp), horizontalAlignment = Alignment.End) {
+            FitText(amount, 14.sp, FontWeight.ExtraBold, color)
             if (label.isNotBlank()) Text(label, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
         }
         if (onClick != null) Text("›", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 8.dp))
@@ -906,7 +907,7 @@ private fun LazyListScope.simpleLedger(cols: List<Pair<String, Color>>, totals: 
                     VerticalDivider(Modifier.fillMaxHeight(), color = Faint)
                     Column(Modifier.width(68.dp).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                         Text(label.uppercase(), fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        if (label.isNotBlank()) Text(fmt(totals[k]), fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = color, maxLines = 1, softWrap = false)
+                        if (label.isNotBlank()) FitText(fmt(totals[k]), 13.sp, FontWeight.ExtraBold, color, Modifier.padding(horizontal = 3.dp))
                     }
                 }
             }
@@ -932,7 +933,7 @@ private fun LazyListScope.simpleLedger(cols: List<Pair<String, Color>>, totals: 
                         VerticalDivider(Modifier.fillMaxHeight(), color = Faint)
                         Box(Modifier.width(68.dp).fillMaxHeight().padding(top = 7.dp), contentAlignment = Alignment.TopCenter) {
                             val v = amounts.getOrElse(k) { 0.0 }
-                            Text(if (v == 0.0) "" else fmt(v), fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+                            FitText(if (v == 0.0) "" else fmt(v), 12.sp, FontWeight.Bold, modifier = Modifier.padding(horizontal = 3.dp))
                         }
                     }
                 }
@@ -1453,7 +1454,7 @@ private fun ReportRow(title: String, sub: String, amount: String, color: Color, 
         }
         VerticalDivider(Modifier.fillMaxHeight(), color = Faint)
         Box(Modifier.width(96.dp).fillMaxHeight(), contentAlignment = Alignment.Center) {
-            Text(amount, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = color, maxLines = 1, softWrap = false)
+            FitText(amount, 14.sp, FontWeight.ExtraBold, color, Modifier.padding(horizontal = 4.dp))
         }
     }
 }
@@ -1497,8 +1498,8 @@ private fun ShareRow(icon: String, name: String, v: Double, total: Double, mark:
                 Box(Modifier.fillMaxWidth((pc / 100f).coerceIn(0f, 1f)).fillMaxHeight().clip(RoundedCornerShape(2.dp)).background(mark))
             }
         }
-        Column(horizontalAlignment = Alignment.End) {
-            Text(fmt(v), fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = ink)
+        Column(Modifier.widthIn(max = 120.dp), horizontalAlignment = Alignment.End) {
+            FitText(fmt(v), 14.sp, FontWeight.ExtraBold, ink)
             Text("$pc%", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Text("›", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 8.dp))
