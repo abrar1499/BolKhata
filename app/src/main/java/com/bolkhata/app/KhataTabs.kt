@@ -26,7 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.DriveFileRenameOutline
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Menu
@@ -370,25 +370,37 @@ internal fun PeriodChips(newest: List<Entry>, period: Period, onPick: (Period) -
         item(key = "first") {
             Box {
                 SmallChip(first, period.month == ALL_MONTHS) { open = true }
-                DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-                    (listOf("All") + years.map { it.toString() } + "Dates…").forEach { v ->
-                        val on = when (v) { "All" -> period.year == 0 && period.from == 0L; "Dates…" -> period.from > 0; else -> period.year.toString() == v && period.from == 0L }
-                        DropdownMenuItem(
-                            text = { Text(v, fontSize = 13.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.SemiBold, color = if (on) Ember else MaterialTheme.colorScheme.onSurface) },
-                            onClick = {
-                                open = false
-                                when (v) {
-                                    "All" -> onPick(Period())
-                                    "Dates…" -> {
-                                        val today = cal(System.currentTimeMillis()).apply {
-                                            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-                                        }.timeInMillis
-                                        dates = (if (period.from > 0) period.from else today - 30 * 86_400_000L) to (if (period.from > 0) period.to else today)
+                // A small white card right under the chip (as in the mock-up), not the plain system menu.
+                if (open) androidx.compose.ui.window.Popup(
+                    offset = androidx.compose.ui.unit.IntOffset(0, with(androidx.compose.ui.platform.LocalDensity.current) { 36.dp.roundToPx() }),
+                    onDismissRequest = { open = false },
+                    properties = androidx.compose.ui.window.PopupProperties(focusable = true)
+                ) {
+                    val shape = RoundedCornerShape(12.dp)
+                    Column(
+                        Modifier.widthIn(min = 110.dp).shadow(8.dp, shape).clip(shape).background(MaterialTheme.colorScheme.surface)
+                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape).padding(vertical = 4.dp)
+                    ) {
+                        (listOf("All") + years.map { it.toString() } + "Dates…").forEach { v ->
+                            val on = when (v) { "All" -> period.year == 0 && period.from == 0L; "Dates…" -> period.from > 0; else -> period.year.toString() == v && period.from == 0L }
+                            Text(
+                                v, fontSize = 13.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium,
+                                color = if (on) Ember else MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.widthIn(min = 110.dp).clickable {
+                                    open = false
+                                    when (v) {
+                                        "All" -> onPick(Period())
+                                        "Dates…" -> {
+                                            val today = cal(System.currentTimeMillis()).apply {
+                                                set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+                                            }.timeInMillis
+                                            dates = (if (period.from > 0) period.from else today - 30 * 86_400_000L) to (if (period.from > 0) period.to else today)
+                                        }
+                                        else -> onPick(Period(year = v.toInt()))
                                     }
-                                    else -> onPick(Period(year = v.toInt()))
-                                }
-                            }
-                        )
+                                }.padding(horizontal = 14.dp, vertical = 8.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -937,7 +949,8 @@ private fun ItRow(
 /** "+ Add account" / "+ Add in Food": a dashed rounded box under a list. */
 @Composable
 private fun DashedAdd(label: String, onClick: () -> Unit) {
-    val edge = MaterialTheme.colorScheme.outline
+    // A clearly visible grey dash (the card edge colour is too faint for it).
+    val edge = if (MaterialTheme.colorScheme.surface.luminance() < 0.5f) Color(0xFF555555) else Color(0xFFC2BBB3)
     Text(
         label, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center,
         modifier = Modifier.padding(start = 10.dp, end = 10.dp, top = 10.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp))
@@ -1070,8 +1083,14 @@ fun SideScreen(
     onMenu: () -> Unit, business: String, onEdit: (Entry) -> Unit, onSave: (Entry) -> Unit, onReport: () -> Unit,
     /** Opens this account and person straight away (from the report's To get / To pay). */
     jump: Pair<String, String>? = null, onJumped: () -> Unit = {},
-    /** Move or delete (to Trash) all entries of a category account. */
-    onMoveKhata: (String) -> Unit = {}, onDeleteKhata: (String) -> Unit = {}
+    /** Saves changed entries (same ids). */
+    onUpdate: (List<Entry>) -> Unit = {},
+    /** Opens the Move list for these entries ([title] names them). */
+    onMoveEntries: (title: String, ids: Set<String>) -> Unit = { _, _ -> },
+    /** Asks, then moves these entries to Trash and runs [after]. */
+    onDeleteEntries: (title: String, ids: Set<String>, after: () -> Unit) -> Unit = { _, _, _ -> },
+    /** Renames (or merges) a person's khata. */
+    onRenamePerson: (from: String, to: String) -> Unit = { _, _ -> }
 ) {
     val party = side == Side.PARTY
     val income = side == Side.INC
@@ -1081,8 +1100,10 @@ fun SideScreen(
     var q by rememberSaveable(side) { mutableStateOf("") }
     var adding by remember { mutableStateOf<String?>(null) }   // "book" or "kid"
     var sheet by remember { mutableStateOf<AddReq?>(null) }
-    var acct by remember { mutableStateOf<Book?>(null) }        // long-pressed account
-    var renaming by remember { mutableStateOf<Book?>(null) }
+    // The long-pressed account, or a person or thing inside it (Kid set).
+    var menu by remember { mutableStateOf<Pair<Book, Kid?>?>(null) }
+    var renaming by remember { mutableStateOf<Pair<Book, Kid?>?>(null) }
+    var movingPeople by remember { mutableStateOf<Pair<Book, Kid?>?>(null) }
     LaunchedEffect(jump) { jump?.let { (b, k) -> bookName = b; kidName = k; onJumped() } }
     val books = remember(entries, setup, side) { Sides.books(side, entries, setup) }
     val book = books.firstOrNull { it.name == bookName }
@@ -1092,10 +1113,7 @@ fun SideScreen(
     BackHandler(enabled = bookName != null) { if (kidName != null) kidName = null else bookName = null }
     val ink = if (income) GreenIn else RedSpend
     val crumb = when (side) { Side.PARTY -> "Party"; Side.INC -> "Income"; Side.EXP -> "Expense" }
-    val khataMenu = LocalKhataMenu.current
     val state = rememberLazyListState()
-    /** Whether [b] is one the owner added (not Staff, Food… read from the entries). */
-    fun own(b: Book) = setup.books.any { it.name.equals(b.name, true) && it.people == b.people && (b.people || it.side == side) }
     /** The word under an account's figure. */
     fun word(b: Book, inside: Boolean) = if (Sides.isAuto(b)) (if (income) "sold" else "work") else if (income) (if (inside) "income" else "received") else "spent"
     Box(Modifier.fillMaxSize()) {
@@ -1144,7 +1162,7 @@ fun SideScreen(
                             ItRow(
                                 if (book.people || auto) "👤" else iconFor(k.name, income), k.name, entryCount(k.entries.size), amt, what.lowercase(),
                                 if (book.people) balanceColor(what) else ink, i, kids.size,
-                                onLong = if (auto) null else khataMenu?.let { m -> { m(if (book.people) "party" else if (income) "income" else "expense-name", k.name) } }
+                                onLong = if (auto) null else ({ menu = book to k })
                             ) { kidName = k.name }
                         }
                     }
@@ -1182,10 +1200,10 @@ fun SideScreen(
                                 val sub = (if (kids.size == 1) "1 person" else "${kids.size} people") +
                                     (if (p > 0.5) " · " + fmt(p) + " to get" else "") + (if (m > 0.5) " · " + fmt(m) + " to give" else "")
                                 ItRow("👤", b.name, sub, fmt(kotlin.math.abs(net)), (if (net >= 0) "to get" else "to give") + " · net",
-                                    if (net >= 0) GreenIn else RedSpend, i, shown.size, onLong = { acct = b }) { bookName = b.name; q = "" }
+                                    if (net >= 0) GreenIn else RedSpend, i, shown.size, onLong = { menu = b to null }) { bookName = b.name; q = "" }
                             } else {
                                 ItRow(bookIcon(b), b.name, kids.take(4).joinToString(", ") { it.name }, fmt(Sides.done(b, entries, setup, inPer)), word(b, false), ink, i, shown.size,
-                                    onLong = if (Sides.isAuto(b)) null else ({ acct = b })) { bookName = b.name; q = "" }
+                                    onLong = if (Sides.isAuto(b)) null else ({ menu = b to null })) { bookName = b.name; q = "" }
                             }
                         }
                     }
@@ -1239,41 +1257,107 @@ fun SideScreen(
         }
     }
     sheet?.let { r -> AddSheet(r, entries, onDismiss = { sheet = null }) { e -> onSave(e); sheet = null } }
-    // An account's long-press menu: Rename (own and people accounts), Move and Delete (a category's entries, or an own account).
-    acct?.let { b ->
-        val mine = own(b)
-        val n = Sides.kids(b, entries, setup).sumOf { it.entries.size }
+    /** The owner's saved account that is [b] (none for Food, Staff… read from the entries). */
+    fun sameBook(it: Book, b: Book) = it.name.equals(b.name, true) && it.people == b.people && (b.people || it.side == side)
+    val ready = listOf(Sides.CUSTOMERS, Sides.SUPPLIERS, Sides.STAFF, Sides.PEOPLE)
+    // The same long-press menu everywhere: Rename, Move, Delete, for an account and for a person or thing inside it.
+    menu?.let { (b, k) ->
+        val list = k?.entries ?: Sides.kids(b, entries, setup).flatMap { it.entries }
+        val ids = list.map { it.id }.toSet()
+        val name = k?.name ?: b.name
         ActionMenu(
-            title = b.name, subtitle = if (n == 1) "1 entry" else "$n entries", amount = "", amountColor = Color.Unspecified,
-            actions = listOfNotNull(
-                if (mine || b.people) MenuAction("Rename", Icons.Filled.Edit) { acct = null; renaming = b } else null,
-                if (b.cat != null && n > 0) MenuAction("Move", Icons.Filled.SwapHoriz) { acct = null; onMoveKhata(b.name) } else null,
-                when {
-                    mine -> MenuAction("Delete", Icons.Filled.Delete, danger = true) {
-                        acct = null
-                        onSetup(setup.copy(books = setup.books.filterNot { it.name.equals(b.name, true) && it.people == b.people && (b.people || it.side == side) },
-                            people = setup.people.filterValues { !it.equals(b.name, true) }, kids = setup.kids - b.name))
+            title = name, subtitle = if (ids.size == 1) "1 entry" else "${ids.size} entries", amount = "", amountColor = Color.Unspecified,
+            actions = listOf(
+                MenuAction("Rename", Icons.Filled.DriveFileRenameOutline) { menu = null; renaming = b to k },
+                MenuAction("Move", Icons.Filled.SwapHoriz) {
+                    menu = null
+                    // People move to another Party account; things' entries move to another khata.
+                    if (b.people) movingPeople = b to k else onMoveEntries(name, ids)
+                },
+                MenuAction("Delete", Icons.Filled.Delete, danger = true) {
+                    menu = null
+                    val after = {
+                        onSetup(when {
+                            k != null && b.people -> setup.copy(people = setup.people.filterKeys { !it.trim().equals(k.name, true) })
+                            k != null -> setup.copy(kids = setup.kids[b.name]?.let { l -> setup.kids + (b.name to l.filterNot { it.equals(k.name, true) }) } ?: setup.kids)
+                            else -> setup.copy(books = setup.books.filterNot { sameBook(it, b) },
+                                people = if (b.people) setup.people.filterValues { !it.equals(b.name, true) } else setup.people, kids = setup.kids - b.name)
+                        })
                     }
-                    b.cat != null && n > 0 -> MenuAction("Delete", Icons.Filled.Delete, danger = true) { acct = null; onDeleteKhata(b.name) }
-                    else -> null
+                    if (ids.isEmpty()) after() else onDeleteEntries(name, ids, after)
                 }
             ),
-            onDismiss = { acct = null }
+            onDismiss = { menu = null }
         )
     }
-    renaming?.let { b ->
-        RenameDialog("Rename account", b.name, onRename = { new ->
+    renaming?.let { (b, k) ->
+        RenameDialog(if (k == null) "Rename account" else "Rename", k?.name ?: b.name, onRename = rn@{ raw ->
             renaming = null
-            val mine = own(b)
-            // A ready people account (Staff…) becomes the owner's own under the new name, its people with it.
-            val people = Sides.kids(b, entries, setup).map { it.name }
-            onSetup(setup.copy(
-                books = if (mine) setup.books.map { if (it.name.equals(b.name, true) && it.people == b.people && (b.people || it.side == side)) it.copy(name = new) else it }
-                    else setup.books + Book(b.side, new, true),
-                people = setup.people.mapValues { (_, v) -> if (v.equals(b.name, true)) new else v } + (if (mine) emptyMap() else people.associateWith { new }),
-                kids = setup.kids[b.name]?.let { (setup.kids - b.name) + (new to it) } ?: setup.kids
-            ))
+            val new = raw.trim()
+            if (new.isEmpty() || new.equals(k?.name ?: b.name, true)) return@rn
+            when {
+                // A person: their khata takes the new name, and their place in Party with it.
+                k != null && b.people -> {
+                    onRenamePerson(k.name, new)
+                    setup.people.entries.firstOrNull { it.key.trim().equals(k.name, true) }?.let { (old, acc) -> onSetup(setup.copy(people = setup.people - old + (new to acc))) }
+                }
+                // A thing (Groceries…): its entries take the new name; the account keeps it.
+                k != null -> {
+                    onUpdate(k.entries.map { it.copy(item = new, note = if (it.note.isBlank() || it.note == it.item) new else it.note) })
+                    setup.kids[b.name]?.let { l -> onSetup(setup.copy(kids = setup.kids + (b.name to l.map { if (it.equals(k.name, true)) new else it }))) }
+                }
+                // A people account: its people go with it (Staff… becomes the owner's own under the new name).
+                b.people -> {
+                    val people = Sides.kids(b, entries, setup).map { it.name }
+                    val mine = setup.books.any { sameBook(it, b) }
+                    onSetup(setup.copy(
+                        books = if (mine) setup.books.map { if (sameBook(it, b)) it.copy(name = new) else it } else setup.books + Book(b.side, new, true),
+                        people = setup.people.mapValues { (_, v) -> if (v.equals(b.name, true)) new else v } + people.associateWith { new }
+                    ))
+                }
+                else -> {
+                    val kids = Sides.kids(b, entries, setup)
+                    val list = kids.flatMap { it.entries }
+                    val names = (kids.map { it.name } + setup.kids[b.name].orEmpty()).distinctBy { it.lowercase() }
+                    val cat = if (side == Side.EXP) Cat.values().firstOrNull { it.label.equals(new, true) } else null
+                    val books = setup.books.filterNot { sameBook(it, b) }
+                    if (cat != null) {
+                        // Named like a category (Food…): the entries go there.
+                        onUpdate(list.map { it.copy(category = cat) })
+                        onSetup(setup.copy(books = books, kids = setup.kids - b.name + (cat.label to (setup.kids[cat.label].orEmpty() + setup.kids[b.name].orEmpty()).distinctBy { it.lowercase() })))
+                    } else {
+                        // Any other name: the owner's own account holding the same things.
+                        if (side == Side.EXP && b.cat != null) onUpdate(list.map { it.copy(category = Cat.OTHER) })
+                        onSetup(setup.copy(books = books + Book(side, new, false),
+                            kids = setup.kids - b.name + (new to (setup.kids[new].orEmpty() + names).distinctBy { it.lowercase() })))
+                    }
+                }
+            }
         }, onDismiss = { renaming = null })
+    }
+    movingPeople?.let { (b, k) ->
+        var to by remember { mutableStateOf("") }
+        val picks = (books.filter { it.people }.map { it.name } + ready).distinctBy { it.lowercase() }.filterNot { it.equals(b.name, true) }
+        AppPopup("Move ${k?.name ?: b.name} to", "Move", onDismiss = { movingPeople = null }, onAction = act@{
+            val t = to.trim()
+            if (t.isEmpty()) return@act
+            movingPeople = null
+            val people = k?.let { listOf(it.name) } ?: Sides.kids(b, entries, setup).map { it.name }
+            val mine = setup.books.any { sameBook(it, b) }
+            onSetup(setup.copy(
+                // An account the owner names here is made a Party account (Customers keep Given | Received).
+                books = (if (k == null && mine) setup.books.filterNot { sameBook(it, b) } else setup.books) +
+                    (if (picks.any { it.equals(t, true) } || ready.any { it.equals(t, true) }) emptyList() else listOf(Book(Side.EXP, t, true))),
+                people = setup.people.filterKeys { key -> people.none { it.equals(key.trim(), true) } } + people.associateWith { t }
+            ))
+        }) {
+            WellField(to, { to = it }, "Account name")
+            Text("OR PICK ONE", fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 12.dp, bottom = 6.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                picks.chunked(2).forEach { row -> Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { row.forEach { n -> PickChip("👤 $n", to == n) { to = n } } } }
+            }
+        }
     }
 }
 

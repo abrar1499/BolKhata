@@ -61,13 +61,16 @@ object Sides {
         val own = setup.books.filter { it.side == side && !it.people }.map { b ->
             Cat.values().firstOrNull { it.label.equals(b.name, true) && side == Side.EXP }?.let { b.copy(name = it.label, cat = it) } ?: b
         }
+        // Entries kept in the owner's own accounts don't make Other or Income received show.
+        val mine = ownThings(side, setup)
+        fun loose(e: Entry) = mine[thingName(e).lowercase()] == null
         val things = if (side == Side.EXP) {
-            val used = all.filter { it.type == Type.KHARCHA }.map { it.category }.toSet()
+            val used = all.filter { it.type == Type.KHARCHA && (it.category != Cat.OTHER || loose(it)) }.map { it.category }.toSet()
             expenseCats.filter { it in used }.map { Book(side, it.label, false, it) } +
                 listOfNotNull(Book(side, PURCHASES, false).takeIf { all.any { it.type == Type.PURCHASE && it.amount > 0 } })
         } else listOfNotNull(
             Book(side, SALES, false).takeIf { all.any { it.type == Type.SALE && it.amount > 0 } },
-            Book(side, INCOME, false).takeIf { all.any { it.type == Type.AAMDANI } }
+            Book(side, INCOME, false).takeIf { all.any { it.type == Type.AAMDANI && loose(it) } }
         )
         return (things + own).distinctBy { it.name.lowercase() }
     }

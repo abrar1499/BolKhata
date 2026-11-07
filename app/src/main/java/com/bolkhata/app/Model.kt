@@ -661,4 +661,9 @@ class Store(context: Context) {
     var bgPhoto: String
         get() = prefs.getString("bgPhoto", "") ?: ""
         set(v) = prefs.edit().putString("bgPhoto", v).apply()
+
+    /** The light page colour (one of [PAGE_COLORS]). */
+    var page: Long
+        get() = prefs.getLong("page", PAGE_COLORS[0]).takeIf { it in PAGE_COLORS } ?: PAGE_COLORS[0]
+        set(v) = prefs.edit().putLong("page", v).apply()
 }

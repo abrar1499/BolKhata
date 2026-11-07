@@ -61,9 +61,6 @@ class Selection {
 
 val LocalSelection = staticCompositionLocalOf<Selection?> { null }
 
-/** Long-press on a khata row opens Rename / Move: kind "party", "expense" (name = category label) or "income" (who paid). */
-val LocalKhataMenu = staticCompositionLocalOf<((kind: String, name: String) -> Unit)?> { null }
-
 // ---------------------------------------------------------------- people
 
 /**
@@ -207,7 +204,7 @@ val defaultSubs: Map<Cat, List<String>> = mapOf(
     Cat.MOBILE to listOf("Recharge", "Internet"),
     Cat.SEHAT to listOf("Medicine", "Doctor"),
     Cat.PERSONAL to listOf("Haircut", "Soap & shampoo"),
-    Cat.FEES to listOf("Iqama", "Bank fee", "Visa"),
+    Cat.FEES to listOf("ID card", "Bank fee", "Visa"),
     Cat.SHOPPING to listOf("Clothes", "Electronics"),
     Cat.EDU to listOf("School fees", "Books"),
     Cat.RENT to listOf("House rent"),

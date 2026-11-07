@@ -139,7 +139,7 @@ class AppScreenshots {
         SideMenu(
             name = "Hamid Akram", currency = "SAR", lang = "", dark = false, photo = false, themeName = "Green", version = "1.0",
             businesses = listOf("" to "My business"), current = "", onBusiness = {}, onManage = {}, onAddBusiness = {},
-            onName = {}, onCurrency = {}, onLang = {}, onTheme = {}, onGray = {}, onDark = {}, onPhoto = {},
+            onName = {}, onCurrency = {}, onLang = {}, onTheme = {}, page = PAGE_COLORS[0], onPage = {}, onDark = {}, onPhoto = {},
             onExport = {}, onImport = {}, onTrash = {}, onVersion = {}
         )
     }
