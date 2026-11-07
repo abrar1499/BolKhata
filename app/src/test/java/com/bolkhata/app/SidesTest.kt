@@ -3,7 +3,7 @@ package com.bolkhata.app
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/** Expense / Income accounts: staff Paid | Work, customers Given | Received, items and profit, all from the entries. */
+/** Party, Expense and Income accounts: staff Paid | Work, customers Given | Received, Purchases / Sales, profit and net worth, all from the entries. */
 class SidesTest {
     private var n = 0L
     private fun en(t: Type, amt: Double, person: String = "", item: String = "", cat: Cat = Cat.UDHAAR, qty: Double = 0.0): Entry {
@@ -17,17 +17,29 @@ class SidesTest {
     private val setup = SideSetup(people = mapOf("Hamid Akram" to Sides.STAFF))
 
     @Test fun staffPaidMoreThanWorkIsAdvanceLeft() {
-        val staff = Sides.books(Side.EXP, all, setup).first { it.name == Sides.STAFF }
+        val staff = Sides.books(Side.PARTY, all, setup).first { it.name == Sides.STAFF }
         val k = Sides.kids(staff, all, setup).single()
         assertEquals("12,000" to "Advance left", Sides.balanceText(staff, k.balance))
         assertEquals(8000.0, Sides.done(staff, all, setup) { true }, 0.0)
     }
 
     @Test fun customerGivenMoreThanReceivedIsToGet() {
-        val cust = Sides.books(Side.INC, all, setup).first { it.name == Sides.CUSTOMERS }
+        val cust = Sides.books(Side.PARTY, all, setup).first { it.name == Sides.CUSTOMERS }
         val k = Sides.kids(cust, all, setup).single()
         assertEquals("20,000" to "To get", Sides.balanceText(cust, k.balance))
-        assertEquals(20000.0 to 0.0, Sides.owed(Side.INC, all, setup))
+        // Customers owe 20,000; the staff advance of 12,000 is also to get.
+        assertEquals(32000.0 to 0.0, Sides.owed(all, setup))
+    }
+
+    @Test fun salesAndPurchasesFillThemselvesFromTheKhatas() {
+        assertEquals(listOf(Sides.SALES), Sides.books(Side.INC, all, setup).map { it.name })
+        val sales = Sides.books(Side.INC, all, setup).first { it.name == Sides.SALES }
+        assertEquals("Nargis Salim Rashid" to 70000.0, Sides.kids(sales, all, setup).single().let { it.name to it.total })
+        val buys = Sides.books(Side.EXP, all, setup).first { it.name == Sides.PURCHASES }
+        assertEquals("Hamid Akram" to 8000.0, Sides.kids(buys, all, setup).single().let { it.name to it.total })
+        assertEquals(8000.0, Sides.done(buys, all, setup) { true }, 0.0)
+        // No people accounts sit in Expense or Income any more.
+        assertEquals(emptyList<String>(), (Sides.books(Side.EXP, all, setup) + Sides.books(Side.INC, all, setup)).filter { it.people }.map { it.name })
     }
 
     @Test fun itemsShowGivenAndWhatIsLeft() {
@@ -50,11 +62,13 @@ class SidesTest {
         assertEquals(listOf("Item A"), Sides.items(raw, setup).map { it.name })
     }
 
-    @Test fun workAddsUpByKindAndWorker() {
-        val w = Sides.works(all, setup).single()
-        assertEquals("Task A", w.name)
-        assertEquals(200.0, w.qty, 0.0)
-        assertEquals(8000.0, w.amount, 0.0)
-        assertEquals("Hamid Akram", w.who.single().first)
+    @Test fun assetsAreNotAnExpenseButCountInNetWorth() {
+        val withAsset = all + en(Type.KHARCHA, 9000.0, item = "Laptop", cat = Cat.ASSETS)
+        assertEquals(60500.0, Sides.profit(withAsset).profit, 0.0)
+        val w = Sides.worth(withAsset, setup)
+        assertEquals(9000.0, w.assets, 0.0)
+        // Cash: 50,000 in − 20,000 − 1,500 − 9,000 out; to get 32,000; nothing in stock cost anything; nothing to pay.
+        assertEquals(19500.0, w.cash, 0.0)
+        assertEquals(19500.0 + 32000.0 + 9000.0, w.net, 0.0)
     }
 }

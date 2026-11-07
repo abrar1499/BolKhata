@@ -69,7 +69,7 @@ class AppScreenshots {
             // As in the app: the list runs under the floating bar and ends with room for it.
             CompositionLocalProvider(LocalBarSpace provides 90.dp) { Column(Modifier.fillMaxSize()) { content() } }
             Box(Modifier.align(Alignment.BottomCenter)) {
-                InputBar(onSend = {}, onMic = {}, placeholder = "Speak, type or ask…", onAttach = {}, voice = voice)
+                InputBar(onSend = {}, onMic = {}, placeholder = "Speak, type or ask…", voice = voice)
             }
         }
     }

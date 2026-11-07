@@ -34,12 +34,7 @@ class CashBookTest {
     }
 
     @Test
-    fun businessViewsPickTheirEntries() {
-        val all = listOf(e(Type.SALE).copy(id = "s"), e(Type.PURCHASE).copy(id = "p"), e(Type.DIYA, "Hamid Akram").copy(id = "d"), e(Type.KHARCHA).copy(id = "k"))
-        assertEquals(listOf("d"), aboutView(0, all).map { it.id })
-        assertEquals(listOf("s", "p"), aboutView(1, all).map { it.id })
-        assertEquals(listOf("s"), aboutView(2, all).map { it.id })
-        assertEquals(listOf("p"), aboutView(3, all).map { it.id })
+    fun plusMinusShowsTheSign() {
         assertEquals("+1,150", plusMinus(1150.0))
         assertEquals("−400", plusMinus(-400.0))
     }

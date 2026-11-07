@@ -1,13 +1,18 @@
 package com.bolkhata.app
 
 /**
- * The Expense and Income tabs as accounts: people accounts (Staff, Suppliers, Customers, or one the owner adds) and
- * things accounts (Food, Bills… with Groceries, Electricity… inside). Everything is read from the saved entries:
- * a person's Paid / Work (or Received / Given) is their khata, and only cash entries reach the Cashbook.
+ * The Party, Expense and Income tabs as accounts. Party holds the people accounts (Customers, Suppliers, Staff, People,
+ * or one the owner adds); Expense and Income hold things accounts (Food, Bills… with Groceries, Electricity… inside).
+ * Everything is read from the saved entries: a person's Paid / Work (or Given / Received) is their khata, and only cash
+ * entries reach the Cashbook. What customers bought shows by itself in Income › Sales, and what staff and suppliers
+ * did or supplied in Expense › Purchases.
  */
-enum class Side { EXP, INC }
+enum class Side { EXP, INC, PARTY }
 
-/** One account on a side. A things account is a category ([cat]), or one the owner named (its entries are Other). */
+/**
+ * One account. A things account is a category ([cat]), or one the owner named (its entries are Other). A people account
+ * keeps the side its columns come from: INC for Given | Received, EXP for Paid | Work; Party lists both.
+ */
 data class Book(val side: Side, val name: String, val people: Boolean, val cat: Cat? = null)
 
 /** What the owner set up: their own accounts, who sits in which people account, and extra things inside an account. */
@@ -33,6 +38,9 @@ object Sides {
     /** People with only loans (gave / took), who are neither staff, suppliers nor customers. */
     const val PEOPLE = "People"
     const val INCOME = "Income received"
+    /** Expense › Purchases and Income › Sales: filled from the people's khatas, nothing is added in them. */
+    const val PURCHASES = "Purchases"
+    const val SALES = "Sales"
 
     /** Expense categories offered as ready-made accounts, in this order. */
     private val expenseCats = listOf(Cat.KHANA, Cat.TRANSPORT, Cat.BIJLI, Cat.RENT, Cat.MOBILE, Cat.SEHAT, Cat.EDU, Cat.SHOPPING,
@@ -43,22 +51,30 @@ object Sides {
      * owner's own (one named like a category holds that category).
      */
     fun books(side: Side, all: List<Entry>, setup: SideSetup): List<Book> {
-        val own = setup.books.filter { it.side == side }.map { b ->
-            if (b.people) b else Cat.values().firstOrNull { it.label.equals(b.name, true) && side == Side.EXP }?.let { b.copy(name = it.label, cat = it) } ?: b
+        if (side == Side.PARTY) {
+            fun hasPeople(name: String) = setup.people.values.any { it.equals(name, true) } ||
+                all.any { withPerson(it) && bookOf(it.person, all, setup) == name }
+            val ready = listOf(CUSTOMERS to Side.INC, SUPPLIERS to Side.EXP, STAFF to Side.EXP, PEOPLE to Side.EXP)
+                .filter { hasPeople(it.first) }.map { (n, s) -> Book(s, n, true) }
+            return (ready + setup.books.filter { it.people }).distinctBy { it.name.lowercase() }
         }
-        fun hasPeople(name: String) = setup.people.values.any { it.equals(name, true) } ||
-            all.any { withPerson(it) && bookOf(it.person, all, setup) == name }
-        val people = if (side == Side.EXP) listOf(STAFF, SUPPLIERS, PEOPLE).filter(::hasPeople).map { Book(side, it, true) }
-        else listOf(CUSTOMERS).filter(::hasPeople).map { Book(side, it, true) }
+        val own = setup.books.filter { it.side == side && !it.people }.map { b ->
+            Cat.values().firstOrNull { it.label.equals(b.name, true) && side == Side.EXP }?.let { b.copy(name = it.label, cat = it) } ?: b
+        }
         val things = if (side == Side.EXP) {
             val used = all.filter { it.type == Type.KHARCHA }.map { it.category }.toSet()
-            expenseCats.filter { it in used }.map { Book(side, it.label, false, it) }
-        } else listOfNotNull(Book(side, INCOME, false).takeIf { all.any { it.type == Type.AAMDANI } })
-        // Expense lists its things (Food, Bills…) first and the people after; Income starts with Customers.
-        val p = people + own.filter { it.people }
-        val t = things + own.filter { !it.people }
-        return (if (side == Side.EXP) t + p else p + t).distinctBy { it.name.lowercase() }
+            expenseCats.filter { it in used }.map { Book(side, it.label, false, it) } +
+                listOfNotNull(Book(side, PURCHASES, false).takeIf { all.any { it.type == Type.PURCHASE && it.amount > 0 } })
+        } else listOfNotNull(
+            Book(side, SALES, false).takeIf { all.any { it.type == Type.SALE && it.amount > 0 } },
+            Book(side, INCOME, false).takeIf { all.any { it.type == Type.AAMDANI } }
+        )
+        return (things + own).distinctBy { it.name.lowercase() }
     }
+
+    /** Whether [book] is Purchases or Sales: people's work, goods and sales, read from their khatas. */
+    fun isAuto(book: Book) = !book.people && book.cat == null &&
+        (book.side == Side.EXP && book.name == PURCHASES || book.side == Side.INC && book.name == SALES)
 
     /** The people account [person] sits in: the one the owner picked, else Customers for sales, Suppliers for purchases. */
     fun bookOf(person: String, all: List<Entry>, setup: SideSetup): String {
@@ -71,10 +87,6 @@ object Sides {
         }
     }
 
-    /** The side a people account belongs to. */
-    fun sideOf(book: String, setup: SideSetup) =
-        if (book == CUSTOMERS) Side.INC else setup.books.firstOrNull { it.name.equals(book, true) }?.side ?: Side.EXP
-
     /** A person's khata entries: everything with them that is not a sale or purchase settled in cash on the spot. */
     private fun personEntries(all: List<Entry>) = all.filter { withPerson(it) && !it.paid && it.person.isNotBlank() }
 
@@ -82,6 +94,12 @@ object Sides {
     fun kids(book: Book, all: List<Entry>, setup: SideSetup): List<Kid> {
         val newest = all.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt })
         val extra = setup.kids[book.name].orEmpty()
+        if (isAuto(book)) {
+            val t = if (book.side == Side.EXP) Type.PURCHASE else Type.SALE
+            return newest.filter { it.type == t && it.amount > 0 }.groupBy { it.person.trim().lowercase() }.values
+                .map { l -> Kid(l.first().person.trim().ifBlank { if (t == Type.SALE) "Cash sale" else "Cash purchase" }, l) }
+                .sortedByDescending { it.entries.first().date }
+        }
         if (book.people) {
             val byPerson = personEntries(newest).groupBy { it.person.trim().lowercase() }
                 .filter { (_, l) -> bookOf(l.first().person, all, setup).equals(book.name, true) }
@@ -128,15 +146,14 @@ object Sides {
         kids(book, all, setup).sumOf { k -> k.entries.filter { inMonth(it.date) && counts(book, it) }.sumOf { it.amount } }
 
     /** Whether an entry is a cost (Expense) or an earning (Income): a person's work or goods given, a thing's amount. */
-    fun counts(book: Book, e: Entry): Boolean = !book.people || when (book.side) {
-        Side.EXP -> book.name != PEOPLE && e.type == Type.PURCHASE
-        Side.INC -> e.type == Type.SALE
-    }
+    fun counts(book: Book, e: Entry): Boolean = !book.people ||
+        (if (book.side == Side.INC) e.type == Type.SALE else book.name != PEOPLE && e.type == Type.PURCHASE)
 
-    /** What the people accounts on [side] hold: (advance left or to get, to pay or advance taken), both as plus figures. */
-    fun owed(side: Side, all: List<Entry>, setup: SideSetup): Pair<Double, Double> {
-        val ks = books(side, all, setup).filter { it.people && it.name != PEOPLE }.flatMap { kids(it, all, setup) }
-        return ks.filter { it.balance > 0.5 }.sumOf { it.balance } to ks.filter { it.balance < -0.5 }.sumOf { -it.balance }
+    /** What every person's khata adds up to in the period: (to get, to give), both as plus figures. */
+    fun owed(all: List<Entry>, setup: SideSetup, inPeriod: (Long) -> Boolean = { true }): Pair<Double, Double> {
+        val v = books(Side.PARTY, all, setup).flatMap { kids(it, all, setup) }
+            .map { k -> k.entries.filter { inPeriod(it.date) }.sumOf { personEffect(it) } }
+        return v.filter { it > 0.5 }.sum() to v.filter { it < -0.5 }.sumOf { -it }
     }
 
     /** Labels of a people account's two columns and the add buttons: (plus side, minus side). */
@@ -172,19 +189,13 @@ object Sides {
         }.sortedByDescending { it.amount }
     }
 
-    /** Work done by staff, by kind (kachi eint, bharai…): how much, what it cost, and who did how much. */
-    class Work(val name: String, val qty: Double, val amount: Double, val who: List<Triple<String, Double, Double>>)
+    /** What one of [item] cost to make or buy, from what came in; 0 when nothing came in with a cost. */
+    fun unitCost(item: Item): Double {
+        val qty = item.stockIn.sumOf { it.qty }
+        return if (qty > 0) item.stockIn.sumOf(::costOf) / qty else 0.0
+    }
 
-    fun works(all: List<Entry>, setup: SideSetup, inMonth: (Long) -> Boolean = { true }): List<Work> =
-        all.filter { it.type == Type.PURCHASE && it.qty > 0 && it.item.isNotBlank() && it.person.isNotBlank() &&
-            inMonth(it.date) && bookOf(it.person, all, setup) == STAFF }
-            .groupBy { it.item.trim().lowercase() }.values
-            .map { l ->
-                Work(l.first().item.trim(), l.sumOf { it.qty }, l.sumOf { it.amount },
-                    l.groupBy { it.person.trim() }.map { (p, w) -> Triple(p, w.sumOf { it.qty }, w.sumOf { it.amount }) }.sortedByDescending { it.third })
-            }.sortedByDescending { it.amount }
-
-    /** The profit report: sale, other income, work and purchases, expenses, and what is left. */
+    /** The profit report: sales, other income, purchases, expenses, and what is left. Assets bought are not an expense. */
     class Profit(val sale: Double, val income: Double, val work: Double, val spent: Double) {
         val profit = sale + income - work - spent
     }
@@ -193,6 +204,20 @@ object Sides {
         period.filter { it.type == Type.SALE }.sumOf { it.amount },
         period.filter { it.type == Type.AAMDANI }.sumOf { it.amount },
         period.filter { it.type == Type.PURCHASE }.sumOf { it.amount },
-        period.filter { it.type == Type.KHARCHA }.sumOf { it.amount }
+        period.filter { it.type == Type.KHARCHA && it.category != Cat.ASSETS }.sumOf { it.amount }
     )
+
+    /** Net worth today: cash in hand, dues to get, stock and assets at what they cost, less what you owe. */
+    class Worth(val cash: Double, val toGet: Double, val stock: Double, val assets: Double, val toPay: Double) {
+        val net = cash + toGet + stock + assets - toPay
+    }
+
+    fun worth(all: List<Entry>, setup: SideSetup): Worth {
+        val (get, pay) = owed(all, setup)
+        return Worth(
+            all.filter(::cashIn).sumOf { it.amount } - all.filter(::cashOut).sumOf { it.amount }, get,
+            items(all, setup).sumOf { maxOf(0.0, it.inStock) * unitCost(it) },
+            all.filter { it.type == Type.KHARCHA && it.category == Cat.ASSETS }.sumOf { it.amount }, pay
+        )
+    }
 }

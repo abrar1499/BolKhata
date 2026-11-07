@@ -249,19 +249,19 @@ fun App(
     }
     var results by remember { mutableStateOf<Pair<String, Boolean>?>(null) }      // query, edit mode
 
-    /** "Hamid ka khata kholo": the party's own khata on the Business tab (the same screen as tapping the party). */
-    fun openParty(name: String) {
-        val saved = personAccounts(entries).firstOrNull { it.name.equals(name, true) }?.name ?: name
-        results = null; people = null; account = null; ledger = null; ledgerPerson = null
-        tab = Tab.PARTIES
-        partyOpen = saved
-    }
     var confirmEmptyTrash by remember { mutableStateOf(false) }
     // Expense / Income accounts the owner set up, for the open book, and the profit report opened from them.
     var sides by remember(businessName) { mutableStateOf(store.loadSides()) }
     var profitOpen by remember { mutableStateOf(false) }
     // A person to open on Expense / Income (from the report's To get / To pay).
     var sideJump by remember { mutableStateOf<Pair<String, String>?>(null) }
+    /** "Hamid ka khata kholo": the person's khata on the Party tab (the same screen as tapping the person). */
+    fun openParty(name: String) {
+        val saved = personAccounts(entries).firstOrNull { it.name.equals(name, true) }?.name ?: name
+        results = null; people = null; account = null; ledger = null; ledgerPerson = null
+        sideJump = Sides.bookOf(saved, entries, sides) to saved
+        tab = Tab.PARTIES
+    }
     var showMoveHistory by remember { mutableStateOf(false) }
     var confirm by remember { mutableStateOf<Pair<String, Set<String>>?>(null) }  // message, ids to delete  // entries the app did not understand
     var newVersion by remember { mutableStateOf<UpdateInfo?>(null) }
@@ -2178,7 +2178,6 @@ fun App(
                 Column {
                     InputBar(
                         onSend = { chatInput(it) }, onMic = { startVoice(forChat = true) }, placeholder = "Speak, type or ask…",
-                        onAttach = { pickFile.launch(arrayOf("image/*", "application/pdf")) },
                         busy = chatLoading,
                         voice = if (recorder != null) VoiceState(true, "Listening…", "sends when you stop", level = voiceLevel) { finishRecording() } else null,
                         navPad = false
@@ -2225,39 +2224,19 @@ fun App(
                     )
                 }
                 who != null -> PeopleScreen(entries, currency, who, onBack = { people = null }, onEdit = { editing = it })
-                tab == Tab.PARTIES && partyOpen != null -> {
-                    val name = partyOpen!!
-                    PartyKhataScreen(
-                        name, entries, currency, onBack = { partyOpen = null; activeLedgerPerson = null; tab = Tab.CHAT }, onEdit = { editing = it },
-                        onReport = {
-                            val p = personAccounts(entries).firstOrNull { it.name.equals(name, true) }
-                            ledgerPerson = name
-                            ledger = if (p == null || p.toReceive) MainAcct.TO_RECEIVE else MainAcct.TO_PAY
-                        },
-                        onAdd = { paid -> trade = template(if (paid) Type.DIYA else Type.WAPIS_MILA, name) }
-                    )
-                }
-                tab == Tab.PARTIES -> PartiesScreen(
-                    entries, currency, onMenu = { openMenu() }, business = businessName,
-                    onOpen = { p -> partyOpen = p.name; activeLedgerPerson = p.name },
-                    onReport = { reportStart = it; tab = Tab.REPORTS },
-                    onAdd = { trade = it }, onEdit = { editing = it },
-                    onSaveMade = { e -> save(listOf(e) + entries); toast("✓ Made ${fmt(e.qty)} ${e.item} · cost ${fmt(e.rate)} each") }
-                )
-                profitOpen -> ProfitScreen(entries, currency, sides, onBack = { profitOpen = false }, onEdit = { editing = it }) { inc, b, k ->
-                    profitOpen = false; sideJump = b to k; tab = if (inc) Tab.INCOME else Tab.EXPENSE
+                profitOpen -> ProfitScreen(entries, currency, sides, onBack = { profitOpen = false }, onEdit = { editing = it }) { b, k ->
+                    profitOpen = false; sideJump = b to k; tab = Tab.PARTIES
                 }
                 tab == Tab.CASHBOOK -> CashBookScreen(
                     entries, currency, onMenu = { openMenu() }, business = businessName,
                     onEdit = { editing = it }, onReport = { profitOpen = true }
                 )
-                tab == Tab.EXPENSE || tab == Tab.INCOME -> {
-                    val inc = tab == Tab.INCOME
+                tab == Tab.EXPENSE || tab == Tab.INCOME || tab == Tab.PARTIES -> {
                     SideScreen(
-                        inc, entries, currency, sides, onSetup = { s -> sides = s; store.saveSides(s) },
+                        when (tab) { Tab.INCOME -> Side.INC; Tab.PARTIES -> Side.PARTY; else -> Side.EXP },
+                        entries, currency, sides, onSetup = { s -> sides = s; store.saveSides(s) },
                         onMenu = { openMenu() }, business = businessName, onEdit = { editing = it },
                         onSave = { e -> save(listOf(e) + entries); lastAdded = listOf(e.id); toast("✓ Saved") },
-                        onStockIn = { item, qty -> val e = madeEntry(item, qty, madeRate(entries, qty), System.currentTimeMillis()); save(listOf(e) + entries); toast("✓ Stock added") },
                         onReport = { profitOpen = true },
                         jump = sideJump, onJumped = { sideJump = null },
                         onMoveKhata = { n -> khataMove = "expense" to n },

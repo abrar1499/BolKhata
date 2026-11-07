@@ -97,10 +97,16 @@ Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Packa
 - White business pill (`BusinessPill`: glossy logo + name, no arrow); tapping it opens the side menu, which is also
   Settings: businesses (+ Add business), Name, Currency, Language, Header dots, Background dots + photo, Backup, Trash,
   Version. No separate Settings page.
-- Bottom tabs Chat · Cashbook · Expense · Income (emoji icons 💬 📒 🧾 💵). Chat bar only on Chat (38 high, mic).
-  No Entry button on lists: entries are added inside an account (solid + Paid / + Work, + Received / + Given, + Out).
-- Expense/Income = accounts (`Sides.kt`, `SideScreen`): rows with icon square, name, sub, amount + word, ›; dashed
+- Bottom tabs Chat · Cashbook · Party · Expense · Income (emoji icons 💬 📒 👥 🧾 💵). Chat bar only on Chat: a 38-high
+  field on the page (no white strip, no +), 13sp, white round mic with a soft shadow.
+  No Entry button on lists: entries are added inside a person or thing (solid + Paid / + Work, + Received / + Given, + Out).
+- Party / Expense / Income = accounts (`Sides.kt`, `SideScreen`): rows with icon square, name, sub, amount + word, ›; dashed
   "+ Add account"; inner pages: round back button, path above title, one summary card, plain white ledger.
+  Party holds every people account (Customers, Suppliers, Staff, People, own); Expense/Income hold things only, plus
+  Purchases / Sales filled from the khatas (read-only). No Stock / Work views.
+- Period chips (`PeriodChips`) on Party, Expense, Income and the Report: "All ▾" opens All, the years with entries and
+  Dates… (from–to); then that year's months as "Nov 2026". Report: Sales, Other income, Purchases, Expenses, Profit, then
+  Net worth (Cash in hand, To get, Stock, Assets, To pay, Net worth); 0 shows without a sign; Assets are not an expense.
 - Cashbook ledger: head 13/10, rows 12/10, amounts 12 without + / −, columns 68, day strip #EEF1F8 with coloured
   day totals. Report rows 14/11/14, amount column 96, every row opens its detail; owed = To get / To pay only.
 - Long-press an account or entry for Rename / Move / Delete. Red = money out, green = money in, orange = owed.
