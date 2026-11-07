@@ -30,8 +30,6 @@ import androidx.compose.material.icons.filled.DriveFileRenameOutline
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.outlined.Storefront
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Book
@@ -258,14 +256,6 @@ private fun SearchBox(q: String, hint: String, onChange: (String) -> Unit) {
     }
 }
 
-/** Round letter badge for a party or an income source. */
-@Composable
-internal fun Initial(name: String) {
-    Box(Modifier.size(30.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
-        Text(name.trim().take(1).uppercase(), color = Ember, fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
-    }
-}
-
 /** Small filter chip (All / Receivable / Payable). */
 @Composable
 internal fun SmallChip(label: String, on: Boolean, onClick: () -> Unit) {
@@ -276,9 +266,6 @@ internal fun SmallChip(label: String, on: Boolean, onClick: () -> Unit) {
             .clickable { onClick() }.padding(horizontal = 11.dp, vertical = 6.dp)
     )
 }
-
-
-private fun lastSeen(ms: Long) = if (sameDay(ms, System.currentTimeMillis())) "Today" else shortDay.format(Date(ms))
 
 internal fun plusMinus(v: Double) = (if (v > 0.005) "+" else if (v < -0.005) "−" else "") + fmt(kotlin.math.abs(v))
 
@@ -791,109 +778,6 @@ internal fun cashTemplate(income: Boolean): Entry =
     template(if (income) Type.AAMDANI else Type.KHARCHA, "").copy(category = if (income) Cat.TANKHWAH else Cat.OTHER, item = "")
 
 // ---------------------------------------------------------------- businesses
-
-/** This month's cash out and cash in of one book, for the book list. */
-internal fun monthCash(list: List<Entry>, now: Long = System.currentTimeMillis()): Pair<Double, Double> {
-    val m = monthKey(now)
-    val month = list.filter { monthKey(it.date) == m }
-    return month.filter(::cashOut).sumOf { it.amount } to month.filter(::cashIn).sumOf { it.amount }
-}
-
-/**
- * Full-screen list of businesses: all books' cash this month on top, then each book with its own out / in,
- * a tick on the open one, ⋮ to rename or delete, and Add New Business.
- */
-@Composable
-fun BusinessPicker(
-    list: List<Triple<String, String, Int>>, current: String, onBack: () -> Unit, onPick: (String) -> Unit,
-    onAdd: (String) -> Unit, onRename: (String, String) -> Unit, onDelete: (String) -> Unit,
-    /** Book id to (cash out, cash in) this month. */
-    totals: Map<String, Pair<Double, Double>> = emptyMap(), currency: String = ""
-) {
-    var naming by remember { mutableStateOf<Pair<String?, String>?>(null) }   // (id or null for new, text)
-    var deleting by remember { mutableStateOf<Pair<String, String>?>(null) }
-    androidx.compose.ui.window.Dialog(onDismissRequest = onBack, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            Column {
-                Row(Modifier.fillMaxWidth().then(glassBand()).padding(horizontal = 6.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White) }
-                    Text("Select Business", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                }
-                LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(top = 10.dp)) {
-                    // Every book together this month, so the kiln, the home and personal spending add up in one place.
-                    if (list.size > 1 && totals.isNotEmpty()) item(key = "all") {
-                        val out = totals.values.sumOf { it.first }
-                        val inn = totals.values.sumOf { it.second }
-                        Column(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 10.dp)) {
-                            Text("All books · this month", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(start = 4.dp, bottom = 6.dp))
-                            SumCard(Triple(money(currency, out), "Out", RedSpend), Triple(money(currency, inn), "In", GreenIn),
-                                plusMinus(inn - out), onLink = {})
-                        }
-                    }
-                    items(list, key = { it.first }) { (id, name, parties) ->
-                        var more by remember { mutableStateOf(false) }
-                        Row(
-                            Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).clickable { onPick(id) }
-                                .padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Outlined.Storefront, contentDescription = null, tint = Ember, modifier = Modifier.size(26.dp))
-                            Spacer(Modifier.width(14.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                val t = totals[id]
-                                Text(
-                                    (if (parties == 1) "1 party" else "$parties parties") +
-                                        (if (t != null && (t.first > 0 || t.second > 0)) " · this month −" + fmt(t.first) + " / +" + fmt(t.second) else ""),
-                                    fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                            if (id == current) Icon(Icons.Filled.Check, contentDescription = "Open", tint = Ember)
-                            Box {
-                                IconButton(onClick = { more = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "More", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
-                                DropdownMenu(expanded = more, onDismissRequest = { more = false }) {
-                                    DropdownMenuItem(text = { Text("Rename") }, onClick = { more = false; naming = id to name })
-                                    if (id.isNotEmpty()) DropdownMenuItem(text = { Text("Delete", color = RedSpend) }, onClick = { more = false; deleting = id to name })
-                                }
-                            }
-                        }
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
-                    }
-                }
-                Box(
-                    Modifier.navigationBarsPadding().padding(16.dp).fillMaxWidth().height(50.dp).clip(CircleShape).then(glassBand())
-                        .clickable { naming = null to "" },
-                    contentAlignment = Alignment.Center
-                ) { Text("+  Add New Business", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
-            }
-        }
-    }
-    naming?.let { (id, start) ->
-        var text by remember(id) { mutableStateOf(start) }
-        AlertDialog(
-            onDismissRequest = { naming = null },
-            title = { Text(if (id == null) "New business" else "Rename business") },
-            text = { OutlinedTextField(text, { text = it }, singleLine = true, placeholder = { Text("Business name") }) },
-            confirmButton = {
-                TextButton(enabled = text.isNotBlank(), onClick = {
-                    if (id == null) onAdd(text.trim()) else onRename(id, text.trim())
-                    naming = null
-                }) { Text("Save") }
-            },
-            dismissButton = { TextButton(onClick = { naming = null }) { Text("Cancel") } }
-        )
-    }
-    deleting?.let { (id, name) ->
-        AlertDialog(
-            onDismissRequest = { deleting = null },
-            title = { Text("Delete $name?") },
-            text = { Text("All its entries will be deleted too.") },
-            confirmButton = { TextButton(onClick = { onDelete(id); deleting = null }) { Text("Delete", color = RedSpend) } },
-            dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancel") } }
-        )
-    }
-}
 
 // ---------------------------------------------------------------- Expense / Income as accounts
 

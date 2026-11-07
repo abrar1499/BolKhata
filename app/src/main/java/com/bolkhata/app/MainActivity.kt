@@ -196,7 +196,6 @@ fun App(
     var partyOpen by remember { mutableStateOf<String?>(null) }
     /** The open business's name, and whether the business list is showing. */
     var businessName by remember { mutableStateOf(store.businesses().firstOrNull { it.first == store.business }?.second ?: "My business") }
-    var pickingBusiness by remember { mutableStateOf(false) }
     var businessTick by remember { mutableIntStateOf(0) }
     // Smart understanding: entries the local engine read (shown before saving), a name to pick, what was just added (Undo),
     // the entry being edited from the card (to learn from), and words the person corrected before.
@@ -2095,7 +2094,6 @@ fun App(
         businessName = store.businesses().firstOrNull { it.first == id }?.second ?: "My business"
         sides = store.loadSides()
         partyOpen = null
-        pickingBusiness = false
     }
     // A photo picked for the background is copied into the app's own storage (the old one is removed).
     val pickBg = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
@@ -2140,8 +2138,9 @@ fun App(
                 name = name, currency = currency, lang = lang, dark = dark, photo = photo, themeName = themeName,
                 version = BuildConfig.VERSION_NAME,
                 businesses = remember(businessTick, businessName) { store.businesses() }, current = store.business,
-                onBusiness = { id -> openBusiness(id); close() },
-                onManage = { pickingBusiness = true; close() },
+                onBusiness = { id -> if (id != store.business) openBusiness(id); close() },
+                onRenameBusiness = { id, n -> store.renameBusiness(id, n); if (id == store.business) businessName = n; businessTick++ },
+                onDeleteBusiness = { id -> val wasOpen = id == store.business; store.deleteBusiness(id); if (wasOpen) openBusiness("") else businessTick++ },
                 onAddBusiness = { n -> openBusiness(store.addBusiness(n)); businessTick++; close() },
                 onName = { name = it; store.name = it; toast("✓ Name saved") },
                 onCurrency = { c -> currency = c; store.currency = c; toast("✓ Currency set to $c") },
@@ -2921,19 +2920,6 @@ fun App(
                 ) { Text("Delete") }
             },
             dismissButton = { TextButton(onClick = { confirm = null; afterTrash = null }) { Text("Cancel") } }
-        )
-    }
-
-    if (pickingBusiness) {
-        fun open(id: String) = openBusiness(id)
-        BusinessPicker(
-            list = remember(businessTick, entries) { store.businesses().map { (id, n) -> Triple(id, n, personAccounts(store.loadFor(id)).size) } },
-            current = store.business, onBack = { pickingBusiness = false }, onPick = { open(it) },
-            onAdd = { open(store.addBusiness(it)) },
-            onRename = { id, n -> store.renameBusiness(id, n); if (id == store.business) businessName = n; businessTick++ },
-            onDelete = { id -> val wasOpen = id == store.business; store.deleteBusiness(id); if (wasOpen) open("") else businessTick++ },
-            totals = remember(businessTick, entries) { store.businesses().associate { (id, _) -> id to monthCash(if (id == store.business) entries else store.loadFor(id)) } },
-            currency = currency
         )
     }
 
