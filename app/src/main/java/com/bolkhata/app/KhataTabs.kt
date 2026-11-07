@@ -367,7 +367,7 @@ fun PartiesScreen(
         LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
             stickyHeader { TabHead {
                 KhataTop("", "", onMenu, business = business) {
-                    SumCard(shownCard.first, shownCard.second, "Report ›") { onReport(shownCard.third) }
+                    SumCard(shownCard.first, shownCard.second, "Report ›", onLink = { onReport(shownCard.third) })
                 }
                 SearchBox(q, when (view) { 0 -> "Search parties"; 1 -> "Search items"; 2 -> "Search sales"; 3 -> "Search purchases"; 5 -> "Search costs"; else -> "Search months" }) { q = it }
                 LazyRow(contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1083,7 +1083,7 @@ fun BusinessPicker(
                             Text("All books · this month", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(start = 4.dp, bottom = 6.dp))
                             SumCard(Triple(money(currency, out), "Out", RedSpend), Triple(money(currency, inn), "In", GreenIn),
-                                plusMinus(inn - out)) {}
+                                plusMinus(inn - out), onLink = {})
                         }
                     }
                     items(list, key = { it.first }) { (id, name, parties) ->
