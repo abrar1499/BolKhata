@@ -483,7 +483,7 @@ private fun EmptyHint() {
         GlassLogo(44.dp)
         Spacer(Modifier.height(10.dp))
         Text("No entries here yet", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-        Text("Say \"tea 5\" in the chat, or tap Entry.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Add one inside an account, or say it in the chat.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -1127,7 +1127,8 @@ fun SideScreen(
             if (n.isNotEmpty()) onSetup(when {
                 // A new Party account keeps Paid | Work columns, Customers Given | Received.
                 what == "book" -> setup.copy(books = setup.books + Book(if (n.equals(Sides.CUSTOMERS, true)) Side.INC else if (party) Side.EXP else side, n, party))
-                book != null && book.people -> setup.copy(people = setup.people + (n to book.name))
+                // One person, one account: adding them here takes them (and their entries) out of any other.
+                book != null && book.people -> setup.copy(people = setup.people.filterKeys { !it.trim().equals(n, true) } + (n to book.name))
                 book != null -> setup.copy(kids = setup.kids + (book.name to (setup.kids[book.name].orEmpty() + n)))
                 else -> setup
             })

@@ -70,6 +70,13 @@ class SidesTest {
         assertEquals(700.0, Sides.done(books.single(), moved, own) { true }, 0.0)
     }
 
+    @Test fun aPersonPutInAnotherAccountTakesTheirEntriesThere() {
+        val moved = SideSetup(people = mapOf("hamid akram" to Sides.CUSTOMERS))
+        val cust = Sides.books(Side.PARTY, all, moved).first { it.name == Sides.CUSTOMERS }
+        assertEquals(2, Sides.kids(cust, all, moved).first { it.name == "Hamid Akram" }.entries.size)
+        assertEquals(false, Sides.books(Side.PARTY, all, moved).any { it.name == Sides.STAFF })
+    }
+
     @Test fun assetsAreNotAnExpenseButCountInNetWorth() {
         val withAsset = all + en(Type.KHARCHA, 9000.0, item = "Laptop", cat = Cat.ASSETS)
         assertEquals(60500.0, Sides.profit(withAsset).profit, 0.0)

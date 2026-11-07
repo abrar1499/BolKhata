@@ -394,7 +394,7 @@ class NativeChatEngineTest {
     @Test fun vagueDeleteDoesNotCreateAnUnboundedMutation() {
         val result = read("delete it")
         assertEquals("chat", result.kind)
-        assertTrue(result.reply.contains("kaun", ignoreCase = true))
+        assertTrue(result.reply.contains("which entries", ignoreCase = true))
     }
 
     @Test fun recognizesSavedKhataDestinationForExplicitBulkMove() {
@@ -503,7 +503,7 @@ class NativeChatEngineNameTest {
     @Test fun kyaHalHaiIsSmallTalkNotANameQuestion() {
         val r = read("kya hal hai")
         assertEquals("chat", r.kind)
-        assertTrue(r.reply, r.reply.contains("theek", ignoreCase = true))
+        assertTrue(r.reply, r.reply.contains("good", ignoreCase = true))
     }
 
     @Test fun twoMatchingWordsPickThatPerson() {

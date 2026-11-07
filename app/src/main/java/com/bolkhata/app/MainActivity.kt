@@ -2237,7 +2237,8 @@ fun App(
                         when (tab) { Tab.INCOME -> Side.INC; Tab.PARTIES -> Side.PARTY; else -> Side.EXP },
                         entries, currency, sides, onSetup = { s -> sides = s; store.saveSides(s) },
                         onMenu = { openMenu() }, business = businessName, onEdit = { editing = it },
-                        onSave = { e -> save(listOf(e) + entries); lastAdded = listOf(e.id); toast("✓ Saved") },
+                        // No toast: it would cover the add buttons, and the new entry shows in the list at once.
+                        onSave = { e -> save(listOf(e) + entries); lastAdded = listOf(e.id) },
                         onReport = { profitOpen = true },
                         jump = sideJump, onJumped = { sideJump = null },
                         onUpdate = { changed -> val m = changed.associateBy { it.id }; save(entries.map { m[it.id] ?: it }) },

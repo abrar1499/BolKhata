@@ -52,8 +52,8 @@ object Sides {
      */
     fun books(side: Side, all: List<Entry>, setup: SideSetup): List<Book> {
         if (side == Side.PARTY) {
-            fun hasPeople(name: String) = setup.people.values.any { it.equals(name, true) } ||
-                all.any { withPerson(it) && bookOf(it.person, all, setup) == name }
+            val used = all.filter(::withPerson).map { it.person }.distinctBy { it.trim().lowercase() }.map { bookOf(it, all, setup) }.toSet()
+            fun hasPeople(name: String) = setup.people.values.any { it.equals(name, true) } || name in used
             val ready = listOf(CUSTOMERS to Side.INC, SUPPLIERS to Side.EXP, STAFF to Side.EXP, PEOPLE to Side.EXP)
                 .filter { hasPeople(it.first) }.map { (n, s) -> Book(s, n, true) }
             return (ready + setup.books.filter { it.people }).distinctBy { it.name.lowercase() }
@@ -79,15 +79,29 @@ object Sides {
     fun isAuto(book: Book) = !book.people && book.cat == null &&
         (book.side == Side.EXP && book.name == PURCHASES || book.side == Side.INC && book.name == SALES)
 
+    // Work out once per set of entries and setup, not on every row: who sits where, and each account's people or things.
+    private var memoAll: List<Entry>? = null
+    private var memoSetup: SideSetup? = null
+    private var memoBooks: Map<String, String> = emptyMap()
+    private val memoKids = HashMap<Book, List<Kid>>()
+
+    private fun fresh(all: List<Entry>, setup: SideSetup) {
+        if (all === memoAll && setup == memoSetup) return
+        memoAll = all; memoSetup = setup; memoKids.clear()
+        memoBooks = all.filter { it.person.isNotBlank() }.groupBy { it.person.trim().lowercase() }.mapValues { (_, l) ->
+            when {
+                l.any { it.type == Type.SALE } -> CUSTOMERS
+                l.any { it.type == Type.PURCHASE } -> SUPPLIERS
+                else -> PEOPLE
+            }
+        }
+    }
+
     /** The people account [person] sits in: the one the owner picked, else Customers for sales, Suppliers for purchases. */
     fun bookOf(person: String, all: List<Entry>, setup: SideSetup): String {
         setup.people.entries.firstOrNull { it.key.trim().equals(person.trim(), true) }?.let { return it.value }
-        val mine = all.filter { it.person.trim().equals(person.trim(), true) }
-        return when {
-            mine.any { it.type == Type.SALE } -> CUSTOMERS
-            mine.any { it.type == Type.PURCHASE } -> SUPPLIERS
-            else -> PEOPLE
-        }
+        fresh(all, setup)
+        return memoBooks[person.trim().lowercase()] ?: PEOPLE
     }
 
     /** A person's khata entries: everything with them that is not a sale or purchase settled in cash on the spot. */
@@ -95,6 +109,11 @@ object Sides {
 
     /** The people or things inside [book], each with its entries newest first. */
     fun kids(book: Book, all: List<Entry>, setup: SideSetup): List<Kid> {
+        fresh(all, setup)
+        return memoKids.getOrPut(book) { findKids(book, all, setup) }
+    }
+
+    private fun findKids(book: Book, all: List<Entry>, setup: SideSetup): List<Kid> {
         val newest = all.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt })
         val extra = setup.kids[book.name].orEmpty()
         if (isAuto(book)) {
