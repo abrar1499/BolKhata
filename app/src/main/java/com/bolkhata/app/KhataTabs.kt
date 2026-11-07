@@ -1105,21 +1105,24 @@ fun SideScreen(
             val name = kidName!!
             val staff = Sides.bookOf(name, entries, setup) == Sides.STAFF
             val crumbs = "${book.name} › $name"
-            fun add(t: Entry, label: String, color: Color, qty: Boolean = false) { sheet = AddReq(t, label, color, crumbs, qty) }
+            fun add(t: Entry, label: String, color: Color, qty: Boolean = false, money: Entry? = null) { sheet = AddReq(t, label, color, crumbs, qty, money) }
             when {
                 !book.people -> SolidButtons(listOf((if (income) "+ In" else "+ Out") to ink)) {
                     add(cashTemplate(income).copy(category = if (income) Cat.TANKHWAH else book.cat ?: Cat.OTHER, item = name), if (income) "In" else "Out", ink)
                 }
                 book.side == Side.INC -> SolidButtons(listOf("+ Received" to GreenIn, "+ Given" to OweButton)) { i ->
                     if (i == 0) add(template(Type.WAPIS_MILA, name), "Received", GreenIn)
-                    else add(template(Type.SALE, name).copy(category = Cat.SALES, item = ""), "Given", OweButton, qty = true)
+                    // Given: goods, or money paid to the customer (an advance back, a refund).
+                    else add(template(Type.SALE, name).copy(category = Cat.SALES, item = ""), "Given", OweButton, qty = true, money = template(Type.DIYA, name))
                 }
                 book.name == Sides.PEOPLE -> SolidButtons(listOf("+ Paid" to RedSpend, "+ Received" to GreenIn)) { i ->
                     if (i == 0) add(template(Type.DIYA, name), "Paid", RedSpend) else add(template(Type.WAPIS_MILA, name), "Received", GreenIn)
                 }
                 else -> SolidButtons(listOf("+ Paid" to RedSpend, "+ Work" to OweButton)) { i ->
                     if (i == 0) add(template(Type.DIYA, name), "Paid", RedSpend)
-                    else add(template(Type.PURCHASE, name).copy(category = if (staff) Cat.PRODUCTION else Cat.STOCK, item = ""), "Work", OweButton, qty = true)
+                    // Work: work or goods, or money they paid back.
+                    else add(template(Type.PURCHASE, name).copy(category = if (staff) Cat.PRODUCTION else Cat.STOCK, item = ""), "Work", OweButton, qty = true,
+                        money = template(Type.WAPIS_MILA, name))
                 }
             }
         } else UpButton(state)
@@ -1351,7 +1354,8 @@ internal fun NamePopup(title: String, hint: String, onDismiss: () -> Unit, picks
 }
 
 /** What an add button opens: the blank entry, its word (Out, Paid, Work…), colour, where it goes, and whether it takes goods. */
-private class AddReq(val template: Entry, val label: String, val color: Color, val crumb: String, val goods: Boolean)
+/** What the add sheet saves: [template] (goods when [goods]); with [money], a Goods | Money switch saves that cash entry instead. */
+private class AddReq(val template: Entry, val label: String, val color: Color, val crumb: String, val goods: Boolean, val money: Entry? = null)
 
 private val sheetDay = SimpleDateFormat("dd/MM/yyyy", Locale.US)
 private val sheetTime = SimpleDateFormat("h:mm a", Locale.US)
@@ -1370,6 +1374,8 @@ private fun AddSheet(r: AddReq, all: List<Entry>, onDismiss: () -> Unit, onSave:
     var rate by remember { mutableStateOf("") }
     var per1000 by remember { mutableStateOf(false) }
     var date by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var cash by remember { mutableStateOf(false) }
+    val goods = r.goods && !cash
     val out = isOut(r.template.type)
     val known = remember(all) { Goods.known(all) }
     fun pick(n: String) {
@@ -1378,7 +1384,7 @@ private fun AddSheet(r: AddReq, all: List<Entry>, onDismiss: () -> Unit, onSave:
     }
     val q = qty.toDoubleOrNull() ?: 0.0
     val rt = rate.toDoubleOrNull() ?: 0.0
-    val total = if (r.goods) (if (per1000) q / 1000 * rt else q * rt) else amount.toDoubleOrNull() ?: 0.0
+    val total = if (goods) (if (per1000) q / 1000 * rt else q * rt) else amount.toDoubleOrNull() ?: 0.0
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface, dragHandle = null,
         shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)) {
         Column(Modifier.padding(16.dp).navigationBarsPadding().imePadding()) {
@@ -1389,7 +1395,16 @@ private fun AddSheet(r: AddReq, all: List<Entry>, onDismiss: () -> Unit, onSave:
                 }
                 Box(Modifier.size(28.dp).clip(CircleShape).background(Well).clickable { onDismiss() }, contentAlignment = Alignment.Center) { Text("✕", fontSize = 12.sp) }
             }
-            if (r.goods) {
+            if (r.money != null) Row(Modifier.padding(top = 12.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Well).padding(3.dp)) {
+                listOf((if (r.label == "Given") "Goods" else "Work") to false, "Money" to true).forEach { (label, v) ->
+                    val on = cash == v
+                    Text(label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
+                        color = if (on) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(if (on) MaterialTheme.colorScheme.surface else Color.Transparent)
+                            .clickable { cash = v }.padding(vertical = 8.dp))
+                }
+            }
+            if (goods) {
                 WellField(item, { item = it; known.firstOrNull { k -> k.equals(it.trim(), true) }?.let(::pick) }, if (r.label == "Given") "Item (type new or tap one)" else "Work (type new or tap one)")
                 val hints = remember(item, known) { Goods.suggest(item, known) }
                 if (hints.isNotEmpty()) LazyRow(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1415,17 +1430,23 @@ private fun AddSheet(r: AddReq, all: List<Entry>, onDismiss: () -> Unit, onSave:
                 }
             }
             Text(
-                when (r.label) { "Given" -> "Money comes later with + Received."; "Work" -> "Pay later with + Paid."; else -> "Goes in Cashbook too." },
+                when {
+                    cash -> if (r.label == "Given") "Money paid to the customer. Goes in Cashbook too." else "Money they paid back. Goes in Cashbook too."
+                    r.label == "Given" -> "Money comes later with + Received."
+                    r.label == "Work" -> "Pay later with + Paid."
+                    else -> "Goes in Cashbook too."
+                },
                 fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 10.dp)
             )
             Box(
                 Modifier.padding(top = 12.dp).fillMaxWidth().height(42.dp).clip(RoundedCornerShape(12.dp)).background(r.color).clickable {
-                    if (total <= 0.0 || (r.goods && item.isBlank())) return@clickable
+                    if (total <= 0.0 || (goods && item.isBlank())) return@clickable
                     val now = System.currentTimeMillis()
-                    onSave(r.template.copy(
+                    val t = if (cash) r.money ?: r.template else r.template
+                    onSave(t.copy(
                         id = "e" + System.nanoTime(), amount = total, note = note.trim(), date = date, createdAt = now,
-                        item = if (r.goods) Goods.canonical(item, known) else r.template.item,
-                        qty = if (r.goods) q else 0.0, rate = if (r.goods) rt else 0.0, unit = if (r.goods && per1000) "1000" else ""
+                        item = if (goods) Goods.canonical(item, known) else t.item,
+                        qty = if (goods) q else 0.0, rate = if (goods) rt else 0.0, unit = if (goods && per1000) "1000" else ""
                     ))
                 },
                 contentAlignment = Alignment.Center
