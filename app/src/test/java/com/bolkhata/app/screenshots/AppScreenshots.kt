@@ -136,7 +136,12 @@ class AppScreenshots {
     }
 
     @Test fun sideMenu() = shot("10-side-menu") {
-        DrawerMenu(Tab.HOME, "Abrar", "SAR", onCurrency = {}, onPick = {})
+        SideMenu(
+            name = "Hamid Akram", currency = "SAR", lang = "", dark = false, photo = false, themeName = "Green", version = "1.0",
+            businesses = listOf("" to "My business"), current = "", onBusiness = {}, onManage = {},
+            onName = {}, onCurrency = {}, onLang = {}, onTheme = {}, onGray = {}, onDark = {}, onPhoto = {},
+            onExport = {}, onImport = {}, onTrash = {}, onVersion = {}
+        )
     }
 
     @Test fun entryMenu() = shot("08-entry-menu") {
