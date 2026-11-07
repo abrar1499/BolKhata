@@ -370,25 +370,37 @@ internal fun PeriodChips(newest: List<Entry>, period: Period, onPick: (Period) -
         item(key = "first") {
             Box {
                 SmallChip(first, period.month == ALL_MONTHS) { open = true }
-                DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-                    (listOf("All") + years.map { it.toString() } + "Dates…").forEach { v ->
-                        val on = when (v) { "All" -> period.year == 0 && period.from == 0L; "Dates…" -> period.from > 0; else -> period.year.toString() == v && period.from == 0L }
-                        DropdownMenuItem(
-                            text = { Text(v, fontSize = 13.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.SemiBold, color = if (on) Ember else MaterialTheme.colorScheme.onSurface) },
-                            onClick = {
-                                open = false
-                                when (v) {
-                                    "All" -> onPick(Period())
-                                    "Dates…" -> {
-                                        val today = cal(System.currentTimeMillis()).apply {
-                                            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-                                        }.timeInMillis
-                                        dates = (if (period.from > 0) period.from else today - 30 * 86_400_000L) to (if (period.from > 0) period.to else today)
+                // A small white card right under the chip (as in the mock-up), not the plain system menu.
+                if (open) androidx.compose.ui.window.Popup(
+                    offset = androidx.compose.ui.unit.IntOffset(0, with(androidx.compose.ui.platform.LocalDensity.current) { 36.dp.roundToPx() }),
+                    onDismissRequest = { open = false },
+                    properties = androidx.compose.ui.window.PopupProperties(focusable = true)
+                ) {
+                    val shape = RoundedCornerShape(12.dp)
+                    Column(
+                        Modifier.widthIn(min = 110.dp).shadow(8.dp, shape).clip(shape).background(MaterialTheme.colorScheme.surface)
+                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape).padding(vertical = 4.dp)
+                    ) {
+                        (listOf("All") + years.map { it.toString() } + "Dates…").forEach { v ->
+                            val on = when (v) { "All" -> period.year == 0 && period.from == 0L; "Dates…" -> period.from > 0; else -> period.year.toString() == v && period.from == 0L }
+                            Text(
+                                v, fontSize = 13.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium,
+                                color = if (on) Ember else MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.widthIn(min = 110.dp).clickable {
+                                    open = false
+                                    when (v) {
+                                        "All" -> onPick(Period())
+                                        "Dates…" -> {
+                                            val today = cal(System.currentTimeMillis()).apply {
+                                                set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+                                            }.timeInMillis
+                                            dates = (if (period.from > 0) period.from else today - 30 * 86_400_000L) to (if (period.from > 0) period.to else today)
+                                        }
+                                        else -> onPick(Period(year = v.toInt()))
                                     }
-                                    else -> onPick(Period(year = v.toInt()))
-                                }
-                            }
-                        )
+                                }.padding(horizontal = 14.dp, vertical = 8.dp)
+                            )
+                        }
                     }
                 }
             }
