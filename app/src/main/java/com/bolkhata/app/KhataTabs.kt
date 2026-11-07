@@ -10,6 +10,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -1171,7 +1172,7 @@ private val nameIcons = listOf(
     "coal" to "⚫", "koila" to "⚫", "cement" to "🏗", "staff" to "👥", "supplier" to "🚚", "customer" to "🤝", "people" to "🤝", "income" to "💰"
 )
 private fun iconFor(name: String): String = name.lowercase().let { n -> nameIcons.firstOrNull { n.contains(it.first) }?.second } ?: "📁"
-private fun bookIcon(b: Book) = b.cat?.icon ?: if (b.people && nameIcons.none { b.name.lowercase().contains(it.first) }) "👥" else iconFor(b.name)
+private fun bookIcon(b: Book) = if (b.people) "👤" else b.cat?.icon ?: iconFor(b.name)
 
 /** Shape of row [i] of [n] in a white rounded sheet: the first and last rows round the sheet's corners. */
 private fun sheetRow(i: Int, n: Int) = RoundedCornerShape(
@@ -1358,7 +1359,7 @@ private fun balanceColor(what: String) = when (what) {
 @Composable
 fun SideScreen(
     income: Boolean, entries: List<Entry>, currency: String, setup: SideSetup, onSetup: (SideSetup) -> Unit,
-    onMenu: () -> Unit, business: String, onEdit: (Entry) -> Unit, onAdd: (Entry) -> Unit,
+    onMenu: () -> Unit, business: String, onEdit: (Entry) -> Unit, onSave: (Entry) -> Unit,
     onStockIn: (String, Double) -> Unit, onReport: () -> Unit,
     /** Opens this account and person straight away (from the report's To get / To pay). */
     jump: Pair<String, String>? = null, onJumped: () -> Unit = {}
@@ -1371,6 +1372,7 @@ fun SideScreen(
     var q by rememberSaveable(income) { mutableStateOf("") }
     var adding by remember { mutableStateOf<String?>(null) }   // "book" or "kid"
     var stockIn by remember { mutableStateOf(false) }
+    var sheet by remember { mutableStateOf<AddReq?>(null) }
     LaunchedEffect(jump) { jump?.let { (b, k) -> items = false; bookName = b; kidName = k; onJumped() } }
     val books = remember(entries, setup, side) { Sides.books(side, entries, setup) }
     val book = books.firstOrNull { it.name == bookName }
@@ -1503,19 +1505,22 @@ fun SideScreen(
         if (book != null && kidName != null) {
             val name = kidName!!
             val staff = Sides.bookOf(name, entries, setup) == Sides.STAFF
+            val crumbs = "${book.name} › $name"
+            fun add(t: Entry, label: String, color: Color, qty: Boolean = false) { sheet = AddReq(t, label, color, crumbs, qty) }
             when {
                 !book.people -> SolidButtons(listOf((if (income) "+ In" else "+ Out") to ink)) {
-                    onAdd(cashTemplate(income).copy(category = if (income) Cat.TANKHWAH else book.cat ?: Cat.OTHER, item = name))
+                    add(cashTemplate(income).copy(category = if (income) Cat.TANKHWAH else book.cat ?: Cat.OTHER, item = name), if (income) "In" else "Out", ink)
                 }
                 income -> SolidButtons(listOf("+ Received" to GreenIn, "+ Given" to OweButton)) { i ->
-                    onAdd(if (i == 0) template(Type.WAPIS_MILA, name) else template(Type.SALE, name).copy(category = Cat.SALES, item = ""))
+                    if (i == 0) add(template(Type.WAPIS_MILA, name), "Received", GreenIn)
+                    else add(template(Type.SALE, name).copy(category = Cat.SALES, item = ""), "Given", OweButton, qty = true)
                 }
                 book.name == Sides.PEOPLE -> SolidButtons(listOf("+ Paid" to RedSpend, "+ Received" to GreenIn)) { i ->
-                    onAdd(template(if (i == 0) Type.DIYA else Type.WAPIS_MILA, name))
+                    if (i == 0) add(template(Type.DIYA, name), "Paid", RedSpend) else add(template(Type.WAPIS_MILA, name), "Received", GreenIn)
                 }
                 else -> SolidButtons(listOf("+ Paid" to RedSpend, "+ Work" to OweButton)) { i ->
-                    onAdd(if (i == 0) template(Type.DIYA, name)
-                    else template(Type.PURCHASE, name).copy(category = if (staff) Cat.PRODUCTION else Cat.STOCK, item = ""))
+                    if (i == 0) add(template(Type.DIYA, name), "Paid", RedSpend)
+                    else add(template(Type.PURCHASE, name).copy(category = if (staff) Cat.PRODUCTION else Cat.STOCK, item = ""), "Work", OweButton, qty = true)
                 }
             }
         } else if (items && itemName != null) {
@@ -1523,7 +1528,7 @@ fun SideScreen(
         } else UpButton(state)
     }
     adding?.let { what ->
-        NameDialog(if (what == "book") "New account" else "Add in ${book?.name}", askKind = what == "book", onDismiss = { adding = null }) { name, people ->
+        val done = { name: String, people: Boolean ->
             val n = name.trim()
             if (n.isNotEmpty()) onSetup(when {
                 what == "book" -> setup.copy(books = setup.books + Book(side, n, people))
@@ -1533,32 +1538,205 @@ fun SideScreen(
             })
             adding = null
         }
+        if (what == "book") AccountDialog(side, books.map { it.name.lowercase() }.toSet(), onDismiss = { adding = null }, onSave = done)
+        else NamePopup("Add in ${book?.name}", if (book?.people == true) "Name" else "Name (e.g. Groceries)", onDismiss = { adding = null }) { done(it, false) }
     }
+    sheet?.let { r -> AddSheet(r, entries, onDismiss = { sheet = null }) { e -> onSave(e); sheet = null } }
     if (stockIn) itemName?.let { n ->
         StockInDialog(n, onDismiss = { stockIn = false }) { qty -> onStockIn(n, qty); stockIn = false }
     }
 }
 
-/** Asks a name; for a new account also whether it holds people (a party) or things (food, bills). */
+/** The app's popup: a white rounded card with its title and ✕, the content, then Cancel and a coloured main button. */
 @Composable
-private fun NameDialog(title: String, askKind: Boolean, onDismiss: () -> Unit, onSave: (String, Boolean) -> Unit) {
+private fun AppPopup(title: String, action: String, onDismiss: () -> Unit, onAction: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.surface).padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(title, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
+                Box(Modifier.size(28.dp).clip(CircleShape).background(Well).clickable { onDismiss() }, contentAlignment = Alignment.Center) { Text("✕", fontSize = 12.sp) }
+            }
+            content()
+            Row(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(12.dp)).border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp))
+                    .clickable { onDismiss() }, contentAlignment = Alignment.Center) { Text("Cancel", fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+                Box(Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(12.dp)).background(EmberTop).clickable { onAction() },
+                    contentAlignment = Alignment.Center) { Text(action, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White) }
+            }
+        }
+    }
+}
+
+/** A plain field in the popups and the add sheet: grey well, thin edge, hint inside. */
+@Composable
+private fun WellField(value: String, onChange: (String) -> Unit, hint: String, modifier: Modifier = Modifier, big: Boolean = false, number: Boolean = false) {
+    val style = TextStyle(fontSize = if (big) 20.sp else 14.sp, fontWeight = if (big) FontWeight.ExtraBold else FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
+    Box(
+        modifier.padding(top = 10.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Well)
+            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 11.dp)
+    ) {
+        if (value.isEmpty()) Text(hint, style = style.copy(color = MaterialTheme.colorScheme.onSurfaceVariant))
+        BasicTextField(
+            value, { v -> onChange(if (number) v.filter { it.isDigit() || it == '.' } else v) }, singleLine = true, textStyle = style,
+            cursorBrush = SolidColor(EmberTop), modifier = Modifier.fillMaxWidth(),
+            keyboardOptions = if (number) androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal)
+            else androidx.compose.foundation.text.KeyboardOptions.Default
+        )
+    }
+}
+
+/** A small tap-to-pick chip in the popups (ringed in orange when picked). */
+@Composable
+private fun PickChip(label: String, on: Boolean, onClick: () -> Unit) {
+    Text(
+        label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (on) EmberTop else MaterialTheme.colorScheme.onSurface, maxLines = 1,
+        modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(if (on) EmberTop.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surface)
+            .border(1.dp, if (on) EmberTop else MaterialTheme.colorScheme.outline, RoundedCornerShape(10.dp)).clickable { onClick() }
+            .padding(horizontal = 10.dp, vertical = 7.dp)
+    )
+}
+
+/** Ready accounts offered in New account: name, picture, and whether it holds people. */
+private val accountPicks = mapOf(
+    Side.EXP to listOf(
+        Triple("Food", "🍛", false), Triple("Transport", "🚗", false), Triple("Bills", "💡", false), Triple("Rent", "🏠", false),
+        Triple("Mobile & Internet", "📱", false), Triple("Health", "💊", false), Triple("Education", "📚", false), Triple("Shopping", "🛍️", false),
+        Triple("Personal care", "💈", false), Triple("Fees & Govt", "🏛️", false), Triple("Gifts & Charity", "🎁", false), Triple("Production", "🏭", false),
+        Triple(Sides.STAFF, "👤", true), Triple(Sides.SUPPLIERS, "👤", true), Triple(Sides.PEOPLE, "👤", true)
+    ),
+    Side.INC to listOf(Triple(Sides.CUSTOMERS, "👤", true), Triple("Salary", "💼", false), Triple("Rent received", "🏘️", false), Triple("Other income", "💰", false))
+)
+
+/** New account: type a name or pick a ready one (which also sets People or Things), then Add. */
+@Composable
+private fun AccountDialog(side: Side, have: Set<String>, onDismiss: () -> Unit, onSave: (String, Boolean) -> Unit) {
     var name by remember { mutableStateOf("") }
-    var people by remember { mutableStateOf(true) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(name, { name = it }, singleLine = true, label = { Text(if (askKind) "Account name" else "Name") })
-                if (askKind) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    SmallChip("People (party)", people) { people = true }
-                    SmallChip("Things (food, bills)", !people) { people = false }
+    var people by remember { mutableStateOf(false) }
+    AppPopup("New account", "Add", onDismiss, { if (name.isNotBlank()) onSave(name, people) }) {
+        WellField(name, { name = it }, "Account name")
+        val picks = accountPicks[side].orEmpty().filter { it.first.lowercase() !in have }
+        if (picks.isNotEmpty()) {
+            Text("OR PICK ONE", fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 12.dp, bottom = 6.dp))
+            // Two chips a row keeps every pick visible without a wrapping layout.
+            Column(Modifier.heightIn(max = 190.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                picks.chunked(2).forEach { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        row.forEach { (n, icon, p) -> PickChip("$icon $n", name == n) { name = n; people = p } }
+                    }
                 }
             }
-        },
-        confirmButton = { TextButton(onClick = { onSave(name, people) }) { Text("Add") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
-    )
+        }
+        Row(Modifier.padding(top = 12.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Well).padding(3.dp)) {
+            listOf("Things (food, bills)" to false, "People (party)" to true).forEach { (label, v) ->
+                val on = people == v
+                Text(label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
+                    color = if (on) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(if (on) MaterialTheme.colorScheme.surface else Color.Transparent)
+                        .clickable { people = v }.padding(vertical = 8.dp))
+            }
+        }
+    }
+}
+
+/** A one-field popup (a name to add inside an account, or a new business). */
+@Composable
+internal fun NamePopup(title: String, hint: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
+    var name by remember { mutableStateOf("") }
+    AppPopup(title, "Add", onDismiss, { if (name.isNotBlank()) onSave(name.trim()) }) { WellField(name, { name = it }, hint) }
+}
+
+/** What an add button opens: the blank entry, its word (Out, Paid, Work…), colour, where it goes, and whether it takes goods. */
+private class AddReq(val template: Entry, val label: String, val color: Color, val crumb: String, val goods: Boolean)
+
+private val sheetDay = SimpleDateFormat("dd/MM/yyyy", Locale.US)
+private val sheetTime = SimpleDateFormat("h:mm a", Locale.US)
+
+/**
+ * The add sheet from the bottom: amount (or goods, qty and rate for Work / Given, the last rate filling itself),
+ * note, date and time, and Save in the kind's colour. A rate "per 1000" (bricks) counts thousands.
+ */
+@Composable
+private fun AddSheet(r: AddReq, all: List<Entry>, onDismiss: () -> Unit, onSave: (Entry) -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var amount by remember { mutableStateOf("") }
+    var note by remember { mutableStateOf("") }
+    var item by remember { mutableStateOf("") }
+    var qty by remember { mutableStateOf("") }
+    var rate by remember { mutableStateOf("") }
+    var per1000 by remember { mutableStateOf(false) }
+    var date by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    val out = isOut(r.template.type)
+    val known = remember(all) { Goods.known(all) }
+    fun pick(n: String) {
+        item = n
+        Goods.lastRate(n, r.template.person, out, all)?.let { rate = plain(it.rate); per1000 = it.unit == "1000" }
+    }
+    val q = qty.toDoubleOrNull() ?: 0.0
+    val rt = rate.toDoubleOrNull() ?: 0.0
+    val total = if (r.goods) (if (per1000) q / 1000 * rt else q * rt) else amount.toDoubleOrNull() ?: 0.0
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface, dragHandle = null,
+        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)) {
+        Column(Modifier.padding(16.dp).navigationBarsPadding().imePadding()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("+ ${r.label}", fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
+                    Text(r.crumb, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Box(Modifier.size(28.dp).clip(CircleShape).background(Well).clickable { onDismiss() }, contentAlignment = Alignment.Center) { Text("✕", fontSize = 12.sp) }
+            }
+            if (r.goods) {
+                WellField(item, { item = it; known.firstOrNull { k -> k.equals(it.trim(), true) }?.let(::pick) }, if (r.label == "Given") "Item (type new or tap one)" else "Work (type new or tap one)")
+                val hints = remember(item, known) { Goods.suggest(item, known) }
+                if (hints.isNotEmpty()) LazyRow(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(hints) { h -> PickChip(h, item == h) { pick(h) } }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    WellField(qty, { qty = it }, "Qty", Modifier.weight(1f), big = true, number = true)
+                    WellField(rate, { rate = it }, if (per1000) "Rate per 1000" else "Rate", Modifier.weight(1f), number = true)
+                }
+                Text(if (q > 0 && rt > 0) "Amount = " + fmt(q) + (if (per1000) " ÷ 1000" else "") + " × " + fmt(rt) + " = " + fmt(total) else "Amount = qty × rate",
+                    fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 10.dp))
+            } else WellField(amount, { amount = it }, "Amount", big = true, number = true)
+            WellField(note, { note = it }, "Note (optional)")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                val c = cal(date)
+                PickBox(sheetDay.format(Date(date)), Modifier.weight(1f)) {
+                    android.app.DatePickerDialog(context, { _, y, m, d -> date = cal(date).apply { set(y, m, d) }.timeInMillis },
+                        c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH)).show()
+                }
+                PickBox(sheetTime.format(Date(date)).replace("AM", "am").replace("PM", "pm"), Modifier.weight(1f)) {
+                    android.app.TimePickerDialog(context, { _, h, m -> date = cal(date).apply { set(Calendar.HOUR_OF_DAY, h); set(Calendar.MINUTE, m) }.timeInMillis },
+                        c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE), false).show()
+                }
+            }
+            Text(
+                when (r.label) { "Given" -> "Money comes later with + Received."; "Work" -> "Pay later with + Paid."; else -> "Goes in Cashbook too." },
+                fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 10.dp)
+            )
+            Box(
+                Modifier.padding(top = 12.dp).fillMaxWidth().height(42.dp).clip(RoundedCornerShape(12.dp)).background(r.color).clickable {
+                    if (total <= 0.0 || (r.goods && item.isBlank())) return@clickable
+                    val now = System.currentTimeMillis()
+                    onSave(r.template.copy(
+                        id = "e" + System.nanoTime(), amount = total, note = note.trim(), date = date, createdAt = now,
+                        item = if (r.goods) Goods.canonical(item, known) else r.template.item,
+                        qty = if (r.goods) q else 0.0, rate = if (r.goods) rt else 0.0, unit = if (r.goods && per1000) "1000" else ""
+                    ))
+                },
+                contentAlignment = Alignment.Center
+            ) { Text("Save", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
+        }
+    }
+}
+
+/** A grey box showing a date or time; tap to change it. */
+@Composable
+private fun PickBox(text: String, modifier: Modifier, onClick: () -> Unit) {
+    Box(
+        modifier.padding(top = 10.dp).clip(RoundedCornerShape(12.dp)).background(Well)
+            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp)).clickable { onClick() }.padding(horizontal = 12.dp, vertical = 11.dp)
+    ) { Text(text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold) }
 }
 
 /** Stock in for an item: how many were made or bought. No cash moves; a purchase is a + Paid to the supplier. */

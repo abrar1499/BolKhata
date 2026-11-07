@@ -210,12 +210,13 @@ private val MENU_THEMES = listOf("Clean", "Red", "Green", "Sky Blue", "Violet", 
 internal fun SideMenu(
     name: String, currency: String, lang: String, dark: Boolean, photo: Boolean, themeName: String, version: String,
     businesses: List<Pair<String, String>>, current: String,
-    onBusiness: (String) -> Unit, onManage: () -> Unit,
+    onBusiness: (String) -> Unit, onManage: () -> Unit, onAddBusiness: (String) -> Unit,
     onName: (String) -> Unit, onCurrency: (String) -> Unit, onLang: (String) -> Unit, onTheme: (String) -> Unit,
     onGray: () -> Unit, onDark: () -> Unit, onPhoto: () -> Unit,
     onExport: () -> Unit, onImport: () -> Unit, onTrash: () -> Unit, onVersion: () -> Unit
 ) {
     var naming by remember { mutableStateOf(false) }
+    var addingBusiness by remember { mutableStateOf(false) }
     ModalDrawerSheet(
         modifier = Modifier.width(252.dp),
         drawerContainerColor = MaterialTheme.colorScheme.background,
@@ -240,7 +241,7 @@ internal fun SideMenu(
                         if (id == current) Text("✓", fontSize = 13.sp, color = GreenIn)
                     }
                 }
-                MenuRow(onClick = onManage, last = true) {
+                MenuRow(onClick = { addingBusiness = true }, last = true) {
                     Text("+ Add business", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = EmberTop)
                 }
             }
@@ -294,6 +295,7 @@ internal fun SideMenu(
             }
         }
     }
+    if (addingBusiness) NamePopup("New business", "Business name", onDismiss = { addingBusiness = false }) { addingBusiness = false; onAddBusiness(it) }
     if (naming) {
         var text by remember { mutableStateOf(name) }
         AlertDialog(
@@ -335,7 +337,7 @@ private fun MenuValue(value: String) {
 @Composable
 private fun Dot(fill: Brush, on: Boolean, onClick: () -> Unit) {
     Box(
-        Modifier.padding(start = 5.dp).size(20.dp)
+        Modifier.padding(start = 4.dp).size(18.dp)
             .then(if (on) Modifier.border(2.dp, EmberTop, CircleShape).padding(3.dp) else Modifier.border(1.dp, MaterialTheme.colorScheme.outline, CircleShape))
             .clip(CircleShape).background(fill).clickable(onClick = onClick)
     )
