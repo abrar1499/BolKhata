@@ -177,7 +177,7 @@ private fun KhataTop(
         .then(if (banded) Modifier.drawBehind { drawBand(theme, size.height - cardH / 2f) } else Modifier)) {
         Column(Modifier.statusBarsPadding().padding(horizontal = 12.dp)) {
             if (business != null) Row(verticalAlignment = Alignment.CenterVertically) {
-                BusinessPill(business, onMenu, onBusiness)
+                BusinessPill(business, onMenu, onBusiness, switchable = LocalTopMenu.current?.personal != true)
                 Spacer(Modifier.weight(1f))
                 LocalTopMenu.current?.let { TopMenuButton(it) }
             } else
@@ -211,7 +211,11 @@ private fun DrawScope.drawBand(theme: HeaderTheme, h: Float) {
 }
 
 /** The ⋮ menu at the top right of Business and Personal: import / export of that book alone, and currency. */
-class TopMenu(val currency: String, val onImport: () -> Unit, val onExport: () -> Unit, val onCurrency: (String) -> Unit)
+class TopMenu(
+    val currency: String, val onImport: () -> Unit, val onExport: () -> Unit, val onCurrency: (String) -> Unit,
+    /** The Personal book is open: its pill has no ▾ (there is one Personal; businesses switch from the Business tab). */
+    val personal: Boolean = false
+)
 val LocalTopMenu = compositionLocalOf<TopMenu?> { null }
 
 /** A white round ⋮ next to the business pill, same look as the pill. */
@@ -237,7 +241,7 @@ private fun TopMenuButton(m: TopMenu) {
 
 /** Compact frosted pill at the top: menu, then the open business with ▾ to switch or add one. */
 @Composable
-internal fun BusinessPill(name: String, onMenu: () -> Unit, onBusiness: () -> Unit) {
+internal fun BusinessPill(name: String, onMenu: () -> Unit, onBusiness: () -> Unit, switchable: Boolean = true) {
     Row(
         Modifier.padding(top = 12.dp).shadow(1.dp, CircleShape).clip(CircleShape).background(Color.White).padding(end = 11.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -246,10 +250,10 @@ internal fun BusinessPill(name: String, onMenu: () -> Unit, onBusiness: () -> Un
         Box(Modifier.size(38.dp).clip(CircleShape).clickable(onClickLabel = "Menu") { onMenu() }, contentAlignment = Alignment.Center) {
             GlassLogo(24.dp)
         }
-        Row(Modifier.clickable { onBusiness() }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.clickable(enabled = switchable) { onBusiness() }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(name, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1C1917), maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.widthIn(max = 170.dp))
-            Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Switch business", tint = Ember, modifier = Modifier.padding(start = 3.dp).size(16.dp))
+            if (switchable) Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Switch business", tint = Ember, modifier = Modifier.padding(start = 3.dp).size(16.dp))
         }
     }
 }
@@ -931,15 +935,18 @@ private fun LedgerRow(r: LRow, cols: List<LCol>, last: Boolean, card: Boolean = 
             }
     ) {
         Column(Modifier.weight(1f).padding(start = 10.dp, end = 4.dp, top = 5.dp, bottom = 5.dp), verticalArrangement = Arrangement.Center) {
-            Text(r.title, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val title = loanWord(r.title, r.entry)
+            val khata = loanWord(r.khata, r.entry)
+            val note = loanWord(r.note, r.entry)
+            Text(title, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
                 buildAnnotatedString {
                     withStyle(SpanStyle(fontSize = 8.sp)) { append(clockFmt.format(Date(r.date)).lowercase()) }
-                    if (r.khata.isNotBlank() && !r.khata.equals(r.title, true)) {
+                    if (khata.isNotBlank() && !khata.equals(title, true)) {
                         append(" · ")
-                        withStyle(SpanStyle(fontSize = 8.sp, fontWeight = FontWeight.SemiBold, color = KhataBlue)) { append(r.khata) }
+                        withStyle(SpanStyle(fontSize = 8.sp, fontWeight = FontWeight.SemiBold, color = KhataBlue)) { append(khata) }
                     }
-                    if (r.note.isNotBlank() && !r.note.equals(r.title, true)) append(" · " + r.note)
+                    if (note.isNotBlank() && !note.equals(title, true) && !note.equals(khata, true)) append(" · " + note)
                 },
                 fontSize = 9.sp, color = sub, maxLines = 1, overflow = TextOverflow.Ellipsis
             )
@@ -1325,23 +1332,11 @@ internal fun cashTemplate(income: Boolean): Entry =
 
 // ---------------------------------------------------------------- businesses
 
-/** This month's cash out and cash in of one book, for the book list. */
-internal fun monthCash(list: List<Entry>, now: Long = System.currentTimeMillis()): Pair<Double, Double> {
-    val m = monthKey(now)
-    val month = list.filter { monthKey(it.date) == m }
-    return month.filter(::cashOut).sumOf { it.amount } to month.filter(::cashIn).sumOf { it.amount }
-}
-
-/**
- * Full-screen list of businesses: all books' cash this month on top, then each book with its own out / in,
- * a tick on the open one, ⋮ to rename or delete, and Add New Business.
- */
+/** Full-screen list of businesses: each with its parties, a tick on the open one, ⋮ to rename or delete, and Add New Business. */
 @Composable
 fun BusinessPicker(
     list: List<Triple<String, String, Int>>, current: String, onBack: () -> Unit, onPick: (String) -> Unit,
-    onAdd: (String) -> Unit, onRename: (String, String) -> Unit, onDelete: (String) -> Unit,
-    /** Book id to (cash out, cash in) this month. */
-    totals: Map<String, Pair<Double, Double>> = emptyMap(), currency: String = ""
+    onAdd: (String) -> Unit, onRename: (String, String) -> Unit, onDelete: (String) -> Unit
 ) {
     var naming by remember { mutableStateOf<Pair<String?, String>?>(null) }   // (id or null for new, text)
     var deleting by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -1353,17 +1348,6 @@ fun BusinessPicker(
                     Text("Select Business", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
                 }
                 LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(top = 10.dp)) {
-                    // Every book together this month, so the kiln, the home and personal spending add up in one place.
-                    if (list.size > 1 && totals.isNotEmpty()) item(key = "all") {
-                        val out = totals.values.sumOf { it.first }
-                        val inn = totals.values.sumOf { it.second }
-                        Column(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 10.dp)) {
-                            Text("All books · this month", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(start = 4.dp, bottom = 6.dp))
-                            SumCard(Triple(money(currency, out), "Out", RedSpend), Triple(money(currency, inn), "In", GreenIn),
-                                plusMinus(inn - out)) {}
-                        }
-                    }
                     items(list, key = { it.first }) { (id, name, parties) ->
                         var more by remember { mutableStateOf(false) }
                         Row(
@@ -1375,10 +1359,8 @@ fun BusinessPicker(
                             Spacer(Modifier.width(14.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                val t = totals[id]
                                 Text(
-                                    (if (parties == 1) "1 party" else "$parties parties") +
-                                        (if (t != null && (t.first > 0 || t.second > 0)) " · this month −" + fmt(t.first) + " / +" + fmt(t.second) else ""),
+                                    if (parties == 1) "1 party" else "$parties parties",
                                     fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis
                                 )
                             }

@@ -304,6 +304,16 @@ val OWNER_MOVES = mapOf(
 )
 fun ownerMove(item: String): String? = OWNER_MOVES.keys.firstOrNull { it.equals(item.trim(), true) }
 
+/** "Loans" (the stored name of a loan) shown as the plain word for what happened: Gave, Took, Got back, Paid back. */
+fun loanWord(text: String, e: Entry?): String =
+    if (e == null || !isLoan(e.type) || !text.equals("Loans", true)) text
+    else when (e.type) {
+        Type.DIYA -> "Gave"
+        Type.LIYA -> "Took"
+        Type.WAPIS_MILA -> "Got back"
+        else -> "Paid back"
+    }
+
 /** An expense or income left Due with a party: it goes in their khata and moves no cash. */
 fun isDue(e: Entry) = (e.type == Type.KHARCHA || e.type == Type.AAMDANI) && e.credit && e.person.isNotBlank()
 
