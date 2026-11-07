@@ -280,7 +280,14 @@ fun EntryForm(
         // Only Out / In can go to an expense category, an income or a stock item; the other tabs pick a party.
         val anyKhata = !work && trade == null
         if (picking) PartyPicker(
-            people, "", "Select khata",
+            people, "",
+            when {
+                work -> "Who did the work"
+                trade == Type.SALE -> "Customer"
+                trade == Type.PURCHASE -> "Supplier"
+                out == false -> "Party or income"
+                else -> "Party or expense"
+            },
             confirm = { creating -> if (creating) "Create & select" else "Select" },
             onPick = {
                 person = it; khata = null; pickCat = null; picking = false

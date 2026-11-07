@@ -29,12 +29,11 @@ import androidx.compose.material.icons.outlined.Storefront
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.outlined.Book
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
-import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material.icons.outlined.NoteAdd
 import androidx.compose.material.icons.outlined.People
-import androidx.compose.material.icons.outlined.ReceiptLong
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -103,33 +102,53 @@ fun cashIn(e: Entry) = when (e.type) {
 /** The tabs shown in the bottom bar, in order. */
 val KHATA_TABS = listOf(Tab.CHAT, Tab.PARTIES, Tab.CASHBOOK, Tab.EXPENSE, Tab.INCOME)
 
+/** The book for home money: kept apart so it never counts as a business cost. */
+const val PERSONAL = "personal"
+
+/** The sections of each book, shown as chips under the search box. */
+val BUSINESS_SECTIONS = listOf("Cashbook", "Parties", "Stock", "Production", "Profit")
+val PERSONAL_SECTIONS = listOf("Cashbook", "Expense", "Income")
+
+/** Bottom bar: Chat · Business · Personal · + (the one place to add an entry). */
 @Composable
-fun KhataNav(tab: Tab, onTab: (Tab) -> Unit) {
+fun KhataNav(tab: Tab, personal: Boolean, onChat: () -> Unit, onBusiness: () -> Unit, onPersonal: () -> Unit, onAdd: () -> Unit) {
     // No shadow: it joins the white chat strip above into one bottom panel.
     Surface(color = MaterialTheme.colorScheme.surface) {
         Row(Modifier.fillMaxWidth().navigationBarsPadding().height(58.dp)) {
-            KHATA_TABS.forEach { t ->
-                val (label, icon) = navItem(t)
-                val on = t == tab
-                val tint = if (on) Ember else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                Column(
-                    Modifier.weight(1f).fillMaxHeight().clickable { onTab(t) },
-                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
-                ) {
-                    Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(22.dp))
-                    Text(label, fontSize = 10.sp, color = tint, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium)
+            NavItem("Chat", Icons.Outlined.ChatBubbleOutline, tab == Tab.CHAT, onChat)
+            NavItem("Business", Icons.Outlined.Storefront, tab != Tab.CHAT && !personal, onBusiness)
+            NavItem("Personal", Icons.Outlined.Home, tab != Tab.CHAT && personal, onPersonal)
+            Column(
+                Modifier.weight(1f).fillMaxHeight().clickable { onAdd() },
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
+            ) {
+                Box(Modifier.size(34.dp).clip(CircleShape).background(Ember), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Filled.Add, contentDescription = "Add entry", tint = Color.White, modifier = Modifier.size(22.dp))
                 }
+                Text("Entry", fontSize = 10.sp, color = Ember, fontWeight = FontWeight.Bold)
             }
         }
     }
 }
 
-private fun navItem(t: Tab): Pair<String, ImageVector> = when (t) {
-    Tab.PARTIES -> "Business" to Icons.Outlined.Storefront
-    Tab.CASHBOOK -> "Cashbook" to Icons.Outlined.Book
-    Tab.EXPENSE -> "Expense" to Icons.Outlined.ReceiptLong
-    Tab.INCOME -> "Income" to Icons.Outlined.Payments
-    else -> "Chat" to Icons.Outlined.ChatBubbleOutline
+@Composable
+private fun RowScope.NavItem(label: String, icon: ImageVector, on: Boolean, onClick: () -> Unit) {
+    val tint = if (on) Ember else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+    Column(
+        Modifier.weight(1f).fillMaxHeight().clickable { onClick() },
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
+    ) {
+        Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(22.dp))
+        Text(label, fontSize = 10.sp, color = tint, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium)
+    }
+}
+
+/** The section chips under the search box (Cashbook · Parties · Stock… or Cashbook · Expense · Income). */
+@Composable
+fun SectionChips(names: List<String>, selected: String, onPick: (String) -> Unit) {
+    LazyRow(contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        items(names) { n -> SmallChip(n, n == selected) { onPick(n) } }
+    }
 }
 
 /** A glass header behind white text (Reports, To give / To get): the icon's look in the theme's colours. */
@@ -276,8 +295,6 @@ private fun lastSeen(ms: Long) = if (sameDay(ms, System.currentTimeMillis())) "T
 // ---------------------------------------------------------------- Business: Parties, Stock, Sale, Purchase, Profit
 
 private val BusinessViews = listOf("Parties", "Stock", "Sale", "Purchase", "Profit", "Production")
-/** The order the chips show in: Production sits before Profit. */
-private val ViewOrder = listOf(0, 1, 2, 3, 5, 4)
 
 /** The entries a Business view is about, newest first; their months make that view's month chips. */
 internal fun aboutView(view: Int, newest: List<Entry>) = when (view) {
@@ -308,10 +325,12 @@ fun PartiesScreen(
     entries: List<Entry>, currency: String, onMenu: () -> Unit, business: String, onBusiness: () -> Unit,
     onOpen: (PersonAcct) -> Unit, onReport: (ReportKind) -> Unit, onAdd: (Entry) -> Unit, onEdit: (Entry) -> Unit,
     /** Units made in a month (Production) and saving it. */
-    made: (Int) -> Double = { 0.0 }, onSetMade: (Int, Double) -> Unit = { _, _ -> }
+    made: (Int) -> Double = { 0.0 }, onSetMade: (Int, Double) -> Unit = { _, _ -> },
+    /** The section chip to open on, and what to do when Cashbook (another screen) is tapped. */
+    section: String = "Parties", onSection: (String) -> Unit = {}
 ) {
     val newest = remember(entries) { entries.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt }) }
-    var view by rememberSaveable { mutableIntStateOf(0) }
+    var view by rememberSaveable(section) { mutableIntStateOf(BusinessViews.indexOf(section).coerceAtLeast(0)) }
     var month by rememberSaveable { mutableIntStateOf(ALL_MONTHS) }
     var q by rememberSaveable { mutableStateOf("") }
     val about = remember(newest, view) { aboutView(view, newest) }
@@ -370,8 +389,9 @@ fun PartiesScreen(
                     SumCard(shownCard.first, shownCard.second, "Report ›") { onReport(shownCard.third) }
                 }
                 SearchBox(q, when (view) { 0 -> "Search parties"; 1 -> "Search items"; 2 -> "Search sales"; 3 -> "Search purchases"; 5 -> "Search costs"; else -> "Search months" }) { q = it }
-                LazyRow(contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(ViewOrder) { i -> SmallChip(BusinessViews[i], view == i) { view = i; month = firstMonth(i, newest); q = "" } }
+                SectionChips(BUSINESS_SECTIONS, BusinessViews[view]) { n ->
+                    val i = BusinessViews.indexOf(n)
+                    if (i < 0) onSection(n) else { view = i; month = firstMonth(i, newest); q = "" }
                 }
                 if (months.isNotEmpty()) MonthChips(months, pick) { month = it }
             } }
@@ -384,16 +404,6 @@ fun PartiesScreen(
             }
         }
         UpButton(state)
-        PlusButton(when (view) { 0 -> "Add entry"; 1 -> "Add stock"; 3 -> "Add purchase"; 5 -> "Add cost"; else -> "Add sale" }) {
-            onAdd(
-                when (view) {
-                    0 -> template(Type.DIYA, "")
-                    1, 3 -> template(Type.PURCHASE, "").copy(category = Cat.STOCK, item = "")
-                    5 -> template(Type.KHARCHA, "").copy(category = Cat.PRODUCTION, item = "")
-                    else -> template(Type.SALE, "").copy(category = Cat.SALES, item = "")
-                }
-            )
-        }
     }
     if (askMade) MadeDialog(madeQty.takeIf { pick != ALL_MONTHS }, onDismiss = { askMade = false }) { qty ->
         val m = if (pick == ALL_MONTHS) monthKey(now) else pick
@@ -840,7 +850,9 @@ private fun matches(e: Entry, q: String) =
 @Composable
 fun CashBookScreen(
     entries: List<Entry>, currency: String, onMenu: () -> Unit, business: String, onBusiness: () -> Unit,
-    onEdit: (Entry) -> Unit, onHistory: () -> Unit, onAdd: (income: Boolean) -> Unit
+    onEdit: (Entry) -> Unit, onHistory: () -> Unit,
+    /** The book's section chips (Cashbook · Parties… or Cashbook · Expense · Income). */
+    sections: @Composable () -> Unit = {}
 ) {
     val newest = remember(entries) {
         entries.filter { cashIn(it) || cashOut(it) }.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt })
@@ -869,6 +881,7 @@ fun CashBookScreen(
                     )
                 }
                 SearchBox(q, "Search") { q = it }
+                sections()
                 if (q.isBlank() && months.isNotEmpty()) MonthChips(months, month) { month = it }
             } }
             val label = if (q.isNotBlank()) "Found" else monthLabel(months, month) ?: ""
@@ -886,7 +899,6 @@ fun CashBookScreen(
             )
         }
         UpButton(state)
-        PlusButton { onAdd(false) }
     }
 }
 
@@ -1038,7 +1050,9 @@ fun TrashScreen(
 @Composable
 fun MoneyScreen(
     income: Boolean, entries: List<Entry>, currency: String, onMenu: () -> Unit, business: String, onBusiness: () -> Unit,
-    onEdit: (Entry) -> Unit, onReport: () -> Unit, onAdd: () -> Unit
+    onEdit: (Entry) -> Unit, onReport: () -> Unit,
+    /** The book's section chips. */
+    sections: @Composable () -> Unit = {}
 ) {
     val type = if (income) Type.AAMDANI else Type.KHARCHA
     val list = remember(entries, income) {
@@ -1077,6 +1091,7 @@ fun MoneyScreen(
                     SumCard(Triple(money(currency, thisYear), "Year $year", color), Triple(money(currency, thisMonth), "This month", color), "Report ›", onReport)
                 }
                 SearchBox(q, "Search") { q = it }
+                sections()
                 if (months.isNotEmpty()) MonthChips(months, pick) { pick = it }
             } }
             val kind = if (income) LKind.IN else LKind.OUT
@@ -1145,7 +1160,6 @@ fun MoneyScreen(
                 Text(if (income) "No income yet." else "No expenses yet.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp, modifier = Modifier.padding(24.dp))
             }
         }
-        PlusButton(if (income) "Add income" else "Add expense", onAdd)
     }
 }
 

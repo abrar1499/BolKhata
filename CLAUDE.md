@@ -49,6 +49,7 @@ Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Packa
 - Floating ChatGPT-style message bar (`AppParts.kt` `InputBar`) only on the Chat tab; lists end with
   `barSpace()`.
 - Match the surrounding code: short KDoc comments, no dead code, reuse helpers in `Ui.kt`.
+- UI words: plain, common English everyone knows (Paid / Due, not "On credit"); one word where possible.
 - When the owner changes the size/look of a common part (chips, search, business pill, cards), change it everywhere it
   appears (one shared composable), not just on the screen in the screenshot.
 
