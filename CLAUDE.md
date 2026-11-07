@@ -50,6 +50,8 @@ Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Packa
   `barSpace()`.
 - Match the surrounding code: short KDoc comments, no dead code, reuse helpers in `Ui.kt`.
 - UI words: plain, common English everyone knows (Paid / Due, not "On credit"); one word where possible.
+- Never Urdu/Hindi words in the UI or mock-ups ("khata" → "account"), and never examples from one kind of business
+  (no kiln, bricks, thapai…): the app is for anyone; users add their own names.
 - Keep it simple: the owner asked to go back to 1.391 (Business chips with Production) after the Business/Personal
   redesign got too complex. Add new things only one small step at a time, mock first.
 - When the owner changes the size/look of a common part (chips, search, business pill, cards), change it everywhere it
