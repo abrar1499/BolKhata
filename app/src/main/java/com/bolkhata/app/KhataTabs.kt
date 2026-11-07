@@ -26,6 +26,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.outlined.Storefront
 import androidx.compose.material.icons.filled.MoreVert
@@ -1162,7 +1165,7 @@ private val OweButton = Color(0xFFE8892B)
 private val Well: Color
     @Composable @ReadOnlyComposable get() = if (MaterialTheme.colorScheme.surface.luminance() < 0.5f) Color(0xFF262626) else Color(0xFFEFECE8)
 
-/** An emoji for a name (Groceries 🛒, Petrol ⛽, Staff 👥…), 📁 when nothing fits. */
+/** An emoji for a name (Groceries 🛒, Petrol ⛽…), 🗂️ when nothing fits. */
 private val nameIcons = listOf(
     "grocer" to "🛒", "restaurant" to "🍽", "tea" to "☕", "bread" to "🍞", "fruit" to "🍎", "water" to "💧", "food" to "🍛",
     "petrol" to "⛽", "fuel" to "⛽", "repair" to "🔧", "oil" to "🛢", "tyre" to "🛞", "wash" to "🚿", "parking" to "🅿️", "taxi" to "🚕",
@@ -1171,7 +1174,7 @@ private val nameIcons = listOf(
     "charity" to "🤲", "labour" to "👷", "raw" to "🧱", "loading" to "🚚", "unloading" to "🚚", "salary" to "💼", "eint" to "🧱", "brick" to "🧱",
     "coal" to "⚫", "koila" to "⚫", "cement" to "🏗", "staff" to "👥", "supplier" to "🚚", "customer" to "🤝", "people" to "🤝", "income" to "💰"
 )
-private fun iconFor(name: String): String = name.lowercase().let { n -> nameIcons.firstOrNull { n.contains(it.first) }?.second } ?: "📁"
+private fun iconFor(name: String): String = name.lowercase().let { n -> nameIcons.firstOrNull { n.contains(it.first) }?.second } ?: "🗂️"
 private fun bookIcon(b: Book) = if (b.people) "👤" else b.cat?.icon ?: iconFor(b.name)
 
 /** Shape of row [i] of [n] in a white rounded sheet: the first and last rows round the sheet's corners. */
@@ -1362,7 +1365,9 @@ fun SideScreen(
     onMenu: () -> Unit, business: String, onEdit: (Entry) -> Unit, onSave: (Entry) -> Unit,
     onStockIn: (String, Double) -> Unit, onReport: () -> Unit,
     /** Opens this account and person straight away (from the report's To get / To pay). */
-    jump: Pair<String, String>? = null, onJumped: () -> Unit = {}
+    jump: Pair<String, String>? = null, onJumped: () -> Unit = {},
+    /** Move or delete (to Trash) all entries of a category account. */
+    onMoveKhata: (String) -> Unit = {}, onDeleteKhata: (String) -> Unit = {}
 ) {
     val side = if (income) Side.INC else Side.EXP
     var bookName by rememberSaveable(income) { mutableStateOf<String?>(null) }
@@ -1373,6 +1378,8 @@ fun SideScreen(
     var adding by remember { mutableStateOf<String?>(null) }   // "book" or "kid"
     var stockIn by remember { mutableStateOf(false) }
     var sheet by remember { mutableStateOf<AddReq?>(null) }
+    var acct by remember { mutableStateOf<Book?>(null) }        // long-pressed account
+    var renaming by remember { mutableStateOf<Book?>(null) }
     LaunchedEffect(jump) { jump?.let { (b, k) -> items = false; bookName = b; kidName = k; onJumped() } }
     val books = remember(entries, setup, side) { Sides.books(side, entries, setup) }
     val book = books.firstOrNull { it.name == bookName }
@@ -1493,7 +1500,7 @@ fun SideScreen(
                             val owe = if (!b.people) "" else (if (p > 0.5) " · " + fmt(p) + " " + Sides.balanceText(b, 1.0).second.lowercase() else "") +
                                 (if (m > 0.5) " · " + fmt(m) + " " + Sides.balanceText(b, -1.0).second.lowercase() else "")
                             ItRow(bookIcon(b), b.name, sub, fmt(Sides.done(b, entries, setup, thisMonth)), (if (income) "this month" else "spent") + owe, ink, i, shown.size,
-                                onLong = if (b.cat != null) khataMenu?.let { mm -> { mm("expense", b.name) } } else null) { bookName = b.name; q = "" }
+                                onLong = { acct = b }) { bookName = b.name; q = "" }
                         }
                     }
                     if (shown.isEmpty()) emptyNote("Nothing found")
@@ -1547,6 +1554,41 @@ fun SideScreen(
         }
     }
     sheet?.let { r -> AddSheet(r, entries, onDismiss = { sheet = null }) { e -> onSave(e); sheet = null } }
+    // An account's long-press menu: Rename (own and people accounts), Move and Delete (a category's entries, or an own account).
+    acct?.let { b ->
+        val own = setup.books.any { it.side == side && it.name.equals(b.name, true) }
+        val n = Sides.kids(b, entries, setup).sumOf { it.entries.size }
+        ActionMenu(
+            title = b.name, subtitle = if (n == 1) "1 entry" else "$n entries", amount = "", amountColor = Color.Unspecified,
+            actions = listOfNotNull(
+                if (own || b.people) MenuAction("Rename", Icons.Filled.Edit) { acct = null; renaming = b } else null,
+                if (b.cat != null && n > 0) MenuAction("Move", Icons.Filled.SwapHoriz) { acct = null; onMoveKhata(b.name) } else null,
+                when {
+                    own -> MenuAction("Delete", Icons.Filled.Delete, danger = true) {
+                        acct = null
+                        onSetup(setup.copy(books = setup.books.filterNot { it.side == side && it.name.equals(b.name, true) },
+                            people = setup.people.filterValues { !it.equals(b.name, true) }, kids = setup.kids - b.name))
+                    }
+                    b.cat != null && n > 0 -> MenuAction("Delete", Icons.Filled.Delete, danger = true) { acct = null; onDeleteKhata(b.name) }
+                    else -> null
+                }
+            ),
+            onDismiss = { acct = null }
+        )
+    }
+    renaming?.let { b ->
+        RenameDialog("Rename account", b.name, onRename = { new ->
+            renaming = null
+            val own = setup.books.any { it.side == side && it.name.equals(b.name, true) }
+            // A ready people account (Staff…) becomes the owner's own under the new name, its people with it.
+            val people = Sides.kids(b, entries, setup).map { it.name }
+            onSetup(setup.copy(
+                books = (if (own) setup.books.map { if (it.side == side && it.name.equals(b.name, true)) it.copy(name = new) else it } else setup.books + Book(side, new, true)),
+                people = setup.people.mapValues { (_, v) -> if (v.equals(b.name, true)) new else v } + (if (own) emptyMap() else people.associateWith { new }),
+                kids = setup.kids[b.name]?.let { (setup.kids - b.name) + (new to it) } ?: setup.kids
+            ))
+        }, onDismiss = { renaming = null })
+    }
     if (stockIn) itemName?.let { n ->
         StockInDialog(n, onDismiss = { stockIn = false }) { qty -> onStockIn(n, qty); stockIn = false }
     }
