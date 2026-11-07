@@ -571,7 +571,7 @@ object NativeChatEngine {
     fun nameChoices(text: String): List<String> {
         val list = Regex("""^Which (.+) do you mean\?$""").find(text.trim())?.groupValues?.get(1)
             ?: Regex("""^Please choose one saved name: (.+)\.$""").find(text.trim())?.groupValues?.get(1)
-            ?: Regex("""^Move to which khata: (.+)\?$""").find(text.trim())?.groupValues?.get(1)
+            ?: Regex("""^Move to which (?:account|khata): (.+)\?$""").find(text.trim())?.groupValues?.get(1)
             ?: return emptyList()
         return list.split(" or ").map { it.trim() }.filter { it.isNotEmpty() }.takeIf { it.size >= 2 }.orEmpty()
     }
