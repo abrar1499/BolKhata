@@ -2963,6 +2963,14 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 saveLabel = "Save",
                 onSave = { e ->
                     save(listOf(e) + entries)
+                    // Money moved between the books: the other book gets its side (Business ↔ Personal).
+                    val other = OWNER_MOVES[ownerMove(e.item) ?: ""]
+                    if (other != null && t.amount == 0.0 && isTransfer(e.type)) {
+                        store.addTo(
+                            if (book == PERSONAL) lastBusiness else PERSONAL,
+                            e.copy(id = "e" + System.nanoTime(), type = if (e.type == Type.TRANSFER_OUT) Type.TRANSFER_IN else Type.TRANSFER_OUT, item = other, note = other)
+                        )
+                    }
                     trade = null
                     lastAdded = listOf(e.id)
                     toast("✓ Saved")

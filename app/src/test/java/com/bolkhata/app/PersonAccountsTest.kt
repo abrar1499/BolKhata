@@ -133,4 +133,13 @@ class PersonAccountsTest {
         assertEquals(3200.0, net.cost, 0.001)
         assertEquals(-3200.0, net.profit, 0.001)
     }
+
+    /** Taking money home is a transfer with its other side in Personal, so it is never a business expense. */
+    @Test
+    fun ownerMovesPairUp() {
+        assertEquals("Taken for home", ownerMove(" taken for HOME "))
+        assertEquals("From business", OWNER_MOVES["Taken for home"])
+        assertEquals("Put in business", OWNER_MOVES["From home"])
+        assertEquals(null, ownerMove("Fuel"))
+    }
 }

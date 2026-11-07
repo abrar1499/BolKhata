@@ -307,9 +307,9 @@ internal fun aboutView(view: Int, newest: List<Entry>) = when (view) {
     else -> newest.filter { it.type == Type.SALE || it.type == Type.KHARCHA }
 }
 
-/** Sale, Purchase and Profit open on their newest month like the Cash book; the other views on All. */
+/** Sale and Purchase open on their newest month like the Cash book; the other views on All. */
 private fun firstMonth(view: Int, newest: List<Entry>) =
-    if (view >= 2) monthsOf(aboutView(view, newest)).firstOrNull()?.first ?: ALL_MONTHS else ALL_MONTHS
+    if (view == 2 || view == 3) monthsOf(aboutView(view, newest)).firstOrNull()?.first ?: ALL_MONTHS else ALL_MONTHS
 
 private fun yearOf(ms: Long) = cal(ms).get(Calendar.YEAR)
 
