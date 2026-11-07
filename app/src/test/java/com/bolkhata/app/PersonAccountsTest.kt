@@ -120,4 +120,17 @@ class PersonAccountsTest {
         // A plain expense is still cash out.
         assertTrue(cashOut(work.copy(person = "", credit = false)))
     }
+
+    /** Income left Due with a party: they owe it, no cash came in. Profit takes every expense off the sales. */
+    @Test
+    fun dueIncomeGoesInTheKhataAndProfitTakesExpenses() {
+        val fee = Entry("f", Type.AAMDANI, 6000.0, Cat.TANKHWAH, "Commission", "Hamid Akram", "Commission", 1L, 1L, credit = true)
+        assertTrue(isDue(fee))
+        assertFalse(cashIn(fee))
+        assertEquals(6000.0, personAccounts(listOf(fee)).single().balance, 0.001)
+        val fuel = Entry("x", Type.KHARCHA, 3200.0, Cat.TRANSPORT, "Fuel", "", "Fuel", 1L, 1L)
+        val net = netOf(listOf(fuel), listOf(fuel))
+        assertEquals(3200.0, net.cost, 0.001)
+        assertEquals(-3200.0, net.profit, 0.001)
+    }
 }

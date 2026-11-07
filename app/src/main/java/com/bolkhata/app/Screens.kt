@@ -656,7 +656,8 @@ enum class ReportKind(val label: String, val tab: Boolean = true) {
 }
 
 private fun Entry.isCashInFlow(): Boolean = when (type) {
-    Type.AAMDANI, Type.WAPIS_MILA, Type.LIYA, Type.TRANSFER_IN -> true
+    Type.AAMDANI -> !isDue(this)
+    Type.WAPIS_MILA, Type.LIYA, Type.TRANSFER_IN -> true
     Type.SALE -> person.isBlank() || paid
     else -> false
 }

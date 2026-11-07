@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -13,6 +12,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.ArrowDropUp
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.*
@@ -60,11 +61,8 @@ fun FormPopup(onDismiss: () -> Unit, content: @Composable () -> Unit) {
 }
 
 /**
- * One compact form for adding, editing and answering "what is this?". Tabs Out · In · Sale · Purchase · Work (none
- * picked when [askType]), then the same order on each: item (chips of names used before), qty × rate, amount, party,
- * note. On Out / In the app works out the rest: no party means an expense (its category read from the item and note)
- * or income; a party means a loan or a repayment, from that party's balance. An edit that keeps the direction and the
- * party keeps the entry's own kind (transfer…). The khata list on Out / In also offers Income and Expense khatas.
+ * One clean form for adding, editing and answering "what is this?": Out | In (none picked when [askType]), What for
+ * (a drop list), qty × rate, amount, party, Paid | Due, note. The app works out the kind from these (see kind()).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -84,52 +82,45 @@ fun EntryForm(
 ) {
     var out by remember(initial.id) { mutableStateOf<Boolean?>(if (askType) null else isOut(initial.type)) }
     val people = remember(all) { partyNames(all) }
-    // The other khatas the entry can go to: stock items (sale / purchase), who paid income, expense categories.
     val stockNames = remember(all) { stock(all).map { it.name.trim() }.filter { it.isNotBlank() }.distinctBy { it.lowercase() } }
-    val incomeNames = remember(all) { all.filter { it.type == Type.AAMDANI }.map { source(it).trim() }.filter { it.isNotBlank() }.distinctBy { it.lowercase() } }
-    /** What money went on before, newest first, offered as chips on the Out tab. */
-    val expenseNames = remember(all) {
-        all.filter { it.type == Type.KHARCHA && !isWork(it) }.sortedByDescending { it.date }.map { it.item.trim() }
-            .filter { it.isNotBlank() }.distinctBy { it.lowercase() }.take(12)
-    }
-    val expenseCats = remember { Cat.entries.filter { it !in setOf(Cat.UDHAAR, Cat.TANKHWAH, Cat.SALES, Cat.STOCK) } }
-    /** A non-party khata picked in the list: "income" (name in [item]) or "expense" (in [pickCat]); null = party. */
-    // A production cost (Add cost) opens with its khata shown: Expense · Production.
-    val prodCost = !askType && initial.type == Type.KHARCHA && initial.category == Cat.PRODUCTION && !isWork(initial)
-    var khata by remember(initial.id) { mutableStateOf(if (prodCost) "expense" else null) }
-    var pickCat by remember(initial.id) { mutableStateOf(if (prodCost) Cat.PRODUCTION else null) }
+    /** Names used before on each side, newest first: they join the What for list by themselves. */
+    val usedOut = remember(all) { usedNames(all.filter { it.type == Type.KHARCHA }) }
+    val usedIn = remember(all) { usedNames(all.filter { it.type == Type.AAMDANI }) }
     var amount by remember(initial.id) { mutableStateOf(if (initial.amount > 0) plain(initial.amount) else "") }
-    var item by remember(initial.id) { mutableStateOf(if (initial.item == "Loans") "" else initial.item) }
+    var item by remember(initial.id) { mutableStateOf(if (initial.item == "Loans" || isTransfer(initial.type)) "" else initial.item) }
+    /** The category of a name picked from the list; null when typed (then guessed from the words). */
+    var pickedCat by remember(initial.id) { mutableStateOf<Cat?>(null) }
+    /** A new name added as a stock item, so it is bought or sold rather than spent. */
+    var newStock by remember(initial.id) { mutableStateOf(false) }
+    var listOpen by remember { mutableStateOf(false) }
     var qty by remember(initial.id) { mutableStateOf(if (initial.qty > 0) plain(initial.qty) else "") }
-    var person by remember(initial.id) { mutableStateOf(initial.person) }
-    var paid by remember(initial.id) { mutableStateOf(initial.paid) }
-    /** Work mode: what a worker earned (qty × rate) or a salary, owed to the party; no cash moves until paid. */
-    var work by remember(initial.id) { mutableStateOf(isWork(initial)) }
-    var salary by remember(initial.id) { mutableStateOf(isWork(initial) && initial.qty <= 0) }
-    /** The Sale or Purchase tab; null on Out, In and Work. */
-    var trade by remember(initial.id) { mutableStateOf(if (askType) null else initial.type.takeIf { it == Type.SALE || it == Type.PURCHASE }) }
     var rate by remember(initial.id) { mutableStateOf(if (initial.rate > 0) plain(initial.rate) else "") }
+    var person by remember(initial.id) { mutableStateOf(initial.person) }
+    /** Due: not paid yet, it stays in the party's khata. Paid: settled now. */
+    var due by remember(initial.id) { mutableStateOf(isDue(initial) || (isTrade(initial.type) && initial.person.isNotBlank() && !initial.paid)) }
     var date by remember(initial.id) { mutableLongStateOf(initial.date) }
-    var note by remember(initial.id) { mutableStateOf(initial.note) }
+    var note by remember(initial.id) { mutableStateOf(if (initial.note == initial.item) "" else initial.note) }
     var showDate by remember { mutableStateOf(false) }
     var askDelete by remember { mutableStateOf(false) }
 
     val amountValue = amount.toDoubleOrNull()
-    val accent = when {
-        work -> OrangeOwe
-        trade == Type.SALE -> GreenIn
-        trade == Type.PURCHASE -> RedSpend
-        else -> when (out) { true -> RedSpend; false -> GreenIn; null -> MaterialTheme.colorScheme.primary }
-    }
+    val accent = when (out) { true -> RedSpend; false -> GreenIn; null -> MaterialTheme.colorScheme.primary }
+    val itemT = item.trim()
+    val isStock = newStock || stockNames.any { it.equals(itemT, true) }
+    // An old loan keeps its goods name ("Loans" aside) without turning into an expense.
+    val loanItem = isLoan(initial.type) && itemT.equals(initial.item.trim(), true)
+    val withItem = itemT.isNotEmpty() && !loanItem
 
-    /** The entry's kind from the tab and the party (see the class comment). */
+    /**
+     * The entry's kind, worked out from Out / In, the item and the party: a stock item is a sale or purchase; an item
+     * with a party is an expense or income in their khata (Due) or settled (Paid); a party alone is money lent or paid
+     * back, from their balance; nothing else is a plain expense or income.
+     */
     fun kind(o: Boolean): Type {
-        if (work) return Type.KHARCHA
-        trade?.let { return it }
-        if (khata == "income" || khata == "expense") return if (o) Type.KHARCHA else Type.AAMDANI
         val p = person.trim()
-        if (!askType && o == isOut(initial.type) && p.equals(initial.person.trim(), true)) return initial.type
-        if (p.isEmpty()) return if (o) Type.KHARCHA else Type.AAMDANI
+        if (!askType && isTransfer(initial.type) && o == isOut(initial.type)) return initial.type
+        if (withItem && isStock) return if (o) Type.PURCHASE else Type.SALE
+        if (p.isEmpty() || withItem) return if (o) Type.KHARCHA else Type.AAMDANI
         val bal = personAccounts(all.filter { it.id != initial.id }).firstOrNull { it.name.equals(p, true) }?.balance ?: 0.0
         return if (o) (if (bal < -0.005) Type.WAPIS_DIYA else Type.DIYA) else (if (bal > 0.005) Type.WAPIS_MILA else Type.LIYA)
     }
@@ -140,26 +131,6 @@ fun EntryForm(
         val q = qty.toDoubleOrNull() ?: 0.0
         val r = rate.toDoubleOrNull() ?: 0.0
         if (q > 0 && r > 0) amount = plain(Math.round(q * r * 100) / 100.0)
-    }
-    /** Work types used before, newest first, one spelling each (Moulding and moulding are the same). */
-    val workTypes = remember(all) {
-        all.filter { isWork(it) && it.qty > 0 }.sortedByDescending { it.date }.map { it.item.trim() }
-            .filter { it.isNotBlank() && it != "Work" }.distinctBy { it.lowercase() }
-    }
-    /** The rate last used for this party's work, so the next entry fills it in. */
-    fun lastRate(p: String) = all.filter { isWork(it) && it.rate > 0 && it.person.trim().equals(p.trim(), true) }
-        .maxByOrNull { it.date }?.rate
-    /** Sale or Purchase tab: stock items in the chips, the party is the customer or supplier. */
-    fun toTrade(t: Type) {
-        if (khata != null) item = ""
-        khata = null; pickCat = null; work = false; trade = t; out = t == Type.PURCHASE
-    }
-    // The chips under the item field: what was used before on this tab, so a name is never spelt two ways.
-    val chipNames = when {
-        work -> workTypes
-        trade != null -> stockNames
-        out == false -> incomeNames
-        else -> expenseNames
     }
 
     Column(
@@ -187,48 +158,32 @@ fun EntryForm(
             }
         }
 
-        // Where the entry goes; on Out / In the app works out expense / income / loan from the khata.
         Row(
             Modifier.fillMaxWidth().height(38.dp).clip(RoundedCornerShape(12.dp))
                 .background(MaterialTheme.colorScheme.background).padding(3.dp)
         ) {
-            Seg("Out", out == true && !work && trade == null, RedSpend, Modifier.weight(1f)) { out = true; work = false; trade = null }
-            Seg("In", out == false && trade == null, GreenIn, Modifier.weight(1f)) { out = false; work = false; trade = null }
-            Seg("Sale", trade == Type.SALE, GreenIn, Modifier.weight(1f)) { toTrade(Type.SALE) }
-            Seg("Purchase", trade == Type.PURCHASE, RedSpend, Modifier.weight(1.25f)) { toTrade(Type.PURCHASE) }
-            Seg("Work", work, OrangeOwe, Modifier.weight(1f)) {
-                if (khata != null) item = ""
-                khata = null; pickCat = null; out = true; work = true; trade = null
-                if (rate.isBlank() && person.isNotBlank()) lastRate(person)?.let { rate = plain(it); fillAmount() }
-            }
+            Seg("↑ Out", out == true, RedSpend, Modifier.weight(1f)) { out = true }
+            Seg("↓ In", out == false, GreenIn, Modifier.weight(1f)) { out = false }
         }
 
-        // Work = quantity × rate; Salary = a fixed amount. Both go in the party's khata.
-        if (work) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Pill("Work", !salary, OrangeOwe) { salary = false }
-            Pill("Salary", salary, OrangeOwe) { salary = true }
+        // What for: type to search; the drop list shows every kind of expense (or income), stock items and names used before.
+        Field(
+            item, { item = it; pickedCat = null; newStock = false; listOpen = true },
+            if (out == false) "From what" else "What for",
+            Modifier.fillMaxWidth().onFocusChanged { if (it.hasFocus) listOpen = true }
+        ) {
+            IconButton(onClick = { listOpen = !listOpen }, modifier = Modifier.size(36.dp)) {
+                Icon(if (listOpen) Icons.Filled.ArrowDropUp else Icons.Filled.ArrowDropDown, contentDescription = "List")
+            }
         }
-        if (!(work && salary)) {
-            Field(
-                item, { item = it },
-                when {
-                    work -> "Work type"
-                    trade == Type.SALE -> "Item sold"
-                    trade == Type.PURCHASE -> "Item bought"
-                    out == false -> "From what (optional)"
-                    else -> "What for (optional)"
-                },
-                Modifier.fillMaxWidth()
-            )
-            val typed = item.trim()
-            val offered = chipNames.filter { !it.equals(typed, true) && (typed.isEmpty() || it.contains(typed, true)) }
-            if (offered.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                offered.forEach { w -> Pill(w, false, accent) { item = w } }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Field(qty, { v -> qty = v.filter { it.isDigit() || it == '.' }; fillAmount() }, "Qty", Modifier.weight(1f), numeric = true)
-                Field(rate, { v -> rate = v.filter { it.isDigit() || it == '.' }; fillAmount() }, "Rate", Modifier.weight(1f), numeric = true)
-            }
+        if (listOpen) WhatForList(
+            typed = itemT, income = out == false, stockNames = stockNames, used = if (out == false) usedIn else usedOut,
+            onPick = { name, cat, stockItem -> item = name; pickedCat = cat; newStock = stockItem; listOpen = false }
+        )
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Field(qty, { v -> qty = v.filter { it.isDigit() || it == '.' }; fillAmount() }, "Qty", Modifier.weight(1f), numeric = true)
+            Field(rate, { v -> rate = v.filter { it.isDigit() || it == '.' }; fillAmount() }, "Rate", Modifier.weight(1f), numeric = true)
         }
 
         // Amount + date side by side
@@ -253,72 +208,27 @@ fun EntryForm(
         }
 
         var picking by remember { mutableStateOf(false) }
-        val shown = when (khata) {
-            "income" -> "Income · $item"
-            "expense" -> "Expense · " + (pickCat?.label ?: "")
-            else -> person
-        }
         Box {
-            Field(
-                shown, { person = it },
-                when {
-                    work -> "Party · who did the work"
-                    trade == Type.SALE -> "Customer (optional)"
-                    trade == Type.PURCHASE -> "Supplier (optional)"
-                    else -> "Khata (optional) · party, income, expense"
-                },
-                Modifier.fillMaxWidth(), readOnly = true
-            ) {
-                if (shown.isNotBlank()) IconButton(onClick = { person = ""; if (khata != null) item = ""; khata = null; pickCat = null }, modifier = Modifier.size(36.dp)) {
-                    Icon(Icons.Filled.Close, contentDescription = "No khata", modifier = Modifier.size(18.dp))
+            Field(person, { person = it }, "Party (optional)", Modifier.fillMaxWidth(), readOnly = true) {
+                if (person.isNotBlank()) IconButton(onClick = { person = "" }, modifier = Modifier.size(36.dp)) {
+                    Icon(Icons.Filled.Close, contentDescription = "No party", modifier = Modifier.size(18.dp))
                 }
                 else Icon(Icons.Filled.ArrowDropDown, contentDescription = null, modifier = Modifier.padding(end = 6.dp))
             }
-            // The field (not its × button) opens the khata list.
+            // The field (not its × button) opens the party list.
             Box(Modifier.matchParentSize().padding(end = 40.dp).clip(RoundedCornerShape(12.dp)).clickable { picking = true })
         }
-        // Only Out / In can go to an expense category, an income or a stock item; the other tabs pick a party.
-        val anyKhata = !work && trade == null
         if (picking) PartyPicker(
-            people, "",
-            when {
-                work -> "Who did the work"
-                trade == Type.SALE -> "Customer"
-                trade == Type.PURCHASE -> "Supplier"
-                out == false -> "Party or income"
-                else -> "Party or expense"
-            },
-            confirm = { creating -> if (creating) "Create & select" else "Select" },
-            onPick = {
-                person = it; khata = null; pickCat = null; picking = false
-                if (work) lastRate(it)?.let { r -> rate = plain(r); fillAmount() }
-            }, onDismiss = { picking = false },
-            categories = if (anyKhata) expenseCats else emptyList(),
-            onCategory = { pickCat = it; khata = "expense"; person = ""; out = true; picking = false },
-            stockNames = if (anyKhata) stockNames else emptyList(),
-            onStock = { toTrade(if (out == false) Type.SALE else Type.PURCHASE); item = it; person = ""; picking = false },
-            incomeNames = if (anyKhata) incomeNames else emptyList(),
-            onIncome = { item = it; khata = "income"; person = ""; out = false; picking = false }
+            people, "", "Party",
+            confirm = { creating -> if (creating) "Add party" else "Select" },
+            onPick = { person = it; picking = false }, onDismiss = { picking = false }
         )
-        if (chosen != null && isTrade(chosen) && person.isNotBlank()) {
-            // On credit: the amount goes in To pay / To receive. Paid: settled in cash, khata unchanged.
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Pill("On credit", !paid, OrangeOwe) { paid = false }
-                Pill("Paid now", paid, GreenIn) { paid = true }
-            }
+        // With a party and an item the money can be settled now or left due in their khata.
+        if (person.isNotBlank() && withItem) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Pill("Paid", !due, GreenIn) { due = false }
+            Pill("Due", due, OrangeOwe) { due = true }
         }
         Field(note, { note = it }, "Note (optional)", Modifier.fillMaxWidth())
-        if (work) {
-            val sum = amountValue ?: 0.0
-            val who = person.trim().ifBlank { "the party" }
-            val q = qty.toDoubleOrNull() ?: 0.0
-            val r = rate.toDoubleOrNull() ?: 0.0
-            Text(
-                (if (!salary && q > 0 && r > 0) "${fmt(q)} × ${plain(r)} = " else "") +
-                    "${fmt(sum)} owed to $who. It counts in Production cost; paying them is a Cash out to $who.",
-                fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             if (onDelete != null) {
@@ -339,13 +249,12 @@ fun EntryForm(
             Button(
                 onClick = {
                     chosen?.let { t ->
-                        // An expense's category comes from what the note and goods say ("nashta" -> Food), but a category
-                        // already set (Transport) stays when the entry is only renamed: the guess only fills Other.
-                        val kept = initial.category.takeIf { initial.type == Type.KHARCHA && it != Cat.UDHAAR && it != Cat.OTHER }
+                        // An expense's category: the one picked from the list, else the one already set (an edit),
+                        // else guessed from the words ("nashta" -> Food).
+                        val kept = initial.category.takeIf { initial.type == t && it != Cat.UDHAAR && it != Cat.OTHER }
                         val guess = Parser.guessCategory((item + " " + note).trim())
-                        val cat = pickCat ?: kept ?: guess?.first ?: Cat.OTHER
+                        val cat = pickedCat ?: kept ?: guess?.first ?: Cat.OTHER
                         val finalCat = when {
-                            work -> Cat.PRODUCTION
                             t == Type.SALE -> Cat.SALES
                             t == Type.PURCHASE -> Cat.STOCK
                             isLoan(t) -> Cat.UDHAAR
@@ -355,36 +264,34 @@ fun EntryForm(
                             else -> cat
                         }
                         val finalItem = when {
-                            work && salary -> "Salary"
-                            work -> spelled(item, workTypes).ifBlank { "Work" }
-                            isLoan(t) -> item.trim().ifBlank { "Loans" }
-                            isTransfer(t) -> item.trim().ifBlank { "Transfer" }
+                            isLoan(t) -> if (loanItem) initial.item else "Loans"
+                            isTransfer(t) -> initial.item.ifBlank { "Transfer" }
                             isTrade(t) -> spelled(item, stockNames).ifBlank { if (t == Type.SALE) "Sale" else "Purchase" }
-                            item.isNotBlank() -> spelled(item, chipNames)
+                            itemT.isNotEmpty() -> spelled(item, if (t == Type.AAMDANI) usedIn else usedOut)
                             t == Type.AAMDANI -> "Income"
                             else -> guess?.second ?: finalCat.label
                         }
+                        val withParty = person.isNotBlank()
                         onSave(
                             initial.copy(
                                 type = t,
                                 amount = amountValue ?: 0.0,
                                 category = finalCat,
                                 item = finalItem,
-                                qty = if (work && salary) 0.0 else qty.toDoubleOrNull() ?: 0.0,
-                                rate = if (work && salary) 0.0 else rate.toDoubleOrNull() ?: 0.0,
-                                person = if (work || isLoan(t) || isTrade(t) || isTransfer(t)) person.trim() else "",
-                                paid = isTrade(t) && person.isNotBlank() && paid,
-                                credit = work,
+                                qty = qty.toDoubleOrNull() ?: 0.0,
+                                rate = rate.toDoubleOrNull() ?: 0.0,
+                                person = person.trim(),
+                                paid = isTrade(t) && withParty && !due,
+                                credit = (t == Type.KHARCHA || t == Type.AAMDANI) && withParty && due,
                                 // A new "nashta" today after 9 AM is put at 7 AM, and so on (see Parser.partOfDayTime).
                                 date = if (initial.amount == 0.0 && date == initial.date)
                                     Parser.partOfDayTime(date, Parser.dayPartHour("$note $item"), System.currentTimeMillis()) else date,
-                                note = note.trim().ifBlank { if (work && finalItem != "Work" && !salary) "Work · $finalItem" else finalItem }
+                                note = note.trim().ifBlank { finalItem }
                             )
                         )
                     }
                 },
-                enabled = chosen != null && amountValue != null && amountValue > 0 &&
-                    (!isLoan(chosen) || person.isNotBlank()) && (!work || (person.isNotBlank() && khata == null)),
+                enabled = chosen != null && amountValue != null && amountValue > 0,
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = accent),
                 modifier = Modifier.weight(1f).height(44.dp)
@@ -466,3 +373,79 @@ private fun Pill(label: String, selected: Boolean, color: Color, modifier: Modif
 
 /** [typed] in the spelling already used in [names] ("cement" → "Cement"), else as typed. */
 private fun spelled(typed: String, names: List<String>): String = typed.trim().let { t -> names.firstOrNull { it.equals(t, true) } ?: t }
+
+/** Names used before on one side, newest first, for the What for list. */
+private fun usedNames(list: List<Entry>): List<String> = list.sortedByDescending { it.date }.map { it.item.trim() }
+    .filter { it.isNotBlank() && it != "Loans" && it != "Income" }.distinctBy { it.lowercase() }.take(15)
+
+/** One name in the What for list: the category it files under, and whether it is a stock item. */
+private class WhatFor(val name: String, val cat: Cat?, val stock: Boolean)
+
+/** Every common kind of expense, grouped, each with its category. */
+private val OUT_GROUPS: List<Pair<String, List<Pair<String, Cat>>>> = listOf(
+    "Home" to listOf(
+        "Groceries" to Cat.KHANA, "Food" to Cat.KHANA, "Rent" to Cat.RENT, "Electricity" to Cat.BIJLI, "Gas" to Cat.BIJLI,
+        "Water" to Cat.BIJLI, "Internet" to Cat.MOBILE, "Mobile" to Cat.MOBILE, "Household" to Cat.SHOPPING, "Maid" to Cat.OTHER
+    ),
+    "Travel" to listOf("Fuel" to Cat.TRANSPORT, "Transport" to Cat.TRANSPORT, "Car repair" to Cat.TRANSPORT, "Parking" to Cat.TRANSPORT, "Travel" to Cat.TRANSPORT),
+    "Family" to listOf(
+        "School fee" to Cat.EDU, "Health" to Cat.SEHAT, "Medicine" to Cat.SEHAT, "Clothes" to Cat.SHOPPING,
+        "Personal care" to Cat.PERSONAL, "Gifts" to Cat.CHARITY, "Charity" to Cat.CHARITY, "Sent home" to Cat.GHAR
+    ),
+    "Business" to listOf(
+        "Raw material" to Cat.PRODUCTION, "Wages" to Cat.PRODUCTION, "Salary" to Cat.PRODUCTION, "Shop rent" to Cat.RENT,
+        "Shop electricity" to Cat.BIJLI, "Machine fuel" to Cat.PRODUCTION, "Repair" to Cat.PRODUCTION, "Freight" to Cat.TRANSPORT,
+        "Packing" to Cat.PRODUCTION, "Tools" to Cat.ASSETS, "Office" to Cat.OTHER, "Marketing" to Cat.OTHER,
+        "Commission" to Cat.OTHER, "Bank charges" to Cat.FEES, "Taxes & fees" to Cat.FEES
+    ),
+    "Other" to listOf("Entertainment" to Cat.OTHER, "Subscriptions" to Cat.MOBILE, "Insurance" to Cat.FEES, "Other" to Cat.OTHER)
+)
+
+/** Every common kind of income. */
+private val IN_GROUPS: List<Pair<String, List<Pair<String, Cat>>>> = listOf(
+    "Income" to listOf("Salary", "Sale", "Business income", "Rent received", "Commission", "Profit", "Bonus", "Gift received", "Refund", "Other")
+        .map { it to Cat.TANKHWAH }
+)
+
+/**
+ * The What for drop list: names used before, stock items, then every common kind, all filtered by what is typed.
+ * A name that is not there can be added (as an expense / income, or as a stock item); once saved it is in the list.
+ */
+@Composable
+private fun WhatForList(typed: String, income: Boolean, stockNames: List<String>, used: List<String>, onPick: (String, Cat?, Boolean) -> Unit) {
+    val seen = HashSet<String>()
+    fun keep(w: WhatFor) = (typed.isEmpty() || w.name.contains(typed, true)) && seen.add(w.name.lowercase())
+    val sections = buildList {
+        add("Used before" to used.map { WhatFor(it, null, false) }.filter(::keep))
+        add("Stock" to stockNames.map { WhatFor(it, null, true) }.filter(::keep))
+        (if (income) IN_GROUPS else OUT_GROUPS).forEach { (g, l) -> add(g to l.map { (n, c) -> WhatFor(n, c, false) }.filter(::keep)) }
+    }.filter { it.second.isNotEmpty() }
+    val exact = sections.any { (_, l) -> l.any { it.name.equals(typed, true) } }
+    val shape = RoundedCornerShape(12.dp)
+    Column(
+        Modifier.fillMaxWidth().heightIn(max = 280.dp).clip(shape)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape).background(MaterialTheme.colorScheme.surface)
+            .verticalScroll(rememberScrollState())
+    ) {
+        if (typed.isNotEmpty() && !exact) {
+            ListRow("+ Add “$typed”", GreenIn) { onPick(typed, null, false) }
+            ListRow("+ Add “$typed” as a stock item", GreenIn) { onPick(typed, null, true) }
+        }
+        sections.forEach { (g, l) ->
+            Text(
+                g.uppercase(), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).padding(horizontal = 12.dp, vertical = 5.dp)
+            )
+            l.forEach { w -> ListRow(w.name, MaterialTheme.colorScheme.onSurface) { onPick(w.name, w.cat, w.stock) } }
+        }
+    }
+}
+
+@Composable
+private fun ListRow(text: String, color: Color, onClick: () -> Unit) {
+    Text(
+        text, fontSize = 14.sp, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 12.dp, vertical = 10.dp)
+    )
+}

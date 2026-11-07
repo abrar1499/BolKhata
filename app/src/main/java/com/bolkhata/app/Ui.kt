@@ -292,16 +292,19 @@ fun isTrade(t: Type) = t == Type.SALE || t == Type.PURCHASE
 fun isTransfer(t: Type) = t == Type.TRANSFER_IN || t == Type.TRANSFER_OUT
 
 /** True when this entry belongs in a named person history: loans, trades, and transfers. */
-fun withPerson(e: Entry) = e.person.isNotBlank() && (isLoan(e.type) || isTrade(e.type) || isTransfer(e.type)) || isWork(e)
+fun withPerson(e: Entry) = e.person.isNotBlank() && (isLoan(e.type) || isTrade(e.type) || isTransfer(e.type)) || isDue(e)
 
-/** Work or salary a person earned and I owe them: an expense in their khata that moves no cash. */
-fun isWork(e: Entry) = e.type == Type.KHARCHA && e.credit && e.person.isNotBlank()
+/** An expense or income left Due with a party: it goes in their khata and moves no cash. */
+fun isDue(e: Entry) = (e.type == Type.KHARCHA || e.type == Type.AAMDANI) && e.credit && e.person.isNotBlank()
+
+/** Work or salary a person earned and I owe them: a Due expense. */
+fun isWork(e: Entry) = e.type == Type.KHARCHA && isDue(e)
 
 /** What a party mostly is, from their entries: Worker, Staff, Customer or Supplier; empty for plain loans. */
 fun partyRole(list: List<Entry>): String = when {
     list.any { isWork(it) && it.qty > 0 } -> "Worker"
     list.any { isWork(it) } -> "Staff"
-    list.any { it.type == Type.SALE } -> "Customer"
+    list.any { it.type == Type.SALE || isDue(it) } -> "Customer"
     list.any { it.type == Type.PURCHASE } -> "Supplier"
     else -> ""
 }
