@@ -93,7 +93,9 @@ internal fun glassBand(): Modifier {
 
 /** Money that left your hand. A sale or purchase on credit with a party moves no cash. */
 fun cashOut(e: Entry) = when (e.type) {
-    Type.KHARCHA, Type.DIYA, Type.WAPIS_DIYA, Type.TRANSFER_OUT -> true
+    Type.KHARCHA, Type.DIYA, Type.WAPIS_DIYA -> true
+    // To someone: money left; between your own accounts (D360, a wallet, the ATM): it only moved, so it stays yours.
+    Type.TRANSFER_OUT -> e.person.isNotBlank()
     // Goods made here moved no cash: they are stock, not a payment.
     Type.PURCHASE -> (e.paid || e.person.isBlank()) && !isMade(e)
     else -> false
@@ -101,7 +103,8 @@ fun cashOut(e: Entry) = when (e.type) {
 
 /** Money that came into your hand. */
 fun cashIn(e: Entry) = when (e.type) {
-    Type.AAMDANI, Type.LIYA, Type.WAPIS_MILA, Type.TRANSFER_IN -> true
+    Type.AAMDANI, Type.LIYA, Type.WAPIS_MILA -> true
+    Type.TRANSFER_IN -> e.person.isNotBlank()
     Type.SALE -> e.paid || e.person.isBlank()
     else -> false
 }
