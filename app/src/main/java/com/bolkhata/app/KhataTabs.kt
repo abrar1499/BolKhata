@@ -1524,7 +1524,15 @@ fun SideScreen(
                             // All time, the same figure the account shows inside; the card on top has this month.
                             val owe = if (!b.people) "" else (if (p > 0.5) " · " + fmt(p) + " " + Sides.balanceText(b, 1.0).second.lowercase() else "") +
                                 (if (m > 0.5) " · " + fmt(m) + " " + Sides.balanceText(b, -1.0).second.lowercase() else "")
-                            ItRow(bookIcon(b), b.name, sub, fmt(Sides.done(b, entries, setup) { true }), (if (income) "income" else "spent") + owe, ink, i, shown.size,
+                            val done = Sides.done(b, entries, setup) { true }
+                            // A people account with only money lent or borrowed (People) shows what is owed, not "0 spent".
+                            val net = p - m
+                            val loansOnly = b.people && done == 0.0 && (p > 0.5 || m > 0.5)
+                            val (amount, label, color) = if (loansOnly) Triple(fmt(kotlin.math.abs(net)),
+                                (if (net >= 0) Sides.balanceText(b, 1.0) else Sides.balanceText(b, -1.0)).second.lowercase() + " · net" + owe,
+                                if (net >= 0) GreenIn else RedSpend)
+                            else Triple(fmt(done), (if (income) "income" else "spent") + owe, ink)
+                            ItRow(bookIcon(b), b.name, sub, amount, label, color, i, shown.size,
                                 onLong = { acct = b }) { bookName = b.name; q = "" }
                         }
                     }
