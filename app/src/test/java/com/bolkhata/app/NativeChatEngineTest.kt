@@ -819,3 +819,11 @@ class ParserProductionTest {
         }
     }
 }
+
+/** Shampoo said the way people type it still goes to Personal care, not Other. */
+class ParserShampooSpellingTest {
+    @Test fun shampooSpellingsArePersonalCare() {
+        for (t in listOf("shampu 15", "shampo 20", "shampoo 30", "sabun 10"))
+            assertEquals(t, Cat.PERSONAL, Parser.parse(t).entries.single().category)
+    }
+}
