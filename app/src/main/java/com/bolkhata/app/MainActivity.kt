@@ -248,6 +248,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         partyOpen = saved
     }
     var confirmEmptyTrash by remember { mutableStateOf(false) }
+    // Expense / Income accounts the owner set up, for the open book, and the profit report opened from them.
+    var sides by remember(businessName) { mutableStateOf(store.loadSides()) }
+    var profitOpen by remember { mutableStateOf(false) }
     var showMoveHistory by remember { mutableStateOf(false) }
     var confirm by remember { mutableStateOf<Pair<String, Set<String>>?>(null) }  // message, ids to delete  // entries the app did not understand
     var newVersion by remember { mutableStateOf<UpdateInfo?>(null) }
@@ -638,14 +641,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     fun handleTextSafely(text: String, clock: Understand.Clock? = null, original: String? = null) {
         // "120000 awal eint tayyar hui": goods made go into stock at what one cost to make this month so far.
         Goods.readMade(text)?.let { (qty, said) ->
-            val now = System.currentTimeMillis()
-            val month = entries.filter { sameMonth(it.date, now) }
-            val cost = month.filter { it.type == Type.KHARCHA && it.category == Cat.PRODUCTION }.sumOf { it.amount }
-            val made = month.filter(::isMade).sumOf { it.qty }
             val item = Goods.canonical(said, Goods.known(entries)).ifBlank { "Goods" }
-            val e = madeEntry(item, qty, if (cost > 0) cost / (made + qty) else 0.0, now)
+            val e = madeEntry(item, qty, madeRate(entries, qty), System.currentTimeMillis())
             save(listOf(e) + entries)
-            toast("✓ Made ${fmt(qty)} $item" + if (cost > 0) " · cost ${fmt(e.rate)} each" else " · add this month's costs to see the cost of one")
+            toast("✓ Made ${fmt(qty)} $item" + if (e.rate > 0) " · cost ${fmt(e.rate)} each" else " · add this month's costs to see the cost of one")
             return
         }
         // "ghar ka bijli 3000": the entry goes to the book it names, without switching books.
@@ -2135,7 +2134,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         voice = if (recorder != null) VoiceState(true, "Listening…", "sends when you stop", level = voiceLevel) { finishRecording() } else null,
                         navPad = false
                     )
-                    KhataNav(tab) { tab = it }
+                    KhataNav(tab) { tab = it; profitOpen = false }
                 }
             } else {
                 // The khata tabs sit under the chat bar on the main screens.
@@ -2151,7 +2150,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         voice = if (recorder != null) VoiceState(true, "Listening…", "sends when you stop", level = voiceLevel) { finishRecording() } else null,
                         navPad = !nav
                     )
-                    if (nav) KhataNav(tab) { tab = it }
+                    if (nav) KhataNav(tab) { tab = it; profitOpen = false }
                 }
             }
         },
@@ -2188,7 +2187,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 tab == Tab.PARTIES && partyOpen != null -> {
                     val name = partyOpen!!
                     PartyKhataScreen(
-                        name, entries, currency, onBack = { partyOpen = null; activeLedgerPerson = null }, onEdit = { editing = it },
+                        name, entries, currency, onBack = { partyOpen = null; activeLedgerPerson = null; tab = Tab.CHAT }, onEdit = { editing = it },
                         onReport = {
                             val p = personAccounts(entries).firstOrNull { it.name.equals(name, true) }
                             ledgerPerson = name
@@ -2204,17 +2203,20 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     onAdd = { trade = it }, onEdit = { editing = it },
                     onSaveMade = { e -> save(listOf(e) + entries); toast("✓ Made ${fmt(e.qty)} ${e.item} · cost ${fmt(e.rate)} each") }
                 )
+                profitOpen -> ProfitScreen(entries, currency, sides, onBack = { profitOpen = false })
                 tab == Tab.CASHBOOK -> CashBookScreen(
                     entries, currency, onMenu = { openMenu() }, business = businessName, onBusiness = { pickingBusiness = true },
-                    onEdit = { editing = it }, onHistory = { tab = Tab.ENTRIES },
+                    onEdit = { editing = it }, onHistory = { profitOpen = true },
                     onAdd = { inc -> trade = cashTemplate(inc) }
                 )
                 tab == Tab.EXPENSE || tab == Tab.INCOME -> {
                     val inc = tab == Tab.INCOME
-                    MoneyScreen(
-                        inc, entries, currency, onMenu = { openMenu() }, business = businessName, onBusiness = { pickingBusiness = true }, onEdit = { editing = it },
-                        onReport = { reportStart = if (inc) ReportKind.CASH_IN else ReportKind.CASH_OUT; tab = Tab.REPORTS },
-                        onAdd = { trade = cashTemplate(inc) }
+                    SideScreen(
+                        inc, entries, currency, sides, onSetup = { s -> sides = s; store.saveSides(s) },
+                        onMenu = { openMenu() }, business = businessName, onBusiness = { pickingBusiness = true }, onEdit = { editing = it },
+                        onAdd = { trade = it },
+                        onStockIn = { item, qty -> val e = madeEntry(item, qty, madeRate(entries, qty), System.currentTimeMillis()); save(listOf(e) + entries); toast("✓ Stock added") },
+                        onReport = { profitOpen = true }
                     )
                 }
                 tab == Tab.HOME -> HomeScreen(
@@ -2935,9 +2937,9 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             EntryForm(
                 initial = t,
                 title = when {
+                    t.person.isNotBlank() -> t.person
                     t.type == Type.SALE -> "Sold " + t.item
                     t.type == Type.PURCHASE -> "Bought " + t.item
-                    t.person.isNotBlank() -> t.person
                     t.type == Type.DIYA -> "New party entry"
                     else -> "New entry"
                 },

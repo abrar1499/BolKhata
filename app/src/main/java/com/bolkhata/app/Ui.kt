@@ -358,6 +358,15 @@ fun costOf(e: Entry) = if (e.amount > 0) e.amount else e.rate * e.qty
 /** Goods made here (Production): they come into stock at what one cost to make, with no money paid. */
 fun isMade(e: Entry) = e.sourceFingerprint.startsWith("made:")
 
+/** What one of [qty] goods made now cost: this month's production costs over everything made this month, these too. */
+fun madeRate(all: List<Entry>, qty: Double, now: Long = System.currentTimeMillis()): Double {
+    val month = all.filter { sameMonth(it.date, now) }
+    val cost = month.filter { it.type == Type.KHARCHA && it.category == Cat.PRODUCTION }.sumOf { it.amount } +
+        month.filter { it.type == Type.PURCHASE && it.category == Cat.PRODUCTION && !isMade(it) }.sumOf { it.amount }
+    val made = month.filter(::isMade).sumOf { it.qty }
+    return if (cost > 0 && made + qty > 0) cost / (made + qty) else 0.0
+}
+
 fun madeEntry(item: String, qty: Double, rate: Double, date: Long, unit: String = ""): Entry {
     val id = "e" + System.nanoTime()
     return Entry(id, Type.PURCHASE, 0.0, Cat.STOCK, item, "", "Made", date, System.currentTimeMillis(),

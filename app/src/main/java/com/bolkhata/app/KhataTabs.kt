@@ -2,6 +2,7 @@
 
 package com.bolkhata.app
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
@@ -101,7 +102,7 @@ fun cashIn(e: Entry) = when (e.type) {
 }
 
 /** The tabs shown in the bottom bar, in order. */
-val KHATA_TABS = listOf(Tab.CHAT, Tab.PARTIES, Tab.CASHBOOK, Tab.EXPENSE, Tab.INCOME)
+val KHATA_TABS = listOf(Tab.CHAT, Tab.CASHBOOK, Tab.EXPENSE, Tab.INCOME)
 
 @Composable
 fun KhataNav(tab: Tab, onTab: (Tab) -> Unit) {
@@ -207,20 +208,24 @@ internal fun BusinessPill(name: String, onMenu: () -> Unit, onBusiness: () -> Un
 
 /** White card with two figures side by side and a small link at the end. */
 @Composable
-private fun SumCard(a: Triple<String, String, Color>, b: Triple<String, String, Color>, link: String, onLink: () -> Unit) {
+private fun SumCard(
+    a: Triple<String, String, Color>, b: Triple<String, String, Color>, link: String, onLink: () -> Unit,
+    /** A third figure (Expense: To pay), shown after the second. */
+    c: Triple<String, String, Color>? = null
+) {
     Surface(
         shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 1.dp
     ) {
         Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
-            listOf(a, b).forEachIndexed { i, (value, label, color) ->
+            listOfNotNull(a, b, c).forEachIndexed { i, (value, label, color) ->
                 if (i > 0) VerticalDivider(Modifier.fillMaxHeight(), color = MaterialTheme.colorScheme.outlineVariant)
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(value, color = color, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
                     Text(label, fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            VerticalDivider(Modifier.fillMaxHeight(), color = MaterialTheme.colorScheme.outlineVariant)
-            Text(
+            if (link.isNotEmpty()) VerticalDivider(Modifier.fillMaxHeight(), color = MaterialTheme.colorScheme.outlineVariant)
+            if (link.isNotEmpty()) Text(
                 link, color = Ember, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
                 modifier = Modifier.width(64.dp).clickable { onLink() }.padding(vertical = 8.dp)
             )
@@ -870,7 +875,7 @@ fun CashBookScreen(
                     SumCard(
                         Triple(money(currency, hand), "Cash in hand", if (hand < 0) RedSpend else GreenIn),
                         Triple(money(currency, spentMonth), "Spent this month", RedSpend),
-                        "History", onHistory
+                        "Report ›", onHistory
                     )
                 }
                 SearchBox(q, "Search") { q = it }
@@ -1039,125 +1044,6 @@ fun TrashScreen(
 
 // ---------------------------------------------------------------- Expense / Income
 
-@Composable
-fun MoneyScreen(
-    income: Boolean, entries: List<Entry>, currency: String, onMenu: () -> Unit, business: String, onBusiness: () -> Unit,
-    onEdit: (Entry) -> Unit, onReport: () -> Unit, onAdd: () -> Unit
-) {
-    val type = if (income) Type.AAMDANI else Type.KHARCHA
-    val list = remember(entries, income) {
-        entries.filter { it.type == type }.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt })
-    }
-    val color = if (income) GreenIn else RedSpend
-    val start = cal(System.currentTimeMillis()).apply {
-        set(java.util.Calendar.DAY_OF_MONTH, 1); set(java.util.Calendar.HOUR_OF_DAY, 0)
-        set(java.util.Calendar.MINUTE, 0); set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
-    }
-    val thisStart = start.timeInMillis
-    val year = start.get(java.util.Calendar.YEAR)
-    val yearStart = start.apply { set(java.util.Calendar.MONTH, java.util.Calendar.JANUARY) }.timeInMillis
-    val thisMonth = list.filter { it.date >= thisStart }.sumOf { it.amount }
-    val thisYear = list.filter { it.date >= yearStart }.sumOf { it.amount }
-    // Month chips like the Cash book, with All first (the default here).
-    val months = remember(list) { monthsOf(list) }
-    var pick by rememberSaveable(income) { mutableIntStateOf(ALL_MONTHS) }
-    var q by rememberSaveable(income) { mutableStateOf("") }
-    val shown = remember(list, pick, q) { list.filter { inMonth(it.date, pick) && (q.isBlank() || matches(it, q)) } }
-    val total = shown.sumOf { it.amount }
-    // Expense by category; income by who paid (like the party list).
-    val groups = remember(shown, income) {
-        (if (income) shown.groupBy { source(it).lowercase() }.map { (_, l) -> Group(source(l.first()), null, l) }
-        else shown.groupBy { it.category }.map { (c, l) -> Group(c.label, c, l) })
-            // Categories biggest first (they show a share); payers newest first, like every dated list.
-            .sortedByDescending { if (income) it.list.maxOf { e -> e.date }.toDouble() else it.total }
-    }
-    val open = remember(income) { mutableStateListOf<String>() }
-    val khataMenu = LocalKhataMenu.current
-    Box(Modifier.fillMaxSize()) {
-        val listState = rememberLazyListState()
-        LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
-            stickyHeader { TabHead {
-                KhataTop("", "", onMenu, business = business, onBusiness = onBusiness) {
-                    SumCard(Triple(money(currency, thisYear), "Year $year", color), Triple(money(currency, thisMonth), "This month", color), "Report ›", onReport)
-                }
-                SearchBox(q, "Search") { q = it }
-                if (months.isNotEmpty()) MonthChips(months, pick) { pick = it }
-            } }
-            val kind = if (income) LKind.IN else LKind.OUT
-            if (groups.isNotEmpty()) item {
-                LedgerHead(if (income) "Income" else "Expense", if (groups.size == 1) "1 group" else "${groups.size} groups",
-                    listOf(LCol("Total", fmt(total), kind)), false, WideColW)
-            }
-            groups.forEach { g ->
-                val isOpen = g.name in open
-                item(key = "g" + g.name) {
-                    val share = if (total > 0) (g.total / total).toFloat() else 0f
-                    // Its own square raised card: icon, name with a share bar (expense) or last date and count (income), then the
-                    // amount in dark ink (only the head's Total is red / green), in a column with the party cards' light tint (red for expense, green for income).
-                    Row(
-                        Modifier.padding(start = 10.dp, end = 10.dp, top = 2.dp).fillMaxWidth().height(IntrinsicSize.Min).shadow(1.dp)
-                            .background(MaterialTheme.colorScheme.surface)
-                            .combinedClickable(onLongClick = khataMenu?.let { { it(if (income) "income" else "expense", g.name) } }) {
-                                if (isOpen) open.remove(g.name) else open.add(g.name)
-                            }.padding(start = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (g.cat != null) CatBubble(g.cat, 30.dp) else Initial(g.name)
-                        Spacer(Modifier.width(10.dp))
-                        Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
-                            Text(g.name, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            if (g.cat != null) {
-                                Box(Modifier.padding(top = 4.dp).fillMaxWidth().height(4.dp).clip(CircleShape).background(MaterialTheme.colorScheme.outlineVariant)) {
-                                    Box(Modifier.fillMaxWidth(share).fillMaxHeight().clip(CircleShape).background(catColor(g.cat)))
-                                }
-                            } else {
-                                Text(shortDay.format(Date(g.list.maxOf { it.date })) + " · " + (if (g.list.size == 1) "1 entry" else "${g.list.size} entries"),
-                                    fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-                            }
-                        }
-                        Spacer(Modifier.width(10.dp))
-                        VerticalDivider(Modifier.fillMaxHeight(), color = Faint)
-                        Column(
-                            Modifier.width(WideColW).fillMaxHeight().background(cellTint(kind, 0.025f)),
-                            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
-                        ) {
-                            Text(fmt(g.total), fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, color = AmountInk)
-                            Text(if (g.cat != null) "${Math.round(share * 100)}%" else if (isOpen) "⌄" else "›",
-                                fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                }
-                // A group's own entries open right under it, on the same ledger page; an expense category with
-                // several names (Bank fee, Iqama fee…) shows one ledger per name, newest first.
-                if (isOpen) {
-                    val subs = if (g.cat == null) listOf(g.list) else g.list.groupBy { nameKey(it) }.values.sortedByDescending { l -> l.maxOf { it.date } }
-                    subs.forEach { list ->
-                        ledger(
-                            if (subs.size == 1) g.name else title(list.first()), listOf(LCol("Amount", fmt(list.sumOf { it.amount }), kind)),
-                            list.map { e -> LRow(e.id, e.date, title(e), e.note, listOf(e.amount), e) { onEdit(e) } },
-                            keyPrefix = "g${g.name}:${title(list.first()).lowercase()}:",
-                            // Hold the head to move the whole name khata (all of Muhammad Bin Saeed) to another category.
-                            onHold = khataMenu?.let { m ->
-                                { if (subs.size == 1) m(if (income) "income" else "expense", g.name) else m("expense-name", title(list.first()).trim()) }
-                            }
-                        )
-                    }
-                    item(key = "g${g.name}:end") { Spacer(Modifier.height(8.dp)) }
-                }
-            }
-            if (list.isEmpty()) item {
-                Text(if (income) "No income yet." else "No expenses yet.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp, modifier = Modifier.padding(24.dp))
-            }
-        }
-        PlusButton(onAdd)
-    }
-}
-
-/** A row on the Expense / Income page: a category, or for income the one who paid. */
-private class Group(val name: String, val cat: Cat?, val list: List<Entry>) {
-    val total = list.sumOf { it.amount }
-}
-
 /** Who an income came from: the payer's name, or "From X" read from a bank alert's note. */
 internal fun source(e: Entry): String {
     val generic = e.item.isBlank() || e.item.equals("Transfer", true) || e.item.equals("Income", true)
@@ -1272,5 +1158,323 @@ fun BusinessPicker(
             confirmButton = { TextButton(onClick = { onDelete(id); deleting = null }) { Text("Delete", color = RedSpend) } },
             dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancel") } }
         )
+    }
+}
+
+// ---------------------------------------------------------------- Expense / Income as accounts
+
+/** Orange of work done and goods given: owed, not cash. */
+private val OweInk = Color(0xFFB45309)
+
+/**
+ * Expense or Income as accounts: people (Staff, Suppliers, Customers…) and things (Food, Bills…). An account opens its
+ * people or things; a person opens their khata with Paid | Work (or Given | Received) and the two add buttons.
+ * Income also has Items: what was given, to whom, and what is left in stock.
+ */
+@Composable
+fun SideScreen(
+    income: Boolean, entries: List<Entry>, currency: String, setup: SideSetup, onSetup: (SideSetup) -> Unit,
+    onMenu: () -> Unit, business: String, onBusiness: () -> Unit, onEdit: (Entry) -> Unit, onAdd: (Entry) -> Unit,
+    onStockIn: (String, Double) -> Unit, onReport: () -> Unit
+) {
+    val side = if (income) Side.INC else Side.EXP
+    var bookName by rememberSaveable(income) { mutableStateOf<String?>(null) }
+    var kidName by rememberSaveable(income) { mutableStateOf<String?>(null) }
+    var items by rememberSaveable(income) { mutableStateOf(false) }
+    var itemName by rememberSaveable(income) { mutableStateOf<String?>(null) }
+    var q by rememberSaveable(income) { mutableStateOf("") }
+    var adding by remember { mutableStateOf<String?>(null) }   // "book" or "kid"
+    var stockIn by remember { mutableStateOf(false) }
+    val books = remember(entries, setup, side) { Sides.books(side, entries, setup) }
+    val book = books.firstOrNull { it.name == bookName }
+    val owedNow = remember(entries, setup, side) { Sides.owed(side, entries, setup) }
+    BackHandler(enabled = bookName != null || itemName != null) {
+        when { kidName != null -> kidName = null; bookName != null -> bookName = null; else -> itemName = null }
+    }
+    val now = System.currentTimeMillis()
+    val thisMonth = { ms: Long -> sameMonth(ms, now) }
+    val ink = if (income) GreenIn else RedSpend
+    val crumb = if (income) "Income" else "Expense"
+    val state = rememberLazyListState()
+    Box(Modifier.fillMaxSize()) {
+        LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
+            when {
+                book != null && kidName != null -> {
+                    val kid = Sides.kids(book, entries, setup).firstOrNull { it.name.equals(kidName, true) } ?: Kid(kidName!!, emptyList())
+                    kidView(book, kid, currency, crumb) { kidName = null }
+                    kidLedger(book, kid, onEdit)
+                }
+                book != null -> {
+                    val kids = Sides.kids(book, entries, setup)
+                    stickyHeader { TabHead {
+                        KhataTop(book.name, "$crumb ›", { bookName = null }, back = true) {
+                            if (book.people) {
+                                val pos = kids.filter { it.balance > 0.5 }.sumOf { it.balance }
+                                val neg = kids.filter { it.balance < -0.5 }.sumOf { -it.balance }
+                                val (a, b) = Sides.balanceText(book, 1.0).second to Sides.balanceText(book, -1.0).second
+                                SumCard(Triple(money(currency, pos), a, if (income) GreenIn else OweInk), Triple(money(currency, neg), b, if (income) OweInk else RedSpend),
+                                    "+ Add", { adding = "kid" })
+                            } else SumCard(Triple(money(currency, Sides.done(book, entries, setup, thisMonth)), if (income) "This month" else "Spent this month", ink),
+                                Triple(money(currency, kids.sumOf { it.total }), "All time", ink), "+ Add", { adding = "kid" })
+                        }
+                    } }
+                    kids.forEachIndexed { i, k ->
+                        item(key = "k" + k.name.lowercase()) {
+                            val (amt, what) = if (book.people) Sides.balanceText(book, k.balance) else fmt(k.total) to ""
+                            val color = when {
+                                !book.people -> AmountInk
+                                what == "Settled" -> MaterialTheme.colorScheme.onSurfaceVariant
+                                (k.balance > 0) == income -> GreenIn
+                                else -> if (income) OweInk else RedSpend
+                            }
+                            GridRow(k.name, entryCount(k.entries.size) + if (what.isNotEmpty() && what != "Settled") " · $what" else "",
+                                listOf(GCell(amt, if (book.people) LKind.PLAIN else if (income) LKind.IN else LKind.OUT, color)), WideColW, i == kids.lastIndex) { kidName = k.name }
+                        }
+                    }
+                    item(key = "addkid") { AddLine("+ Add in ${book.name}") { adding = "kid" } }
+                }
+                items -> {
+                    val all = Sides.items(entries, setup)
+                    val it0 = all.firstOrNull { it.name == itemName }
+                    stickyHeader { TabHead {
+                        if (it0 == null) KhataTop("", "", onMenu, business = business, onBusiness = onBusiness) {
+                            SumCard(Triple(money(currency, all.sumOf { it.amount }), "Sold", GreenIn), Triple(all.size.toString(), "Items", AmountInk), "Report ›", onReport)
+                        } else KhataTop(it0.name, "Income › Items ›", { itemName = null }, back = true) {
+                            SumCard(Triple(fmt(it0.given), "Given", GreenIn), Triple(fmt(it0.inStock), "In stock", AmountInk), "+ Stock in", { stockIn = true },
+                                Triple(money(currency, it0.amount), "Amount", AmountInk))
+                        }
+                        if (it0 == null) SideChips(true) { items = it; itemName = null }
+                    } }
+                    if (it0 == null) {
+                        if (all.isEmpty()) emptyNote("No items yet. Add Given in a customer's account, with goods and qty.")
+                        all.forEachIndexed { i, r ->
+                            item(key = "i" + r.name) {
+                                GridRow(r.name, "Given to " + (if (r.who.size == 1) "1 customer" else "${r.who.size} customers"),
+                                    listOf(GCell(fmt(r.given), LKind.PLAIN), GCell(fmt(r.inStock), LKind.PLAIN)), WideColW, i == all.lastIndex) { itemName = r.name }
+                            }
+                        }
+                    } else {
+                        it0.who.forEachIndexed { i, (who, n) ->
+                            item(key = "w$who") { GridRow(who, "Given", listOf(GCell(fmt(n), LKind.PLAIN)), WideColW, false) {} }
+                        }
+                        it0.stockIn.forEach { e ->
+                            item(key = "s" + e.id) { GridRow(if (isMade(e)) "Made" else "Stock in", shortDay.format(Date(e.date)) + (e.person.takeIf { it.isNotBlank() }?.let { " · $it" } ?: ""),
+                                listOf(GCell("+" + fmt(e.qty), LKind.IN, GreenIn)), WideColW, false) { onEdit(e) } }
+                        }
+                    }
+                }
+                else -> {
+                    val (pos, neg) = owedNow
+                    val total = books.sumOf { Sides.done(it, entries, setup, thisMonth) }
+                    stickyHeader { TabHead {
+                        KhataTop("", "", onMenu, business = business, onBusiness = onBusiness) {
+                            SumCard(Triple(money(currency, total), if (income) "Income this month" else "Spent this month", ink),
+                                Triple(money(currency, pos), if (income) "To get" else "Advance left", if (income) GreenIn else OweInk),
+                                "Report ›", onReport, Triple(money(currency, neg), if (income) "Advance taken" else "To pay", if (income) OweInk else RedSpend))
+                        }
+                        if (income) SideChips(false) { items = it }
+                        SearchBox(q, "Search") { q = it }
+                    } }
+                    val shown = books.filter { q.isBlank() || it.name.contains(q.trim(), true) ||
+                        Sides.kids(it, entries, setup).any { k -> k.name.contains(q.trim(), true) } }
+                    shown.forEachIndexed { i, b ->
+                        item(key = "b" + b.name) {
+                            val kids = Sides.kids(b, entries, setup)
+                            val sub = if (b.people) (if (kids.size == 1) "1 person" else "${kids.size} people") else kids.take(4).joinToString(", ") { it.name }
+                            GridRow(b.name, sub, listOf(GCell(fmt(Sides.done(b, entries, setup, thisMonth)), if (income) LKind.IN else LKind.OUT)), WideColW, i == shown.lastIndex) {
+                                bookName = b.name; q = ""
+                            }
+                        }
+                    }
+                    if (shown.isEmpty()) emptyNote("Nothing found")
+                    item(key = "addbook") { AddLine("+ Add account") { adding = "book" } }
+                }
+            }
+        }
+        UpButton(state)
+        // A person or thing: its two add buttons (or one); elsewhere the usual Entry button.
+        if (book != null && kidName != null) {
+            val name = kidName!!
+            val (plus, minus) = Sides.columns(book)
+            val staff = Sides.bookOf(name, entries, setup) == Sides.STAFF
+            when {
+                !book.people -> AddButtons(listOf((if (income) "+ In" else "+ Out") to ink)) {
+                    onAdd(cashTemplate(income).copy(category = if (income) Cat.TANKHWAH else book.cat ?: Cat.OTHER, item = name))
+                }
+                income -> AddButtons(listOf("+ Received" to GreenIn, "+ Given" to OweInk)) { i ->
+                    onAdd(if (i == 0) template(Type.WAPIS_MILA, name) else template(Type.SALE, name).copy(category = Cat.SALES, item = ""))
+                }
+                book.name == Sides.PEOPLE -> AddButtons(listOf("+ $plus" to RedSpend, "+ $minus" to GreenIn)) { i ->
+                    onAdd(template(if (i == 0) Type.DIYA else Type.WAPIS_MILA, name))
+                }
+                else -> AddButtons(listOf("+ Paid" to RedSpend, "+ Work" to OweInk)) { i ->
+                    onAdd(if (i == 0) template(Type.DIYA, name)
+                    else template(Type.PURCHASE, name).copy(category = if (staff) Cat.PRODUCTION else Cat.STOCK, item = ""))
+                }
+            }
+        } else if (book == null && !items) PlusButton { onAdd(cashTemplate(income)) }
+    }
+    adding?.let { what ->
+        NameDialog(if (what == "book") "New account" else "Add in ${book?.name}", askKind = what == "book", onDismiss = { adding = null }) { name, people ->
+            val n = name.trim()
+            if (n.isNotEmpty()) onSetup(when {
+                what == "book" -> setup.copy(books = setup.books + Book(side, n, people))
+                book?.people == true -> setup.copy(people = setup.people + (n to book.name))
+                book != null -> setup.copy(kids = setup.kids + (book.name to (setup.kids[book.name].orEmpty() + n)))
+                else -> setup
+            })
+            adding = null
+        }
+    }
+    if (stockIn) itemName?.let { n ->
+        StockInDialog(n, onDismiss = { stockIn = false }) { qty -> onStockIn(n, qty); stockIn = false }
+    }
+}
+
+/** A person's or thing's head: what the balance means, or what it cost / brought in. */
+private fun LazyListScope.kidView(book: Book, kid: Kid, currency: String, crumb: String, onBack: () -> Unit) {
+    stickyHeader { TabHead {
+        KhataTop(kid.name, "$crumb › ${book.name} ›", onBack, back = true) {
+            if (book.people) {
+                val what = Sides.balanceText(book, kid.balance).second
+                val (plus, minus) = Sides.columns(book)
+                val color = when { what == "Settled" -> MaterialTheme.colorScheme.onSurfaceVariant; what == "To get" || what == "Advance left" -> GreenIn; else -> RedSpend }
+                SumCard(Triple(money(currency, kotlin.math.abs(kid.balance)), what, color),
+                    Triple(money(currency, kid.entries.filter { personEffect(it) > 0 }.sumOf { it.amount }), plus, AmountInk), "",  {},
+                    Triple(money(currency, kid.entries.filter { personEffect(it) < 0 }.sumOf { it.amount }), minus, AmountInk))
+            } else SumCard(Triple(money(currency, kid.total), if (book.side == Side.INC) "Income" else "Spent", if (book.side == Side.INC) GreenIn else RedSpend),
+                Triple(entryCount(kid.entries.size), "Entries", AmountInk), "", {})
+        }
+    } }
+}
+
+/** A person's or thing's entries, newest first, in its columns: Paid | Work, Given | Received, or one Out / In column. */
+private fun LazyListScope.kidLedger(book: Book, kid: Kid, onEdit: (Entry) -> Unit) {
+    val list = kid.entries
+    fun line(e: Entry) = if (e.qty > 0) (e.item.takeIf { it.isNotBlank() && it !in setOf("Sale", "Purchase", "Loans") }?.let { "$it · " } ?: "") +
+        fmt(e.qty) + (if (e.rate > 0) " × " + fmt(e.rate) + (if (e.unit == "1000") " /1000" else "") else "")
+        else e.note.ifBlank { e.item.takeIf { it.isNotBlank() && it != "Loans" } ?: e.type.label }
+    if (!book.people) {
+        val kind = if (book.side == Side.INC) LKind.IN else LKind.OUT
+        ledger(kid.name, listOf(LCol(if (book.side == Side.INC) "In" else "Out", fmt(kid.total), kind)),
+            list.map { e -> LRow(e.id, e.date, e.note.ifBlank { kid.name }, "", listOf(e.amount), e) { onEdit(e) } }, keyPrefix = "kid:")
+        return
+    }
+    val (plus, minus) = Sides.columns(book)
+    val income = book.side == Side.INC
+    val plusKind = if (income) LKind.PLAIN else LKind.OUT
+    val minusKind = if (income) LKind.IN else LKind.PLAIN
+    ledger(kid.name,
+        listOf(LCol(plus, fmt(list.filter { personEffect(it) > 0 }.sumOf { it.amount }), plusKind),
+            LCol(minus, fmt(list.filter { personEffect(it) < 0 }.sumOf { it.amount }), minusKind)),
+        list.map { e ->
+            val p = personEffect(e) > 0
+            LRow(e.id, e.date, line(e), if (e.qty > 0) e.note else "", listOf(if (p) e.amount else 0.0, if (!p) e.amount else 0.0), e) { onEdit(e) }
+        }, keyPrefix = "kid:")
+}
+
+/** Accounts | Items, the two views of Income. */
+@Composable
+private fun SideChips(items: Boolean, onPick: (Boolean) -> Unit) {
+    Row(Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        SmallChip("Accounts", !items) { onPick(false) }
+        SmallChip("Items", items) { onPick(true) }
+    }
+}
+
+/** "+ Add account" / "+ Add in Staff" at the end of a list, in the accent colour. */
+@Composable
+private fun AddLine(label: String, onClick: () -> Unit) {
+    Text(label, color = Ember, fontSize = 12.sp, fontWeight = FontWeight.Bold,
+        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp).fillMaxWidth().clickable { onClick() }.padding(vertical = 8.dp, horizontal = 4.dp))
+}
+
+/** The add buttons of a person or thing, side by side above the bottom panel, in the Entry button's white card look. */
+@Composable
+private fun BoxScope.AddButtons(buttons: List<Pair<String, Color>>, onClick: (Int) -> Unit) {
+    val shape = RoundedCornerShape(14.dp)
+    Row(Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = LocalBarSpace.current + 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        buttons.forEachIndexed { i, (label, color) ->
+            Box(Modifier.height(46.dp).shadow(2.dp, shape).clip(shape).background(MaterialTheme.colorScheme.surface)
+                .clickable { onClick(i) }.padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+                Text(label, color = color, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+/** Asks a name; for a new account also whether it holds people (a party) or things (food, bills). */
+@Composable
+private fun NameDialog(title: String, askKind: Boolean, onDismiss: () -> Unit, onSave: (String, Boolean) -> Unit) {
+    var name by remember { mutableStateOf("") }
+    var people by remember { mutableStateOf(true) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(name, { name = it }, singleLine = true, label = { Text(if (askKind) "Account name" else "Name") })
+                if (askKind) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    SmallChip("People (party)", people) { people = true }
+                    SmallChip("Things (food, bills)", !people) { people = false }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onSave(name, people) }) { Text("Add") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
+
+/** Stock in for an item: how many were made or bought. No cash moves; a purchase is a + Paid to the supplier. */
+@Composable
+private fun StockInDialog(item: String, onDismiss: () -> Unit, onSave: (Double) -> Unit) {
+    var qty by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Stock in · $item") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                OutlinedTextField(qty, { t -> qty = t.filter { it.isDigit() || it == '.' } }, singleLine = true, label = { Text("Qty made or bought") },
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number))
+                Text("Stock only, no cash. A purchase is a + Paid to the supplier.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        },
+        confirmButton = { TextButton(onClick = { qty.toDoubleOrNull()?.takeIf { it > 0 }?.let(onSave) }) { Text("Save") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
+
+/** Report · Profit: sale and other income less work, purchases and expenses, then what is owed (not part of profit). */
+@Composable
+fun ProfitScreen(entries: List<Entry>, currency: String, setup: SideSetup, onBack: () -> Unit) {
+    val newest = remember(entries) { entries.sortedByDescending { it.date } }
+    val months = remember(newest) { monthsOf(newest) }
+    var month by rememberSaveable { mutableIntStateOf(months.firstOrNull()?.first ?: ALL_MONTHS) }
+    val p = remember(newest, month) { Sides.profit(newest.filter { inMonth(it.date, month) }) }
+    val (adv, pay) = remember(entries, setup) { Sides.owed(Side.EXP, entries, setup) }
+    val (get, taken) = remember(entries, setup) { Sides.owed(Side.INC, entries, setup) }
+    BackHandler { onBack() }
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
+        stickyHeader { TabHead {
+            KhataTop("Report · Profit", "Cashbook ›", onBack, back = true) {
+                SumCard(Triple(money(currency, kotlin.math.abs(p.profit)), if (p.profit < 0) "Loss" else "Profit", if (p.profit < 0) RedSpend else GreenIn),
+                    Triple(money(currency, p.sale + p.income), "Earned", GreenIn), "", {})
+            }
+            if (months.isNotEmpty()) MonthChips(months, month) { month = it }
+        } }
+        val lines = listOf(
+            Triple("Sale", "goods given to customers", GCell("+" + fmt(p.sale), LKind.IN, GreenIn)),
+            Triple("Other income", "salary, rent…", GCell("+" + fmt(p.income), LKind.IN, GreenIn)),
+            Triple("Work and purchases", "labour and goods from staff and suppliers", GCell("−" + fmt(p.work), LKind.OUT, RedSpend)),
+            Triple("Expenses", "home, bills…", GCell("−" + fmt(p.spent), LKind.OUT, RedSpend)),
+            Triple("Profit", "", GCell(plusMinus(p.profit), LKind.PLAIN, if (p.profit < 0) RedSpend else GreenIn))
+        )
+        lines.forEachIndexed { i, (t, s, c) -> item(key = "p$i") { GridRow(t, s, listOf(c), WideColW, i == lines.lastIndex) {} } }
+        item(key = "owed") {
+            Text("OWED · not part of profit", fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 14.dp, top = 14.dp, bottom = 4.dp))
+        }
+        val owed = listOf(Triple("To get", get, GreenIn), Triple("To pay", pay, RedSpend), Triple("Advance left", adv, OweInk), Triple("Advance taken", taken, OweInk))
+        owed.forEachIndexed { i, (t, v, c) -> item(key = "o$i") { GridRow(t, "", listOf(GCell(fmt(v), LKind.PLAIN, c)), WideColW, i == owed.lastIndex) {} } }
     }
 }

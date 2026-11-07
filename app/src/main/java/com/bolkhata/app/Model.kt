@@ -471,6 +471,29 @@ class Store(context: Context) {
     /** Saves the entries of another business (an entry said for it while this one is open). */
     fun saveFor(id: String, list: List<Entry>) = write(scoped("entries", id), list)
 
+    /** The open book's own accounts, who sits in which people account, and extra things inside accounts (see [Sides]). */
+    fun loadSides(): SideSetup = try {
+        val o = JSONObject(prefs.getString(scoped("sides"), "{}") ?: "{}")
+        val books = o.optJSONArray("books") ?: JSONArray()
+        val people = o.optJSONObject("people") ?: JSONObject()
+        val kids = o.optJSONObject("kids") ?: JSONObject()
+        SideSetup(
+            (0 until books.length()).map { i -> books.getJSONObject(i).let { b ->
+                Book(if (b.optString("side") == "inc") Side.INC else Side.EXP, b.getString("name"), b.optBoolean("people")) } },
+            people.keys().asSequence().associateWith { people.getString(it) },
+            kids.keys().asSequence().associateWith { k -> kids.getJSONArray(k).let { a -> (0 until a.length()).map { a.getString(it) } } }
+        )
+    } catch (_: Exception) { SideSetup() }
+
+    fun saveSides(s: SideSetup) {
+        val o = JSONObject()
+        o.put("books", JSONArray().apply { s.books.forEach { b ->
+            put(JSONObject().put("side", if (b.side == Side.INC) "inc" else "exp").put("name", b.name).put("people", b.people)) } })
+        o.put("people", JSONObject().apply { s.people.forEach { (k, v) -> put(k, v) } })
+        o.put("kids", JSONObject().apply { s.kids.forEach { (k, v) -> put(k, JSONArray(v)) } })
+        prefs.edit().putString(scoped("sides"), o.toString()).apply()
+    }
+
     /** Saving happens on one background thread, in order, so the screen never waits for it. */
     private val saver = java.util.concurrent.Executors.newSingleThreadExecutor()
 
