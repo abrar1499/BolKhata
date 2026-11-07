@@ -2185,7 +2185,16 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 LocalMainOpener provides { a: MainAcct -> ledger = a },
                 LocalEntryMenu provides { e: Entry -> menuFor = e },
                 LocalKhataMenu provides { kind: String, n: String -> khataFor = kind to n },
-                LocalSelection provides selection
+                LocalSelection provides selection,
+                LocalTopMenu provides TopMenu(
+                    currency,
+                    onImport = { importFile.launch(arrayOf("application/json", "text/plain", "application/octet-stream", "*/*")) },
+                    onExport = {
+                        val day = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+                        exportFile.launch("SmartExpense-backup-$day.json")
+                    },
+                    onCurrency = { c -> currency = c; store.currency = c; toast("✓ Currency set to $c") }
+                )
             ) {
             // Each screen keeps its own scroll and picks when another opens over it (a party, a report…),
             // so Back returns to the same place in the list.

@@ -176,7 +176,11 @@ private fun KhataTop(
     Box(Modifier.fillMaxWidth()
         .then(if (banded) Modifier.drawBehind { drawBand(theme, size.height - cardH / 2f) } else Modifier)) {
         Column(Modifier.statusBarsPadding().padding(horizontal = 12.dp)) {
-            if (business != null) BusinessPill(business, onMenu, onBusiness) else
+            if (business != null) Row(verticalAlignment = Alignment.CenterVertically) {
+                BusinessPill(business, onMenu, onBusiness)
+                Spacer(Modifier.weight(1f))
+                LocalTopMenu.current?.let { TopMenuButton(it) }
+            } else
             Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onMenu) {
                     Icon(if (back) Icons.AutoMirrored.Filled.ArrowBack else Icons.Filled.Menu, contentDescription = if (back) "Back" else "Menu", tint = ink)
@@ -204,6 +208,31 @@ private fun TabHead(content: @Composable ColumnScope.() -> Unit) =
 private fun DrawScope.drawBand(theme: HeaderTheme, h: Float) {
     drawGlass(bandColors(theme), h)
     drawRect(Color.White.copy(alpha = 0.35f), topLeft = Offset(0f, h - 1.dp.toPx()), size = Size(size.width, 1.dp.toPx()))
+}
+
+/** The ⋮ menu at the top right of Business and Personal: import, export and currency. */
+class TopMenu(val currency: String, val onImport: () -> Unit, val onExport: () -> Unit, val onCurrency: (String) -> Unit)
+val LocalTopMenu = compositionLocalOf<TopMenu?> { null }
+
+/** A white round ⋮ next to the business pill, same look as the pill. */
+@Composable
+private fun TopMenuButton(m: TopMenu) {
+    var open by remember { mutableStateOf(false) }
+    var currencies by remember { mutableStateOf(false) }
+    Box(Modifier.padding(top = 12.dp)) {
+        Box(
+            Modifier.size(40.dp).shadow(1.dp, CircleShape).clip(CircleShape).background(Color.White).clickable { open = true },
+            contentAlignment = Alignment.Center
+        ) { Icon(Icons.Filled.MoreVert, contentDescription = "More", tint = Color(0xFF1C1917), modifier = Modifier.size(20.dp)) }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(text = { Text("Import") }, onClick = { open = false; m.onImport() })
+            DropdownMenuItem(text = { Text("Export") }, onClick = { open = false; m.onExport() })
+            DropdownMenuItem(text = { Text("Currency · " + m.currency) }, onClick = { open = false; currencies = true })
+        }
+        DropdownMenu(expanded = currencies, onDismissRequest = { currencies = false }, modifier = Modifier.heightIn(max = 360.dp)) {
+            CURRENCIES.forEach { c -> DropdownMenuItem(text = { Text(currencyLabel(c)) }, onClick = { currencies = false; m.onCurrency(c) }) }
+        }
+    }
 }
 
 /** Compact frosted pill at the top: menu, then the open business with ▾ to switch or add one. */
