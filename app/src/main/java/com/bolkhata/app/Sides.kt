@@ -154,7 +154,7 @@ object Sides {
         else -> fmt(kotlin.math.abs(v)) to if (v > 0) "Advance left" else "To pay"
     }
 
-    /** Items: each one sold (goods given), to whom, and what is left of what came in (made or bought). */
+    /** Items: each one sold or made, to whom it was given, and what is left of what came in (made or bought). */
     class Item(val name: String, val given: Double, val amount: Double, val inStock: Double, val who: List<Pair<String, Double>>, val stockIn: List<Entry>)
 
     fun items(all: List<Entry>, setup: SideSetup): List<Item> {
@@ -162,7 +162,8 @@ object Sides {
         val sales = all.filter { it.type == Type.SALE && it.qty > 0 && it.item.isNotBlank() && !it.item.equals("Sale", true) }
         val ins = all.filter { it.type == Type.PURCHASE && it.qty > 0 && it.item.isNotBlank() && it.id !in staff && !it.item.equals("Purchase", true) }
             .sortedByDescending { it.date }
-        val names = (sales.map { it.item.trim() } + ins.map { it.item.trim() }).distinctBy { it.lowercase() }
+        // Only goods you sell or make show here: raw material (kachi eint, coal…) used up in making is a cost, not stock.
+        val names = (sales.map { it.item.trim() } + ins.filter(::isMade).map { it.item.trim() }).distinctBy { it.lowercase() }
         return names.map { n ->
             val s = sales.filter { it.item.trim().equals(n, true) }
             val i = ins.filter { it.item.trim().equals(n, true) }
