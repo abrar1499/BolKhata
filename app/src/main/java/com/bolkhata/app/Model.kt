@@ -656,4 +656,9 @@ class Store(context: Context) {
     var dark: Boolean
         get() = prefs.getBoolean("dark", false)
         set(v) = prefs.edit().putBoolean("dark", v).apply()
+
+    /** A photo picked as the app's background (a file in the app's own storage); empty for the plain colour. */
+    var bgPhoto: String
+        get() = prefs.getString("bgPhoto", "") ?: ""
+        set(v) = prefs.edit().putString("bgPhoto", v).apply()
 }

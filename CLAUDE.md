@@ -91,15 +91,16 @@ Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Packa
 - A push to main is blocked unless the owner's latest words approve the release; if blocked, ask once, plainly.
 
 ## Look the owner likes (keep it)
-- No coloured header band: page colour up to the status bar (status bar = page colour), white business pill
-  (`BusinessPill`: menu, name ▾) and the white summary card on the page; bottom tabs Chat · Business · Cashbook ·
-  Expense · Income; chat bar on every screen; "Entry" add button (`PlusButton`).
-- Lists sit in white rounded sheets with faint lines. Business tab chips Parties · Stock · Sale · Purchase · Profit,
-  each with month chips (All first). Parties list = ledger columns Party | Payable | Receivable
-  (totals in the head, same tints as Cash) so dues show at a glance; tapping a party opens its Paid | Received khata.
-- Ledgers (`ledger()` in KhataTabs.kt): head cell "Month / N entries", each total under its column name;
-  slim day line per date with signed day totals, same light blue tint on every date; rows show detail with
-  "time · note" below, signed amounts (−out / +in) centred in Out | In. No Balance column, no arrows.
-- Small text: compact lists use `Tight { }` (no extra line height); the app pins the screen to 390 dp wide and fontScale 1 (MainActivity), and text line height is 1.25em
-  (AppTypography), so phones show the mock-up 1:1 (1 CSS px = 1 dp/sp).
-- Red = money out, green = money in. No pill buttons, no extra headings.
+- Mock-up of record: Artifact https://claude.ai/artifact/KaEp1kbD1q82ARWJdB9zhr (copied 1:1 into Compose).
+- Page colour: plain grey #EDEDED (Background: Gray / Dark / own photo, in the side menu). Cards white, no glass on
+  cards; only the app icon (`GlassLogo`) and the optional header band are glossy.
+- White business pill (`BusinessPill`: glossy logo + name, no arrow); tapping it opens the side menu, which is also
+  Settings: businesses (+ Add business), Name, Currency, Language, Header dots, Background dots + photo, Backup, Trash,
+  Version. No separate Settings page.
+- Bottom tabs Chat · Cashbook · Expense · Income (emoji icons 💬 📒 🧾 💵). Chat bar only on Chat (38 high, mic).
+  No Entry button on lists: entries are added inside an account (solid + Paid / + Work, + Received / + Given, + Out).
+- Expense/Income = accounts (`Sides.kt`, `SideScreen`): rows with icon square, name, sub, amount + word, ›; dashed
+  "+ Add account"; inner pages: round back button, path above title, one summary card, plain white ledger.
+- Cashbook ledger: head 13/10, rows 12/10, amounts 12 without + / −, columns 68, day strip #EEF1F8 with coloured
+  day totals. Report rows 14/11/14, amount column 96, every row opens its detail; owed = To get / To pay only.
+- Long-press an account or entry for Rename / Move / Delete. Red = money out, green = money in, orange = owed.

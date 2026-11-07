@@ -39,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -61,16 +62,21 @@ class MainActivity : ComponentActivity() {
         setContent {
             var dark by remember { mutableStateOf(store.dark) }
             var themeName by remember { mutableStateOf(store.theme) }
+            var photo by remember { mutableStateOf(store.bgPhoto) }
+            val bg = remember(photo) { photo.takeIf { it.isNotBlank() }?.let { android.graphics.BitmapFactory.decodeFile(it)?.asImageBitmap() } }
             val header = headerTheme(themeName, dark)
             // Every phone shows the design 1:1: the screen is 350 units wide (the 390 mock-up, everything a bit bigger) and the phone's
             // font-size and display-size settings don't blow the compact ledgers up.
             val m = resources.displayMetrics
             CompositionLocalProvider(LocalHeader provides header, LocalDensity provides Density(minOf(m.widthPixels, m.heightPixels) / 350f, 1f)) {
-                BolTheme(dark) {
+                BolTheme(dark, clear = bg != null) {
                     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                        // A picked photo sits behind every screen; the plain colour otherwise.
+                        if (bg != null) androidx.compose.foundation.Image(bg, null, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
                         App(
                             store, dark, { dark = it; store.dark = it },
-                            themeName = themeName, onTheme = { themeName = it; store.theme = it }
+                            themeName = themeName, onTheme = { themeName = it; store.theme = it },
+                            photo = bg != null, onPhoto = { photo = it; store.bgPhoto = it }
                         )
                     }
                 }
@@ -105,7 +111,10 @@ private suspend fun <T> offMain(block: () -> T): T = kotlinx.coroutines.withCont
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: String, onTheme: (String) -> Unit) {
+fun App(
+    store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: String, onTheme: (String) -> Unit,
+    photo: Boolean = false, onPhoto: (String) -> Unit = {}
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
@@ -251,6 +260,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     // Expense / Income accounts the owner set up, for the open book, and the profit report opened from them.
     var sides by remember(businessName) { mutableStateOf(store.loadSides()) }
     var profitOpen by remember { mutableStateOf(false) }
+    // A person to open on Expense / Income (from the report's To get / To pay).
+    var sideJump by remember { mutableStateOf<Pair<String, String>?>(null) }
     var showMoveHistory by remember { mutableStateOf(false) }
     var confirm by remember { mutableStateOf<Pair<String, Set<String>>?>(null) }  // message, ids to delete  // entries the app did not understand
     var newVersion by remember { mutableStateOf<UpdateInfo?>(null) }
@@ -2073,6 +2084,26 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         }
     }
 
+    /** Opens another business (book): its entries, trash and accounts. */
+    fun openBusiness(id: String) {
+        store.business = id
+        entries = store.load()
+        trash = store.loadTrash()
+        businessName = store.businesses().firstOrNull { it.first == id }?.second ?: "My business"
+        sides = store.loadSides()
+        partyOpen = null
+        pickingBusiness = false
+    }
+    // A photo picked for the background is copied into the app's own storage (the old one is removed).
+    val pickBg = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val f = java.io.File(context.filesDir, "bg-${System.currentTimeMillis()}.jpg")
+        runCatching {
+            context.contentResolver.openInputStream(uri)?.use { input -> f.outputStream().use { input.copyTo(it) } }
+            context.filesDir.listFiles { x -> x.name.startsWith("bg-") && x.name != f.name }?.forEach { it.delete() }
+            onPhoto(f.absolutePath)
+        }.onFailure { toast("Couldn't use that photo") }
+    }
     val drawer = rememberDrawerState(DrawerValue.Closed)
     fun openMenu() {
         scope.launch { drawer.open() }
@@ -2101,18 +2132,35 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     ModalNavigationDrawer(
         drawerState = drawer,
         drawerContent = {
-            DrawerMenu(tab, name, currency, onCurrency = { c ->
-                currency = c
-                store.currency = c
-                toast("✓ Currency set to $c")
-            }) { t ->
-                if (t == Tab.REPORTS) reportStart = ReportKind.CASH_OUT
-                tab = t
-                people = null
-                results = null
-                partyOpen = null
-                scope.launch { drawer.close() }
-            }
+            fun close() = scope.launch { drawer.close() }
+            SideMenu(
+                name = name, currency = currency, lang = lang, dark = dark, photo = photo, themeName = themeName,
+                version = BuildConfig.VERSION_NAME,
+                businesses = remember(businessTick, businessName) { store.businesses() }, current = store.business,
+                onBusiness = { id -> openBusiness(id); close() },
+                onManage = { pickingBusiness = true; close() },
+                onName = { name = it; store.name = it; toast("✓ Name saved") },
+                onCurrency = { c -> currency = c; store.currency = c; toast("✓ Currency set to $c") },
+                onLang = { lang = it; store.language = it },
+                onTheme = onTheme,
+                onGray = { onPhoto(""); onDark(false) },
+                onDark = { onPhoto(""); onDark(true) },
+                onPhoto = { pickBg.launch("image/*") },
+                onExport = {
+                    val day = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+                    exportFile.launch("SmartExpense-backup-$day.json"); close()
+                },
+                onImport = { importFile.launch(arrayOf("application/json", "text/plain", "application/octet-stream", "*/*")); close() },
+                onTrash = { tab = Tab.TRASH; people = null; results = null; partyOpen = null; close() },
+                onVersion = {
+                    scope.launch {
+                        newVersion = Updater.check()
+                        if (newVersion == null && Updater.lastCheckFailed) toast("Couldn't check for updates. Check the internet and try again.")
+                        else if (newVersion == null) toast("You have the latest version")
+                        else { tab = Tab.CHAT; drawer.close() }
+                    }
+                }
+            )
         }
     ) {
     // Only a main khata tab with the band draws under the status bar; every other screen starts below it.
@@ -2139,18 +2187,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             } else {
                 // The khata tabs sit under the chat bar on the main screens.
                 val nav = main && tab in KHATA_TABS && partyOpen == null
+                // The chat bar lives on Chat only; other screens keep just the tabs (entries go in from inside an account).
                 Column {
                     FlashStrip(flash) { flash = null }
-                    InputBar(
-                        onSend = { homeInput(it) },
-                        onMic = { startVoice(forChat = true) },
-                        placeholder = "Speak, type or ask…",
-                        onAttach = { pickFile.launch(arrayOf("image/*", "application/pdf")) },
-                        busy = chatLoading,
-                        voice = if (recorder != null) VoiceState(true, "Listening…", "sends when you stop", level = voiceLevel) { finishRecording() } else null,
-                        navPad = !nav
-                    )
-                    if (nav) KhataNav(tab) { tab = it; profitOpen = false }
+                    if (nav) KhataNav(tab) { tab = it; profitOpen = false } else Spacer(Modifier.navigationBarsPadding())
                 }
             }
         },
@@ -2197,26 +2237,28 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     )
                 }
                 tab == Tab.PARTIES -> PartiesScreen(
-                    entries, currency, onMenu = { openMenu() }, business = businessName, onBusiness = { pickingBusiness = true },
+                    entries, currency, onMenu = { openMenu() }, business = businessName,
                     onOpen = { p -> partyOpen = p.name; activeLedgerPerson = p.name },
                     onReport = { reportStart = it; tab = Tab.REPORTS },
                     onAdd = { trade = it }, onEdit = { editing = it },
                     onSaveMade = { e -> save(listOf(e) + entries); toast("✓ Made ${fmt(e.qty)} ${e.item} · cost ${fmt(e.rate)} each") }
                 )
-                profitOpen -> ProfitScreen(entries, currency, sides, onBack = { profitOpen = false })
+                profitOpen -> ProfitScreen(entries, currency, sides, onBack = { profitOpen = false }, onEdit = { editing = it }) { inc, b, k ->
+                    profitOpen = false; sideJump = b to k; tab = if (inc) Tab.INCOME else Tab.EXPENSE
+                }
                 tab == Tab.CASHBOOK -> CashBookScreen(
-                    entries, currency, onMenu = { openMenu() }, business = businessName, onBusiness = { pickingBusiness = true },
-                    onEdit = { editing = it }, onHistory = { profitOpen = true },
-                    onAdd = { inc -> trade = cashTemplate(inc) }
+                    entries, currency, onMenu = { openMenu() }, business = businessName,
+                    onEdit = { editing = it }, onReport = { profitOpen = true }
                 )
                 tab == Tab.EXPENSE || tab == Tab.INCOME -> {
                     val inc = tab == Tab.INCOME
                     SideScreen(
                         inc, entries, currency, sides, onSetup = { s -> sides = s; store.saveSides(s) },
-                        onMenu = { openMenu() }, business = businessName, onBusiness = { pickingBusiness = true }, onEdit = { editing = it },
+                        onMenu = { openMenu() }, business = businessName, onEdit = { editing = it },
                         onAdd = { trade = it },
                         onStockIn = { item, qty -> val e = madeEntry(item, qty, madeRate(entries, qty), System.currentTimeMillis()); save(listOf(e) + entries); toast("✓ Stock added") },
-                        onReport = { profitOpen = true }
+                        onReport = { profitOpen = true },
+                        jump = sideJump, onJumped = { sideJump = null }
                     )
                 }
                 tab == Tab.HOME -> HomeScreen(
@@ -2278,7 +2320,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         subtitle = "$monthName · ${fmt(monthSpent)} $currency spent",
                         suggestions = suggestions,
                         onMenu = { openMenu() },
-                        business = businessName, onBusiness = { pickingBusiness = true },
+                        business = businessName,
                         onSend = { chatInput(it) },
                         onClear = {
                             chatMessages = emptyList()
@@ -2913,14 +2955,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     }
 
     if (pickingBusiness) {
-        fun open(id: String) {
-            store.business = id
-            entries = store.load()
-            trash = store.loadTrash()
-            businessName = store.businesses().firstOrNull { it.first == id }?.second ?: "My business"
-            partyOpen = null
-            pickingBusiness = false
-        }
+        fun open(id: String) = openBusiness(id)
         BusinessPicker(
             list = remember(businessTick, entries) { store.businesses().map { (id, n) -> Triple(id, n, personAccounts(store.loadFor(id)).size) } },
             current = store.business, onBack = { pickingBusiness = false }, onPick = { open(it) },

@@ -49,7 +49,10 @@ object Sides {
             val used = all.filter { it.type == Type.KHARCHA }.map { it.category }.toSet()
             expenseCats.filter { it in used || defaultSubs.containsKey(it) }.map { Book(side, it.label, false, it) }
         } else listOf(Book(side, INCOME, false))
-        return (people + own.filter { it.people } + things + own.filter { !it.people }).distinctBy { it.name.lowercase() }
+        // Expense lists its things (Food, Bills…) first and the people after; Income starts with Customers.
+        val p = people + own.filter { it.people }
+        val t = things + own.filter { !it.people }
+        return (if (side == Side.EXP) t + p else p + t).distinctBy { it.name.lowercase() }
     }
 
     /** The people account [person] sits in: the one the owner picked, else Customers for sales, Suppliers for purchases. */

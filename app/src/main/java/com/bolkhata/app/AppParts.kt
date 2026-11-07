@@ -12,6 +12,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -84,25 +87,26 @@ internal fun InputBar(
         if (talking) VoicePanel(voice!!)
         Box(Modifier.fillMaxWidth().then(if (navPad) Modifier.navigationBarsPadding() else Modifier)
             .padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = if (navPad) 8.dp else 0.dp)) {
-            Surface(shape = RoundedCornerShape(12.dp), color = Color.Transparent, modifier = Modifier.fillMaxWidth().fieldEdge(RoundedCornerShape(12.dp))) {
-                Row(Modifier.heightIn(min = 44.dp).padding(start = 2.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            // Compact: one 38-high rounded field with the mic in a small circle at its end.
+            Surface(shape = RoundedCornerShape(19.dp), color = Color.Transparent, modifier = Modifier.fillMaxWidth().fieldEdge(RoundedCornerShape(19.dp))) {
+                Row(Modifier.heightIn(min = 38.dp).padding(start = 2.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (onAttach != null) {
-                        Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onAttach), contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(34.dp).clip(CircleShape).clickable(onClick = onAttach), contentAlignment = Alignment.Center) {
                             ThinPlus(ink)
                         }
                     } else Spacer(Modifier.width(12.dp))
                     BasicTextField(
                         value = text,
                         onValueChange = { text = it },
-                        modifier = Modifier.weight(1f).padding(horizontal = 4.dp, vertical = 10.dp),
+                        modifier = Modifier.weight(1f).padding(horizontal = 4.dp, vertical = 7.dp),
                         maxLines = 4,
-                        textStyle = LocalTextStyle.current.copy(fontSize = 16.sp, color = ink),
+                        textStyle = LocalTextStyle.current.copy(fontSize = 14.sp, color = ink),
                         cursorBrush = SolidColor(GreenDeep),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                         keyboardActions = KeyboardActions(onSend = { send() }),
                         decorationBox = { field ->
                             Box(contentAlignment = Alignment.CenterStart) {
-                                if (text.isEmpty()) Text(placeholder, fontSize = 16.sp, color = hint, maxLines = 1)
+                                if (text.isEmpty()) Text(placeholder, fontSize = 14.sp, color = hint, maxLines = 1)
                                 field()
                             }
                         }
@@ -110,7 +114,7 @@ internal fun InputBar(
                     // A plain line mic in a white circle (no colour fill).
                     Box(
                         Modifier
-                            .size(36.dp)
+                            .size(30.dp)
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.surface)
                             .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
@@ -195,72 +199,146 @@ fun ThinPlus(color: Color) {
     }
 }
 
-/** The side menu in the same plain style as Settings: who you are, then simple rows with line icons. */
+/** Header themes offered in the side menu (the app's glossy bands), in this order. */
+private val MENU_THEMES = listOf("Clean", "Red", "Green", "Sky Blue", "Violet", "Navy")
+
+/**
+ * The side menu, which is also Settings: the app logo, the businesses (+ Add business), then every setting in plain
+ * rows (Name, Currency, Language, Header, Background) and Backup, Trash, Version. Nothing opens another settings page.
+ */
 @Composable
-internal fun DrawerMenu(tab: Tab, name: String, currency: String, onCurrency: (String) -> Unit, onPick: (Tab) -> Unit) {
-    var currencyOpen by remember { mutableStateOf(false) }
+internal fun SideMenu(
+    name: String, currency: String, lang: String, dark: Boolean, photo: Boolean, themeName: String, version: String,
+    businesses: List<Pair<String, String>>, current: String,
+    onBusiness: (String) -> Unit, onManage: () -> Unit,
+    onName: (String) -> Unit, onCurrency: (String) -> Unit, onLang: (String) -> Unit, onTheme: (String) -> Unit,
+    onGray: () -> Unit, onDark: () -> Unit, onPhoto: () -> Unit,
+    onExport: () -> Unit, onImport: () -> Unit, onTrash: () -> Unit, onVersion: () -> Unit
+) {
+    var naming by remember { mutableStateOf(false) }
     ModalDrawerSheet(
-        modifier = Modifier.width(240.dp),
+        modifier = Modifier.width(252.dp),
         drawerContainerColor = MaterialTheme.colorScheme.background,
-        drawerShape = RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp),
+        drawerShape = RoundedCornerShape(0.dp),
         windowInsets = WindowInsets(0, 0, 0, 0)
     ) {
-        // The header in the chosen theme's glass colours, with the app logo.
-        val header = LocalHeader.current
-        Row(
-            Modifier.fillMaxWidth().drawBehind { drawGlass(bandColors(header), size.height) }.statusBarsPadding()
-                .padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 18.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            GlassLogo(40.dp, onBand = true)
-            Spacer(Modifier.width(12.dp))
-            Column {
-                Text("Smart Expense", fontWeight = FontWeight.Bold, fontSize = 17.sp, color = header.on)
-                Text(
-                    if (name.isBlank()) "Speak it. Track it." else "Hello, ${name.trim()}",
-                    fontSize = 12.sp, color = header.on.copy(alpha = 0.75f)
-                )
-            }
-        }
-        Spacer(Modifier.height(8.dp))
-        DrawerRow("All entries", Icons.Outlined.FormatListBulleted, tab == Tab.ENTRIES, Color(0xFF8B5CF6)) { onPick(Tab.ENTRIES) }
-        DrawerRow("Reports", Icons.Outlined.BarChart, tab == Tab.REPORTS, Color(0xFF0EA5E9)) { onPick(Tab.REPORTS) }
-        DrawerRow("Trash", Icons.Outlined.Delete, tab == Tab.TRASH, Color(0xFF64748B)) { onPick(Tab.TRASH) }
-        DrawerRow("Settings", Icons.Outlined.Settings, tab == Tab.SETTINGS, Color(0xFF64748B)) { onPick(Tab.SETTINGS) }
-        HorizontalDivider(Modifier.padding(horizontal = 20.dp, vertical = 10.dp), color = MaterialTheme.colorScheme.outlineVariant)
-        Box {
-            DrawerRow("Currency", Icons.Outlined.Payments, false, Color(0xFFF59E0B), value = "$currency ▾") { currencyOpen = true }
-            PickMenu(currencyOpen, { currencyOpen = false }) {
-                CURRENCIES.forEach { c ->
-                    DropdownMenuItem(
-                        text = { Text(currencyLabel(c), fontSize = 13.sp, fontWeight = if (c == currency) FontWeight.SemiBold else FontWeight.Normal) },
-                        onClick = { onCurrency(c); currencyOpen = false }
-                    )
+        Column(Modifier.verticalScroll(rememberScrollState()).statusBarsPadding().padding(bottom = 16.dp)) {
+            Row(Modifier.padding(start = 14.dp, end = 14.dp, top = 16.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                GlassLogo(34.dp)
+                Spacer(Modifier.width(10.dp))
+                Column {
+                    Text("Smart Expense", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
+                    Text("Speak it. Track it.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
+            MenuCard {
+                businesses.forEach { (id, n) ->
+                    MenuRow(onClick = { if (id == current) onManage() else onBusiness(id) }) {
+                        GlassLogo(20.dp)
+                        Spacer(Modifier.width(10.dp))
+                        Text(n, fontSize = 13.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (id == current) Text("✓", fontSize = 13.sp, color = GreenIn)
+                    }
+                }
+                MenuRow(onClick = onManage, last = true) {
+                    Text("+ Add business", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = EmberTop)
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            MenuCard {
+                MenuRow(onClick = { naming = true }) { MenuLabel("👤", "Name"); MenuValue(name.ifBlank { "Add" }) }
+                Box {
+                    var open by remember { mutableStateOf(false) }
+                    MenuRow(onClick = { open = true }) { MenuLabel("💱", "Currency"); MenuValue("$currency ▾") }
+                    PickMenu(open, { open = false }) {
+                        CURRENCIES.forEach { c ->
+                            DropdownMenuItem(text = { Text(currencyLabel(c), fontSize = 13.sp, fontWeight = if (c == currency) FontWeight.SemiBold else FontWeight.Normal) },
+                                onClick = { onCurrency(c); open = false })
+                        }
+                    }
+                }
+                Box {
+                    var open by remember { mutableStateOf(false) }
+                    val langs = listOf("" to "Auto", "hi-IN" to "Roman Urdu", "en-US" to "English", "ur-PK" to "Urdu")
+                    MenuRow(onClick = { open = true }) { MenuLabel("🌐", "Language"); MenuValue((langs.firstOrNull { it.first == lang }?.second ?: "Auto") + " ▾") }
+                    PickMenu(open, { open = false }) {
+                        langs.forEach { (code, label) -> DropdownMenuItem(text = { Text(label, fontSize = 13.sp) }, onClick = { onLang(code); open = false }) }
+                    }
+                }
+                MenuRow(onClick = null) {
+                    MenuLabel("🖌", "Header")
+                    MENU_THEMES.mapNotNull { n -> HEADER_THEMES.firstOrNull { it.name == n } }.forEach { t ->
+                        Dot(Brush.linearGradient(listOf(t.c1, t.c2, t.c3)), themeName == t.name) { onTheme(t.name) }
+                    }
+                }
+                MenuRow(onClick = null, last = true) {
+                    MenuLabel("🎨", "Background")
+                    Dot(SolidColor(Color(0xFFEDEDED)), !dark && !photo, onGray)
+                    Dot(SolidColor(Color(0xFF2A2F36)), dark && !photo, onDark)
+                    Text("🖼", fontSize = 16.sp, modifier = Modifier.padding(start = 5.dp).clip(CircleShape).clickable(onClick = onPhoto)
+                        .then(if (photo) Modifier.border(2.dp, EmberTop, CircleShape) else Modifier).padding(2.dp))
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            MenuCard {
+                Box {
+                    var open by remember { mutableStateOf(false) }
+                    MenuRow(onClick = { open = true }) { MenuLabel("💾", "Backup"); MenuValue("Export · Import") }
+                    PickMenu(open, { open = false }) {
+                        DropdownMenuItem(text = { Text("Export data") }, onClick = { open = false; onExport() })
+                        DropdownMenuItem(text = { Text("Import data") }, onClick = { open = false; onImport() })
+                    }
+                }
+                MenuRow(onClick = onTrash) { MenuLabel("🗑", "Trash"); MenuValue("›") }
+                MenuRow(onClick = onVersion, last = true) { MenuLabel("⬆️", "Version"); MenuValue(version) }
+            }
         }
+    }
+    if (naming) {
+        var text by remember { mutableStateOf(name) }
+        AlertDialog(
+            onDismissRequest = { naming = false },
+            title = { Text("Your name") },
+            text = { OutlinedTextField(text, { text = it }, singleLine = true) },
+            confirmButton = { TextButton(onClick = { onName(text.trim()); naming = false }) { Text("Save") } },
+            dismissButton = { TextButton(onClick = { naming = false }) { Text("Cancel") } }
+        )
     }
 }
 
-/** One side-menu row: coloured line icon and label; the open screen sits on a soft orange highlight. */
+/** A white rounded card of side-menu rows. */
 @Composable
-private fun DrawerRow(label: String, icon: ImageVector, selected: Boolean, tint: Color, value: String? = null, onClick: () -> Unit) {
+private fun MenuCard(content: @Composable ColumnScope.() -> Unit) =
+    Column(Modifier.padding(horizontal = 10.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surface), content = content)
+
+/** One side-menu row with a faint line under it (none under the [last]). */
+@Composable
+private fun MenuRow(onClick: (() -> Unit)?, last: Boolean = false, content: @Composable RowScope.() -> Unit) {
     Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 2.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(if (selected) EmberTop.copy(alpha = 0.12f) else Color.Transparent)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 11.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(21.dp), tint = tint)
-        Spacer(Modifier.width(14.dp))
-        Text(label, fontSize = 15.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-            color = if (selected) EmberTop else MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
-        if (value != null) Text(value, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
+        Modifier.fillMaxWidth().then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier).padding(horizontal = 12.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically, content = content
+    )
+    if (!last) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+}
+
+@Composable
+private fun RowScope.MenuLabel(icon: String, label: String) {
+    Text("$icon $label", fontSize = 13.sp, maxLines = 1, modifier = Modifier.weight(1f))
+}
+
+@Composable
+private fun MenuValue(value: String) {
+    Text(value, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+}
+
+/** A small round colour to pick (header theme or background), ringed when chosen. */
+@Composable
+private fun Dot(fill: Brush, on: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier.padding(start = 5.dp).size(20.dp)
+            .then(if (on) Modifier.border(2.dp, EmberTop, CircleShape).padding(3.dp) else Modifier.border(1.dp, MaterialTheme.colorScheme.outline, CircleShape))
+            .clip(CircleShape).background(fill).clickable(onClick = onClick)
+    )
 }
 
 /** A friendly one-tap question for things the app did not understand. */

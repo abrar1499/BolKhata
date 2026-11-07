@@ -55,7 +55,6 @@ fun ChatScreen(
     suggestions: List<Entry>,
     onMenu: () -> Unit,
     business: String = "",
-    onBusiness: () -> Unit = {},
     onSend: (String) -> Unit,
     onClear: () -> Unit,
     onShareDiagnostics: () -> Unit = {},
@@ -93,7 +92,7 @@ fun ChatScreen(
         Box(Modifier.fillMaxWidth().drawBehind { drawGlass(bandColors(theme), size.height) }) {
             Column(Modifier.statusBarsPadding().padding(horizontal = 12.dp).padding(bottom = 10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    BusinessPill(business.ifBlank { "Chat" }, onMenu, onBusiness)
+                    BusinessPill(business.ifBlank { "Chat" }, onMenu)
                     Text(subtitle, color = theme.on.copy(alpha = 0.8f), fontSize = 11.sp, maxLines = 1,
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 10.dp, top = 10.dp))
                     Box {

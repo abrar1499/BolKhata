@@ -190,7 +190,8 @@ val AppTypography: Typography = Typography().run {
 }
 
 @Composable
-fun BolTheme(dark: Boolean, content: @Composable () -> Unit) {
+/** [clear]: a background photo shows through, so the page colour is see-through. */
+fun BolTheme(dark: Boolean, clear: Boolean = false, content: @Composable () -> Unit) {
     val scheme = if (dark) darkColorScheme(
         primary = Color(0xFF34D399),
         onPrimary = Color(0xFF00210F),
@@ -212,7 +213,8 @@ fun BolTheme(dark: Boolean, content: @Composable () -> Unit) {
         onPrimaryContainer = Color(0xFF065F46),
         secondaryContainer = Color(0xFFD1FAE5),
         onSecondaryContainer = Color(0xFF065F46),
-        background = Color(0xFFF3F1EF),
+        // Plain light grey page (Settings › Background › Gray); cards stay white on it.
+        background = Color(0xFFEDEDED),
         onBackground = Color(0xFF0D0D0D),
         surface = Color.White,
         onSurface = Color(0xFF0D0D0D),
@@ -221,7 +223,7 @@ fun BolTheme(dark: Boolean, content: @Composable () -> Unit) {
         outline = Color(0xFFE6E3DF),
         outlineVariant = Color(0xFFECE7E3)
     )
-    MaterialTheme(colorScheme = scheme, typography = AppTypography, content = content)
+    MaterialTheme(colorScheme = if (clear) scheme.copy(background = Color.Transparent) else scheme, typography = AppTypography, content = content)
 }
 
 // ---------- formatting ----------
