@@ -543,8 +543,10 @@ private fun LazyListScope.profitView(
         list.filter { it.type == Type.AAMDANI }.groupBy { source(it).trim().ifBlank { "Income" } }
             .forEach { (n, l) -> add(Line(n, "income", 0.0, l.sumOf { it.amount })) }
         if (goods > 0) add(Line("Cost of goods sold", "what the sold items cost", goods, 0.0))
-        list.filter { it.type == Type.KHARCHA }.groupBy { it.category.label }.map { (n, l) -> n to l.sumOf { it.amount } }
-            .sortedByDescending { it.second }.forEach { (n, v) -> add(Line(n, "expense", v, 0.0)) }
+        // Each expense under its own name (thaper, fuel…), its category under it.
+        list.filter { it.type == Type.KHARCHA }.groupBy { it.item.trim().ifBlank { it.category.label }.lowercase() }
+            .map { (_, l) -> Line(l.first().item.trim().ifBlank { l.first().category.label }, l.first().category.label, l.sumOf { it.amount }, 0.0) }
+            .sortedByDescending { it.out }.forEach { add(it) }
     }.filter { q.isBlank() || it.name.contains(q.trim(), true) }
     val madeQty = if (month == ALL_MONTHS) 0.0 else made(month)
     item(key = "fh") {
