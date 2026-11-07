@@ -189,10 +189,10 @@ val AppTypography: Typography = Typography().run {
     )
 }
 
-@Composable
 /** Light page colours offered in the side menu (Background): grey first, then half white, off-white, light slate, warm grey. */
 val PAGE_COLORS = listOf(0xFFEDEDED, 0xFFF5F5F3, 0xFFF1F0ED, 0xFFE6E8EB, 0xFFE9E6E1)
 
+@Composable
 /** [clear]: a background photo shows through, so the page colour is see-through. [page]: the light page colour. */
 fun BolTheme(dark: Boolean, clear: Boolean = false, page: Long = PAGE_COLORS[0], content: @Composable () -> Unit) {
     val scheme = if (dark) darkColorScheme(
