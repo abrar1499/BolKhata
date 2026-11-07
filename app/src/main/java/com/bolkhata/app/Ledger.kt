@@ -211,6 +211,7 @@ val defaultSubs: Map<Cat, List<String>> = mapOf(
     Cat.SHOPPING to listOf("Clothes", "Electronics"),
     Cat.EDU to listOf("School fees", "Books"),
     Cat.RENT to listOf("House rent"),
+    Cat.CHARITY to listOf("Gifts", "Charity"),
     Cat.PRODUCTION to listOf("Labour", "Raw material", "Fuel", "Loading", "Unloading", "Office", "Salary", "Transport")
 )
 
