@@ -34,12 +34,7 @@ class CashBookTest {
     }
 
     @Test
-    fun businessViewsPickTheirEntries() {
-        val all = listOf(e(Type.SALE).copy(id = "s"), e(Type.PURCHASE).copy(id = "p"), e(Type.DIYA, "Hamid Akram").copy(id = "d"), e(Type.KHARCHA).copy(id = "k"))
-        assertEquals(listOf("d"), aboutView(0, all).map { it.id })
-        assertEquals(listOf("s", "p"), aboutView(1, all).map { it.id })
-        assertEquals(listOf("s"), aboutView(2, all).map { it.id })
-        assertEquals(listOf("p"), aboutView(3, all).map { it.id })
+    fun plusMinusShowsTheSign() {
         assertEquals("+1,150", plusMinus(1150.0))
         assertEquals("−400", plusMinus(-400.0))
     }
@@ -83,13 +78,5 @@ class CashBookTest {
         assertEquals(Cat.TRANSPORT, moved.category)
         assertEquals("Petrol", moved.item)
         assertEquals("ALJIDAR STATION · Riyadh · card · Al Rajhi", moved.note)
-    }
-
-    @Test
-    fun ownAccountTransfersDoNotMoveCash() {
-        assertFalse(cashOut(e(Type.TRANSFER_OUT)))
-        assertFalse(cashIn(e(Type.TRANSFER_IN)))
-        assertTrue(cashOut(e(Type.TRANSFER_OUT, "Hamid Akram")))
-        assertTrue(cashIn(e(Type.TRANSFER_IN, "Hamid Akram")))
     }
 }

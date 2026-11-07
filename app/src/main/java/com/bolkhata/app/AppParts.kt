@@ -39,6 +39,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.SpanStyle
@@ -55,16 +56,14 @@ import androidx.compose.ui.unit.sp
 // Parts of the main screen kept out of MainActivity: the chat input bar, the side menu and the "what kind of entry?" dialog.
 
 /**
- * The message bar at the bottom of Home and Chat, in the style of ChatGPT: a floating white pill with a thin +,
- * the text and a round green button with a mic that sends what is typed (or starts speaking when empty) and
- * shows a spinner while the app is answering. A soft fade above it keeps the list from being cut off sharply.
+ * The message bar above the tabs on Chat (as in the mock-up): one 38-high rounded field on the page, the text and a
+ * white round mic that sends what is typed (or starts speaking when empty) and shows a spinner while the app is answering.
  */
 @Composable
 internal fun InputBar(
     onSend: (String) -> Unit,
     onMic: () -> Unit,
     placeholder: String = "Type here…",
-    onAttach: (() -> Unit)? = null,
     busy: Boolean = false,
     voice: VoiceState? = null,
     /** False when a bar below (the bottom tabs) already keeps clear of the system navigation. */
@@ -81,43 +80,36 @@ internal fun InputBar(
     val ink = MaterialTheme.colorScheme.onSurface
     val talking = voice?.on == true
     val hint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-    // One white strip with the tabs below it (no floating pill, no shadow, so its edges stay crisp):
-    // rounded at the top, the field inside on the page colour.
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)).background(MaterialTheme.colorScheme.surface)) {
+    // The field sits on the page itself (no white strip behind it), 6 above the tabs.
+    Column(Modifier.fillMaxWidth()) {
         if (talking) VoicePanel(voice!!)
         Box(Modifier.fillMaxWidth().then(if (navPad) Modifier.navigationBarsPadding() else Modifier)
-            .padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = if (navPad) 8.dp else 0.dp)) {
-            // Compact: one 38-high rounded field with the mic in a small circle at its end.
+            .padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = if (navPad) 8.dp else 6.dp)) {
             Surface(shape = RoundedCornerShape(19.dp), color = Color.Transparent, modifier = Modifier.fillMaxWidth().fieldEdge(RoundedCornerShape(19.dp))) {
-                Row(Modifier.heightIn(min = 38.dp).padding(start = 2.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (onAttach != null) {
-                        Box(Modifier.size(34.dp).clip(CircleShape).clickable(onClick = onAttach), contentAlignment = Alignment.Center) {
-                            ThinPlus(ink)
-                        }
-                    } else Spacer(Modifier.width(12.dp))
+                Row(Modifier.heightIn(min = 38.dp).padding(start = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     BasicTextField(
                         value = text,
                         onValueChange = { text = it },
                         modifier = Modifier.weight(1f).padding(horizontal = 4.dp, vertical = 7.dp),
                         maxLines = 4,
-                        textStyle = LocalTextStyle.current.copy(fontSize = 14.sp, color = ink),
+                        textStyle = LocalTextStyle.current.copy(fontSize = 13.sp, color = ink),
                         cursorBrush = SolidColor(GreenDeep),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                         keyboardActions = KeyboardActions(onSend = { send() }),
                         decorationBox = { field ->
                             Box(contentAlignment = Alignment.CenterStart) {
-                                if (text.isEmpty()) Text(placeholder, fontSize = 14.sp, color = hint, maxLines = 1)
+                                if (text.isEmpty()) Text(placeholder, fontSize = 13.sp, color = hint, maxLines = 1)
                                 field()
                             }
                         }
                     )
-                    // A plain line mic in a white circle (no colour fill).
+                    // A plain line mic in a white circle with a soft shadow (no colour fill).
                     Box(
                         Modifier
                             .size(30.dp)
+                            .shadow(1.dp, CircleShape)
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.surface)
-                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
                             .clickable(enabled = talking || !busy) {
                                 when {
                                     talking -> voice!!.toggle()
@@ -186,16 +178,6 @@ private fun VoiceWave(color: Color, strength: Float, modifier: Modifier) {
             val x = gap * i + gap / 2
             drawLine(color, Offset(x, (size.height - h) / 2), Offset(x, (size.height + h) / 2), w, StrokeCap.Round)
         }
-    }
-}
-
-/** A thin "+" like ChatGPT's attach button. */
-@Composable
-fun ThinPlus(color: Color) {
-    Canvas(Modifier.size(20.dp)) {
-        val w = 1.8.dp.toPx()
-        drawLine(color, Offset(size.width / 2, 1.dp.toPx()), Offset(size.width / 2, size.height - 1.dp.toPx()), w, StrokeCap.Round)
-        drawLine(color, Offset(1.dp.toPx(), size.height / 2), Offset(size.width - 1.dp.toPx(), size.height / 2), w, StrokeCap.Round)
     }
 }
 
