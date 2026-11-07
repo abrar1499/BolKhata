@@ -68,7 +68,7 @@ data class Entry(
     val rate: Double = 0.0,
     /** Sale or purchase with a person that was settled in cash, so it does not go in the khata. */
     val paid: Boolean = false,
-    /** Work or salary owed to [person]: an expense that goes in their khata, no cash moved yet (see [isWork]). */
+    /** Due with [person]: an expense or income left in their khata, no cash moved yet (see [isDue]). */
     val credit: Boolean = false,
     /** Stable hash of a structured bank alert, used to prevent the same notification being saved twice. */
     val sourceFingerprint: String = ""

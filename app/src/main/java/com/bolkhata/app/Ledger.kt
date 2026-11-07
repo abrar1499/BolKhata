@@ -87,7 +87,8 @@ class PersonAcct(
 fun personEffect(e: Entry): Double = when (e.type) {
     Type.DIYA, Type.WAPIS_DIYA, Type.SALE, Type.TRANSFER_OUT -> e.amount
     Type.LIYA, Type.WAPIS_MILA, Type.PURCHASE, Type.TRANSFER_IN -> -e.amount
-    Type.KHARCHA -> if (isWork(e)) -e.amount else 0.0
+    Type.KHARCHA -> if (isDue(e)) -e.amount else 0.0
+    Type.AAMDANI -> if (isDue(e)) e.amount else 0.0
     else -> 0.0
 }
 

@@ -2953,7 +2953,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     t.type == Type.PURCHASE -> "Bought " + t.item
                     t.person.isNotBlank() -> t.person
                     t.type == Type.DIYA -> "New party entry"
-                    else -> "New entry"
+                    // The + button: the open book shows in the title (Personal, or the business name).
+                    else -> "New entry · $businessName"
                 },
                 question = null,
                 askType = false,
