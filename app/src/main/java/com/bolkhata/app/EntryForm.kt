@@ -78,7 +78,9 @@ fun EntryForm(
     onCancel: () -> Unit,
     header: @Composable () -> Unit = {},
     /** All saved entries: the party list and each party's balance come from them. */
-    all: List<Entry> = emptyList()
+    all: List<Entry> = emptyList(),
+    /** No Qty | Rate (the Personal book). */
+    simple: Boolean = false
 ) {
     var out by remember(initial.id) { mutableStateOf<Boolean?>(if (askType) null else isOut(initial.type)) }
     val people = remember(all) { partyNames(all) }
@@ -184,7 +186,7 @@ fun EntryForm(
             onPick = { name, cat, stockItem -> item = name; pickedCat = cat; newStock = stockItem; listOpen = false }
         )
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (!simple) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Field(qty, { v -> qty = v.filter { it.isDigit() || it == '.' }; fillAmount() }, "Qty", Modifier.weight(1f), numeric = true)
             Field(rate, { v -> rate = v.filter { it.isDigit() || it == '.' }; fillAmount() }, "Rate", Modifier.weight(1f), numeric = true)
         }

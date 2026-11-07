@@ -108,7 +108,7 @@ const val PERSONAL = "personal"
 
 /** The sections of each book, shown as chips under the search box. */
 val BUSINESS_SECTIONS = listOf("Cashbook", "Parties", "Stock", "Profit")
-val PERSONAL_SECTIONS = listOf("Cashbook", "Expense", "Income")
+val PERSONAL_SECTIONS = listOf("Cashbook", "Expense", "Income", "Parties")
 
 /** Bottom bar: Chat · Business · Personal · + (the one place to add an entry). */
 @Composable
@@ -360,7 +360,9 @@ fun PartiesScreen(
     /** The item made in a month (it goes into Stock) and saving it. */
     madeItem: (Int) -> String = { "" }, onSetMadeItem: (Int, String) -> Unit = { _, _ -> },
     /** The section chip to open on, and what to do when Cashbook (another screen) is tapped. */
-    section: String = "Parties", onSection: (String) -> Unit = {}
+    section: String = "Parties", onSection: (String) -> Unit = {},
+    /** The book's section chips (Business: Cashbook · Parties · Stock · Profit; Personal ends with Parties). */
+    sectionNames: List<String> = BUSINESS_SECTIONS
 ) {
     val newest = remember(entries) { entries.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt }) }
     var view by rememberSaveable(section) { mutableIntStateOf(BusinessViews.indexOf(section).coerceAtLeast(0)) }
@@ -423,7 +425,7 @@ fun PartiesScreen(
                     SumCard(card.first, card.second, "Report ›") { onReport(card.third) }
                 }
                 SearchBox(q, when (view) { 0 -> "Search parties"; 1 -> "Search items"; 2 -> "Search sales"; 3 -> "Search purchases"; else -> "Search months" }) { q = it }
-                SectionChips(BUSINESS_SECTIONS, BusinessViews[view]) { n ->
+                SectionChips(sectionNames, BusinessViews[view]) { n ->
                     val i = BusinessViews.indexOf(n)
                     if (i < 0) onSection(n) else { view = i; month = firstMonth(i, newest); q = "" }
                 }

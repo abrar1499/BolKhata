@@ -2153,7 +2153,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         tab, book == PERSONAL,
                         onChat = { tab = Tab.CHAT },
                         onBusiness = { if (book == PERSONAL) openBook(lastBusiness); if (tab != Tab.PARTIES) tab = Tab.CASHBOOK },
-                        onPersonal = { if (book != PERSONAL) openBook(PERSONAL); if (tab == Tab.CHAT || tab == Tab.PARTIES) tab = Tab.CASHBOOK },
+                        onPersonal = { if (book != PERSONAL) openBook(PERSONAL); if (tab == Tab.CHAT || tab == Tab.PARTIES && businessSection != "Parties") tab = Tab.CASHBOOK },
                         onAdd = { trade = cashTemplate(false) }
                     )
                 }
@@ -2166,7 +2166,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         tab, book == PERSONAL,
                         onChat = { tab = Tab.CHAT },
                         onBusiness = { if (book == PERSONAL) openBook(lastBusiness); if (tab != Tab.PARTIES) tab = Tab.CASHBOOK },
-                        onPersonal = { if (book != PERSONAL) openBook(PERSONAL); if (tab == Tab.CHAT || tab == Tab.PARTIES) tab = Tab.CASHBOOK },
+                        onPersonal = { if (book != PERSONAL) openBook(PERSONAL); if (tab == Tab.CHAT || tab == Tab.PARTIES && businessSection != "Parties") tab = Tab.CASHBOOK },
                         onAdd = { trade = cashTemplate(false) }
                     ) else Spacer(Modifier.navigationBarsPadding())
                 }
@@ -2221,7 +2221,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     onAdd = { trade = it }, onEdit = { editing = it },
                     made = { store.made(it) }, onSetMade = { m, qty -> store.setMade(m, qty) },
                     madeItem = { store.madeItem(it) }, onSetMadeItem = { m, item -> store.setMadeItem(m, item) },
-                    section = businessSection, onSection = { goSection(it) }
+                    section = businessSection, onSection = { goSection(it) }, sectionNames = sectionNames
                 )
                 tab == Tab.CASHBOOK -> CashBookScreen(
                     entries, currency, onMenu = { openMenu() }, business = businessName, onBusiness = { pickingBusiness = true },
@@ -2959,6 +2959,8 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 },
                 question = null,
                 askType = false,
+                // Home money is just an amount: no qty × rate.
+                simple = book == PERSONAL,
                 currency = currency,
                 all = entries,
                 saveLabel = "Save",
