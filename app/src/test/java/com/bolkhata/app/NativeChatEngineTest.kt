@@ -29,6 +29,13 @@ class NativeChatEngineTest {
     private fun read(text: String, history: List<ChatMessage> = emptyList()) =
         NativeChatEngine.interpret(text, entries, now = now, history = history)
 
+    @Test fun aCategoryWithAnAmountIsANewEntryNotALookup() {
+        assertEquals("entry", read("petrol 60").kind)
+        assertEquals("entry", read("food 200").kind)
+        assertEquals("ask", read("petrol").kind)
+        assertEquals("ask", read("petrol kitna").kind)
+    }
+
     @Test fun fromADateTillTodayIsOneRange() {
         val r = read("19 aug se aj tak expense batao")
         assertEquals("ask", r.kind)
