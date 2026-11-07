@@ -398,9 +398,11 @@ fun PartiesScreen(
     sectionNames: List<String> = BUSINESS_SECTIONS
 ) {
     val newest = remember(entries) { entries.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt }) }
-    var view by rememberSaveable(section) { mutableIntStateOf(BusinessViews.indexOf(section).coerceAtLeast(0)) }
-    var month by rememberSaveable(section) { mutableIntStateOf(firstMonth(view, newest)) }
+    // The open chip comes from the caller (it is kept there), so coming back from Cashbook opens the chip tapped.
+    val view = BusinessViews.indexOf(section).coerceAtLeast(0)
+    var month by rememberSaveable { mutableIntStateOf(ALL_MONTHS) }
     var q by rememberSaveable { mutableStateOf("") }
+    LaunchedEffect(section) { month = firstMonth(view, newest); q = "" }
     val about = remember(newest, view) { aboutView(view, newest) }
     val months = remember(about) { monthsOf(about) }
     val pick = if (month == ALL_MONTHS || months.any { it.first == month }) month else ALL_MONTHS
@@ -458,10 +460,7 @@ fun PartiesScreen(
                     SumCard(card.first, card.second, "Report ›") { onReport(card.third) }
                 }
                 SearchBox(q, when (view) { 0 -> "Search parties"; 1 -> "Search items"; 2 -> "Search sales"; 3 -> "Search purchases"; else -> "Search months" }) { q = it }
-                SectionChips(sectionNames, BusinessViews[view]) { n ->
-                    val i = BusinessViews.indexOf(n)
-                    if (i < 0) onSection(n) else { view = i; month = firstMonth(i, newest); q = "" }
-                }
+                SectionChips(sectionNames, BusinessViews[view]) { onSection(it) }
                 if (months.isNotEmpty()) MonthChips(months, pick) { month = it }
             } }
             when (view) {
