@@ -199,7 +199,7 @@ internal fun SideMenu(
     onBusiness: (String) -> Unit, onAddBusiness: (String) -> Unit,
     onRenameBusiness: (id: String, name: String) -> Unit, onDeleteBusiness: (id: String) -> Unit,
     onName: (String) -> Unit, onCurrency: (String) -> Unit, onLang: (String) -> Unit, onTheme: (String) -> Unit,
-    page: Long, onPage: (Long) -> Unit, onDark: () -> Unit, onPhoto: () -> Unit,
+    page: Long, onPage: (Long) -> Unit, onDark: (Long) -> Unit, onPhoto: () -> Unit,
     onExport: () -> Unit, onImport: () -> Unit, onTrash: () -> Unit, onVersion: () -> Unit
 ) {
     var naming by remember { mutableStateOf(false) }
@@ -287,12 +287,14 @@ internal fun SideMenu(
                     }
                 }
                 MenuRow(onClick = null, last = true) {
-                    // The label on top and the colours under it: five light ones, dark, then a photo.
+                    // The label on top, then five light colours, five dull dark ones and a photo.
                     Column(Modifier.weight(1f)) {
                         Text("🎨 Background", fontSize = 13.sp, maxLines = 1)
                         Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                             PAGE_COLORS.forEach { c -> Dot(SolidColor(Color(c)), !dark && !photo && page == c) { onPage(c) } }
-                            Dot(SolidColor(Color(0xFF2A2F36)), dark && !photo, onDark)
+                        }
+                        Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            DARK_PAGES.forEach { c -> Dot(SolidColor(Color(c)), dark && !photo && (page == c || (c == DARK_PAGES[0] && page !in DARK_PAGES))) { onDark(c) } }
                             Text("🖼", fontSize = 16.sp, modifier = Modifier.padding(start = 5.dp).clip(CircleShape).clickable(onClick = onPhoto)
                                 .then(if (photo) Modifier.border(2.dp, EmberTop, CircleShape) else Modifier).padding(2.dp))
                         }

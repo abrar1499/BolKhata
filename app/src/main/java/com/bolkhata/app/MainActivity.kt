@@ -2147,7 +2147,7 @@ fun App(
                 onLang = { lang = it; store.language = it },
                 onTheme = onTheme,
                 page = page, onPage = { onPhoto(""); onDark(false); onPage(it) },
-                onDark = { onPhoto(""); onDark(true) },
+                onDark = { c -> onPhoto(""); onDark(true); onPage(c) },
                 onPhoto = { pickBg.launch("image/*") },
                 onExport = {
                     val day = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())

@@ -192,9 +192,14 @@ val AppTypography: Typography = Typography().run {
 /** Light page colours offered in the side menu (Background): grey first, then half white, off-white, light slate, warm grey. */
 val PAGE_COLORS = listOf(0xFFEDEDED, 0xFFF5F5F3, 0xFFF1F0ED, 0xFFE6E8EB, 0xFFE9E6E1)
 
+/** Dark page colours, dull rather than pure black: slate first, then graphite, charcoal, deep navy, warm dark. */
+val DARK_PAGES = listOf(0xFF2A2F36, 0xFF303134, 0xFF262626, 0xFF1F2533, 0xFF2D2A27)
+
 @Composable
 /** [clear]: a background photo shows through, so the page colour is see-through. [page]: the light page colour. */
 fun BolTheme(dark: Boolean, clear: Boolean = false, page: Long = PAGE_COLORS[0], content: @Composable () -> Unit) {
+    // [page] is one light or one dark colour; a light one in dark mode (or the other way) falls back to the first.
+    val bg = Color(if (dark) page.takeIf { it in DARK_PAGES } ?: DARK_PAGES[0] else page.takeIf { it in PAGE_COLORS } ?: PAGE_COLORS[0])
     val scheme = if (dark) darkColorScheme(
         primary = Color(0xFF34D399),
         onPrimary = Color(0xFF00210F),
@@ -202,8 +207,8 @@ fun BolTheme(dark: Boolean, clear: Boolean = false, page: Long = PAGE_COLORS[0],
         onPrimaryContainer = Color(0xFFD1FAE5),
         secondaryContainer = Color(0xFF064E3B),
         onSecondaryContainer = Color(0xFFD1FAE5),
-        // A slate-grey page, so the dark cards stand out on it.
-        background = Color(0xFF2A2F36),
+        // A dull dark page (slate by default), so the dark cards stand out on it.
+        background = bg,
         surface = Color(0xFF181818),
         surfaceVariant = Color(0xFF262626),
         onSurfaceVariant = Color(0xFFA3A3A3),
@@ -217,7 +222,7 @@ fun BolTheme(dark: Boolean, clear: Boolean = false, page: Long = PAGE_COLORS[0],
         secondaryContainer = Color(0xFFD1FAE5),
         onSecondaryContainer = Color(0xFF065F46),
         // The light page colour picked in the side menu (grey by default); cards stay white on it.
-        background = Color(page),
+        background = bg,
         onBackground = Color(0xFF0D0D0D),
         surface = Color.White,
         onSurface = Color(0xFF0D0D0D),
