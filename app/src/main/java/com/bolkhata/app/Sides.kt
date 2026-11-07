@@ -38,12 +38,9 @@ object Sides {
     private val expenseCats = listOf(Cat.KHANA, Cat.TRANSPORT, Cat.BIJLI, Cat.RENT, Cat.MOBILE, Cat.SEHAT, Cat.EDU, Cat.SHOPPING,
         Cat.PERSONAL, Cat.CHARITY, Cat.GHAR, Cat.FEES, Cat.PRODUCTION, Cat.ASSETS, Cat.OTHER)
 
-    /** Expense accounts that are always there; every other one shows once it has entries or is added. */
-    private val mainCats = listOf(Cat.KHANA, Cat.TRANSPORT, Cat.BIJLI)
-
     /**
-     * Every account on [side]: a few main ones (Food, Transport, Bills; Customers, Income received), then any category
-     * or people account that has entries, then the owner's own (one named like a category holds that category).
+     * Every account on [side]: nothing ready-made; a category or people account shows once it has entries, then the
+     * owner's own (one named like a category holds that category).
      */
     fun books(side: Side, all: List<Entry>, setup: SideSetup): List<Book> {
         val own = setup.books.filter { it.side == side }.map { b ->
@@ -52,11 +49,11 @@ object Sides {
         fun hasPeople(name: String) = setup.people.values.any { it.equals(name, true) } ||
             all.any { withPerson(it) && bookOf(it.person, all, setup) == name }
         val people = if (side == Side.EXP) listOf(STAFF, SUPPLIERS, PEOPLE).filter(::hasPeople).map { Book(side, it, true) }
-        else listOf(Book(side, CUSTOMERS, true))
+        else listOf(CUSTOMERS).filter(::hasPeople).map { Book(side, it, true) }
         val things = if (side == Side.EXP) {
             val used = all.filter { it.type == Type.KHARCHA }.map { it.category }.toSet()
-            expenseCats.filter { it in mainCats || it in used }.map { Book(side, it.label, false, it) }
-        } else listOf(Book(side, INCOME, false))
+            expenseCats.filter { it in used }.map { Book(side, it.label, false, it) }
+        } else listOfNotNull(Book(side, INCOME, false).takeIf { all.any { it.type == Type.AAMDANI } })
         // Expense lists its things (Food, Bills…) first and the people after; Income starts with Customers.
         val p = people + own.filter { it.people }
         val t = things + own.filter { !it.people }
@@ -96,7 +93,7 @@ object Sides {
         }
         val list = thingEntries(book, newest, setup)
         val groups = list.groupBy { thingName(it).lowercase() }
-        val names = (groups.values.map { thingName(it.first()) } + (book.cat?.let { defaultSubs[it] }.orEmpty()) + extra)
+        val names = (groups.values.map { thingName(it.first()) } + extra)
             .distinctBy { it.lowercase() }
         return names.map { n -> Kid(n, groups[n.lowercase()].orEmpty()) }
             .sortedWith(compareByDescending<Kid> { it.entries.firstOrNull()?.date ?: 0L })

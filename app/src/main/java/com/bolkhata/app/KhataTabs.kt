@@ -1539,7 +1539,12 @@ fun SideScreen(
             adding = null
         }
         if (what == "book") AccountDialog(side, books.map { it.name.lowercase() }.toSet(), onDismiss = { adding = null }, onSave = done)
-        else NamePopup("Add in ${book?.name}", if (book?.people == true) "Name" else "Name (e.g. Groceries)", onDismiss = { adding = null }) { done(it, false) }
+        else {
+            // Things: the category's usual sub-accounts not made yet, as chips.
+            val have = book?.let { b -> Sides.kids(b, entries, setup).map { it.name.lowercase() }.toSet() }.orEmpty()
+            val picks = book?.takeIf { !it.people }?.cat?.let { defaultSubs[it] }.orEmpty().filter { it.lowercase() !in have }
+            NamePopup("Add in ${book?.name}", if (book?.people == true) "Name" else "Name (e.g. Groceries)", onDismiss = { adding = null }, picks = picks) { done(it, false) }
+        }
     }
     sheet?.let { r -> AddSheet(r, entries, onDismiss = { sheet = null }) { e -> onSave(e); sheet = null } }
     if (stockIn) itemName?.let { n ->
@@ -1641,9 +1646,21 @@ private fun AccountDialog(side: Side, have: Set<String>, onDismiss: () -> Unit, 
 
 /** A one-field popup (a name to add inside an account, or a new business). */
 @Composable
-internal fun NamePopup(title: String, hint: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
+internal fun NamePopup(title: String, hint: String, onDismiss: () -> Unit, picks: List<String> = emptyList(), onSave: (String) -> Unit) {
     var name by remember { mutableStateOf("") }
-    AppPopup(title, "Add", onDismiss, { if (name.isNotBlank()) onSave(name.trim()) }) { WellField(name, { name = it }, hint) }
+    AppPopup(title, "Add", onDismiss, { if (name.isNotBlank()) onSave(name.trim()) }) {
+        WellField(name, { name = it }, hint)
+        // Ready names (Groceries, Petrol…) to tap instead of typing.
+        if (picks.isNotEmpty()) {
+            Text("OR PICK ONE", fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 12.dp, bottom = 6.dp))
+            Column(Modifier.heightIn(max = 190.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                picks.chunked(2).forEach { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { row.forEach { n -> PickChip("${iconFor(n)} $n", name == n) { name = n } } }
+                }
+            }
+        }
+    }
 }
 
 /** What an add button opens: the blank entry, its word (Out, Paid, Work…), colour, where it goes, and whether it takes goods. */
