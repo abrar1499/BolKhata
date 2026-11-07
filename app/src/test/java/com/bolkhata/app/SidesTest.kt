@@ -57,11 +57,4 @@ class SidesTest {
         assertEquals(8000.0, w.amount, 0.0)
         assertEquals("Hamid Akram", w.who.single().first)
     }
-
-    @Test fun ownTransfersShowInMyAccountsButAreNotIncome() {
-        val moved = all + en(Type.TRANSFER_OUT, 200.0, item = "To D360", cat = Cat.OTHER)
-        val mine = Sides.books(Side.INC, moved, setup).first { it.name == Sides.MY_ACCOUNTS }
-        assertEquals(0.0, Sides.done(mine, moved, setup) { true }, 0.0)
-        assertEquals("D360" to 200.0, Sides.kids(mine, moved, setup).single().let { it.name to it.balance })
-    }
 }

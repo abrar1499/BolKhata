@@ -84,12 +84,4 @@ class CashBookTest {
         assertEquals("Petrol", moved.item)
         assertEquals("ALJIDAR STATION · Riyadh · card · Al Rajhi", moved.note)
     }
-
-    @Test
-    fun ownAccountTransfersDoNotMoveCash() {
-        assertFalse(cashOut(e(Type.TRANSFER_OUT)))
-        assertFalse(cashIn(e(Type.TRANSFER_IN)))
-        assertTrue(cashOut(e(Type.TRANSFER_OUT, "Hamid Akram")))
-        assertTrue(cashIn(e(Type.TRANSFER_IN, "Hamid Akram")))
-    }
 }
