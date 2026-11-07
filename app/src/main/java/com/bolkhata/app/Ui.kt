@@ -292,42 +292,7 @@ fun isTrade(t: Type) = t == Type.SALE || t == Type.PURCHASE
 fun isTransfer(t: Type) = t == Type.TRANSFER_IN || t == Type.TRANSFER_OUT
 
 /** True when this entry belongs in a named person history: loans, trades, and transfers. */
-fun withPerson(e: Entry) = e.person.isNotBlank() && (isLoan(e.type) || isTrade(e.type) || isTransfer(e.type)) || isDue(e)
-
-/**
- * Money the owner moves between the Business and Personal books, each name with the name on the other side. It is a
- * transfer, not an expense or income, so profit stays right; saving one adds the other side to the other book.
- */
-val OWNER_MOVES = mapOf(
-    "Taken for home" to "From business", "From business" to "Taken for home",
-    "Put in business" to "From home", "From home" to "Put in business"
-)
-fun ownerMove(item: String): String? = OWNER_MOVES.keys.firstOrNull { it.equals(item.trim(), true) }
-
-/** "Loans" (the stored name of a loan) shown as the plain word for what happened: Gave, Took, Got back, Paid back. */
-fun loanWord(text: String, e: Entry?): String =
-    if (e == null || !isLoan(e.type) || !text.equals("Loans", true)) text
-    else when (e.type) {
-        Type.DIYA -> "Gave"
-        Type.LIYA -> "Took"
-        Type.WAPIS_MILA -> "Got back"
-        else -> "Paid back"
-    }
-
-/** An expense or income left Due with a party: it goes in their khata and moves no cash. */
-fun isDue(e: Entry) = (e.type == Type.KHARCHA || e.type == Type.AAMDANI) && e.credit && e.person.isNotBlank()
-
-/** Work or salary a person earned and I owe them: a Due expense. */
-fun isWork(e: Entry) = e.type == Type.KHARCHA && isDue(e)
-
-/** What a party mostly is, from their entries: Worker, Staff, Customer or Supplier; empty for plain loans. */
-fun partyRole(list: List<Entry>): String = when {
-    list.any { isWork(it) && it.qty > 0 } -> "Worker"
-    list.any { isWork(it) } -> "Staff"
-    list.any { it.type == Type.SALE || isDue(it) } -> "Customer"
-    list.any { it.type == Type.PURCHASE } -> "Supplier"
-    else -> ""
-}
+fun withPerson(e: Entry) = e.person.isNotBlank() && (isLoan(e.type) || isTrade(e.type) || isTransfer(e.type))
 
 /** "On credit" / "Paid" for a sale or purchase with a person, else empty. */
 fun creditTag(e: Entry) = if (isTrade(e.type) && e.person.isNotBlank()) (if (e.paid) "Paid" else "On credit") else ""

@@ -68,8 +68,6 @@ data class Entry(
     val rate: Double = 0.0,
     /** Sale or purchase with a person that was settled in cash, so it does not go in the khata. */
     val paid: Boolean = false,
-    /** Due with [person]: an expense or income left in their khata, no cash moved yet (see [isDue]). */
-    val credit: Boolean = false,
     /** Stable hash of a structured bank alert, used to prevent the same notification being saved twice. */
     val sourceFingerprint: String = ""
 )
@@ -176,9 +174,6 @@ class Store(context: Context) {
     /** How many units were made in a month (Production), for this business; 0 when not said. */
     fun made(month: Int): Double = prefs.getString(scoped("made:$month"), null)?.toDoubleOrNull() ?: 0.0
     fun setMade(month: Int, qty: Double) = prefs.edit().putString(scoped("made:$month"), qty.toString()).apply()
-    /** What was made that month (the stock item it adds to); "" when not said. */
-    fun madeItem(month: Int): String = prefs.getString(scoped("madeItem:$month"), null) ?: ""
-    fun setMadeItem(month: Int, item: String) = prefs.edit().putString(scoped("madeItem:$month"), item.trim()).apply()
 
     private fun businessNames(): JSONObject = try {
         JSONObject(prefs.getString("businessNames", "{}") ?: "{}")
@@ -195,20 +190,6 @@ class Store(context: Context) {
 
     /** Entries of any business, for counts on the business list. */
     fun loadFor(id: String): List<Entry> = read(scoped("entries", id))
-
-    /** The open book alone as a file (Business or Personal): its name and its entries. */
-    fun exportBook(name: String): String = JSONObject()
-        .put("app", "Smart Expense").put("book", name)
-        .put("entries", JSONArray(prefs.getString(scoped("entries"), "[]") ?: "[]"))
-        .toString()
-
-    /** The entries of a book file, or null when the text is not one. */
-    fun bookEntries(text: String): List<Entry>? = runCatching {
-        JSONObject(text).optJSONArray("entries")?.let { parse(it.toString()) }
-    }.getOrNull()
-
-    /** Adds an entry to another book: the other side of money the owner moved between Business and Personal. */
-    fun addTo(id: String, e: Entry) = write(scoped("entries", id), listOf(e) + read(scoped("entries", id)))
 
     fun addBusiness(name: String): String {
         val id = "b" + System.currentTimeMillis()
@@ -391,9 +372,8 @@ class Store(context: Context) {
         return { prefs.unregisterOnSharedPreferenceChangeListener(l) }
     }
 
-    private fun read(key: String): List<Entry> = parse(prefs.getString(key, "[]") ?: "[]")
-
-    private fun parse(raw: String): List<Entry> {
+    private fun read(key: String): List<Entry> {
+        val raw = prefs.getString(key, "[]") ?: "[]"
         return try {
             val arr = JSONArray(raw)
             (0 until arr.length()).mapNotNull { i ->
@@ -414,7 +394,6 @@ class Store(context: Context) {
                         unit = o.optString("unit", ""),
                         rate = o.optDouble("rate", 0.0).let { if (it.isNaN()) 0.0 else it },
                         paid = o.optBoolean("paid", false),
-                        credit = o.optBoolean("credit", false),
                         sourceFingerprint = o.optString("sourceFingerprint", "")
                     )
                 } catch (e: Exception) {
@@ -527,7 +506,6 @@ class Store(context: Context) {
                     .put("unit", e.unit)
                     .put("rate", e.rate)
                     .put("paid", e.paid)
-                    .put("credit", e.credit)
                     .put("sourceFingerprint", e.sourceFingerprint)
             )
         }

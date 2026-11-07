@@ -183,7 +183,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     /** The party khata open from the Parties tab. */
     var partyOpen by remember { mutableStateOf<String?>(null) }
     /** The open business's name, and whether the business list is showing. */
-    var businessName by remember { mutableStateOf(if (store.business == PERSONAL) "Personal" else store.businesses().firstOrNull { it.first == store.business }?.second ?: "My business") }
+    var businessName by remember { mutableStateOf(store.businesses().firstOrNull { it.first == store.business }?.second ?: "My business") }
     var pickingBusiness by remember { mutableStateOf(false) }
     var businessTick by remember { mutableIntStateOf(0) }
     // Smart understanding: entries the local engine read (shown before saving), a name to pick, what was just added (Undo),
@@ -296,22 +296,6 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     LaunchedEffect(Unit) { sendChatLog() }
 
     var trash by remember { mutableStateOf(store.loadTrash()) }
-    /** The open book: a business, or [PERSONAL] (opened from the book list); Personal money moves pair with the last business. */
-    var book by remember { mutableStateOf(store.business) }
-    var lastBusiness by remember { mutableStateOf(store.business.takeIf { it != PERSONAL } ?: "") }
-    /** The Business section chip to open on (Parties, Stock…). */
-    var businessSection by remember { mutableStateOf("Parties") }
-    fun bookName(id: String) = if (id == PERSONAL) "Personal" else store.businesses().firstOrNull { it.first == id }?.second ?: "My business"
-    /** Opens a book and loads its entries. */
-    fun openBook(id: String) {
-        store.business = id
-        book = id
-        if (id != PERSONAL) lastBusiness = id
-        entries = store.load()
-        trash = store.loadTrash()
-        businessName = bookName(id)
-        partyOpen = null
-    }
 
     fun saveTrash(list: List<Entry>) {
         trash = list
@@ -592,7 +576,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         } else null
         val target = matched ?: if (st.keywords.isEmpty() && (latestRef || st.mentionsMoney)) candidates.firstOrNull() else null
         if (target == null) {
-            toast("I couldn't match that payment to an entry. Mention the item or person, e.g. \"payment for the goods not received\".")
+            toast("I couldn't match that payment to an entry. Mention the item or person, e.g. \"payment for the bricks not received\".")
             return true
         }
         val who = target.person.ifBlank { st.person }
@@ -1481,32 +1465,6 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             toast(if (ok) "✓ Data exported (${entries.size} entries)" else "Could not save the file")
         }
     }
-    // The ⋮ menu's Import / Export: only the open book (Business or Personal).
-    val bookExport = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
-        if (uri != null) scope.launch {
-            val text = store.exportBook(businessName)
-            val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                runCatching { context.contentResolver.openOutputStream(uri)?.use { it.write(text.toByteArray()) } != null }.getOrDefault(false)
-            }
-            toast(if (ok) "✓ $businessName exported (${entries.size} entries)" else "Could not save the file")
-        }
-    }
-    val bookImport = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) scope.launch {
-            val text = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                runCatching { context.contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) } }.getOrNull()
-            }
-            val list = text?.let { store.bookEntries(it) }
-            if (list == null) toast("This is not a Smart Expense book file")
-            else {
-                // Added to the open book; entries already there are kept, none is doubled.
-                val have = entries.map { it.id }.toSet()
-                val add = list.filter { it.id !in have }
-                save(add + entries)
-                toast("✓ ${add.size} entries added to $businessName")
-            }
-        }
-    }
     val importFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) scope.launch {
             val text = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
@@ -2168,11 +2126,20 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     KhataNav(tab) { tab = it }
                 }
             } else {
-                // The chat box lives only on the Chat tab; the other screens show just the tabs.
+                // The khata tabs sit under the chat bar on the main screens.
                 val nav = main && tab in KHATA_TABS && partyOpen == null
                 Column {
                     FlashStrip(flash) { flash = null }
-                    if (nav) KhataNav(tab) { tab = it } else Spacer(Modifier.navigationBarsPadding())
+                    InputBar(
+                        onSend = { homeInput(it) },
+                        onMic = { startVoice(forChat = true) },
+                        placeholder = "Speak, type or ask…",
+                        onAttach = { pickFile.launch(arrayOf("image/*", "application/pdf")) },
+                        busy = chatLoading,
+                        voice = if (recorder != null) VoiceState(true, "Listening…", "sends when you stop", level = voiceLevel) { finishRecording() } else null,
+                        navPad = !nav
+                    )
+                    if (nav) KhataNav(tab) { tab = it }
                 }
             }
         },
@@ -2189,16 +2156,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 LocalMainOpener provides { a: MainAcct -> ledger = a },
                 LocalEntryMenu provides { e: Entry -> menuFor = e },
                 LocalKhataMenu provides { kind: String, n: String -> khataFor = kind to n },
-                LocalSelection provides selection,
-                LocalTopMenu provides TopMenu(
-                    currency,
-                    onImport = { bookImport.launch(arrayOf("application/json", "text/plain", "application/octet-stream", "*/*")) },
-                    onExport = {
-                        val day = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
-                        bookExport.launch("SmartExpense-${businessName.replace(Regex("[^A-Za-z0-9]+"), "-")}-$day.json")
-                    },
-                    onCurrency = { c -> currency = c; store.currency = c; toast("✓ Currency set to $c") }
-                )
+                LocalSelection provides selection
             ) {
             // Each screen keeps its own scroll and picks when another opens over it (a party, a report…),
             // so Back returns to the same place in the list.
@@ -2232,14 +2190,12 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     onOpen = { p -> partyOpen = p.name; activeLedgerPerson = p.name },
                     onReport = { reportStart = it; tab = Tab.REPORTS },
                     onAdd = { trade = it }, onEdit = { editing = it },
-                    made = { store.made(it) }, onSetMade = { m, qty -> store.setMade(m, qty) },
-                    madeItem = { store.madeItem(it) }, onSetMadeItem = { m, item -> store.setMadeItem(m, item) },
-                    section = businessSection, onSection = { businessSection = it }
+                    made = { store.made(it) }, onSetMade = { m, qty -> store.setMade(m, qty) }
                 )
                 tab == Tab.CASHBOOK -> CashBookScreen(
                     entries, currency, onMenu = { openMenu() }, business = businessName, onBusiness = { pickingBusiness = true },
                     onEdit = { editing = it }, onHistory = { tab = Tab.ENTRIES },
-                    onAdd = { trade = cashTemplate(false) }
+                    onAdd = { inc -> trade = cashTemplate(inc) }
                 )
                 tab == Tab.EXPENSE || tab == Tab.INCOME -> {
                     val inc = tab == Tab.INCOME
@@ -2944,19 +2900,21 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
 
     if (pickingBusiness) {
         fun open(id: String) {
-            openBook(id)
+            store.business = id
+            entries = store.load()
+            trash = store.loadTrash()
+            businessName = store.businesses().firstOrNull { it.first == id }?.second ?: "My business"
+            partyOpen = null
             pickingBusiness = false
         }
         BusinessPicker(
-            // The Personal book (from the Business / Personal days) stays reachable here while it has entries.
-            list = remember(businessTick, entries) {
-                val books = store.businesses() + listOfNotNull((PERSONAL to "Personal").takeIf { book == PERSONAL || store.loadFor(PERSONAL).isNotEmpty() })
-                books.map { (id, n) -> Triple(id, n, personAccounts(store.loadFor(id)).size) }
-            },
+            list = remember(businessTick, entries) { store.businesses().map { (id, n) -> Triple(id, n, personAccounts(store.loadFor(id)).size) } },
             current = store.business, onBack = { pickingBusiness = false }, onPick = { open(it) },
             onAdd = { open(store.addBusiness(it)) },
             onRename = { id, n -> store.renameBusiness(id, n); if (id == store.business) businessName = n; businessTick++ },
             onDelete = { id -> val wasOpen = id == store.business; store.deleteBusiness(id); if (wasOpen) open("") else businessTick++ },
+            totals = remember(businessTick, entries) { store.businesses().associate { (id, _) -> id to monthCash(if (id == store.business) entries else store.loadFor(id)) } },
+            currency = currency
         )
     }
 
@@ -2969,26 +2927,15 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     t.type == Type.PURCHASE -> "Bought " + t.item
                     t.person.isNotBlank() -> t.person
                     t.type == Type.DIYA -> "New party entry"
-                    // The + button: the open book shows in the title (Personal, or the business name).
-                    else -> "New entry · $businessName"
+                    else -> "New entry"
                 },
                 question = null,
                 askType = false,
-                // Home money is just an amount: no qty × rate.
-                simple = book == PERSONAL,
                 currency = currency,
                 all = entries,
                 saveLabel = "Save",
                 onSave = { e ->
                     save(listOf(e) + entries)
-                    // Money moved between the books: the other book gets its side (Business ↔ Personal).
-                    val other = OWNER_MOVES[ownerMove(e.item) ?: ""]
-                    if (other != null && t.amount == 0.0 && isTransfer(e.type)) {
-                        store.addTo(
-                            if (book == PERSONAL) lastBusiness else PERSONAL,
-                            e.copy(id = "e" + System.nanoTime(), type = if (e.type == Type.TRANSFER_OUT) Type.TRANSFER_IN else Type.TRANSFER_OUT, item = other, note = other)
-                        )
-                    }
                     trade = null
                     lastAdded = listOf(e.id)
                     toast("✓ Saved")
