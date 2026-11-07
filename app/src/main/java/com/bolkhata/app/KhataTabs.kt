@@ -108,7 +108,7 @@ const val PERSONAL = "personal"
 
 /** The sections of each book, shown as chips under the search box. */
 val BUSINESS_SECTIONS = listOf("Cashbook", "Parties", "Stock", "Profit")
-val PERSONAL_SECTIONS = listOf("Cashbook", "Expense", "Income")
+val PERSONAL_SECTIONS = listOf("Cashbook", "Expense", "Income", "Parties")
 
 /** Bottom bar: Chat · Business · Personal · + (the one place to add an entry). */
 @Composable
@@ -318,12 +318,32 @@ private fun yearOf(ms: Long) = cal(ms).get(Calendar.YEAR)
  * cost, plus every expense) and profit = income − expense.
  */
 internal class Net(val income: Double, val cost: Double) { val profit get() = income - cost }
-internal fun netOf(all: List<Entry>, list: List<Entry>): Net {
+internal fun netOf(all: List<Entry>, list: List<Entry>, madeMonths: Set<Int> = emptySet()): Net {
     val sales = list.filter { it.type == Type.SALE }
     val income = sales.sumOf { it.amount } + list.filter { it.type == Type.AAMDANI }.sumOf { it.amount }
-    val spent = list.filter { it.type == Type.KHARCHA }.sumOf { it.amount }
+    // A month with Made turns its spending into the cost of the goods made; it counts only as they are sold.
+    val spent = list.filter { it.type == Type.KHARCHA && monthKey(it.date) !in madeMonths }.sumOf { it.amount }
     return Net(income, profitBreakdown(all, sales).costOfGoods + spent)
 }
+
+/** Id prefix of the goods-made lots (not saved entries: worked out from Made and the month's spending). */
+internal const val MADE_ID = "made:"
+
+/**
+ * Goods made, as purchases into Stock: one per month with Made (qty, item), at that month's whole spending, dated the
+ * first of the month so that month's sales take their cost from it.
+ */
+internal fun madeLots(all: List<Entry>, made: Map<Int, Pair<Double, String>>): List<Entry> = made.mapNotNull { (k, v) ->
+    val (qty, item) = v
+    if (qty <= 0 || item.isBlank()) return@mapNotNull null
+    val start = Calendar.getInstance().apply { clear(); set(k / 12, k % 12, 1) }.timeInMillis
+    val cost = all.filter { it.type == Type.KHARCHA && monthKey(it.date) == k }.sumOf { it.amount }
+    Entry(MADE_ID + k, Type.PURCHASE, cost, Cat.STOCK, item, "", "Made", start, start, qty = qty, rate = if (qty > 0) cost / qty else 0.0)
+}
+
+/** The item sold most (by quantity): what Made adds to when no item was said. */
+internal fun topSoldItem(all: List<Entry>): String = all.filter { it.type == Type.SALE && it.item.isNotBlank() }
+    .groupBy { it.item.trim() }.maxByOrNull { (_, l) -> l.sumOf { it.qty } }?.key ?: ""
 
 internal fun plusMinus(v: Double) = (if (v > 0.005) "+" else if (v < -0.005) "−" else "") + fmt(kotlin.math.abs(v))
 
@@ -337,8 +357,12 @@ fun PartiesScreen(
     onOpen: (PersonAcct) -> Unit, onReport: (ReportKind) -> Unit, onAdd: (Entry) -> Unit, onEdit: (Entry) -> Unit,
     /** Units made in a month (Production) and saving it. */
     made: (Int) -> Double = { 0.0 }, onSetMade: (Int, Double) -> Unit = { _, _ -> },
+    /** The item made in a month (it goes into Stock) and saving it. */
+    madeItem: (Int) -> String = { "" }, onSetMadeItem: (Int, String) -> Unit = { _, _ -> },
     /** The section chip to open on, and what to do when Cashbook (another screen) is tapped. */
-    section: String = "Parties", onSection: (String) -> Unit = {}
+    section: String = "Parties", onSection: (String) -> Unit = {},
+    /** The book's section chips (Business: Cashbook · Parties · Stock · Profit; Personal ends with Parties). */
+    sectionNames: List<String> = BUSINESS_SECTIONS
 ) {
     val newest = remember(entries) { entries.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt }) }
     var view by rememberSaveable(section) { mutableIntStateOf(BusinessViews.indexOf(section).coerceAtLeast(0)) }
@@ -350,10 +374,15 @@ fun PartiesScreen(
     val picked = remember(about, pick) { about.filter { inMonth(it.date, pick) } }
     val now = System.currentTimeMillis()
     val accts = remember(entries) { personAccounts(entries) }
-    val stock = remember(entries) { stockItems(entries) }
-
-    // Units made per month (tap a Profit month to say): with the month's cost they give the cost of one.
+    // Units made per month (tap Made in Profit to say): that month's spending becomes their cost, and they go into
+    // Stock like a purchase at that cost, so a sale takes off only the cost of what was sold.
     var madeTick by remember { mutableIntStateOf(0) }
+    val madeSet = remember(newest, madeTick) { monthsOf(newest).map { it.first }.filter { made(it) > 0 }.toSet() }
+    val topItem = remember(entries) { topSoldItem(entries) }
+    val lots = remember(newest, madeSet) { madeLots(newest, madeSet.associateWith { made(it) to madeItem(it).ifBlank { topItem } }) }
+    val withMade = remember(entries, lots) { entries + lots }
+    val stock = remember(withMade) { stockItems(withMade) }
+
     var madeMonth by remember { mutableStateOf<Int?>(null) }
     var stockOpen by rememberSaveable { mutableStateOf<String?>(null) }
     // Profit: a line tapped open (its people), then one person tapped open (their entries).
@@ -378,11 +407,13 @@ fun PartiesScreen(
             )
         }
         else -> {
-            val m = netOf(entries, about.filter { monthKey(it.date) == monthKey(now) })
+            val inMonth = about.filter { monthKey(it.date) == monthKey(now) }
+            val m = netOf(withMade, inMonth, madeSet)
             val madeNow = made(monthKey(now))
+            val making = inMonth.filter { it.type == Type.KHARCHA }.sumOf { it.amount }
             Triple(
                 Triple(plusMinus(m.profit), "Profit this month", if (m.profit < 0) RedSpend else GreenIn),
-                Triple(if (madeNow > 0) money(currency, m.cost / madeNow) else "—", "Cost per unit", RedSpend), ReportKind.PROFIT
+                Triple(if (madeNow > 0) money(currency, making / madeNow) else "—", "Cost per unit", RedSpend), ReportKind.PROFIT
             )
         }
     } }
@@ -394,7 +425,7 @@ fun PartiesScreen(
                     SumCard(card.first, card.second, "Report ›") { onReport(card.third) }
                 }
                 SearchBox(q, when (view) { 0 -> "Search parties"; 1 -> "Search items"; 2 -> "Search sales"; 3 -> "Search purchases"; else -> "Search months" }) { q = it }
-                SectionChips(BUSINESS_SECTIONS, BusinessViews[view]) { n ->
+                SectionChips(sectionNames, BusinessViews[view]) { n ->
                     val i = BusinessViews.indexOf(n)
                     if (i < 0) onSection(n) else { view = i; month = firstMonth(i, newest); q = "" }
                 }
@@ -404,11 +435,12 @@ fun PartiesScreen(
                 0 -> partiesView(accts, picked, pick, q, onOpen)
                 1 -> stockView(
                     stock, picked, pick, q, stockOpen,
-                    newest.filter { isTrade(it.type) && it.item.trim().equals(stockOpen, true) }, { stockOpen = it }, onEdit
+                    (lots + newest).filter { isTrade(it.type) && it.item.trim().equals(stockOpen, true) }.sortedByDescending { it.date },
+                    { stockOpen = it }, { if (!it.id.startsWith(MADE_ID)) onEdit(it) }
                 )
                 2, 3 -> tradeView(view == 2, picked, months, pick, q, onEdit)
                 else -> profitView(
-                    entries, about, months, pick, q, made, currency, { m -> madeMonth = m },
+                    withMade, about, months, pick, q, made, madeSet, stock, currency, { m -> madeMonth = m },
                     profitOpen, profitPerson, { profitOpen = it; profitPerson = null }, { profitPerson = it }, onEdit
                 )
             }
@@ -416,23 +448,29 @@ fun PartiesScreen(
         UpButton(state)
     }
     madeMonth?.let { m ->
-        MadeDialog(made(m), onDismiss = { madeMonth = null }) { qty -> onSetMade(m, qty); madeTick++; madeMonth = null }
+        MadeDialog(made(m), madeItem(m).ifBlank { topItem }, onDismiss = { madeMonth = null }) { qty, item ->
+            onSetMade(m, qty); onSetMadeItem(m, item); madeTick++; madeMonth = null
+        }
     }
 }
 
 /** Asks how many units were made in the month. */
 @Composable
-private fun MadeDialog(current: Double?, onDismiss: () -> Unit, onSave: (Double) -> Unit) {
+private fun MadeDialog(current: Double?, currentItem: String, onDismiss: () -> Unit, onSave: (Double, String) -> Unit) {
     var text by remember { mutableStateOf(current?.takeIf { it > 0 }?.let { fmt(it).replace(",", "") } ?: "") }
+    var item by remember { mutableStateOf(currentItem) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("How many were made?") },
         text = {
-            OutlinedTextField(text, { t -> text = t.filter { it.isDigit() || it == '.' } }, singleLine = true,
-                label = { Text("Units made this month") },
-                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number))
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(text, { t -> text = t.filter { it.isDigit() || it == '.' } }, singleLine = true,
+                    label = { Text("Units made this month") },
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number))
+                OutlinedTextField(item, { item = it }, singleLine = true, label = { Text("What was made (goes into Stock)") })
+            }
         },
-        confirmButton = { TextButton(onClick = { text.toDoubleOrNull()?.let(onSave) }) { Text("Save") } },
+        confirmButton = { TextButton(onClick = { text.toDoubleOrNull()?.let { onSave(it, item.trim()) } }) { Text("Save") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
 }
@@ -502,7 +540,7 @@ private fun LazyListScope.stockView(
         history.map { e ->
             val sold = e.type == Type.SALE
             LRow(
-                e.id, e.date, e.person.ifBlank { if (sold) "Sale" else "Purchase" },
+                e.id, e.date, e.person.ifBlank { if (sold) "Sale" else if (e.id.startsWith(MADE_ID)) "Made" else "Purchase" },
                 if (e.qty > 0) fmt(e.qty) + (if (e.rate > 0) " × " + fmt(e.rate) else "") else e.note,
                 listOf(if (sold) 0.0 else e.amount, if (sold) e.amount else 0.0), e
             ) { onEdit(e) }
@@ -534,14 +572,21 @@ private fun LazyListScope.tradeView(sale: Boolean, picked: List<Entry>, months: 
  */
 private fun LazyListScope.profitView(
     all: List<Entry>, about: List<Entry>, months: List<Pair<Int, Long>>, month: Int, q: String,
-    made: (Int) -> Double, currency: String, onMade: (Int) -> Unit,
+    made: (Int) -> Double, madeSet: Set<Int>, stock: List<StockItem>, currency: String, onMade: (Int) -> Unit,
     open: String?, person: String?, onOpen: (String?) -> Unit, onPerson: (String?) -> Unit, onEdit: (Entry) -> Unit
 ) {
     class Line(val key: String, val name: String, val sub: String, val out: Double, val inn: Double, val list: List<Entry>)
     val list = about.filter { inMonth(it.date, month) }
     val sales = list.filter { it.type == Type.SALE }
-    val net = netOf(all, list)
+    val net = netOf(all, list, madeSet)
     val goods = profitBreakdown(all, sales).costOfGoods
+    // Spending in a month with Made is the cost of making (shown below, with what one cost); other months' is a cost now.
+    val spending = list.filter { it.type == Type.KHARCHA }
+    val making = spending.filter { monthKey(it.date) in madeSet }
+    fun byName(l: List<Entry>, prefix: String) = l.groupBy { it.item.trim().ifBlank { it.category.label }.lowercase() }
+        .map { (k, g) -> Line(prefix + k, g.first().item.trim().ifBlank { g.first().category.label }, g.first().category.label, g.sumOf { it.amount }, 0.0, g) }
+        .sortedByDescending { it.out }
+    val makingLines = byName(making, "m")
     val lines = buildList {
         sales.groupBy { it.item.trim().ifBlank { "Sale" } }.forEach { (n, l) ->
             val qty = l.sumOf { it.qty }
@@ -549,18 +594,16 @@ private fun LazyListScope.profitView(
         }
         list.filter { it.type == Type.AAMDANI }.groupBy { source(it).trim().ifBlank { "Income" } }
             .forEach { (n, l) -> add(Line("i" + n.lowercase(), n, "income", 0.0, l.sumOf { it.amount }, l)) }
-        if (goods > 0) add(Line("g", "Cost of goods sold", "what the sold items cost", goods, 0.0, emptyList()))
+        if (goods > 0) add(Line("g", "Cost of sold", "what the sold goods cost (made or bought)", goods, 0.0, emptyList()))
         // Each expense under its own name (thaper, fuel…), its category under it.
-        list.filter { it.type == Type.KHARCHA }.groupBy { it.item.trim().ifBlank { it.category.label }.lowercase() }
-            .map { (k, l) -> Line("e$k", l.first().item.trim().ifBlank { l.first().category.label }, l.first().category.label, l.sumOf { it.amount }, 0.0, l) }
-            .sortedByDescending { it.out }.forEach { add(it) }
+        addAll(byName(spending.filter { monthKey(it.date) !in madeSet }, "e"))
     }
     fun cells(l: List<Entry>): List<GCell> {
         val c = l.filter { it.type == Type.KHARCHA }.sumOf { it.amount }
         val s = l.filter { it.type != Type.KHARCHA }.sumOf { it.amount }
         return listOf(GCell(signed(LKind.OUT, c), LKind.OUT), GCell(signed(LKind.IN, s), LKind.IN))
     }
-    val line = lines.firstOrNull { it.key == open }
+    val line = (lines + makingLines).firstOrNull { it.key == open }
     if (line != null) {
         // One line opened: who it was with, each name's total; a name opens their entries.
         val people = line.list.groupBy { it.person.trim().ifBlank { "No name" } }.toList().sortedByDescending { (_, l) -> l.sumOf { it.amount } }
@@ -594,7 +637,6 @@ private fun LazyListScope.profitView(
         return
     }
     val shown = lines.filter { q.isBlank() || it.name.contains(q.trim(), true) }
-    val madeQty = if (month == ALL_MONTHS) 0.0 else made(month)
     item(key = "fh") {
         LedgerHead(if (month == ALL_MONTHS) "All" else monthLabel(months, month) ?: "All", "sale − cost · tap a line",
             listOf(LCol("Cost", fmt(net.cost), LKind.OUT), LCol("Sale", fmt(net.income), LKind.IN)), false, WideColW)
@@ -607,16 +649,34 @@ private fun LazyListScope.profitView(
     // The profit in the Sale column (a loss in red), then how many were made and what one cost, for a month.
     item(key = "fp") {
         GridRow("Profit", if (net.profit < 0) "loss" else "sale − cost",
-            listOf(GCell("", LKind.OUT), GCell(plusMinus(net.profit), LKind.IN, if (net.profit < 0) RedSpend else GreenIn)), WideColW, month == ALL_MONTHS) {}
+            listOf(GCell("", LKind.OUT), GCell(plusMinus(net.profit), LKind.IN, if (net.profit < 0) RedSpend else GreenIn)), WideColW, true) {}
     }
-    if (month != ALL_MONTHS) {
+    // Making: the spending of months with Made, how many were made, what one cost, and what is still in stock.
+    val madeQty = if (month == ALL_MONTHS) madeSet.sumOf { made(it) } else made(month)
+    if (makingLines.isNotEmpty() || month != ALL_MONTHS) {
+        val makingCost = making.sumOf { it.amount }
+        item(key = "mh") {
+            LedgerHead("Making cost", "spending of months with Made · tap a line",
+                listOf(LCol("Cost", fmt(makingCost), LKind.OUT), LCol("", "", LKind.IN)), false, WideColW)
+        }
+        items(makingLines, key = { "ml" + it.key }) { l ->
+            GridRow(l.name, l.sub, listOf(GCell(signed(LKind.OUT, l.out), LKind.OUT), GCell("", LKind.IN)), WideColW, false) { onOpen(l.key) }
+        }
         item(key = "fm") {
-            GridRow("Made", if (madeQty > 0) "tap to change" else "tap to say how many were made",
-                listOf(GCell("", LKind.OUT), GCell(if (madeQty > 0) fmt(madeQty) else "—", LKind.IN, AmountInk)), WideColW, false) { onMade(month) }
+            GridRow("Made", if (month == ALL_MONTHS) "all months" else if (madeQty > 0) "tap to change" else "tap to say how many were made",
+                listOf(GCell("", LKind.OUT), GCell(if (madeQty > 0) fmt(madeQty) else "—", LKind.IN, AmountInk)), WideColW, false) {
+                if (month != ALL_MONTHS) onMade(month)
+            }
         }
         item(key = "fu") {
-            GridRow("Cost per unit", if (madeQty > 0) "all cost ÷ made" else "",
-                listOf(GCell(if (madeQty > 0) money(currency, net.cost / madeQty) else "—", LKind.OUT), GCell("", LKind.IN)), WideColW, true) {}
+            GridRow("Cost per unit", if (madeQty > 0) fmt(makingCost) + " ÷ " + fmt(madeQty) else "",
+                listOf(GCell(if (madeQty > 0 && makingCost > 0) money(currency, makingCost / madeQty) else "—", LKind.OUT), GCell("", LKind.IN)), WideColW, false) {}
+        }
+        // What was made and is not sold yet, at its cost (from Stock).
+        val madeLeft = stock.filter { s -> madeSet.isNotEmpty() && s.line.qty > 0 && all.any { it.id.startsWith(MADE_ID) && it.item.trim().equals(s.line.name.trim(), true) } }
+        item(key = "fk") {
+            GridRow("Still in stock", madeLeft.joinToString(" · ") { fmt(it.line.qty) + " " + it.line.name }.ifBlank { "nothing made yet" },
+                listOf(GCell("", LKind.OUT), GCell(fmt(madeLeft.sumOf { it.line.qty * it.buyRate }), LKind.IN)), WideColW, true) {}
         }
     }
 }
