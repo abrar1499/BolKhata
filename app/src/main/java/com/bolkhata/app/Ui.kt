@@ -192,8 +192,8 @@ val AppTypography: Typography = Typography().run {
     )
 }
 
-/** Light page colours offered in the side menu (Background): light slate (the default), warm grey. */
-val PAGE_COLORS = listOf(0xFFE6E8EB, 0xFFE9E6E1)
+/** Light page colours offered in the side menu (Background): warm grey (the default on every new install), light slate. */
+val PAGE_COLORS = listOf(0xFFE9E6E1, 0xFFE6E8EB)
 
 /** One dark look; it changes the whole app: page, cards, wells, edges, the ledger's day strip and the search / chat field. */
 class DarkLook(val page: Long, val card: Long, val well: Long, val edge: Long, val day: Long, val field: Long)
