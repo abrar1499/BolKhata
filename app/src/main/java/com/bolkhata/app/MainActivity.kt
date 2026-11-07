@@ -917,7 +917,7 @@ fun App(
             "plan" -> {
                 val plan = f.plan ?: return "I couldn't build a safe change plan. Nothing was changed."
                 pendingPlan = plan
-                "Check karke Apply ya Cancel dabayein."
+                "Check them, then tap Apply or Cancel."
             }
             "clear_all" -> {
                 val targets = scoped(entries)
@@ -2139,6 +2139,7 @@ fun App(
                 businesses = remember(businessTick, businessName) { store.businesses() }, current = store.business,
                 onBusiness = { id -> openBusiness(id); close() },
                 onManage = { pickingBusiness = true; close() },
+                onAddBusiness = { n -> openBusiness(store.addBusiness(n)); businessTick++; close() },
                 onName = { name = it; store.name = it; toast("✓ Name saved") },
                 onCurrency = { c -> currency = c; store.currency = c; toast("✓ Currency set to $c") },
                 onLang = { lang = it; store.language = it },
@@ -2255,7 +2256,7 @@ fun App(
                     SideScreen(
                         inc, entries, currency, sides, onSetup = { s -> sides = s; store.saveSides(s) },
                         onMenu = { openMenu() }, business = businessName, onEdit = { editing = it },
-                        onAdd = { trade = it },
+                        onSave = { e -> save(listOf(e) + entries); lastAdded = listOf(e.id); toast("✓ Saved") },
                         onStockIn = { item, qty -> val e = madeEntry(item, qty, madeRate(entries, qty), System.currentTimeMillis()); save(listOf(e) + entries); toast("✓ Stock added") },
                         onReport = { profitOpen = true },
                         jump = sideJump, onJumped = { sideJump = null }

@@ -335,8 +335,8 @@ private fun UserBubble(text: String, attachment: String = "") {
             text,
             // The question in a dark bubble, the answer in a white card (like the Yaad mock-up).
             color = MaterialTheme.colorScheme.surface,
-            fontSize = 14.sp,
-            lineHeight = 18.sp,
+            fontSize = 13.sp,
+            lineHeight = 17.sp,
             modifier = Modifier
                 .widthIn(max = 300.dp)
                 .clip(MeShape)
@@ -405,7 +405,7 @@ private fun AssistantBubble(text: String) {
     Text(
         text,
         color = MaterialTheme.colorScheme.onSurface,
-        fontSize = 14.sp,
+        fontSize = 13.sp,
         lineHeight = 18.sp,
         modifier = Modifier
             .padding(start = 8.dp)
@@ -520,13 +520,13 @@ private fun SavedCard(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(
-            if (live.isEmpty()) "Removed" else "✓ " + live.size + (if (live.size == 1) " entry saved" else " entries saved"),
+            if (live.isEmpty()) "Entry deleted later" else "✓ " + live.size + (if (live.size == 1) " entry saved" else " entries saved"),
             color = if (live.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else GreenIn,
             fontWeight = FontWeight.Bold, fontSize = 13.sp
         )
         // The assistant's own short line ("Saved: breakfast 7 SAR"), when it wrote one.
-        if (live.isNotEmpty() && !message.text.startsWith("✓")) {
-            Text(message.text, fontSize = 14.sp, lineHeight = 19.sp, color = MaterialTheme.colorScheme.onSurface)
+        if (!message.text.startsWith("✓")) {
+            Text(message.text, fontSize = 13.sp, lineHeight = 17.sp, color = MaterialTheme.colorScheme.onSurface)
         }
         live.forEach { e ->
             Row(
@@ -541,10 +541,10 @@ private fun SavedCard(
                 Box(
                     Modifier.clip(CircleShape).background(catColor(e.category).copy(alpha = 0.16f))
                         .padding(horizontal = 8.dp, vertical = 3.dp)
-                ) { Text(e.category.label, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1) }
+                ) { Text(e.category.label, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1) }
                 Spacer(Modifier.width(8.dp))
-                Text(entryTitle(e), Modifier.weight(1f), fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(moneyA(currency, e.amount, prefix(e.type)), color = signColor(e.type), fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Text(entryTitle(e), Modifier.weight(1f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(moneyA(currency, e.amount, prefix(e.type)), color = signColor(e.type), fontWeight = FontWeight.Bold, fontSize = 13.sp)
             }
         }
         if (live.isNotEmpty()) {
@@ -599,7 +599,7 @@ private fun PickCard(
                     if (e.person.isNotBlank() && !e.note.contains(e.person, ignoreCase = true)) {
                         Text(e.person, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                     }
-                    Text(e.note.ifBlank { entryTitle(e) }, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                    Text(e.note.ifBlank { entryTitle(e) }, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
                     Text(
                         e.category.label + " · " + dayLabel(e.date) + " " + timeLabel(e.date),
                         fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1
