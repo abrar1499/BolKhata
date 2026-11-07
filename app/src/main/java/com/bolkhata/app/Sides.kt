@@ -41,7 +41,9 @@ object Sides {
     /** Every account on [side]: the people accounts first, then things (categories and the owner's own). */
     fun books(side: Side, all: List<Entry>, setup: SideSetup): List<Book> {
         val own = setup.books.filter { it.side == side }
-        val people = if (side == Side.EXP) listOf(Book(side, STAFF, true), Book(side, SUPPLIERS, true), Book(side, PEOPLE, true))
+        // People (loans only) shows once someone is in it.
+        val loans = all.any { withPerson(it) && bookOf(it.person, all, setup) == PEOPLE }
+        val people = if (side == Side.EXP) listOfNotNull(Book(side, STAFF, true), Book(side, SUPPLIERS, true), Book(side, PEOPLE, true).takeIf { loans })
         else listOf(Book(side, CUSTOMERS, true))
         val things = if (side == Side.EXP) {
             val used = all.filter { it.type == Type.KHARCHA }.map { it.category }.toSet()
