@@ -196,6 +196,17 @@ class Store(context: Context) {
     /** Entries of any business, for counts on the business list. */
     fun loadFor(id: String): List<Entry> = read(scoped("entries", id))
 
+    /** The open book alone as a file (Business or Personal): its name and its entries. */
+    fun exportBook(name: String): String = JSONObject()
+        .put("app", "Smart Expense").put("book", name)
+        .put("entries", JSONArray(prefs.getString(scoped("entries"), "[]") ?: "[]"))
+        .toString()
+
+    /** The entries of a book file, or null when the text is not one. */
+    fun bookEntries(text: String): List<Entry>? = runCatching {
+        JSONObject(text).optJSONArray("entries")?.let { parse(it.toString()) }
+    }.getOrNull()
+
     /** Adds an entry to another book: the other side of money the owner moved between Business and Personal. */
     fun addTo(id: String, e: Entry) = write(scoped("entries", id), listOf(e) + read(scoped("entries", id)))
 
@@ -380,8 +391,9 @@ class Store(context: Context) {
         return { prefs.unregisterOnSharedPreferenceChangeListener(l) }
     }
 
-    private fun read(key: String): List<Entry> {
-        val raw = prefs.getString(key, "[]") ?: "[]"
+    private fun read(key: String): List<Entry> = parse(prefs.getString(key, "[]") ?: "[]")
+
+    private fun parse(raw: String): List<Entry> {
         return try {
             val arr = JSONArray(raw)
             (0 until arr.length()).mapNotNull { i ->

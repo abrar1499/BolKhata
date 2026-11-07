@@ -210,7 +210,7 @@ private fun DrawScope.drawBand(theme: HeaderTheme, h: Float) {
     drawRect(Color.White.copy(alpha = 0.35f), topLeft = Offset(0f, h - 1.dp.toPx()), size = Size(size.width, 1.dp.toPx()))
 }
 
-/** The ⋮ menu at the top right of Business and Personal: import, export and currency. */
+/** The ⋮ menu at the top right of Business and Personal: import / export of that book alone, and currency. */
 class TopMenu(val currency: String, val onImport: () -> Unit, val onExport: () -> Unit, val onCurrency: (String) -> Unit)
 val LocalTopMenu = compositionLocalOf<TopMenu?> { null }
 

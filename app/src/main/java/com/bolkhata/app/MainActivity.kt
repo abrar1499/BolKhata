@@ -1491,6 +1491,32 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             toast(if (ok) "✓ Data exported (${entries.size} entries)" else "Could not save the file")
         }
     }
+    // The ⋮ menu's Import / Export: only the open book (Business or Personal).
+    val bookExport = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) scope.launch {
+            val text = store.exportBook(businessName)
+            val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching { context.contentResolver.openOutputStream(uri)?.use { it.write(text.toByteArray()) } != null }.getOrDefault(false)
+            }
+            toast(if (ok) "✓ $businessName exported (${entries.size} entries)" else "Could not save the file")
+        }
+    }
+    val bookImport = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) scope.launch {
+            val text = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching { context.contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) } }.getOrNull()
+            }
+            val list = text?.let { store.bookEntries(it) }
+            if (list == null) toast("This is not a Smart Expense book file")
+            else {
+                // Added to the open book; entries already there are kept, none is doubled.
+                val have = entries.map { it.id }.toSet()
+                val add = list.filter { it.id !in have }
+                save(add + entries)
+                toast("✓ ${add.size} entries added to $businessName")
+            }
+        }
+    }
     val importFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) scope.launch {
             val text = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
@@ -2188,10 +2214,10 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                 LocalSelection provides selection,
                 LocalTopMenu provides TopMenu(
                     currency,
-                    onImport = { importFile.launch(arrayOf("application/json", "text/plain", "application/octet-stream", "*/*")) },
+                    onImport = { bookImport.launch(arrayOf("application/json", "text/plain", "application/octet-stream", "*/*")) },
                     onExport = {
                         val day = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
-                        exportFile.launch("SmartExpense-backup-$day.json")
+                        bookExport.launch("SmartExpense-${businessName.replace(Regex("[^A-Za-z0-9]+"), "-")}-$day.json")
                     },
                     onCurrency = { c -> currency = c; store.currency = c; toast("✓ Currency set to $c") }
                 )
