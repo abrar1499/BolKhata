@@ -88,7 +88,8 @@ internal fun glassBand(): Modifier {
 /** Money that left your hand. A sale or purchase on credit with a party moves no cash. */
 fun cashOut(e: Entry) = when (e.type) {
     Type.KHARCHA, Type.DIYA, Type.WAPIS_DIYA, Type.TRANSFER_OUT -> true
-    Type.PURCHASE -> e.paid || e.person.isBlank()
+    // Goods made here moved no cash: they are stock, not a payment.
+    Type.PURCHASE -> (e.paid || e.person.isBlank()) && !isMade(e)
     else -> false
 }
 
@@ -284,7 +285,7 @@ internal fun aboutView(view: Int, newest: List<Entry>) = when (view) {
     1 -> newest.filter { (it.type == Type.SALE || it.type == Type.PURCHASE) && it.item.isNotBlank() }
     2, 4 -> newest.filter { it.type == Type.SALE }
     3 -> newest.filter { it.type == Type.PURCHASE }
-    else -> newest.filter { it.type == Type.KHARCHA && it.category == Cat.PRODUCTION }
+    else -> newest.filter { (it.type == Type.KHARCHA && it.category == Cat.PRODUCTION) || isMade(it) }
 }
 
 /** Sale, Purchase and Production open on their newest month like the Cash book; the other views on All. */
@@ -306,8 +307,8 @@ internal fun plusMinus(v: Double) = (if (v > 0.005) "+" else if (v < -0.005) "�
 fun PartiesScreen(
     entries: List<Entry>, currency: String, onMenu: () -> Unit, business: String, onBusiness: () -> Unit,
     onOpen: (PersonAcct) -> Unit, onReport: (ReportKind) -> Unit, onAdd: (Entry) -> Unit, onEdit: (Entry) -> Unit,
-    /** Units made in a month (Production) and saving it. */
-    made: (Int) -> Double = { 0.0 }, onSetMade: (Int, Double) -> Unit = { _, _ -> }
+    /** Saves goods made (Production) straight away, without the form. */
+    onSaveMade: (Entry) -> Unit = {}
 ) {
     val newest = remember(entries) { entries.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt }) }
     var view by rememberSaveable { mutableIntStateOf(0) }
@@ -349,13 +350,11 @@ fun PartiesScreen(
             )
         }
     } }
-    // Production: what the picked month (or every month, on All) cost, how many were made, and the cost of one.
-    var madeTick by remember { mutableIntStateOf(0) }
+    // Production: what the picked month (or every month, on All) cost, how many were made, and the cost of one so far.
     var askMade by remember { mutableStateOf(false) }
-    val madeQty = remember(view, pick, months, madeTick) {
-        if (view != 5) 0.0 else if (pick == ALL_MONTHS) months.sumOf { made(it.first) } else made(pick)
-    }
-    val prodCost = if (view == 5) picked.sumOf { it.amount } else 0.0
+    val madeList = if (view == 5) picked.filter(::isMade) else emptyList()
+    val madeQty = madeList.sumOf { it.qty }
+    val prodCost = if (view == 5) picked.filterNot(::isMade).sumOf { it.amount } else 0.0
     val perUnit = if (madeQty > 0) prodCost / madeQty else 0.0
     val shownCard = if (view != 5) card else Triple(
         Triple(if (madeQty > 0) money(currency, perUnit) else "—", "Cost per unit", RedSpend),
@@ -378,7 +377,7 @@ fun PartiesScreen(
                 0 -> partiesView(accts, picked, pick, q, onOpen)
                 1 -> stockView(stock, picked, pick, q, onAdd)
                 2, 3 -> tradeView(view == 2, picked, months, pick, q, onEdit)
-                5 -> productionView(picked, months, pick, q, madeQty, prodCost, perUnit, currency, onEdit) { askMade = true }
+                5 -> productionView(picked.filterNot(::isMade), madeList, months, pick, q, madeQty, prodCost, perUnit, currency, onEdit) { askMade = true }
                 else -> profitView(entries, about, months, pick, q) { m -> view = 2; month = m; q = "" }
             }
         }
@@ -394,9 +393,12 @@ fun PartiesScreen(
             )
         }
     }
-    if (askMade) MadeDialog(madeQty.takeIf { pick != ALL_MONTHS }, onDismiss = { askMade = false }) { qty ->
-        val m = if (pick == ALL_MONTHS) monthKey(now) else pick
-        onSetMade(m, qty); madeTick++; askMade = false
+    if (askMade) MadeDialog(madeList.firstOrNull()?.item ?: Goods.known(entries).firstOrNull() ?: "", Goods.known(entries), onDismiss = { askMade = false }) { item, qty ->
+        // Made in the picked month (today when it is this month or All), at what one cost there so far.
+        val day = if (pick == ALL_MONTHS || pick == monthKey(now)) now else months.firstOrNull { it.first == pick }?.second ?: now
+        val rate = prodCost / (madeQty + qty)
+        onSaveMade(madeEntry(Goods.canonical(item, Goods.known(entries)).ifBlank { "Goods" }, qty, rate, day))
+        askMade = false
     }
 }
 
@@ -405,7 +407,7 @@ fun PartiesScreen(
  * share, then how many were made and what one cost, then the entries themselves like the Cash book.
  */
 private fun LazyListScope.productionView(
-    picked: List<Entry>, months: List<Pair<Int, Long>>, month: Int, q: String, made: Double, cost: Double, perUnit: Double,
+    picked: List<Entry>, madeList: List<Entry>, months: List<Pair<Int, Long>>, month: Int, q: String, made: Double, cost: Double, perUnit: Double,
     currency: String, onEdit: (Entry) -> Unit, onMade: () -> Unit
 ) {
     val list = if (q.isBlank()) picked else picked.filter { matches(it, q) }
@@ -421,14 +423,14 @@ private fun LazyListScope.productionView(
     }
     // How many were made (tap to say) and what one cost; per 1000 too, for bricks and other small things.
     item(key = "pdm") {
-        GridRow("Made", if (made > 0) "Tap to change" else "Tap to say how many were made",
+        GridRow("Made", if (made > 0) madeList.map { it.item }.distinct().joinToString(", ") + " · tap to add more" else "Tap to add what was made",
             listOf(GCell(if (made > 0) fmt(made) else "—", LKind.PLAIN)), WideColW, false) { onMade() }
     }
     item(key = "pdu") {
         GridRow("Cost per unit", if (made > 0 && perUnit < 100) "Per 1000: " + money(currency, perUnit * 1000) else "",
             listOf(GCell(if (made > 0) fmt(perUnit) else "—", LKind.OUT)), WideColW, true) {}
     }
-    if (list.isEmpty()) emptyNote("No production costs yet. Tap Entry, or say \"coal 4200\" in the chat.")
+    if (list.isEmpty()) emptyNote("No production costs yet. Tap Entry, or say \"coal 4200\" in the chat. When goods are ready, say \"made 5000 bricks\".")
     else ledger(
         if (month == ALL_MONTHS) "All" else monthLabel(months, month) ?: "All",
         listOf(LCol("Cost", fmt(cost), LKind.OUT)),
@@ -437,19 +439,24 @@ private fun LazyListScope.productionView(
     )
 }
 
-/** Asks how many units were made in the month. */
+/** Asks what was made and how many; they go into stock at what one cost to make. */
 @Composable
-private fun MadeDialog(current: Double?, onDismiss: () -> Unit, onSave: (Double) -> Unit) {
-    var text by remember { mutableStateOf(current?.takeIf { it > 0 }?.let { fmt(it).replace(",", "") } ?: "") }
+private fun MadeDialog(lastItem: String, known: List<String>, onDismiss: () -> Unit, onSave: (String, Double) -> Unit) {
+    var qty by remember { mutableStateOf("") }
+    var item by remember { mutableStateOf(lastItem) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("How many were made?") },
+        title = { Text("What was made?") },
         text = {
-            OutlinedTextField(text, { t -> text = t.filter { it.isDigit() || it == '.' } }, singleLine = true,
-                label = { Text("Units made this month") },
-                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number))
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(item, { item = it }, singleLine = true, label = { Text("Goods") })
+                val hints = Goods.suggest(item, known).take(3)
+                if (hints.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { hints.forEach { h -> SmallChip(h, false) { item = h } } }
+                OutlinedTextField(qty, { t -> qty = t.filter { it.isDigit() || it == '.' } }, singleLine = true, label = { Text("How many") },
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number))
+            }
         },
-        confirmButton = { TextButton(onClick = { text.toDoubleOrNull()?.let(onSave) }) { Text("Save") } },
+        confirmButton = { TextButton(onClick = { qty.toDoubleOrNull()?.takeIf { it > 0 }?.let { onSave(item.trim(), it) } }) { Text("Save") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
 }

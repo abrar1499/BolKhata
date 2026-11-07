@@ -636,6 +636,18 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     val placeAfter = remember { arrayOf<Long?>(null) }
 
     fun handleTextSafely(text: String, clock: Understand.Clock? = null, original: String? = null) {
+        // "120000 awal eint tayyar hui": goods made go into stock at what one cost to make this month so far.
+        Goods.readMade(text)?.let { (qty, said) ->
+            val now = System.currentTimeMillis()
+            val month = entries.filter { sameMonth(it.date, now) }
+            val cost = month.filter { it.type == Type.KHARCHA && it.category == Cat.PRODUCTION }.sumOf { it.amount }
+            val made = month.filter(::isMade).sumOf { it.qty }
+            val item = Goods.canonical(said, Goods.known(entries)).ifBlank { "Goods" }
+            val e = madeEntry(item, qty, if (cost > 0) cost / (made + qty) else 0.0, now)
+            save(listOf(e) + entries)
+            toast("✓ Made ${fmt(qty)} $item" + if (cost > 0) " · cost ${fmt(e.rate)} each" else " · add this month's costs to see the cost of one")
+            return
+        }
         // "ghar ka bijli 3000": the entry goes to the book it names, without switching books.
         Books.route(text, store.businesses())?.let { (id, rest) ->
             if (id == store.business) { handleTextSafely(rest, clock, original); return }
@@ -2190,7 +2202,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     onOpen = { p -> partyOpen = p.name; activeLedgerPerson = p.name },
                     onReport = { reportStart = it; tab = Tab.REPORTS },
                     onAdd = { trade = it }, onEdit = { editing = it },
-                    made = { store.made(it) }, onSetMade = { m, qty -> store.setMade(m, qty) }
+                    onSaveMade = { e -> save(listOf(e) + entries); toast("✓ Made ${fmt(e.qty)} ${e.item} · cost ${fmt(e.rate)} each") }
                 )
                 tab == Tab.CASHBOOK -> CashBookScreen(
                     entries, currency, onMenu = { openMenu() }, business = businessName, onBusiness = { pickingBusiness = true },

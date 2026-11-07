@@ -40,7 +40,7 @@ fun blankEntry(): Entry {
 }
 
 /** Money going out of the owner's hand: expense, lent, paid back, bought, sent. */
-private fun isOut(t: Type) = t == Type.KHARCHA || t == Type.DIYA || t == Type.WAPIS_DIYA || t == Type.PURCHASE || t == Type.TRANSFER_OUT
+internal fun isOut(t: Type) = t == Type.KHARCHA || t == Type.DIYA || t == Type.WAPIS_DIYA || t == Type.PURCHASE || t == Type.TRANSFER_OUT
 
 /** A rounded popup that floats over the screen instead of filling it. */
 @Composable
@@ -93,7 +93,21 @@ fun EntryForm(
     var amount by remember(initial.id) { mutableStateOf(if (initial.amount > 0) plain(initial.amount) else "") }
     var item by remember(initial.id) { mutableStateOf(if (initial.item == "Loans") "" else initial.item) }
     var qty by remember(initial.id) { mutableStateOf(if (initial.qty > 0) plain(initial.qty) else "") }
+    var rate by remember(initial.id) { mutableStateOf(if (initial.rate > 0) plain(initial.rate) else "") }
+    var unit by remember(initial.id) { mutableStateOf(initial.unit) }
+    val knownGoods = remember(all) { Goods.known(all) }
     var person by remember(initial.id) { mutableStateOf(initial.person) }
+    /** Qty × rate fills the amount (a rate "per 1000" counts thousands, as bricks are sold). */
+    fun fillAmount() {
+        val q = qty.toDoubleOrNull() ?: return
+        val r = rate.toDoubleOrNull() ?: return
+        amount = plain(if (unit == "1000") q / 1000 * r else q * r)
+    }
+    /** A goods name used before brings its last rate and unit (this person's first), unless a rate is typed. */
+    fun fillRate(name: String) {
+        if (rate.isNotBlank()) return
+        Goods.lastRate(name, person, out, all)?.let { rate = plain(it.rate); unit = it.unit; fillAmount() }
+    }
     var paid by remember(initial.id) { mutableStateOf(initial.paid) }
     var date by remember(initial.id) { mutableLongStateOf(initial.date) }
     var note by remember(initial.id) { mutableStateOf(initial.note) }
@@ -174,9 +188,31 @@ fun EntryForm(
 
         Field(note, { note = it }, "Note (what for?)", Modifier.fillMaxWidth())
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Field(item, { item = it }, "Goods (optional)", Modifier.weight(1f))
-            Field(qty, { v -> qty = v.filter { it.isDigit() || it == '.' } }, "Qty", Modifier.width(72.dp), numeric = true)
+        // Goods: saved names show under the field as you type, so one item keeps one spelling.
+        var goodsOpen by remember { mutableStateOf(false) }
+        val goodsHints = remember(item, knownGoods) { Goods.suggest(item, knownGoods) }
+        Box {
+            Field(item, { item = it; goodsOpen = true; knownGoods.firstOrNull { k -> k.equals(it.trim(), true) }?.let(::fillRate) }, "Goods (optional)", Modifier.fillMaxWidth())
+            DropdownMenu(expanded = goodsOpen && goodsHints.isNotEmpty(), onDismissRequest = { goodsOpen = false },
+                properties = androidx.compose.ui.window.PopupProperties(focusable = false)) {
+                goodsHints.forEach { g -> DropdownMenuItem(text = { Text(g) }, onClick = { item = g; goodsOpen = false; fillRate(g) }) }
+            }
+        }
+        // Qty, unit and rate: the amount fills itself from qty × rate.
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Field(qty, { v -> qty = v.filter { it.isDigit() || it == '.' }; fillAmount() }, "Qty", Modifier.weight(1f), numeric = true)
+            var unitOpen by remember { mutableStateOf(false) }
+            Box {
+                Field(if (unit == "1000") "per 1000" else unit, {}, "Unit", Modifier.width(92.dp), readOnly = true,
+                    trailing = { Icon(Icons.Filled.ArrowDropDown, contentDescription = "Unit", modifier = Modifier.size(20.dp)) })
+                // A cover over the field, so a tap anywhere on it opens the list.
+                Box(Modifier.matchParentSize().clickable { unitOpen = true })
+                DropdownMenu(expanded = unitOpen, onDismissRequest = { unitOpen = false }) {
+                    listOf("" to "None", "piece" to "Piece", "kg" to "Kg", "bag" to "Bag", "ton" to "Ton", "litre" to "Litre", "1000" to "Per 1000")
+                        .forEach { (u, l) -> DropdownMenuItem(text = { Text(l) }, onClick = { unit = u; unitOpen = false; fillAmount() }) }
+                }
+            }
+            Field(rate, { v -> rate = v.filter { it.isDigit() || it == '.' }; fillAmount() }, "Rate", Modifier.weight(1f), numeric = true)
         }
 
         var picking by remember { mutableStateOf(false) }
@@ -248,11 +284,12 @@ fun EntryForm(
                             t == Type.AAMDANI -> Cat.TANKHWAH
                             else -> cat
                         }
+                        val itemName = Goods.canonical(item, knownGoods)
                         val finalItem = when {
-                            isLoan(t) -> item.trim().ifBlank { "Loans" }
-                            isTransfer(t) -> item.trim().ifBlank { "Transfer" }
-                            isTrade(t) -> item.trim().ifBlank { if (t == Type.SALE) "Sale" else "Purchase" }
-                            item.isNotBlank() -> item.trim()
+                            isLoan(t) -> itemName.ifBlank { "Loans" }
+                            isTransfer(t) -> itemName.ifBlank { "Transfer" }
+                            isTrade(t) -> itemName.ifBlank { if (t == Type.SALE) "Sale" else "Purchase" }
+                            itemName.isNotBlank() -> itemName
                             t == Type.AAMDANI -> "Income"
                             else -> guess?.second ?: finalCat.label
                         }
@@ -263,6 +300,8 @@ fun EntryForm(
                                 category = finalCat,
                                 item = finalItem,
                                 qty = qty.toDoubleOrNull() ?: 0.0,
+                                rate = rate.toDoubleOrNull() ?: 0.0,
+                                unit = unit,
                                 person = if (isLoan(t) || isTrade(t) || isTransfer(t)) person.trim() else "",
                                 paid = isTrade(t) && person.isNotBlank() && paid,
                                 // A new "nashta" today after 9 AM is put at 7 AM, and so on (see Parser.partOfDayTime).

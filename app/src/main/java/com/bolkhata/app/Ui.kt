@@ -250,6 +250,9 @@ fun dayNumber(ms: Long): Long {
 
 fun sameDay(a: Long, b: Long): Boolean = dayNumber(a) == dayNumber(b)
 
+/** Same calendar month and year. */
+fun sameMonth(a: Long, b: Long): Boolean = cal(a).let { x -> cal(b).let { y -> x.get(Calendar.YEAR) == y.get(Calendar.YEAR) && x.get(Calendar.MONTH) == y.get(Calendar.MONTH) } }
+
 fun dayLabel(d: Long): String {
     val now = System.currentTimeMillis()
     return when {
@@ -349,20 +352,32 @@ data class ProfitBreakdown(
     val items: List<ProfitItemBreakdown>
 )
 
+/** What goods in stock cost: the price paid, or for goods made here (no money paid) qty × the cost per unit. */
+fun costOf(e: Entry) = if (e.amount > 0) e.amount else e.rate * e.qty
+
+/** Goods made here (Production): they come into stock at what one cost to make, with no money paid. */
+fun isMade(e: Entry) = e.sourceFingerprint.startsWith("made:")
+
+fun madeEntry(item: String, qty: Double, rate: Double, date: Long, unit: String = ""): Entry {
+    val id = "e" + System.nanoTime()
+    return Entry(id, Type.PURCHASE, 0.0, Cat.STOCK, item, "", "Made", date, System.currentTimeMillis(),
+        qty = qty, unit = unit, rate = rate, paid = true, sourceFingerprint = "made:$id")
+}
+
 /** Estimated business profit uses recorded item cost before each sale; other Cash In is kept separate. */
 fun profitBreakdown(allEntries: List<Entry>, periodEntries: List<Entry>): ProfitBreakdown {
     val sales = periodEntries.filter { it.type == Type.SALE }
     val costBySaleId = linkedMapOf<String, Double>()
     // Purchases grouped by item once, so a year of sales doesn't scan every entry for each sale.
     val purchasesByItem = if (sales.isEmpty()) emptyMap() else allEntries
-        .filter { it.type == Type.PURCHASE && it.qty > 0.0 && it.amount > 0.0 }
+        .filter { it.type == Type.PURCHASE && it.qty > 0.0 && costOf(it) > 0.0 }
         .groupBy { it.item.trim().lowercase() }
     sales.forEach { sale ->
         if (sale.qty <= 0.0 || sale.item.isBlank() || sale.item.equals("Sale", ignoreCase = true)) return@forEach
         val purchases = purchasesByItem[sale.item.trim().lowercase()].orEmpty().filter { it.date <= sale.date }
         val purchasedQty = purchases.sumOf { it.qty }
         if (purchasedQty > 0.0) {
-            costBySaleId[sale.id] = sale.qty * (purchases.sumOf { it.amount } / purchasedQty)
+            costBySaleId[sale.id] = sale.qty * (purchases.sumOf { costOf(it) } / purchasedQty)
         }
     }
     val itemLines = sales.groupBy { it.item.trim().ifBlank { "Sale" } }
