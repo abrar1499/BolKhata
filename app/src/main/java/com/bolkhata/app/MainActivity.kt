@@ -296,7 +296,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
     LaunchedEffect(Unit) { sendChatLog() }
 
     var trash by remember { mutableStateOf(store.loadTrash()) }
-    /** The open book: a business, or [PERSONAL]; the Business button goes back to the last business. */
+    /** The open book: a business, or [PERSONAL] (opened from the book list); Personal money moves pair with the last business. */
     var book by remember { mutableStateOf(store.business) }
     var lastBusiness by remember { mutableStateOf(store.business.takeIf { it != PERSONAL } ?: "") }
     /** The Business section chip to open on (Parties, Stock…). */
@@ -312,16 +312,6 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
         businessName = bookName(id)
         partyOpen = null
     }
-    /** A section chip: Cashbook / Expense / Income are their own screens, the rest are Business views. */
-    fun goSection(name: String) {
-        tab = when (name) {
-            "Cashbook" -> Tab.CASHBOOK
-            "Expense" -> Tab.EXPENSE
-            "Income" -> Tab.INCOME
-            else -> { businessSection = name; Tab.PARTIES }
-        }
-    }
-    val sectionNames = if (book == PERSONAL) PERSONAL_SECTIONS else BUSINESS_SECTIONS
 
     fun saveTrash(list: List<Entry>) {
         trash = list
@@ -2175,26 +2165,14 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         voice = if (recorder != null) VoiceState(true, "Listening…", "sends when you stop", level = voiceLevel) { finishRecording() } else null,
                         navPad = false
                     )
-                    KhataNav(
-                        tab, book == PERSONAL,
-                        onChat = { tab = Tab.CHAT },
-                        onBusiness = { if (book == PERSONAL) openBook(lastBusiness); if (tab != Tab.PARTIES) tab = Tab.CASHBOOK },
-                        onPersonal = { if (book != PERSONAL) openBook(PERSONAL); if (tab == Tab.CHAT || tab == Tab.PARTIES && businessSection != "Parties") tab = Tab.CASHBOOK },
-                        onAdd = { trade = cashTemplate(false) }
-                    )
+                    KhataNav(tab) { tab = it }
                 }
             } else {
                 // The chat box lives only on the Chat tab; the other screens show just the tabs.
                 val nav = main && tab in KHATA_TABS && partyOpen == null
                 Column {
                     FlashStrip(flash) { flash = null }
-                    if (nav) KhataNav(
-                        tab, book == PERSONAL,
-                        onChat = { tab = Tab.CHAT },
-                        onBusiness = { if (book == PERSONAL) openBook(lastBusiness); if (tab != Tab.PARTIES) tab = Tab.CASHBOOK },
-                        onPersonal = { if (book != PERSONAL) openBook(PERSONAL); if (tab == Tab.CHAT || tab == Tab.PARTIES && businessSection != "Parties") tab = Tab.CASHBOOK },
-                        onAdd = { trade = cashTemplate(false) }
-                    ) else Spacer(Modifier.navigationBarsPadding())
+                    if (nav) KhataNav(tab) { tab = it } else Spacer(Modifier.navigationBarsPadding())
                 }
             }
         },
@@ -2219,8 +2197,7 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                         val day = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
                         bookExport.launch("SmartExpense-${businessName.replace(Regex("[^A-Za-z0-9]+"), "-")}-$day.json")
                     },
-                    onCurrency = { c -> currency = c; store.currency = c; toast("✓ Currency set to $c") },
-                    personal = book == PERSONAL
+                    onCurrency = { c -> currency = c; store.currency = c; toast("✓ Currency set to $c") }
                 )
             ) {
             // Each screen keeps its own scroll and picks when another opens over it (a party, a report…),
@@ -2257,19 +2234,19 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
                     onAdd = { trade = it }, onEdit = { editing = it },
                     made = { store.made(it) }, onSetMade = { m, qty -> store.setMade(m, qty) },
                     madeItem = { store.madeItem(it) }, onSetMadeItem = { m, item -> store.setMadeItem(m, item) },
-                    section = businessSection, onSection = { goSection(it) }, sectionNames = sectionNames
+                    section = businessSection, onSection = { businessSection = it }
                 )
                 tab == Tab.CASHBOOK -> CashBookScreen(
                     entries, currency, onMenu = { openMenu() }, business = businessName, onBusiness = { pickingBusiness = true },
                     onEdit = { editing = it }, onHistory = { tab = Tab.ENTRIES },
-                    sections = { SectionChips(sectionNames, "Cashbook") { goSection(it) } }
+                    onAdd = { trade = cashTemplate(false) }
                 )
                 tab == Tab.EXPENSE || tab == Tab.INCOME -> {
                     val inc = tab == Tab.INCOME
                     MoneyScreen(
                         inc, entries, currency, onMenu = { openMenu() }, business = businessName, onBusiness = { pickingBusiness = true }, onEdit = { editing = it },
                         onReport = { reportStart = if (inc) ReportKind.CASH_IN else ReportKind.CASH_OUT; tab = Tab.REPORTS },
-                        sections = { SectionChips(sectionNames, if (inc) "Income" else "Expense") { goSection(it) } }
+                        onAdd = { trade = cashTemplate(inc) }
                     )
                 }
                 tab == Tab.HOME -> HomeScreen(
@@ -2971,7 +2948,11 @@ fun App(store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: Strin
             pickingBusiness = false
         }
         BusinessPicker(
-            list = remember(businessTick, entries) { store.businesses().map { (id, n) -> Triple(id, n, personAccounts(store.loadFor(id)).size) } },
+            // The Personal book (from the Business / Personal days) stays reachable here while it has entries.
+            list = remember(businessTick, entries) {
+                val books = store.businesses() + listOfNotNull((PERSONAL to "Personal").takeIf { book == PERSONAL || store.loadFor(PERSONAL).isNotEmpty() })
+                books.map { (id, n) -> Triple(id, n, personAccounts(store.loadFor(id)).size) }
+            },
             current = store.business, onBack = { pickingBusiness = false }, onPick = { open(it) },
             onAdd = { open(store.addBusiness(it)) },
             onRename = { id, n -> store.renameBusiness(id, n); if (id == store.business) businessName = n; businessTick++ },

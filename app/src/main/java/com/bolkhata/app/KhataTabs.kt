@@ -29,8 +29,9 @@ import androidx.compose.material.icons.outlined.Storefront
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.outlined.Book
+import androidx.compose.material.icons.outlined.ReceiptLong
+import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.NoteAdd
 import androidx.compose.material.icons.outlined.People
@@ -106,28 +107,20 @@ val KHATA_TABS = listOf(Tab.CHAT, Tab.PARTIES, Tab.CASHBOOK, Tab.EXPENSE, Tab.IN
 /** The book for home money: kept apart so it never counts as a business cost. */
 const val PERSONAL = "personal"
 
-/** The sections of each book, shown as chips under the search box. */
-val BUSINESS_SECTIONS = listOf("Cashbook", "Parties", "Stock", "Profit")
-val PERSONAL_SECTIONS = listOf("Cashbook", "Expense", "Income", "Parties")
+/** The Business chips under the search box. */
+val BUSINESS_SECTIONS = listOf("Parties", "Stock", "Profit")
 
-/** Bottom bar: Chat · Business · Personal · + (the one place to add an entry). */
+/** Bottom bar: Chat · Business · Cashbook · Expense · Income. */
 @Composable
-fun KhataNav(tab: Tab, personal: Boolean, onChat: () -> Unit, onBusiness: () -> Unit, onPersonal: () -> Unit, onAdd: () -> Unit) {
+fun KhataNav(tab: Tab, onTab: (Tab) -> Unit) {
     // No shadow: it joins the white chat strip above into one bottom panel.
     Surface(color = MaterialTheme.colorScheme.surface) {
         Row(Modifier.fillMaxWidth().navigationBarsPadding().height(58.dp)) {
-            NavItem("Chat", Icons.Outlined.ChatBubbleOutline, tab == Tab.CHAT, onChat)
-            NavItem("Business", Icons.Outlined.Storefront, tab != Tab.CHAT && !personal, onBusiness)
-            NavItem("Personal", Icons.Outlined.Home, tab != Tab.CHAT && personal, onPersonal)
-            Column(
-                Modifier.weight(1f).fillMaxHeight().clickable { onAdd() },
-                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
-            ) {
-                Box(Modifier.size(34.dp).clip(CircleShape).background(Ember), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.Add, contentDescription = "Add entry", tint = Color.White, modifier = Modifier.size(22.dp))
-                }
-                Text("Entry", fontSize = 10.sp, color = Ember, fontWeight = FontWeight.Bold)
-            }
+            NavItem("Chat", Icons.Outlined.ChatBubbleOutline, tab == Tab.CHAT) { onTab(Tab.CHAT) }
+            NavItem("Business", Icons.Outlined.Storefront, tab == Tab.PARTIES) { onTab(Tab.PARTIES) }
+            NavItem("Cashbook", Icons.Outlined.Book, tab == Tab.CASHBOOK) { onTab(Tab.CASHBOOK) }
+            NavItem("Expense", Icons.Outlined.ReceiptLong, tab == Tab.EXPENSE) { onTab(Tab.EXPENSE) }
+            NavItem("Income", Icons.Outlined.Payments, tab == Tab.INCOME) { onTab(Tab.INCOME) }
         }
     }
 }
@@ -177,7 +170,7 @@ private fun KhataTop(
         .then(if (banded) Modifier.drawBehind { drawBand(theme, size.height - cardH / 2f) } else Modifier)) {
         Column(Modifier.statusBarsPadding().padding(horizontal = 12.dp)) {
             if (business != null) Row(verticalAlignment = Alignment.CenterVertically) {
-                BusinessPill(business, onMenu, onBusiness, switchable = LocalTopMenu.current?.personal != true)
+                BusinessPill(business, onMenu, onBusiness)
                 Spacer(Modifier.weight(1f))
                 LocalTopMenu.current?.let { TopMenuButton(it) }
             } else
@@ -211,11 +204,7 @@ private fun DrawScope.drawBand(theme: HeaderTheme, h: Float) {
 }
 
 /** The ⋮ menu at the top right of Business and Personal: import / export of that book alone, and currency. */
-class TopMenu(
-    val currency: String, val onImport: () -> Unit, val onExport: () -> Unit, val onCurrency: (String) -> Unit,
-    /** The Personal book is open: its pill has no ▾ (there is one Personal; businesses switch from the Business tab). */
-    val personal: Boolean = false
-)
+class TopMenu(val currency: String, val onImport: () -> Unit, val onExport: () -> Unit, val onCurrency: (String) -> Unit)
 val LocalTopMenu = compositionLocalOf<TopMenu?> { null }
 
 /** A white round ⋮ next to the business pill, same look as the pill. */
@@ -241,7 +230,7 @@ private fun TopMenuButton(m: TopMenu) {
 
 /** Compact frosted pill at the top: menu, then the open business with ▾ to switch or add one. */
 @Composable
-internal fun BusinessPill(name: String, onMenu: () -> Unit, onBusiness: () -> Unit, switchable: Boolean = true) {
+internal fun BusinessPill(name: String, onMenu: () -> Unit, onBusiness: () -> Unit) {
     Row(
         Modifier.padding(top = 12.dp).shadow(1.dp, CircleShape).clip(CircleShape).background(Color.White).padding(end = 11.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -250,10 +239,10 @@ internal fun BusinessPill(name: String, onMenu: () -> Unit, onBusiness: () -> Un
         Box(Modifier.size(38.dp).clip(CircleShape).clickable(onClickLabel = "Menu") { onMenu() }, contentAlignment = Alignment.Center) {
             GlassLogo(24.dp)
         }
-        Row(Modifier.clickable(enabled = switchable) { onBusiness() }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.clickable { onBusiness() }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(name, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1C1917), maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.widthIn(max = 170.dp))
-            if (switchable) Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Switch business", tint = Ember, modifier = Modifier.padding(start = 3.dp).size(16.dp))
+            Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Switch business", tint = Ember, modifier = Modifier.padding(start = 3.dp).size(16.dp))
         }
     }
 }
@@ -393,9 +382,7 @@ fun PartiesScreen(
     /** The item made in a month (it goes into Stock) and saving it. */
     madeItem: (Int) -> String = { "" }, onSetMadeItem: (Int, String) -> Unit = { _, _ -> },
     /** The section chip to open on, and what to do when Cashbook (another screen) is tapped. */
-    section: String = "Parties", onSection: (String) -> Unit = {},
-    /** The book's section chips (Business: Cashbook · Parties · Stock · Profit; Personal ends with Parties). */
-    sectionNames: List<String> = BUSINESS_SECTIONS
+    section: String = "Parties", onSection: (String) -> Unit = {}
 ) {
     val newest = remember(entries) { entries.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt }) }
     // The open chip comes from the caller (it is kept there), so coming back from Cashbook opens the chip tapped.
@@ -460,7 +447,7 @@ fun PartiesScreen(
                     SumCard(card.first, card.second, "Report ›") { onReport(card.third) }
                 }
                 SearchBox(q, when (view) { 0 -> "Search parties"; 1 -> "Search items"; 2 -> "Search sales"; 3 -> "Search purchases"; else -> "Search months" }) { q = it }
-                SectionChips(sectionNames, BusinessViews[view]) { onSection(it) }
+                SectionChips(BUSINESS_SECTIONS, BusinessViews[view]) { onSection(it) }
                 if (months.isNotEmpty()) MonthChips(months, pick) { month = it }
             } }
             when (view) {
@@ -478,6 +465,7 @@ fun PartiesScreen(
             }
         }
         UpButton(state)
+        PlusButton { onAdd(cashTemplate(false)) }
     }
     madeMonth?.let { m ->
         MadeDialog(made(m), madeItem(m).ifBlank { topItem }, onDismiss = { madeMonth = null }) { qty, item ->
@@ -998,9 +986,7 @@ private fun matches(e: Entry, q: String) =
 @Composable
 fun CashBookScreen(
     entries: List<Entry>, currency: String, onMenu: () -> Unit, business: String, onBusiness: () -> Unit,
-    onEdit: (Entry) -> Unit, onHistory: () -> Unit,
-    /** The book's section chips (Cashbook · Parties… or Cashbook · Expense · Income). */
-    sections: @Composable () -> Unit = {}
+    onEdit: (Entry) -> Unit, onHistory: () -> Unit, onAdd: () -> Unit
 ) {
     val newest = remember(entries) {
         entries.filter { cashIn(it) || cashOut(it) }.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt })
@@ -1029,7 +1015,6 @@ fun CashBookScreen(
                     )
                 }
                 SearchBox(q, "Search") { q = it }
-                sections()
                 if (q.isBlank() && months.isNotEmpty()) MonthChips(months, month) { month = it }
             } }
             val label = if (q.isNotBlank()) "Found" else monthLabel(months, month) ?: ""
@@ -1047,6 +1032,7 @@ fun CashBookScreen(
             )
         }
         UpButton(state)
+        PlusButton { onAdd() }
     }
 }
 
@@ -1198,9 +1184,7 @@ fun TrashScreen(
 @Composable
 fun MoneyScreen(
     income: Boolean, entries: List<Entry>, currency: String, onMenu: () -> Unit, business: String, onBusiness: () -> Unit,
-    onEdit: (Entry) -> Unit, onReport: () -> Unit,
-    /** The book's section chips. */
-    sections: @Composable () -> Unit = {}
+    onEdit: (Entry) -> Unit, onReport: () -> Unit, onAdd: () -> Unit
 ) {
     val type = if (income) Type.AAMDANI else Type.KHARCHA
     val list = remember(entries, income) {
@@ -1239,7 +1223,6 @@ fun MoneyScreen(
                     SumCard(Triple(money(currency, thisYear), "Year $year", color), Triple(money(currency, thisMonth), "This month", color), "Report ›", onReport)
                 }
                 SearchBox(q, "Search") { q = it }
-                sections()
                 if (months.isNotEmpty()) MonthChips(months, pick) { pick = it }
             } }
             val kind = if (income) LKind.IN else LKind.OUT
@@ -1309,6 +1292,7 @@ fun MoneyScreen(
                 Text(if (income) "No income yet." else "No expenses yet.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp, modifier = Modifier.padding(24.dp))
             }
         }
+        PlusButton(if (income) "Add income" else "Add expense") { onAdd() }
     }
 }
 
