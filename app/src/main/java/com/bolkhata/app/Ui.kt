@@ -687,7 +687,7 @@ fun BoxScope.PickMenu(open: Boolean, onDismiss: () -> Unit, content: @Composable
 
 /**
  * A compact pick list in a small white card under the row whose Box it is placed in: a search box when [search],
- * then one short line per item (code in bold, name in grey), the picked one in the app's colour.
+ * then one short line per item in full ("QAR · Qatari Riyal"), the picked one bold in the app's colour.
  */
 @Composable
 fun BoxScope.CompactPicker(open: Boolean, items: List<Pair<String, String>>, selected: String, search: Boolean, onDismiss: () -> Unit, onPick: (String) -> Unit) {
@@ -699,7 +699,7 @@ fun BoxScope.CompactPicker(open: Boolean, items: List<Pair<String, String>>, sel
             properties = androidx.compose.ui.window.PopupProperties(focusable = true)
         ) {
             val shape = RoundedCornerShape(14.dp)
-            Column(Modifier.width(230.dp).shadow(8.dp, shape).clip(shape).background(MaterialTheme.colorScheme.surface).padding(vertical = 6.dp)) {
+            Column(Modifier.width(270.dp).shadow(8.dp, shape).clip(shape).background(MaterialTheme.colorScheme.surface).padding(vertical = 6.dp)) {
                 if (search) androidx.compose.foundation.text.BasicTextField(
                     q, { q = it }, singleLine = true,
                     textStyle = TextStyle(fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface),
@@ -712,11 +712,12 @@ fun BoxScope.CompactPicker(open: Boolean, items: List<Pair<String, String>>, sel
                     items(shown.size) { i ->
                         val (k, n) = shown[i]
                         val on = k == selected
-                        Row(Modifier.fillMaxWidth().clickable { onPick(k) }.padding(horizontal = 14.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(k.ifBlank { n }, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (on) Color(0xFFF0572E) else MaterialTheme.colorScheme.onSurface)
-                            if (k.isNotBlank() && n.isNotBlank() && n != k) Text("  $n", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
-                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                        }
+                        Text(
+                            if (n.isBlank() || n == k) k else "$k · $n", fontSize = 13.sp, maxLines = 1,
+                            fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
+                            color = if (on) Color(0xFFF0572E) else MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.fillMaxWidth().clickable { onPick(k) }.padding(horizontal = 14.dp, vertical = 7.dp)
+                        )
                     }
                 }
             }
