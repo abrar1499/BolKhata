@@ -1886,6 +1886,10 @@ fun App(
      * fluent but still be the wrong words. Urdu script is returned as said (shown that way in the chat; the chat
      * engine reads it itself); Hindi letters are returned in Roman Urdu.
      */
+    /** The person's people and goods, for the voice to expect and to spell the way they are saved. */
+    fun voiceKnown(): List<String> =
+        (personAccounts(entries).map { it.name } + sides.people.keys + Goods.known(entries)).map { it.trim() }.filter { it.isNotEmpty() }.distinctBy { it.lowercase() }
+
     fun bestVoiceGuess(guesses: List<String>, confidence: FloatArray?): String =
         guesses.mapIndexedNotNull { index, raw ->
             val roman = runCatching { Translit.toRoman(raw) }.getOrDefault(raw).trim()
@@ -2022,7 +2026,8 @@ fun App(
                 res.data?.getFloatArrayExtra(RecognizerIntent.EXTRA_CONFIDENCE_SCORES)
             )
             if (said.isNotBlank()) {
-                if (voiceForChat) chatInput(said) else homeInput(said)
+                val fixed = Normalizer.voiceFix(said, voiceKnown())
+                if (voiceForChat) chatInput(fixed) else homeInput(fixed)
             } else toast("Couldn't catch that. Tap the mic again and speak a little slower.")
         }
     }
@@ -2031,19 +2036,23 @@ fun App(
         voiceForChat = forChat
         if (groqKey.isNotBlank() && groqVoice) {
             startRecording(
-                heard = { text -> if (forChat) chatInput(text) else homeInput(text) },
+                heard = { text -> Normalizer.voiceFix(text, voiceKnown()).let { if (forChat) chatInput(it) else homeInput(it) } },
                 missed = { toast("Couldn't catch that. Try again.") }
             )
             return
         }
+        // Words the phone should expect: the person's people and goods first, then the words people say most.
         val hints = buildList {
+            addAll(voiceKnown())
             addAll(entries.take(30).flatMap { listOf(it.item, it.person) })
             addAll(listOf(
+                "kal", "aaj", "parson", "subah", "shaam", "raat", "tarikh", "eint", "awal eint", "doyam eint", "kachi eint",
+                "pakki eint", "becha", "bechi", "diye", "liye", "mile", "wapis", "riyal", "rupay",
                 "kharcha", "aamdani", "pese", "paise", "payment", "receive", "received", "nahi mili",
                 "nahi hui", "stock", "sale", "purchase", "udhaar", "cash", "bank", "salary", "petrol",
                 "kiraya", "grocery", "entry", "last entry", "pichli entry", "change entry", "badal do"
             ))
-        }.map { it.trim() }.filter { it.length in 2..60 }.distinct().take(100)
+        }.map { it.trim() }.filter { it.length in 2..60 }.distinctBy { it.lowercase() }.take(100)
 
         val i = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)

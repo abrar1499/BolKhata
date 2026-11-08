@@ -828,3 +828,15 @@ class ParserShampooSpellingTest {
             assertEquals(t, Cat.PERSONAL, Parser.parse(t).entries.single().category)
     }
 }
+
+/** What the phone's voice writes wrongly is fixed before the chat reads it; typed text is left alone. */
+class VoiceFixTest {
+    @Test fun usualMishearingsAreFixed() {
+        assertEquals("kal Subah nashta Kiya 10 Riyal ka", Normalizer.voiceFix("cal Subah nashta Kiya 10 Riyal ka"))
+        assertEquals("Adnan ko 50000 awal eint bechi", Normalizer.voiceFix("Adnan ko 50000 aval int bechi"))
+    }
+
+    @Test fun aNameThatSoundsTheSameIsSpelledAsSaved() {
+        assertEquals("Adnan ko 500 diye", Normalizer.voiceFix("Adnaan ko 500 diye", listOf("Adnan")))
+    }
+}
