@@ -26,6 +26,6 @@ jobs:
           java-version: "17"
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: "8.9"
+          gradle-version: "8.11.1"
       - name: Run unit tests only (no APK release)
         run: gradle testDebugUnitTest --no-daemon

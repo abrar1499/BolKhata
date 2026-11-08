@@ -23,7 +23,7 @@ jobs:
           java-version: "17"
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: "8.9"
+          gradle-version: "8.11.1"
       - name: Pick version (last release + 1)
         env:
           GH_TOKEN: ${{ github.token }}
@@ -67,7 +67,7 @@ jobs:
           java-version: "17"
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: "8.9"
+          gradle-version: "8.11.1"
       - name: Render screens
         run: gradle testDebugUnitTest -Pscreenshots --tests "com.bolkhata.app.screenshots.*" --no-daemon
       - name: Commit screenshots
