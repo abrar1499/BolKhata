@@ -10,12 +10,13 @@ val buildNumber = (System.getenv("APP_VERSION") ?: System.getenv("GITHUB_RUN_NUM
 
 android {
     namespace = "com.bolkhata.app"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.bolkhata.app"
         minSdk = 24
-        targetSdk = 35
+        // Google Play needs new releases to target Android 16 (API 36).
+        targetSdk = 36
         versionCode = buildNumber
         versionName = "1.$buildNumber"
         // The Play Store build updates through Play, so it has no self-updater (see the "play" build type).
