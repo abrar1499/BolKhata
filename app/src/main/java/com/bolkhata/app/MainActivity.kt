@@ -12,6 +12,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.FileProvider
+import androidx.core.graphics.drawable.toBitmap
 import java.io.File
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -255,6 +256,8 @@ fun App(
     // Expense / Income accounts the owner set up, for the open book, and the profit report opened from them.
     var sides by remember(businessName) { mutableStateOf(store.loadSides()) }
     var profitOpen by remember { mutableStateOf(false) }
+    // The open business's own page (details and card), from the side menu.
+    var bizPage by remember { mutableStateOf(false) }
     // A person to open on Expense / Income (from the report's To get / To pay).
     var sideJump by remember { mutableStateOf<Pair<String, String>?>(null) }
     /** "Hamid ka khata kholo": the person's khata on the Party tab (the same screen as tapping the person). */
@@ -1499,7 +1502,7 @@ fun App(
         }
     }
     importText?.let { text ->
-        AlertDialog(
+        AppAlert(
             onDismissRequest = { importText = null },
             title = { Text("Import data?") },
             text = {
@@ -1886,6 +1889,36 @@ fun App(
      * fluent but still be the wrong words. Urdu script is returned as said (shown that way in the chat; the chat
      * engine reads it itself); Hindi letters are returned in Roman Urdu.
      */
+    /** Makes [doc] into a PDF with this business on top and opens the share sheet. */
+    fun sharePdf(doc: PdfDoc) {
+        runCatching {
+            val logo = runCatching { context.packageManager.getApplicationIcon(context.packageName).toBitmap(120, 120) }.getOrNull()
+            shareFile(context, (doc.title + " " + doc.sub).replace("·", "-").take(60).trim() + ".pdf", "application/pdf") { f ->
+                Pdf.write(f, doc, businessName, store.bizInfo(), logo)
+            }
+        }.onFailure { toast("Couldn't make the PDF") }
+    }
+
+    /** A bill for goods given to a customer: number, date, the goods, this bill and what they owe in all. */
+    fun billDoc(e: Entry): PdfDoc {
+        fun m(v: Double) = fmt(v) + " " + currency
+        val no = entries.filter { it.type == Type.SALE }.sortedBy { it.date }.indexOfFirst { it.id == e.id } + 1
+        val owed = balances(entries).entries.firstOrNull { it.key.equals(e.person.trim(), true) }?.value ?: 0.0
+        val day = java.text.SimpleDateFormat("d MMM yyyy", java.util.Locale.US).format(java.util.Date(e.date))
+        val rate = if (e.rate > 0) fmt(e.rate) + (if (e.unit == "1000") " / 1000" else "") else ""
+        return PdfDoc(
+            "Bill", "No. " + String.format(java.util.Locale.US, "%04d", no) + " · " + day, billTo = e.person.trim(),
+            tables = listOf(PdfTable("", listOf("Item", "Qty", "Rate", "Amount"),
+                listOf(listOf(e.item.ifBlank { "Goods" }, if (e.qty > 0) fmt(e.qty) else "", rate, m(e.amount))), listOf("Total", "", "", m(e.amount)))),
+            totals = listOf("This bill" to m(e.amount), "Balance due" to m(maxOf(0.0, owed))),
+            note = "Thank you for your business."
+        )
+    }
+
+    /** The person's people and goods, for the voice to expect and to spell the way they are saved. */
+    fun voiceKnown(): List<String> =
+        (personAccounts(entries).map { it.name } + sides.people.keys + Goods.known(entries)).map { it.trim() }.filter { it.isNotEmpty() }.distinctBy { it.lowercase() }
+
     fun bestVoiceGuess(guesses: List<String>, confidence: FloatArray?): String =
         guesses.mapIndexedNotNull { index, raw ->
             val roman = runCatching { Translit.toRoman(raw) }.getOrDefault(raw).trim()
@@ -2022,7 +2055,8 @@ fun App(
                 res.data?.getFloatArrayExtra(RecognizerIntent.EXTRA_CONFIDENCE_SCORES)
             )
             if (said.isNotBlank()) {
-                if (voiceForChat) chatInput(said) else homeInput(said)
+                val fixed = Normalizer.voiceFix(said, voiceKnown())
+                if (voiceForChat) chatInput(fixed) else homeInput(fixed)
             } else toast("Couldn't catch that. Tap the mic again and speak a little slower.")
         }
     }
@@ -2031,19 +2065,23 @@ fun App(
         voiceForChat = forChat
         if (groqKey.isNotBlank() && groqVoice) {
             startRecording(
-                heard = { text -> if (forChat) chatInput(text) else homeInput(text) },
+                heard = { text -> Normalizer.voiceFix(text, voiceKnown()).let { if (forChat) chatInput(it) else homeInput(it) } },
                 missed = { toast("Couldn't catch that. Try again.") }
             )
             return
         }
+        // Words the phone should expect: the person's people and goods first, then the words people say most.
         val hints = buildList {
+            addAll(voiceKnown())
             addAll(entries.take(30).flatMap { listOf(it.item, it.person) })
             addAll(listOf(
+                "kal", "aaj", "parson", "subah", "shaam", "raat", "tarikh", "eint", "awal eint", "doyam eint", "kachi eint",
+                "pakki eint", "becha", "bechi", "diye", "liye", "mile", "wapis", "riyal", "rupay",
                 "kharcha", "aamdani", "pese", "paise", "payment", "receive", "received", "nahi mili",
                 "nahi hui", "stock", "sale", "purchase", "udhaar", "cash", "bank", "salary", "petrol",
                 "kiraya", "grocery", "entry", "last entry", "pichli entry", "change entry", "badal do"
             ))
-        }.map { it.trim() }.filter { it.length in 2..60 }.distinct().take(100)
+        }.map { it.trim() }.filter { it.length in 2..60 }.distinctBy { it.lowercase() }.take(100)
 
         val i = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
@@ -2089,6 +2127,7 @@ fun App(
     /** Opens another business (book): its entries, trash and accounts. */
     fun openBusiness(id: String) {
         store.business = id
+        bizPage = false
         entries = store.load()
         trash = store.loadTrash()
         businessName = store.businesses().firstOrNull { it.first == id }?.second ?: "My business"
@@ -2135,14 +2174,14 @@ fun App(
         drawerContent = {
             fun close() = scope.launch { drawer.close() }
             SideMenu(
-                name = name, currency = currency, lang = lang, dark = dark, photo = photo, themeName = themeName,
+                currency = currency, lang = lang, dark = dark, photo = photo, themeName = themeName,
                 version = BuildConfig.VERSION_NAME,
                 businesses = remember(businessTick, businessName) { store.businesses() }, current = store.business,
                 onBusiness = { id -> if (id != store.business) openBusiness(id); close() },
                 onRenameBusiness = { id, n -> store.renameBusiness(id, n); if (id == store.business) businessName = n; businessTick++ },
                 onDeleteBusiness = { id -> val wasOpen = id == store.business; store.deleteBusiness(id); if (wasOpen) openBusiness("") else businessTick++ },
-                onAddBusiness = { n -> openBusiness(store.addBusiness(n)); businessTick++; close() },
-                onName = { name = it; store.name = it; toast("✓ Name saved") },
+                onAddBusiness = { n, ph, ad -> val id = store.addBusiness(n); store.saveBizInfo(BizInfo(phone = ph, address = ad), id); openBusiness(id); businessTick++; close() },
+                onBusinessPage = { bizPage = true; close() },
                 onCurrency = { c -> currency = c; store.currency = c; toast("✓ Currency set to $c") },
                 onLang = { lang = it; store.language = it },
                 onTheme = onTheme,
@@ -2184,7 +2223,7 @@ fun App(
                         voice = if (recorder != null) VoiceState(true, "Listening…", "sends when you stop", level = voiceLevel) { finishRecording() } else null,
                         navPad = false
                     )
-                    KhataNav(tab) { tab = it; profitOpen = false }
+                    KhataNav(tab) { tab = it; profitOpen = false; bizPage = false }
                 }
             } else {
                 // The khata tabs sit under the chat bar on the main screens.
@@ -2192,7 +2231,7 @@ fun App(
                 // The chat bar lives on Chat only; other screens keep just the tabs (entries go in from inside an account).
                 Column {
                     FlashStrip(flash) { flash = null }
-                    if (nav) KhataNav(tab) { tab = it; profitOpen = false } else Spacer(Modifier.navigationBarsPadding())
+                    if (nav) KhataNav(tab) { tab = it; profitOpen = false; bizPage = false } else Spacer(Modifier.navigationBarsPadding())
                 }
             }
         },
@@ -2206,6 +2245,8 @@ fun App(
             val acct = account
             CompositionLocalProvider(
                 LocalBarSpace provides pad.calculateBottomPadding(),
+                LocalCurrency provides currency,
+                LocalPdf provides { doc: PdfDoc -> sharePdf(doc) },
                 LocalMainOpener provides { a: MainAcct -> ledger = a },
                 LocalEntryMenu provides { e: Entry -> menuFor = e },
                 LocalSelection provides selection
@@ -2225,6 +2266,11 @@ fun App(
                     )
                 }
                 who != null -> PeopleScreen(entries, currency, who, onBack = { people = null }, onEdit = { editing = it })
+                bizPage -> BusinessPage(
+                    businessName, remember(businessName, businessTick) { store.bizInfo() },
+                    onName = { n -> store.renameBusiness(store.business, n); businessName = n; businessTick++ },
+                    onInfo = { store.saveBizInfo(it) }, onBack = { bizPage = false }
+                )
                 profitOpen -> ProfitScreen(entries, currency, sides, onBack = { profitOpen = false }, onEdit = { editing = it }) { b, k ->
                     profitOpen = false; sideJump = b to k; tab = Tab.PARTIES
                 }
@@ -2523,7 +2569,7 @@ fun App(
                 }
             }
             if (confirmEmptyTrash) {
-                AlertDialog(
+                AppAlert(
                     onDismissRequest = { confirmEmptyTrash = false },
                     title = { Text("Permanently empty Trash?") },
                     text = { Text("This will permanently delete ${trash.size} entries. This action cannot be undone.") },
@@ -2592,7 +2638,8 @@ fun App(
                     onMove = { menuFor = null; moving = e },
                     onSelect = { menuFor = null; selection.ids.clear(); selection.ids.add(e.id); selection.active = true },
                     onDelete = { menuFor = null; confirm = "Move \"${entryTitle(e)}\" (${money(currency, e.amount)}) to Trash?" to setOf(e.id) },
-                    onDismiss = { menuFor = null }
+                    onDismiss = { menuFor = null },
+                    onBill = if (e.type == Type.SALE && e.person.isNotBlank()) ({ menuFor = null; sharePdf(billDoc(e)) }) else null
                 )
             }
             moving?.let { e ->
@@ -2810,7 +2857,7 @@ fun App(
     }
 
     if (bankHelp) {
-        AlertDialog(
+        AppAlert(
             onDismissRequest = { bankHelp = false },
             title = { Text("Turn on bank alerts") },
             text = {
@@ -2906,7 +2953,7 @@ fun App(
     }
 
     confirm?.let { (msg, ids) ->
-        AlertDialog(
+        AppAlert(
             onDismissRequest = { confirm = null; afterTrash = null },
             title = { Text("Are you sure?") },
             text = { Text(msg) },

@@ -137,9 +137,9 @@ class AppScreenshots {
 
     @Test fun sideMenu() = shot("10-side-menu") {
         SideMenu(
-            name = "Hamid Akram", currency = "SAR", lang = "", dark = false, photo = false, themeName = "Green", version = "1.0",
-            businesses = listOf("" to "My business"), current = "", onBusiness = {}, onAddBusiness = {}, onRenameBusiness = { _, _ -> }, onDeleteBusiness = {},
-            onName = {}, onCurrency = {}, onLang = {}, onTheme = {}, page = PAGE_COLORS[0], onPage = {}, onDark = {}, onPhoto = {},
+            currency = "SAR", lang = "", dark = false, photo = false, themeName = "Green", version = "1.0",
+            businesses = listOf("" to "My business"), current = "", onBusiness = {}, onAddBusiness = { _, _, _ -> }, onBusinessPage = {}, onRenameBusiness = { _, _ -> }, onDeleteBusiness = {},
+            onCurrency = {}, onLang = {}, onTheme = {}, page = PAGE_COLORS[0], onPage = {}, onDark = {}, onPhoto = {},
             onExport = {}, onImport = {}, onTrash = {}, onVersion = {}
         )
     }

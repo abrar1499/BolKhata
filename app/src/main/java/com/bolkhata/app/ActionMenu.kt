@@ -9,6 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DriveFileRenameOutline
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MergeType
 import androidx.compose.material.icons.filled.SwapHoriz
@@ -84,14 +85,19 @@ fun ActionMenu(
 
 /** Long-press menu of one entry: Edit, Move, Delete. */
 @Composable
-fun EntryMenu(e: Entry, currency: String, onEdit: () -> Unit, onRename: () -> Unit, onMove: () -> Unit, onSelect: () -> Unit, onDelete: () -> Unit, onDismiss: () -> Unit) {
+fun EntryMenu(
+    e: Entry, currency: String, onEdit: () -> Unit, onRename: () -> Unit, onMove: () -> Unit, onSelect: () -> Unit, onDelete: () -> Unit, onDismiss: () -> Unit,
+    /** A bill for goods given to a customer (shown only for such entries). */
+    onBill: (() -> Unit)? = null
+) {
     val out = isOutflowType(e.type)
     ActionMenu(
         title = entryTitle(e),
         subtitle = listOf(shortDateYear(e.date), e.category.label).joinToString(" · "),
         amount = (if (out) "−" else "+") + money(currency, e.amount),
         amountColor = if (out) RedSpend else GreenIn,
-        actions = listOf(
+        actions = listOfNotNull(
+            onBill?.let { MenuAction("Bill", Icons.Filled.Description, onClick = it) },
             MenuAction("Edit", Icons.Filled.Edit, onClick = onEdit),
             MenuAction("Rename", Icons.Filled.DriveFileRenameOutline, onClick = onRename),
             MenuAction("Move", Icons.Filled.SwapHoriz, onClick = onMove),
@@ -109,7 +115,7 @@ fun RenameDialog(title: String, old: String, info: String = "", onRename: (Strin
     val ok = name.isNotBlank() && !name.trim().equals(old.trim(), true)
     val shape = RoundedCornerShape(12.dp)
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(Modifier.fillMaxWidth(0.82f), shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surface) {
+        Surface(Modifier.fillMaxWidth(0.82f), shape = RoundedCornerShape(18.dp), color = LocalPage.current) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Column {
                     Text(title, fontSize = 15.sp, fontWeight = FontWeight.Bold)
@@ -121,7 +127,7 @@ fun RenameDialog(title: String, old: String, info: String = "", onRename: (Strin
                     cursorBrush = SolidColor(MaterialTheme.colorScheme.onSurface),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = { if (ok) onRename(name.trim()) }),
-                    modifier = Modifier.fillMaxWidth().height(42.dp).clip(shape).background(MaterialTheme.colorScheme.background)
+                    modifier = Modifier.fillMaxWidth().height(42.dp).fieldEdge(shape)
                         .padding(horizontal = 12.dp).wrapContentHeight(Alignment.CenterVertically)
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

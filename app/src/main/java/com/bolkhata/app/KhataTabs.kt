@@ -57,6 +57,9 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.toArgb
+import androidx.core.graphics.drawable.toBitmap
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -152,7 +155,7 @@ internal fun GlassHeader(modifier: Modifier) {
 @Composable
 private fun KhataTop(
     title: String, subtitle: String, onMenu: () -> Unit, back: Boolean = false,
-    business: String? = null, card: @Composable () -> Unit
+    business: String? = null, onPdf: (() -> Unit)? = null, card: @Composable () -> Unit
 ) {
     val theme = LocalHeader.current
     val banded = theme.name != "Clean"
@@ -162,7 +165,10 @@ private fun KhataTop(
     Box(Modifier.fillMaxWidth()
         .then(if (banded) Modifier.drawBehind { drawBand(theme, size.height - cardH / 2f) } else Modifier)) {
         Column(Modifier.statusBarsPadding().padding(horizontal = 12.dp)) {
-            if (business != null) BusinessPill(business, onMenu) else
+            if (business != null) Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f)) { BusinessPill(business, onMenu) }
+                onPdf?.let { PdfButton(it) }
+            } else
             Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onMenu) {
                     Icon(if (back) Icons.AutoMirrored.Filled.ArrowBack else Icons.Filled.Menu, contentDescription = if (back) "Back" else "Menu", tint = ink)
@@ -207,12 +213,31 @@ internal fun BusinessPill(name: String, onMenu: () -> Unit) {
     }
 }
 
+/** An amount with the currency small and grey after it (fits its space like [FitText]). */
+@Composable
+private fun MoneyText(value: String, size: TextUnit, weight: FontWeight, color: Color, modifier: Modifier = Modifier) {
+    val cur = LocalCurrency.current
+    Row(modifier, verticalAlignment = Alignment.Bottom) {
+        FitText(value, size, weight, color, Modifier.weight(1f, fill = false))
+        if (cur.isNotBlank() && value.isNotBlank()) Text(cur, fontSize = size * 0.58f, fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, modifier = Modifier.padding(start = 2.dp, bottom = 1.dp))
+    }
+}
+
+/** A small grey heading over a list (WORK DONE, PEOPLE…). */
+@Composable
+private fun SectionLabel(text: String) =
+    Text(text, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 14.dp, top = 14.dp, bottom = 2.dp))
+
 /** White card with two figures side by side and a small link at the end. */
 @Composable
 private fun SumCard(
     a: Triple<String, String, Color>, b: Triple<String, String, Color>?, link: String, onLink: () -> Unit,
     /** A third figure (Expense: To pay), shown after the second. */
-    c: Triple<String, String, Color>? = null
+    c: Triple<String, String, Color>? = null,
+    /** Which figures (0, 1, 2) are counts, shown without the currency. */
+    plain: Set<Int> = emptySet()
 ) {
     Surface(
         shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 1.dp
@@ -221,7 +246,8 @@ private fun SumCard(
             listOfNotNull(a, b, c).forEachIndexed { i, (value, label, color) ->
                 if (i > 0) VerticalDivider(Modifier.fillMaxHeight(), color = MaterialTheme.colorScheme.outlineVariant)
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                    FitText(value, 12.sp, FontWeight.ExtraBold, color, Modifier.padding(horizontal = 4.dp))
+                    if (i in plain) FitText(value, 12.sp, FontWeight.ExtraBold, color, Modifier.padding(horizontal = 4.dp))
+                    else MoneyText(value, 12.sp, FontWeight.ExtraBold, color, Modifier.padding(horizontal = 4.dp))
                     Text(label, fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
@@ -523,7 +549,8 @@ private fun LedgerHead(
                 Modifier.width(w).fillMaxHeight().padding(horizontal = 3.dp),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
             ) {
-                Text(c.label.uppercase(), fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp, maxLines = 1, color = sub)
+                Text(c.label.uppercase() + LocalCurrency.current.let { if (it.isBlank() || c.label.isBlank()) "" else " · $it" },
+                    fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp, maxLines = 1, color = sub)
                 FitText(c.total, 13.sp, FontWeight.ExtraBold, kindColor(c.kind), Modifier.padding(horizontal = 3.dp))
             }
         }
@@ -645,13 +672,20 @@ fun CashBookScreen(
     // A search looks through every month; otherwise only the picked month is listed.
     val list = remember(newest, month, q) { if (q.isBlank()) newest.filter { inMonth(it.date, month) } else newest.filter { matches(it, q) } }
     val state = rememberLazyListState()
+    val pdf = LocalPdf.current
+    val cur = LocalCurrency.current.let { if (it.isBlank()) "" else " $it" }
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
             stickyHeader { TabHead {
-                KhataTop("", "", onMenu, business = business) {
+                KhataTop("", "", onMenu, business = business, onPdf = {
+                    pdf(PdfDoc("Cashbook", if (q.isNotBlank()) "Search: $q" else monthLabel(months, month) ?: "All",
+                        listOf(fmt(hand) + cur to "Cash in hand", fmt(spentMonth) + cur to "Spent this month"),
+                        listOf(ledgerTable("", listOf("Out", "In"), list.map { e -> e to listOf(if (cashOut(e)) e.amount else 0.0, if (cashIn(e)) e.amount else 0.0) },
+                            { e -> title(e) + e.person.trim().ifBlank { e.category.label }.let { k -> if (k == title(e)) "" else " · $k" } }))))
+                }) {
                     SumCard(
-                        Triple(money(currency, hand), "Cash in hand", if (hand < 0) RedSpend else GreenIn),
-                        Triple(money(currency, spentMonth), "Spent this month", RedSpend),
+                        Triple(fmt(hand), "Cash in hand", if (hand < 0) RedSpend else GreenIn),
+                        Triple(fmt(spentMonth), "Spent this month", RedSpend),
                         "Report ›", onReport
                     )
                 }
@@ -703,7 +737,7 @@ fun TransactionsScreen(entries: List<Entry>, currency: String, onEdit: (Entry) -
         LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
             stickyHeader { TabHead {
                 KhataTop("All entries", if (entries.size == 1) "1 entry" else "${entries.size} entries", onMenu) {
-                    SumCard(Triple(money(currency, outT), "Out", RedSpend), Triple(money(currency, inT), "In", GreenIn), "Add", onAdd)
+                    SumCard(Triple(fmt(outT), "Out", RedSpend), Triple(fmt(inT), "In", GreenIn), "Add", onAdd)
                 }
                 Row(Modifier.horizontalScroll(rememberScrollState()).padding(start = 14.dp, end = 14.dp, top = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     kinds.forEachIndexed { i, t -> SmallChip(t, filter == i) { filter = i } }
@@ -739,7 +773,7 @@ fun TrashScreen(
             KhataTop("Trash", "Deleted entries stay here for 30 days", onMenu) {
                 SumCard(
                     Triple("${trash.size}", if (trash.size == 1) "Entry" else "Entries", MaterialTheme.colorScheme.onSurface),
-                    Triple(money(currency, trash.sumOf { it.amount }), "Total", RedSpend),
+                    Triple(fmt(trash.sumOf { it.amount }), "Total", RedSpend),
                     "Restore all", onRestoreAll
                 )
             }
@@ -754,7 +788,7 @@ fun TrashScreen(
         )
     }
     if (askEmpty) {
-        AlertDialog(
+        AppAlert(
             onDismissRequest = { askEmpty = false },
             title = { Text("Empty trash?") },
             text = { Text("${trash.size} entries will be deleted forever. This cannot be undone.") },
@@ -807,7 +841,7 @@ private fun sheetRow(i: Int, n: Int) = RoundedCornerShape(
 @Composable
 private fun ItRow(
     icon: String, title: String, sub: String, amount: String, label: String, color: Color, i: Int, n: Int,
-    onLong: (() -> Unit)? = null, onClick: (() -> Unit)?
+    onLong: (() -> Unit)? = null, money: Boolean = true, onClick: (() -> Unit)?
 ) = Tight {
     val shape = sheetRow(i, n)
     Row(
@@ -826,7 +860,7 @@ private fun ItRow(
         Spacer(Modifier.width(8.dp))
         // The amount takes at most 130 wide: a big one gets smaller instead of pushing the name out.
         Column(Modifier.widthIn(max = 130.dp), horizontalAlignment = Alignment.End) {
-            FitText(amount, 14.sp, FontWeight.ExtraBold, color)
+            if (money) MoneyText(amount, 14.sp, FontWeight.ExtraBold, color) else FitText(amount, 14.sp, FontWeight.ExtraBold, color)
             if (label.isNotBlank()) Text(label, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
         }
         if (onClick != null) Text("›", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 8.dp))
@@ -850,9 +884,32 @@ private fun DashedAdd(label: String, onClick: () -> Unit) {
     )
 }
 
-/** An inner page's top: a round white back button, the path above the title, then the summary card. */
+private val pdfDay = SimpleDateFormat("d MMM yyyy", Locale.US)
+
+/** A ledger as a PDF table, oldest first: date, what it was, the amount columns, and with [running] the balance after each line. */
+private fun ledgerTable(heading: String, cols: List<String>, rows: List<Pair<Entry, List<Double>>>, title: (Entry) -> String, running: Boolean = false): PdfTable {
+    var bal = 0.0
+    val body = rows.sortedBy { it.first.date }.map { (e, v) ->
+        bal += v.getOrElse(0) { 0.0 } - v.getOrElse(1) { 0.0 }
+        listOf(pdfDay.format(Date(e.date)), title(e)) + v.map { if (it == 0.0) "" else fmt(it) } + (if (running) listOf(fmt(kotlin.math.abs(bal))) else emptyList())
+    }
+    val foot = listOf("Total", "") + cols.indices.map { i -> fmt(rows.sumOf { it.second.getOrElse(i) { 0.0 } }) } + (if (running) listOf("") else emptyList())
+    return PdfTable(heading, listOf("Date", "Detail") + cols + (if (running) listOf("Balance") else emptyList()), body, foot, left = 2)
+}
+
+/** "⤓ PDF": a small white pill at the top right of a page; it makes a PDF of what the page shows. */
 @Composable
-private fun BackHead(title: String, crumb: String, onBack: () -> Unit, card: @Composable () -> Unit) {
+private fun PdfButton(onClick: () -> Unit) {
+    Row(
+        Modifier.shadow(1.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape).clickable { onClick() }.padding(horizontal = 11.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) { Text("⤓ PDF", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface) }
+}
+
+/** An inner page's top: a round white back button, the path above the title, "⤓ PDF" on the right, then the summary card. */
+@Composable
+private fun BackHead(title: String, crumb: String, onBack: () -> Unit, onPdf: (() -> Unit)? = null, card: @Composable () -> Unit) {
     Column(Modifier.statusBarsPadding().padding(start = 12.dp, end = 12.dp, top = 12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
@@ -860,10 +917,11 @@ private fun BackHead(title: String, crumb: String, onBack: () -> Unit, card: @Co
                 contentAlignment = Alignment.Center
             ) { Text("‹", fontSize = 20.sp, fontWeight = FontWeight.Bold) }
             Spacer(Modifier.width(10.dp))
-            Column {
-                Text(crumb, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Column(Modifier.weight(1f)) {
+                Text(crumb, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(title, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
+            onPdf?.let { PdfButton(it) }
         }
         Spacer(Modifier.height(10.dp))
         card()
@@ -908,7 +966,7 @@ private fun LazyListScope.simpleLedger(cols: List<Pair<String, Color>>, totals: 
                 cols.forEachIndexed { k, (label, color) ->
                     VerticalDivider(Modifier.fillMaxHeight(), color = Faint)
                     Column(Modifier.width(68.dp).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                        Text(label.uppercase(), fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(label.uppercase() + LocalCurrency.current.let { if (it.isBlank() || label.isBlank()) "" else " · $it" }, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         if (label.isNotBlank()) FitText(fmt(totals[k]), 13.sp, FontWeight.ExtraBold, color, Modifier.padding(horizontal = 3.dp))
                     }
                 }
@@ -962,7 +1020,7 @@ private fun balanceColor(what: String) = when (what) {
 /**
  * Party, Expense or Income as accounts. Party: people accounts (Customers, Suppliers, Staff, People…); a person opens
  * their khata with Paid | Work (or Given | Received) and the two add buttons. Expense and Income: things accounts (Food,
- * Bills…, a thing opens its ledger and + Out / + In), plus Purchases and Sales filled from the khatas. The chips pick the
+ * Bills…, a thing opens its ledger and + Out / + In), plus Business costs and Sales filled from the khatas. The chips pick the
  * period of the figures. Entries are added only inside a person or thing.
  */
 @Composable
@@ -984,6 +1042,8 @@ fun SideScreen(
     val income = side == Side.INC
     var bookName by rememberSaveable(side) { mutableStateOf<String?>(null) }
     var kidName by rememberSaveable(side) { mutableStateOf<String?>(null) }
+    // Inside Sales or Business costs: an account (kidName), then one person in it.
+    var personName by rememberSaveable(side) { mutableStateOf<String?>(null) }
     var period by rememberSaveable(side) { mutableStateOf("") }
     var q by rememberSaveable(side) { mutableStateOf("") }
     var adding by remember { mutableStateOf<String?>(null) }   // "book" or "kid"
@@ -998,20 +1058,92 @@ fun SideScreen(
     val newest = remember(entries) { entries.sortedByDescending { it.date } }
     val per = remember(period, newest) { Period.decode(period) ?: Period.newestMonth(newest) }
     val inPer = { ms: Long -> per.has(ms) }
-    BackHandler(enabled = bookName != null) { if (kidName != null) kidName = null else bookName = null }
+    BackHandler(enabled = bookName != null) { if (personName != null) personName = null else if (kidName != null) kidName = null else bookName = null }
+    LaunchedEffect(kidName) { personName = null }
     val ink = if (income) GreenIn else RedSpend
     val crumb = when (side) { Side.PARTY -> "Party"; Side.INC -> "Income"; Side.EXP -> "Expense" }
     val state = rememberLazyListState()
+    val pdf = LocalPdf.current
+    val cur = LocalCurrency.current
+    fun m(v: Double) = fmt(v) + if (cur.isBlank()) "" else " $cur"
     /** The word under an account's figure. */
-    fun word(b: Book, inside: Boolean) = if (Sides.isAuto(b)) (if (income) "sold" else "work") else if (income) (if (inside) "income" else "received") else "spent"
+    fun word(b: Book, inside: Boolean) = if (Sides.isAuto(b)) (if (income) "sold" else "cost") else if (income) (if (inside) "income" else "received") else "spent"
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
             when {
+                book != null && kidName != null && Sides.isAuto(book) -> {
+                    // Sales or Business costs › an account: what was sold or done (how many, cost, rate), then its people.
+                    val w = word(book, true)
+                    val group = Sides.kids(book, entries, setup).firstOrNull { it.name.equals(kidName, true) } ?: Kid(kidName!!, emptyList())
+                    val inside = group.entries.filter { inPer(it.date) }
+                    val people = inside.groupBy { it.person.trim().ifBlank { group.name } }.map { (p, l) -> Kid(p, l) }.sortedByDescending { it.total }
+                    val pk = people.firstOrNull { it.name == personName }
+                    if (pk == null) {
+                        val qs = Sides.qtyOf(inside)
+                        fun qtyLine(k: Kid) = Sides.qtyOf(k.entries).joinToString(" · ") { it.name + " " + fmt(it.qty) }
+                        val toPdf = {
+                            pdf(PdfDoc(group.name, "${book.name} · ${per.label()}", listOf(m(inside.sumOf { it.amount }) to w.replaceFirstChar { it.uppercase() }), listOfNotNull(
+                                PdfTable(if (income) "Sold" else "Work done", listOf("Item", "Qty", "Amount", "Rate"),
+                                    qs.map { listOf(it.name, fmt(it.qty), m(it.amount), Sides.rateText(it.amount, it.qty)) }).takeIf { qs.isNotEmpty() },
+                                PdfTable("People", listOf("Name", if (income) "Goods" else "Work", "Amount"), people.map { listOf(it.name, qtyLine(it), m(it.total)) },
+                                    listOf("Total", "", m(inside.sumOf { it.amount })), left = 2)
+                            )))
+                        }
+                        stickyHeader { TabHead {
+                            BackHead(group.name, "$crumb › ${book.name} ›", { kidName = null }, toPdf) { SumCard(Triple(fmt(inside.sumOf { it.amount }), w, ink), null, "", {}) }
+                            PeriodChips(newest, per) { period = it.encode() }
+                        } }
+                        if (qs.isNotEmpty()) {
+                            item(key = "wl") { SectionLabel(if (income) "SOLD" else "WORK DONE") }
+                            qs.forEachIndexed { i, x ->
+                                item(key = "q" + x.name.lowercase()) {
+                                    ItRow(iconFor(x.name), x.name, fmt(x.amount) + " $w · " + Sides.rateText(x.amount, x.qty), fmt(x.qty), "qty",
+                                        MaterialTheme.colorScheme.onSurface, i, qs.size, money = false, onClick = null)
+                                }
+                            }
+                        }
+                        item(key = "pl") { SectionLabel("PEOPLE") }
+                        if (people.isEmpty()) emptyNote("Nothing in this period.")
+                        people.forEachIndexed { i, x ->
+                            item(key = "p" + x.name.lowercase()) {
+                                ItRow("👤", x.name, qtyLine(x).ifBlank { entryCount(x.entries.size) },
+                                    fmt(x.total), w, ink, i, people.size) { personName = x.name }
+                            }
+                        }
+                    } else {
+                        val qs = Sides.qtyOf(pk.entries)
+                        val label = if (income) "Sales" else "Work"
+                        item(key = "ph") {
+                            BackHead(pk.name, "$crumb › ${book.name} › ${group.name} ›", { personName = null }, {
+                                pdf(PdfDoc(pk.name, "${group.name} · ${per.label()}", listOf(m(pk.total) to label) + qs.take(2).map { fmt(it.qty) to it.name },
+                                    listOf(ledgerTable("", listOf(label), pk.entries.map { it to listOf(it.amount) }, ::personLine))))
+                            }) {
+                                val plain = MaterialTheme.colorScheme.onSurface
+                                SumCard(Triple(fmt(pk.total), w, ink), qs.getOrNull(0)?.let { Triple(fmt(it.qty), it.name, plain) }, "", {},
+                                    qs.getOrNull(1)?.let { Triple(fmt(it.qty), it.name, plain) }, plain = setOf(1, 2))
+                            }
+                        }
+                        val rows = pk.entries.map { e -> e to (if (income) listOf(0.0, e.amount) else listOf(e.amount, 0.0)) }
+                        simpleLedger(if (income) listOf("" to ink, label to ink) else listOf(label to ink, "" to ink),
+                            listOf(if (income) 0.0 else pk.total, if (income) pk.total else 0.0), rows, ::personLine, onEdit)
+                    }
+                }
                 book != null && kidName != null -> {
-                    val auto = Sides.isAuto(book)
                     val kid = Sides.kids(book, entries, setup).firstOrNull { it.name.equals(kidName, true) } ?: Kid(kidName!!, emptyList())
                     item(key = "kh") {
-                        BackHead(kid.name, "$crumb › ${book.name} ›", { kidName = null }) {
+                        BackHead(kid.name, "$crumb › ${book.name} ›", { kidName = null }, {
+                            if (book.people) {
+                                // A statement: how many of each thing, the money each way, every line with the balance after it.
+                                val (plus, minus) = Sides.columns(book)
+                                val rows = kid.entries.map { e -> e to (if (personEffect(e) > 0) listOf(e.amount, 0.0) else listOf(0.0, e.amount)) }
+                                val (amt, what) = Sides.balanceText(book, kid.balance)
+                                pdf(PdfDoc("Statement", "${kid.name} · ${book.name}",
+                                    Sides.qtyOf(kid.entries).take(2).map { fmt(it.qty) to it.name } + listOf(m(rows.sumOf { it.second[0] }) to plus, m(rows.sumOf { it.second[1] }) to minus),
+                                    listOf(ledgerTable("", listOf(plus, minus), rows, ::personLine, running = true)),
+                                    note = "$what: $amt" + if (cur.isBlank()) "" else " $cur"))
+                            } else pdf(PdfDoc(kid.name, book.name, listOf(m(kid.total) to word(book, true)),
+                                listOf(ledgerTable("", listOf(if (income) "In" else "Out"), kid.entries.map { it to listOf(it.amount) }, { e -> e.note.ifBlank { e.item } }))))
+                        }) {
                             if (book.people) {
                                 val (amt, what) = Sides.balanceText(book, kid.balance)
                                 SumCard(Triple(amt, what.lowercase(), balanceColor(what)), null, "", {})
@@ -1024,10 +1156,10 @@ fun SideScreen(
                         simpleLedger(listOf(plus to RedSpend, minus to GreenIn), listOf(rows.sumOf { it.second[0] }, rows.sumOf { it.second[1] }), rows, ::personLine, onEdit)
                     } else {
                         val rows = kid.entries.map { e -> e to (if (income) listOf(0.0, e.amount) else listOf(e.amount, 0.0)) }
-                        val label = if (auto) (if (income) "Sales" else "Work") else if (income) "In" else "Out"
+                        val label = if (income) "In" else "Out"
                         val cols = if (income) listOf("" to ink, label to ink) else listOf(label to ink, "" to ink)
                         simpleLedger(cols, listOf(if (income) 0.0 else kid.total, if (income) kid.total else 0.0), rows,
-                            { e -> if (auto) personLine(e) else e.note.ifBlank { label } }, onEdit)
+                            { e -> e.note.ifBlank { label } }, onEdit)
                     }
                 }
                 book != null -> {
@@ -1035,7 +1167,12 @@ fun SideScreen(
                     val kids = Sides.kids(book, entries, setup)
                     val inc = book.side == Side.INC
                     stickyHeader { TabHead {
-                        BackHead(book.name, "$crumb ›", { bookName = null }) {
+                        BackHead(book.name, "$crumb ›", { bookName = null }, {
+                            pdf(PdfDoc(book.name, crumb, tables = listOf(
+                                if (book.people) PdfTable("", listOf("Name", "Balance"), kids.map { k -> Sides.balanceText(book, k.balance).let { (a, w) -> listOf(k.name, "$a ${cur.ifBlank { "" }} ${w.lowercase()}".replace("  ", " ")) } })
+                                else PdfTable("", listOf("Name", "Amount"), kids.map { listOf(it.name, m(it.total)) }, listOf("Total", m(kids.sumOf { it.total })))
+                            )))
+                        }) {
                             if (book.people) {
                                 val pos = kids.filter { it.balance > 0.5 }.sumOf { it.balance }
                                 val neg = kids.filter { it.balance < -0.5 }.sumOf { -it.balance }
@@ -1048,7 +1185,10 @@ fun SideScreen(
                         item(key = "k" + k.name.lowercase()) {
                             val (amt, what) = if (book.people) Sides.balanceText(book, k.balance) else fmt(k.total) to word(book, true)
                             ItRow(
-                                if (book.people || auto) "👤" else iconFor(k.name, income), k.name, entryCount(k.entries.size), amt, what.lowercase(),
+                                if (auto) "👥" else if (book.people) "👤" else iconFor(k.name, income), k.name,
+                                if (auto) Sides.qtyOf(k.entries).take(2).joinToString(" · ") { it.name + " " + fmt(it.qty) }
+                                    .ifBlank { k.entries.map { it.person.trim().lowercase() }.distinct().size.let { n -> if (n == 1) "1 person" else "$n people" } }
+                                else entryCount(k.entries.size), amt, what.lowercase(),
                                 if (book.people) balanceColor(what) else ink, i, kids.size,
                                 onLong = if (auto) null else ({ menu = book to k })
                             ) { kidName = k.name }
@@ -1056,14 +1196,33 @@ fun SideScreen(
                     }
                     if (auto) item(key = "autonote") {
                         Text(
-                            if (income) "Sales come from Party › Customers (+ Given)." else "Work and goods come from Party › Staff and Suppliers (+ Work).",
+                            if (income) "Sales come from your Party customer accounts (+ Given)." else "Work and goods come from your Party accounts (+ Work).",
                             fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
                         )
                     } else item(key = "addkid") { DashedAdd("+ Add in ${book.name}") { adding = "kid" } }
                 }
                 else -> {
                     stickyHeader { TabHead {
-                        KhataTop("", "", onMenu, business = business) {
+                        KhataTop("", "", onMenu, business = business, onPdf = {
+                            // The whole tab: Party, every account with its people; Expense / Income, every account with its share, then what is inside each.
+                            if (party) pdf(PdfDoc("Party", "Everyone you deal with", tables = books.map { b ->
+                                PdfTable(b.name, listOf("Name", "Balance"), Sides.kids(b, entries, setup).map { k ->
+                                    Sides.balanceText(b, k.balance).let { (a, w) -> listOf(k.name, a + (if (cur.isBlank()) "" else " $cur") + " " + w.lowercase()) }
+                                })
+                            }))
+                            else {
+                                val all = books.map { it to Sides.done(it, entries, setup, inPer) }.filter { it.second > 0 }
+                                val tt = all.sumOf { it.second }
+                                pdf(PdfDoc(if (income) "Income" else "Expenses", per.label(), listOf(m(tt) to if (income) "Income" else "Spent"),
+                                    listOf(PdfTable("By account", listOf("Account", "Amount", "Share"),
+                                        all.map { (b, v) -> listOf(b.name, m(v), "${(v / tt * 100).roundToInt()}%") }, listOf("Total", m(tt), "100%"))) +
+                                        all.map { (b, v) ->
+                                            PdfTable("${b.name} · ${m(v)}", listOf("", "Amount"), Sides.kids(b, entries, setup)
+                                                .map { k -> k.name to k.entries.filter { inPer(it.date) && Sides.counts(b, it) }.sumOf { it.amount } }
+                                                .filter { it.second > 0 }.map { (n, a) -> listOf(n, m(a)) })
+                                        }))
+                            }
+                        }) {
                             if (party) {
                                 val (get, give) = Sides.owed(entries, setup, inPer)
                                 SumCard(Triple(fmt(get), "To get", GreenIn), Triple(fmt(give), "To give", RedSpend), "Report ›", onReport)
@@ -1084,9 +1243,9 @@ fun SideScreen(
                                 // The period's net on the row; what is owed all time in the small line, as the account shows inside.
                                 val net = kids.sumOf { k -> k.entries.filter { inPer(it.date) }.sumOf { personEffect(it) } }
                                 val p = kids.filter { it.balance > 0.5 }.sumOf { it.balance }
-                                val m = kids.filter { it.balance < -0.5 }.sumOf { -it.balance }
+                                val give = kids.filter { it.balance < -0.5 }.sumOf { -it.balance }
                                 val sub = (if (kids.size == 1) "1 person" else "${kids.size} people") +
-                                    (if (p > 0.5) " · " + fmt(p) + " to get" else "") + (if (m > 0.5) " · " + fmt(m) + " to give" else "")
+                                    (if (p > 0.5) " · " + fmt(p) + " to get" else "") + (if (give > 0.5) " · " + fmt(give) + " to give" else "")
                                 ItRow("👤", b.name, sub, fmt(kotlin.math.abs(net)), (if (net >= 0) "to get" else "to give") + " · net",
                                     if (net >= 0) GreenIn else RedSpend, i, shown.size, onLong = { menu = b to null }) { bookName = b.name; q = "" }
                             } else {
@@ -1100,7 +1259,7 @@ fun SideScreen(
                 }
             }
         }
-        // A person or thing: its add buttons. Lists, Purchases and Sales have none (entries go inside a person or thing).
+        // A person or thing: its add buttons. Lists, Business costs and Sales have none (entries go inside a person or thing).
         if (book != null && kidName != null && !Sides.isAuto(book)) {
             val name = kidName!!
             val staff = Sides.bookOf(name, entries, setup) == Sides.STAFF
@@ -1257,15 +1416,16 @@ fun SideScreen(
 @Composable
 private fun AppPopup(title: String, action: String, onDismiss: () -> Unit, onAction: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
-        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.surface).padding(16.dp)) {
+        // The theme's page colour with white fields on it, like the pages with their cards.
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(LocalPage.current).padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(title, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
-                Box(Modifier.size(28.dp).clip(CircleShape).background(Well).clickable { onDismiss() }, contentAlignment = Alignment.Center) { Text("✕", fontSize = 12.sp) }
+                Box(Modifier.size(28.dp).shadow(1.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.surface).clickable { onDismiss() }, contentAlignment = Alignment.Center) { Text("✕", fontSize = 12.sp) }
             }
             content()
             Row(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(12.dp)).border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp))
-                    .clickable { onDismiss() }, contentAlignment = Alignment.Center) { Text("Cancel", fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+                Box(Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surface)
+                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp)).clickable { onDismiss() }, contentAlignment = Alignment.Center) { Text("Cancel", fontSize = 14.sp, fontWeight = FontWeight.Bold) }
                 Box(Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(12.dp)).background(EmberTop).clickable { onAction() },
                     contentAlignment = Alignment.Center) { Text(action, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White) }
             }
@@ -1278,8 +1438,8 @@ private fun AppPopup(title: String, action: String, onDismiss: () -> Unit, onAct
 private fun WellField(value: String, onChange: (String) -> Unit, hint: String, modifier: Modifier = Modifier, big: Boolean = false, number: Boolean = false) {
     val style = TextStyle(fontSize = if (big) 20.sp else 14.sp, fontWeight = if (big) FontWeight.ExtraBold else FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
     Box(
-        modifier.padding(top = 10.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Well)
-            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 11.dp)
+        // White with a soft edge, like the search box: every popup's fields look the same.
+        modifier.padding(top = 10.dp).fillMaxWidth().fieldEdge(RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 11.dp)
     ) {
         if (value.isEmpty()) Text(hint, style = style.copy(color = MaterialTheme.colorScheme.onSurfaceVariant))
         BasicTextField(
@@ -1385,7 +1545,7 @@ private fun AddSheet(r: AddReq, all: List<Entry>, onDismiss: () -> Unit, onSave:
     val q = qty.toDoubleOrNull() ?: 0.0
     val rt = rate.toDoubleOrNull() ?: 0.0
     val total = if (goods) (if (per1000) q / 1000 * rt else q * rt) else amount.toDoubleOrNull() ?: 0.0
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface, dragHandle = null,
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = LocalPage.current, dragHandle = null,
         shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)) {
         Column(Modifier.padding(16.dp).navigationBarsPadding().imePadding()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1393,7 +1553,7 @@ private fun AddSheet(r: AddReq, all: List<Entry>, onDismiss: () -> Unit, onSave:
                     Text("+ ${r.label}", fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
                     Text(r.crumb, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Box(Modifier.size(28.dp).clip(CircleShape).background(Well).clickable { onDismiss() }, contentAlignment = Alignment.Center) { Text("✕", fontSize = 12.sp) }
+                Box(Modifier.size(28.dp).shadow(1.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.surface).clickable { onDismiss() }, contentAlignment = Alignment.Center) { Text("✕", fontSize = 12.sp) }
             }
             if (r.money != null) Row(Modifier.padding(top = 12.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Well).padding(3.dp)) {
                 listOf((if (r.label == "Given") "Goods" else "Work") to false, "Money" to true).forEach { (label, v) ->
@@ -1459,8 +1619,7 @@ private fun AddSheet(r: AddReq, all: List<Entry>, onDismiss: () -> Unit, onSave:
 @Composable
 private fun PickBox(text: String, modifier: Modifier, onClick: () -> Unit) {
     Box(
-        modifier.padding(top = 10.dp).clip(RoundedCornerShape(12.dp)).background(Well)
-            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp)).clickable { onClick() }.padding(horizontal = 12.dp, vertical = 11.dp)
+        modifier.padding(top = 10.dp).fieldEdge(RoundedCornerShape(12.dp)).clickable { onClick() }.padding(horizontal = 12.dp, vertical = 11.dp)
     ) { Text(text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold) }
 }
 
@@ -1476,8 +1635,9 @@ private fun ReportRow(title: String, sub: String, amount: String, color: Color, 
             if (sub.isNotBlank()) Text(sub, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         VerticalDivider(Modifier.fillMaxHeight(), color = Faint)
-        Box(Modifier.width(96.dp).fillMaxHeight(), contentAlignment = Alignment.Center) {
+        Column(Modifier.width(96.dp).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             FitText(amount, 14.sp, FontWeight.ExtraBold, color, Modifier.padding(horizontal = 4.dp))
+            LocalCurrency.current.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 8.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
     }
 }
@@ -1522,7 +1682,7 @@ private fun ShareRow(icon: String, name: String, v: Double, total: Double, mark:
             }
         }
         Column(Modifier.widthIn(max = 120.dp), horizontalAlignment = Alignment.End) {
-            FitText(fmt(v), 14.sp, FontWeight.ExtraBold, ink)
+            MoneyText(fmt(v), 14.sp, FontWeight.ExtraBold, ink)
             Text("$pc%", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Text("›", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 8.dp))
@@ -1543,7 +1703,7 @@ fun ProfitScreen(entries: List<Entry>, currency: String, setup: SideSetup, onBac
     var period by rememberSaveable { mutableStateOf("") }
     val per = remember(period, newest) { Period.decode(period) ?: Period.newestMonth(newest) }
     var open by rememberSaveable { mutableStateOf<String?>(null) }
-    // Inside Sales, Other income, Purchases or Expenses: the account picked, then the thing inside it.
+    // Inside Sales, Other income, Business costs or Expenses: the account picked, then the thing inside it.
     var open2 by rememberSaveable { mutableStateOf<String?>(null) }
     var open3 by rememberSaveable { mutableStateOf<String?>(null) }
     val picked = remember(newest, per) { newest.filter { per.has(it.date) } }
@@ -1556,6 +1716,9 @@ fun ProfitScreen(entries: List<Entry>, currency: String, setup: SideSetup, onBac
     val get = people.filter { it.second.balance > 0.5 }
     val pay = people.filter { it.second.balance < -0.5 }
     val plain = MaterialTheme.colorScheme.onSurface
+    val pdf = LocalPdf.current
+    val cur = LocalCurrency.current
+    fun m(v: Double) = fmt(v) + if (cur.isBlank()) "" else " $cur"
     BackHandler { if (open3 != null) open3 = null else if (open2 != null) open2 = null else if (open != null) open = null else onBack() }
     LaunchedEffect(open) { open2 = null; open3 = null }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
@@ -1564,7 +1727,10 @@ fun ProfitScreen(entries: List<Entry>, currency: String, setup: SideSetup, onBac
             o == "To get" || o == "To pay" -> {
                 val list = if (o == "To get") get else pay
                 val color = if (o == "To get") GreenIn else RedSpend
-                item(key = "oh") { BackHead(o, "Cashbook › Report ›", { open = null }) { SumCard(Triple(fmt(list.sumOf { kotlin.math.abs(it.second.balance) }), o, color), null, "", {}) } }
+                item(key = "oh") { BackHead(o, "Cashbook › Report ›", { open = null }, {
+                    pdf(PdfDoc(o, "Everyone, today", tables = listOf(PdfTable("", listOf("Name", "Account", "Amount"),
+                        list.map { (b, k) -> listOf(k.name, b.name, m(kotlin.math.abs(k.balance))) }, listOf("Total", "", m(list.sumOf { kotlin.math.abs(it.second.balance) })), left = 2))))
+                }) { SumCard(Triple(fmt(list.sumOf { kotlin.math.abs(it.second.balance) }), o, color), null, "", {}) } }
                 if (list.isEmpty()) emptyNote("Nobody here.")
                 list.forEachIndexed { i, (b, k) ->
                     item(key = "op" + b.name + k.name) {
@@ -1574,7 +1740,10 @@ fun ProfitScreen(entries: List<Entry>, currency: String, setup: SideSetup, onBac
             }
             o == "Stock" -> {
                 val list = Sides.items(entries, setup).filter { it.inStock > 0.5 }
-                item(key = "sh") { BackHead(o, "Cashbook › Report ›", { open = null }) { SumCard(Triple(fmt(worth.stock), "Stock, at cost", GreenIn), null, "", {}) } }
+                item(key = "sh") { BackHead(o, "Cashbook › Report ›", { open = null }, {
+                    pdf(PdfDoc("Stock", "Today, at cost", tables = listOf(PdfTable("", listOf("Item", "In stock", "Cost"),
+                        list.map { listOf(it.name, fmt(it.inStock), m(it.inStock * Sides.unitCost(it))) }, listOf("Total", "", m(worth.stock))))))
+                }) { SumCard(Triple(fmt(worth.stock), "Stock, at cost", GreenIn), null, "", {}) } }
                 if (list.isEmpty()) emptyNote("Nothing in stock.")
                 list.forEachIndexed { i, x ->
                     item(key = "st" + x.name) { ItRow(iconFor(x.name), x.name, fmt(x.inStock) + " in stock", fmt(x.inStock * Sides.unitCost(x)), "at cost", plain, i, list.size, onClick = null) }
@@ -1584,7 +1753,11 @@ fun ProfitScreen(entries: List<Entry>, currency: String, setup: SideSetup, onBac
                 val cash = o == "Cash in hand"
                 val list = if (cash) newest.filter { cashIn(it) || cashOut(it) } else newest.filter { it.type == Type.KHARCHA && it.category == Cat.ASSETS }
                 val total = if (cash) worth.cash else worth.assets
-                item(key = "ch") { BackHead(o, "Cashbook › Report ›", { open = null }) { SumCard(Triple(plusMinus(total).trimStart('+'), o, if (total < 0) RedSpend else GreenIn), null, "", {}) } }
+                item(key = "ch") { BackHead(o, "Cashbook › Report ›", { open = null }, {
+                    pdf(PdfDoc(o, "Today", listOf(m(total) to o), listOf(ledgerTable("", if (cash) listOf("Out", "In") else listOf("Cost"),
+                        list.map { e -> e to (if (!cash) listOf(e.amount) else if (cashIn(e)) listOf(0.0, e.amount) else listOf(e.amount, 0.0)) },
+                        { e -> (if (e.person.isNotBlank()) e.person + " · " else "") + e.item.ifBlank { e.category.label } }))))
+                }) { SumCard(Triple(plusMinus(total).trimStart('+'), o, if (total < 0) RedSpend else GreenIn), null, "", {}) } }
                 simpleLedger(
                     if (cash) listOf("Out" to RedSpend, "In" to GreenIn) else listOf("Cost" to RedSpend, "" to RedSpend),
                     if (cash) listOf(list.filter(::cashOut).sumOf { it.amount }, list.filter(::cashIn).sumOf { it.amount }) else listOf(total, 0.0),
@@ -1594,7 +1767,7 @@ fun ProfitScreen(entries: List<Entry>, currency: String, setup: SideSetup, onBac
                 )
             }
             o != null -> {
-                val type = when (o) { "Sales" -> Type.SALE; "Other income" -> Type.AAMDANI; "Purchases" -> Type.PURCHASE; else -> Type.KHARCHA }
+                val type = when (o) { "Sales" -> Type.SALE; "Other income" -> Type.AAMDANI; Sides.PURCHASES -> Type.PURCHASE; else -> Type.KHARCHA }
                 val inn = type == Type.SALE || type == Type.AAMDANI
                 val color = if (inn) GreenIn else RedSpend
                 val all = picked.filter { it.type == type && it.amount > 0 && !(type == Type.KHARCHA && it.category == Cat.ASSETS) }
@@ -1602,19 +1775,24 @@ fun ProfitScreen(entries: List<Entry>, currency: String, setup: SideSetup, onBac
                 fun key1(e: Entry) = when (type) {
                     Type.KHARCHA -> e.category.label
                     Type.AAMDANI -> source(e)
-                    else -> e.person.trim().ifBlank { if (type == Type.SALE) "Cash sale" else "Cash purchase" }
+                    // Sales and Business costs: the Party account first (Customers, a workers' account…), then its people.
+                    else -> if (e.person.isBlank()) (if (type == Type.SALE) "Cash sales" else "Cash purchases") else Sides.bookOf(e.person, entries, setup)
                 }
-                val deep = if (type == Type.KHARCHA) 2 else 1
+                fun key2(e: Entry) = if (type == Type.KHARCHA) Sides.thingName(e) else e.person.trim().ifBlank { key1(e) }
+                val deep = if (type == Type.AAMDANI) 1 else 2
                 val level = if (open3 != null) 2 else if (open2 != null) 1 else 0
                 val g1 = open2
                 if (level < deep) {
                     val inside = if (g1 == null) all else all.filter { key1(it) == g1 }
-                    val groups = inside.groupBy { if (g1 == null) key1(it) else Sides.thingName(it) }
+                    val groups = inside.groupBy { if (g1 == null) key1(it) else key2(it) }
                         .map { (n, l) -> n to l.sumOf { it.amount } }.sortedByDescending { it.second }
                     val total = groups.sumOf { it.second }
-                    val people = g1 == null && (type == Type.SALE || type == Type.PURCHASE)
+                    val trade = type == Type.SALE || type == Type.PURCHASE
                     stickyHeader { TabHead {
-                        BackHead(g1 ?: o, "Cashbook › Report ›" + (if (g1 != null) " $o ›" else ""), { if (g1 != null) open2 = null else open = null }) {
+                        BackHead(g1 ?: o, "Cashbook › Report ›" + (if (g1 != null) " $o ›" else ""), { if (g1 != null) open2 = null else open = null }, {
+                            pdf(PdfDoc(g1 ?: o, (if (g1 != null) "$o · " else "") + per.label(), listOf(m(total) to (g1 ?: o)), listOf(PdfTable("", listOf("", "Amount", "Share"),
+                                groups.map { (n, v) -> listOf(n, m(v), if (total > 0) "${(v / total * 100).roundToInt()}%" else "") }, listOf("Total", m(total), "100%")))))
+                        }) {
                             SumCard(Triple(fmt(total), g1 ?: o, color), null, "", {})
                         }
                         PeriodChips(newest, per) { period = it.encode() }
@@ -1623,21 +1801,24 @@ fun ProfitScreen(entries: List<Entry>, currency: String, setup: SideSetup, onBac
                     else item(key = "share") { ShareBar(groups.map { it.second }) }
                     groups.forEachIndexed { i, (n, v) ->
                         item(key = "g$n") {
-                            ShareRow(if (people) "👤" else if (g1 == null && type == Type.KHARCHA) Cat.entries.firstOrNull { it.label == n }?.icon ?: iconFor(n) else iconFor(n, inn),
+                            ShareRow(if (trade) (if (g1 == null) "👥" else "👤") else if (g1 == null && type == Type.KHARCHA) Cat.entries.firstOrNull { it.label == n }?.icon ?: iconFor(n) else iconFor(n, inn),
                                 n, v, total, shareColor(i), color, i, groups.size) { if (g1 == null) open2 = n else open3 = n }
                         }
                     }
                     return@LazyColumn
                 }
-                val list = all.filter { key1(it) == g1 && (deep < 2 || Sides.thingName(it) == open3) }
+                val list = all.filter { key1(it) == g1 && (deep < 2 || key2(it) == open3) }
                 val t = open3 ?: g1 ?: o
                 val total = list.sumOf { it.amount }
                 item(key = "dh") {
-                    BackHead(t, "Cashbook › Report › $o ›" + (if (open3 != null) " $g1 ›" else ""), { if (open3 != null) open3 = null else open2 = null }) {
+                    BackHead(t, "Cashbook › Report › $o ›" + (if (open3 != null) " $g1 ›" else ""), { if (open3 != null) open3 = null else open2 = null }, {
+                        pdf(PdfDoc(t, per.label(), listOf(m(total) to t), listOf(ledgerTable("", listOf(o), list.map { it to listOf(it.amount) },
+                            { e -> (if (e.person.isNotBlank()) e.person + " · " else "") + if (e.qty > 0) personLine(e) else e.item.ifBlank { e.category.label } }))))
+                    }) {
                         SumCard(Triple(fmt(total), t, color), null, "", {})
                     }
                 }
-                val label = when (o) { "Sales" -> "Sales"; "Other income" -> "In"; "Purchases" -> "Work"; else -> "Out" }
+                val label = when (o) { "Sales" -> "Sales"; "Other income" -> "In"; Sides.PURCHASES -> "Work"; else -> "Out" }
                 simpleLedger(
                     if (inn) listOf("" to color, label to color) else listOf(label to color, "" to color),
                     if (inn) listOf(0.0, total) else listOf(total, 0.0),
@@ -1648,7 +1829,18 @@ fun ProfitScreen(entries: List<Entry>, currency: String, setup: SideSetup, onBac
             }
             else -> {
                 stickyHeader { TabHead {
-                    BackHead("Report · Profit", "Cashbook ›", onBack) {
+                    BackHead("Report · Profit", "Cashbook ›", onBack, {
+                        val ex = picked.filter { it.type == Type.KHARCHA && it.category != Cat.ASSETS }.groupBy { it.category.label }
+                            .map { (n, l) -> n to l.sumOf { it.amount } }.sortedByDescending { it.second }
+                        pdf(PdfDoc("Profit report", per.label(), listOf(m(p.profit) to if (p.profit < 0) "Loss" else "Profit", m(worth.net) to "Net worth"), listOf(
+                            PdfTable("Profit", listOf("", "Amount"), listOf(listOf("Sales", m(p.sale)), listOf("Other income", m(p.income)),
+                                listOf(Sides.PURCHASES, "− " + m(p.work)), listOf("Expenses", "− " + m(p.spent))), listOf(if (p.profit < 0) "Loss" else "Profit", m(p.profit))),
+                            PdfTable("Net worth · what you own", listOf("", "Amount"), listOf(listOf("Cash in hand", m(worth.cash)), listOf("To get", m(worth.toGet)),
+                                listOf("Stock", m(worth.stock)), listOf("Assets", m(worth.assets)), listOf("To pay", "− " + m(worth.toPay))), listOf("Net worth", m(worth.net))),
+                            PdfTable("Expenses by account", listOf("Account", "Amount", "Share"),
+                                ex.map { (n, v) -> listOf(n, m(v), if (p.spent > 0) "${(v / p.spent * 100).roundToInt()}%" else "") })
+                        )))
+                    }) {
                         SumCard(Triple(fmt(kotlin.math.abs(p.profit)), if (p.profit < 0) "Loss" else "Profit", if (p.profit < 0) RedSpend else GreenIn),
                             Triple(fmt(p.sale + p.income), "Earned", GreenIn), "", {})
                     }
@@ -1656,7 +1848,7 @@ fun ProfitScreen(entries: List<Entry>, currency: String, setup: SideSetup, onBac
                 } }
                 item(key = "r1") { ReportRow("Sales", "goods given to customers", withSign(p.sale, "+"), GreenIn) { open = "Sales" } }
                 item(key = "r2") { ReportRow("Other income", "salary, rent…", withSign(p.income, "+"), GreenIn) { open = "Other income" } }
-                item(key = "r3") { ReportRow("Purchases", "work and goods from staff and suppliers", withSign(p.work, "−"), RedSpend) { open = "Purchases" } }
+                item(key = "r3") { ReportRow(Sides.PURCHASES, "work and goods from your Party accounts", withSign(p.work, "−"), RedSpend) { open = Sides.PURCHASES } }
                 item(key = "r4") { ReportRow("Expenses", "home, bills…", withSign(p.spent, "−"), RedSpend) { open = "Expenses" } }
                 item(key = "r5") { ReportRow("Profit", "", plusMinus(p.profit), if (p.profit < 0) RedSpend else GreenIn, null) }
                 item(key = "nw") {
@@ -1669,6 +1861,89 @@ fun ProfitScreen(entries: List<Entry>, currency: String, setup: SideSetup, onBac
                 item(key = "n4") { ReportRow("Assets", "laptop, car, machines… at cost", withSign(worth.assets, "+"), GreenIn) { open = "Assets" } }
                 item(key = "n5") { ReportRow("To pay", "money you owe", withSign(worth.toPay, "−"), RedSpend) { open = "To pay" } }
                 item(key = "n6") { ReportRow("Net worth", "what you are worth today", plusMinus(worth.net).trimStart('+'), if (worth.net < 0) RedSpend else GreenIn, null) }
+            }
+        }
+    }
+}
+
+/** New business: its name, and phone and address if wanted (they go on bills, PDFs and the card). */
+@Composable
+internal fun NewBusinessPopup(onDismiss: () -> Unit, onSave: (name: String, phone: String, address: String) -> Unit) {
+    var name by remember { mutableStateOf("") }
+    var phone by remember { mutableStateOf("") }
+    var address by remember { mutableStateOf("") }
+    AppPopup("New business", "Add", onDismiss, { if (name.isNotBlank()) onSave(name.trim(), phone.trim(), address.trim()) }) {
+        WellField(name, { name = it }, "Business name")
+        WellField(phone, { phone = it }, "Phone (optional)")
+        WellField(address, { address = it }, "Address (optional)")
+    }
+}
+
+/**
+ * A business's own page (tap it in the side menu): its name, owner, phone and address, which go on bills and PDFs,
+ * then its business card in the style picked, to save or share. Changes are kept as they are typed.
+ */
+@Composable
+internal fun BusinessPage(name: String, info: BizInfo, onName: (String) -> Unit, onInfo: (BizInfo) -> Unit, onBack: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var n by remember(name) { mutableStateOf(name) }
+    var i by remember(info) { mutableStateOf(info) }
+    val h = LocalHeader.current
+    val colors = Triple(h.c1.toArgb(), h.c2.toArgb(), h.c3.toArgb())
+    val logo = remember { runCatching { context.packageManager.getApplicationIcon(context.packageName).toBitmap(160, 160) }.getOrNull() }
+    val cards = remember(n, i.owner, i.phone, i.address, colors) { CardArt.STYLES.associateWith { CardArt.draw(it, n, i, colors, logo) } }
+    val card = cards[i.card] ?: cards.getValue(CardArt.STYLES.first())
+    LaunchedEffect(i) { onInfo(i) }
+    fun leave() { if (n.isNotBlank() && n.trim() != name) onName(n.trim()); onBack() }
+    BackHandler { leave() }
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
+        item(key = "bh") { BackHead(n.ifBlank { "Business" }, "Business ›", { leave() }) {} }
+        item(key = "dl") { SectionLabel("DETAILS") }
+        item(key = "df") {
+            Column(Modifier.padding(horizontal = 10.dp).fillMaxWidth().shadow(1.dp, RoundedCornerShape(16.dp)).clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.surface).padding(start = 12.dp, end = 12.dp, bottom = 12.dp)) {
+                listOf(
+                    Triple("Business name", n) { v: String -> n = v },
+                    Triple("Your name (optional)", i.owner) { v: String -> i = i.copy(owner = v) },
+                    Triple("Phone (optional)", i.phone) { v: String -> i = i.copy(phone = v) },
+                    Triple("Address (optional)", i.address) { v: String -> i = i.copy(address = v) }
+                ).forEach { (label, value, set) ->
+                    Text(label, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 10.dp))
+                    WellField(value, set, label.removeSuffix(" (optional)"), Modifier.padding(top = 0.dp))
+                }
+            }
+        }
+        item(key = "cl") { SectionLabel("BUSINESS CARD · PICK A STYLE") }
+        item(key = "cp") {
+            LazyRow(contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(CardArt.STYLES) { st ->
+                    val on = st == i.card
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable { i = i.copy(card = st) }) {
+                        androidx.compose.foundation.Image(
+                            cards.getValue(st).asImageBitmap(), st,
+                            Modifier.width(100.dp).height(57.dp).clip(RoundedCornerShape(7.dp)).border(2.dp, if (on) Ember else Color.Transparent, RoundedCornerShape(7.dp))
+                        )
+                        Text(st, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = if (on) Ember else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+                    }
+                }
+            }
+        }
+        item(key = "cb") {
+            androidx.compose.foundation.Image(
+                card.asImageBitmap(), "Business card",
+                Modifier.padding(start = 14.dp, end = 14.dp, top = 8.dp).fillMaxWidth().aspectRatio(1.75f).shadow(10.dp, RoundedCornerShape(18.dp)).clip(RoundedCornerShape(18.dp))
+            )
+        }
+        item(key = "cbt") {
+            Row(Modifier.padding(start = 14.dp, end = 14.dp, top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surface)
+                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp)).clickable {
+                        val ok = saveImage(context, card, (n.ifBlank { "Business" }) + " card")
+                        android.widget.Toast.makeText(context, if (ok) "✓ Saved to Pictures" else "Couldn't save the picture", android.widget.Toast.LENGTH_SHORT).show()
+                    }, contentAlignment = Alignment.Center) { Text("Save image", fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+                Box(Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(12.dp)).background(EmberTop).clickable {
+                    shareFile(context, (n.ifBlank { "Business" }) + " card.png", "image/png") { f -> f.outputStream().use { card.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) } }
+                }, contentAlignment = Alignment.Center) { Text("Share card", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White) }
             }
         }
     }

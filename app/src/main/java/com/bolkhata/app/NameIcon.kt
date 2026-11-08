@@ -63,7 +63,7 @@ object NameIcon {
         "transfer" to "🔁", "metro" to "🚇", "exit" to "🛂", "reentry" to "🛂", "traffic" to "🚨", "diploma" to "🎓", "council" to "🏛️",
         "voucher" to "📱", "zain" to "📱", "stc" to "📱", "mobily" to "📱", "jazz" to "📱", "telenor" to "📱", "zong" to "📱", "ufone" to "📱",
         "laundries" to "🧺", "sweets" to "🍬", "haircut" to "💈", "air" to "✈️",
-        "asset" to "🏷️", "contract" to "🏗️", "thaper" to "🧱", "pathera" to "🧱"
+        "business costs" to "💼", "asset" to "🏷️", "contract" to "🏗️", "thaper" to "🧱", "pathera" to "🧱"
     )
 
     /** The picture for [name]; [income] picks the fallback when no word fits. */

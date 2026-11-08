@@ -43,8 +43,14 @@ enum class Cat(val label: String, val icon: String) {
 /** Every currency: the Gulf, South Asia and the big ones first, then all others A–Z. */
 val CURRENCIES: List<String> = run {
     val first = listOf("SAR", "PKR", "AED", "QAR", "KWD", "OMR", "BHD", "INR", "BDT", "NPR", "LKR", "USD", "EUR", "GBP")
-    first + java.util.Currency.getAvailableCurrencies().map { it.currencyCode }.filter { it !in first }.sorted()
+    // Old currencies no longer in use ("… (1927–2002)") are left out.
+    first + java.util.Currency.getAvailableCurrencies()
+        .filter { c -> runCatching { c.getDisplayName(java.util.Locale.ENGLISH) }.getOrDefault("").none { it.isDigit() } }
+        .map { it.currencyCode }.filter { it !in first }.sorted()
 }
+
+/** A currency's English name ("Saudi Riyal"), or the code. */
+fun currencyName(code: String): String = runCatching { java.util.Currency.getInstance(code).getDisplayName(java.util.Locale.ENGLISH) }.getOrDefault(code)
 
 /** "SAR · Saudi Riyal": the code with its English name, for the currency menus. */
 fun currencyLabel(code: String): String =
@@ -197,11 +203,24 @@ class Store(context: Context) {
         prefs.edit().putString("businessNames", businessNames().put(id, name.trim()).toString()).apply()
     }
 
+    /** A business's owner, phone, address and card style (empty when never set). */
+    fun bizInfo(id: String = business): BizInfo = try {
+        JSONObject(prefs.getString(scoped("bizInfo", id), null) ?: "{}").let {
+            BizInfo(it.optString("owner"), it.optString("phone"), it.optString("address"), it.optString("card", "Classic"))
+        }
+    } catch (_: Exception) { BizInfo() }
+
+    fun saveBizInfo(info: BizInfo, id: String = business) {
+        prefs.edit().putString(scoped("bizInfo", id), JSONObject().put("owner", info.owner.trim()).put("phone", info.phone.trim())
+            .put("address", info.address.trim()).put("card", info.card).toString()).apply()
+    }
+
     /** Deletes a business and its data. The first business can't be deleted. */
     fun deleteBusiness(id: String) {
         if (id.isEmpty()) return
         val o = businessNames().apply { remove(id) }
-        prefs.edit().putString("businessNames", o.toString()).remove(scoped("entries", id)).remove(scoped("trash", id)).apply()
+        prefs.edit().putString("businessNames", o.toString()).remove(scoped("entries", id)).remove(scoped("trash", id))
+            .remove(scoped("bizInfo", id)).apply()
         if (business == id) business = ""
     }
 

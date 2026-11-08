@@ -307,12 +307,12 @@ fun PartyPicker(
     val sub = MaterialTheme.colorScheme.onSurfaceVariant
     val shape = RoundedCornerShape(12.dp)
     Dialog(onDismissRequest = onDismiss, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(Modifier.fillMaxWidth(0.86f), shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surface) {
+        Surface(Modifier.fillMaxWidth(0.86f), shape = RoundedCornerShape(18.dp), color = LocalPage.current) {
             Column(Modifier.padding(16.dp)) {
                 Text(title, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (subtitle.isNotBlank()) Text(subtitle, fontSize = 11.sp, color = sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (tabs.size > 1) Row(
-                    Modifier.padding(top = 12.dp).fillMaxWidth().clip(RoundedCornerShape(11.dp)).background(MaterialTheme.colorScheme.background).padding(3.dp)
+                    Modifier.padding(top = 12.dp).fillMaxWidth().clip(RoundedCornerShape(11.dp)).background(LocalLook.current?.let { Color(it.well) } ?: Color(0xFFF1F1F2)).padding(3.dp)
                 ) {
                     tabs.forEach { label ->
                         val on = tab == label
@@ -343,8 +343,7 @@ fun PartyPicker(
                         query, { query = it; picked = null }, singleLine = true,
                         textStyle = LocalTextStyle.current.copy(fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface),
                         cursorBrush = SolidColor(MaterialTheme.colorScheme.onSurface),
-                        modifier = Modifier.padding(top = 10.dp).fillMaxWidth().height(38.dp).clip(shape)
-                            .background(MaterialTheme.colorScheme.background).padding(horizontal = 12.dp),
+                        modifier = Modifier.padding(top = 10.dp).fillMaxWidth().height(38.dp).fieldEdge(shape).padding(horizontal = 12.dp),
                         decorationBox = { field ->
                             Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Filled.Search, contentDescription = null, tint = sub, modifier = Modifier.size(16.dp))
@@ -701,7 +700,7 @@ private fun PeopleView(
             if (actionName.isBlank()) emptyList()
             else targets.filter { it.contains(actionName.trim(), ignoreCase = true) }
         }
-        AlertDialog(
+        AppAlert(
             onDismissRequest = { editAction = null },
             shape = RoundedCornerShape(26.dp),
             title = {
@@ -898,7 +897,7 @@ fun MoveHistoryDialog(
     onRestore: (MoveBatch) -> Unit,
     onDismiss: () -> Unit
 ) {
-    AlertDialog(
+    AppAlert(
         onDismissRequest = onDismiss,
         title = { Text("Move history") },
         text = {

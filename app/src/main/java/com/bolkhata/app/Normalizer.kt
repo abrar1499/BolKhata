@@ -282,4 +282,26 @@ object Normalizer {
         }
         return Normalized(words.joinToString(" ").replace(Regex(" ([,;?!])"), "$1"), fixes)
     }
+
+    /** Words the phone's voice often writes wrongly, as the person meant them ("cal" for kal, "int" for eint). */
+    private val voiceWords = mapOf(
+        "cal" to "kal", "int" to "eint", "ent" to "eint", "eent" to "eint", "aint" to "eint",
+        "aval" to "awal", "awwal" to "awal", "avval" to "awal", "awval" to "awal", "doem" to "doyam", "doyem" to "doyam",
+        "tareekh" to "tarikh", "tarik" to "tarikh", "rial" to "riyal"
+    )
+
+    /**
+     * What the voice heard, as the person meant it: the usual mishearings fixed word by word, and a word that sounds
+     * like one of [known] (their goods and people) written like it. Typed text is never changed this way.
+     */
+    fun voiceFix(text: String, known: Collection<String> = emptyList()): String {
+        val names = known.flatMap { it.split(' ') }.map { it.trim() }.filter { it.length >= 4 }.distinctBy { it.lowercase() }
+        return text.trim().split(Regex("""\s+""")).joinToString(" ") { w ->
+            val tail = w.takeLastWhile { it in ".,?!" }
+            val bare = w.dropLast(tail.length).lowercase()
+            voiceWords[bare]?.let { it + tail }
+                ?: names.firstOrNull { n -> !n.equals(bare, true) && bare.length >= 4 && Names.key(n) == Names.key(bare) }?.let { it + tail }
+                ?: w
+        }
+    }
 }

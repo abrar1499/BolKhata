@@ -34,12 +34,26 @@ class SidesTest {
     @Test fun salesAndPurchasesFillThemselvesFromTheKhatas() {
         assertEquals(listOf(Sides.SALES), Sides.books(Side.INC, all, setup).map { it.name })
         val sales = Sides.books(Side.INC, all, setup).first { it.name == Sides.SALES }
-        assertEquals("Nargis Salim Rashid" to 70000.0, Sides.kids(sales, all, setup).single().let { it.name to it.total })
+        // Inside: the Party accounts, each with its people's sales or work.
+        assertEquals(Sides.CUSTOMERS to 70000.0, Sides.kids(sales, all, setup).single().let { it.name to it.total })
         val buys = Sides.books(Side.EXP, all, setup).first { it.name == Sides.PURCHASES }
-        assertEquals("Hamid Akram" to 8000.0, Sides.kids(buys, all, setup).single().let { it.name to it.total })
+        assertEquals(Sides.STAFF to 8000.0, Sides.kids(buys, all, setup).single().let { it.name to it.total })
         assertEquals(8000.0, Sides.done(buys, all, setup) { true }, 0.0)
         // No people accounts sit in Expense or Income any more.
         assertEquals(emptyList<String>(), (Sides.books(Side.EXP, all, setup) + Sides.books(Side.INC, all, setup)).filter { it.people }.map { it.name })
+    }
+
+    @Test fun workIsCountedByItemWithItsRate() {
+        val work = listOf(
+            en(Type.PURCHASE, 8000.0, "Hamid Akram", "Task A", Cat.PRODUCTION, 20000.0),
+            en(Type.PURCHASE, 4000.0, "Salim Raza", "Task A", Cat.PRODUCTION, 10000.0),
+            en(Type.PURCHASE, 3500.0, "Salim Raza", "Bags", Cat.STOCK, 10.0)
+        )
+        val q = Sides.qtyOf(work)
+        assertEquals(listOf("Task A" to 30000.0, "Bags" to 10.0), q.map { it.name to it.qty })
+        // A brick-kiln rate reads per 1000, a shop's per piece.
+        assertEquals("400 per 1000", Sides.rateText(q[0].amount, q[0].qty))
+        assertEquals("350 each", Sides.rateText(q[1].amount, q[1].qty))
     }
 
     @Test fun itemsShowGivenAndWhatIsLeft() {

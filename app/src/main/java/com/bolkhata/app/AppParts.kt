@@ -190,19 +190,20 @@ private val MENU_THEMES = listOf("Clean", "Red", "Green", "Navy")
 
 /**
  * The side menu, which is also Settings: the app logo, the businesses (+ Add business), then every setting in plain
- * rows (Name, Currency, Language, Header, Background) and Backup, Trash, Version. Nothing opens another settings page.
+ * rows (Currency, Language, Header, Background) and Backup, Trash, Version. Nothing opens another settings page.
  */
 @Composable
 internal fun SideMenu(
-    name: String, currency: String, lang: String, dark: Boolean, photo: Boolean, themeName: String, version: String,
+    currency: String, lang: String, dark: Boolean, photo: Boolean, themeName: String, version: String,
     businesses: List<Pair<String, String>>, current: String,
-    onBusiness: (String) -> Unit, onAddBusiness: (String) -> Unit,
+    onBusiness: (String) -> Unit, onAddBusiness: (name: String, phone: String, address: String) -> Unit,
+    /** The open business's own page (details and card). */
+    onBusinessPage: () -> Unit,
     onRenameBusiness: (id: String, name: String) -> Unit, onDeleteBusiness: (id: String) -> Unit,
-    onName: (String) -> Unit, onCurrency: (String) -> Unit, onLang: (String) -> Unit, onTheme: (String) -> Unit,
+    onCurrency: (String) -> Unit, onLang: (String) -> Unit, onTheme: (String) -> Unit,
     page: Long, onPage: (Long) -> Unit, onDark: (Long) -> Unit, onPhoto: () -> Unit,
     onExport: () -> Unit, onImport: () -> Unit, onTrash: () -> Unit, onVersion: () -> Unit
 ) {
-    var naming by remember { mutableStateOf(false) }
     var addingBusiness by remember { mutableStateOf(false) }
     var bizMenu by remember { mutableStateOf<Pair<String, String>?>(null) }
     var bizRename by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -222,7 +223,7 @@ internal fun SideMenu(
         RenameDialog("Rename business", n, onRename = { onRenameBusiness(id, it.trim()); bizRename = null }, onDismiss = { bizRename = null })
     }
     bizDelete?.let { (id, n) ->
-        AlertDialog(
+        AppAlert(
             onDismissRequest = { bizDelete = null },
             title = { Text("Delete \"$n\"?") },
             text = { Text("All its entries are deleted too. This can't be undone.") },
@@ -248,7 +249,8 @@ internal fun SideMenu(
             MenuCard {
                 businesses.forEach { (id, n) ->
                     // Tap opens the business; long-press: Rename / Delete, the same menu as accounts.
-                    MenuRow(onClick = { onBusiness(id) }, onLong = { bizMenu = id to n }) {
+                    // Tap: the open business shows its page; another one opens.
+                    MenuRow(onClick = { if (id == current) onBusinessPage() else onBusiness(id) }, onLong = { bizMenu = id to n }) {
                         GlassLogo(20.dp)
                         Spacer(Modifier.width(10.dp))
                         Text(n, fontSize = 13.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -261,24 +263,19 @@ internal fun SideMenu(
             }
             Spacer(Modifier.height(8.dp))
             MenuCard {
-                MenuRow(onClick = { naming = true }) { MenuLabel("👤", "Name"); MenuValue(name.ifBlank { "Add" }) }
                 Box {
                     var open by remember { mutableStateOf(false) }
                     MenuRow(onClick = { open = true }) { MenuLabel("💱", "Currency"); MenuValue("$currency ▾") }
-                    PickMenu(open, { open = false }) {
-                        CURRENCIES.forEach { c ->
-                            DropdownMenuItem(text = { Text(currencyLabel(c), fontSize = 13.sp, fontWeight = if (c == currency) FontWeight.SemiBold else FontWeight.Normal) },
-                                onClick = { onCurrency(c); open = false })
-                        }
-                    }
+                    val all = remember { CURRENCIES.map { it to currencyName(it) } }
+                    CompactPicker(open, all, currency, search = true, onDismiss = { open = false }) { onCurrency(it); open = false }
                 }
                 Box {
                     var open by remember { mutableStateOf(false) }
                     val langs = listOf("" to "Auto", "hi-IN" to "Roman Urdu", "en-US" to "English", "ur-PK" to "Urdu")
                     MenuRow(onClick = { open = true }) { MenuLabel("🌐", "Language"); MenuValue((langs.firstOrNull { it.first == lang }?.second ?: "Auto") + " ▾") }
-                    PickMenu(open, { open = false }) {
-                        langs.forEach { (code, label) -> DropdownMenuItem(text = { Text(label, fontSize = 13.sp) }, onClick = { onLang(code); open = false }) }
-                    }
+                    // The language's name shows (the code means nothing to people).
+                    CompactPicker(open, langs.map { it.second to "" }, langs.firstOrNull { it.first == lang }?.second ?: "Auto",
+                        search = false, onDismiss = { open = false }) { picked -> onLang(langs.first { it.second == picked }.first); open = false }
                 }
                 MenuRow(onClick = null) {
                     MenuLabel("🖌", "Header")
@@ -310,17 +307,7 @@ internal fun SideMenu(
             }
         }
     }
-    if (addingBusiness) NamePopup("New business", "Business name", onDismiss = { addingBusiness = false }) { addingBusiness = false; onAddBusiness(it) }
-    if (naming) {
-        var text by remember { mutableStateOf(name) }
-        AlertDialog(
-            onDismissRequest = { naming = false },
-            title = { Text("Your name") },
-            text = { OutlinedTextField(text, { text = it }, singleLine = true) },
-            confirmButton = { TextButton(onClick = { onName(text.trim()); naming = false }) { Text("Save") } },
-            dismissButton = { TextButton(onClick = { naming = false }) { Text("Cancel") } }
-        )
-    }
+    if (addingBusiness) NewBusinessPopup(onDismiss = { addingBusiness = false }) { n, ph, ad -> addingBusiness = false; onAddBusiness(n, ph, ad) }
 }
 
 /** A white rounded card of side-menu rows. */

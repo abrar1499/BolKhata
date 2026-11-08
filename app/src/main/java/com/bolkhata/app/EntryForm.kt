@@ -19,6 +19,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalConfiguration
@@ -52,7 +53,8 @@ fun FormPopup(onDismiss: () -> Unit, content: @Composable () -> Unit) {
                 .fillMaxWidth(0.88f)
                 .heightIn(max = maxH),
             shape = RoundedCornerShape(22.dp),
-            color = MaterialTheme.colorScheme.surface,
+            // The theme's page colour with white fields on it.
+            color = LocalPage.current,
             shadowElevation = 12.dp
         ) { content() }
     }
@@ -157,9 +159,10 @@ fun EntryForm(
         }
 
         // Only the direction; the app works out expense / income / loan.
+        // A light neutral track; the picked side is a white chip with its colour on the words.
         Row(
             Modifier.fillMaxWidth().height(38.dp).clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.background).padding(3.dp)
+                .background(LocalLook.current?.let { Color(it.well) } ?: Color(0xFFF1F1F2)).padding(3.dp)
         ) {
             Seg("↑ Cash out", out == true, RedSpend, Modifier.weight(1f)) { out = true }
             Seg("↓ Cash in", out == false, GreenIn, Modifier.weight(1f)) { out = false }
@@ -174,8 +177,7 @@ fun EntryForm(
             Row(
                 Modifier
                     .height(44.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.background)
+                    .fieldEdge(RoundedCornerShape(12.dp))
                     .clickable { showDate = true }
                     .padding(horizontal = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -262,7 +264,7 @@ fun EntryForm(
                 } else {
                     OutlinedButton(
                         onClick = { askDelete = true },
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = RedSpend),
+                        colors = ButtonDefaults.outlinedButtonColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = RedSpend),
                         shape = RoundedCornerShape(12.dp)
                     ) { Text("Delete") }
                 }
@@ -345,8 +347,8 @@ private fun Field(
 ) {
     val shape = RoundedCornerShape(12.dp)
     Row(
-        modifier.height(44.dp).clip(shape).background(MaterialTheme.colorScheme.background)
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape).padding(start = 12.dp, end = if (trailing == null) 10.dp else 2.dp),
+        // White with a soft edge, like the search box and chat bar.
+        modifier.height(44.dp).fieldEdge(shape).padding(start = 12.dp, end = if (trailing == null) 10.dp else 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(Modifier.weight(1f)) {
@@ -362,14 +364,17 @@ private fun Field(
     }
 }
 
-/** One half of the Cash out / Cash in switch. */
+/** One half of the Cash out / Cash in switch: picked, a white chip with the words in its colour. */
 @Composable
 private fun Seg(label: String, selected: Boolean, color: Color, modifier: Modifier, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(9.dp)
     Box(
-        modifier.fillMaxHeight().clip(RoundedCornerShape(9.dp)).background(if (selected) color else Color.Transparent).clickable { onClick() },
+        modifier.fillMaxHeight().then(if (selected) Modifier.shadow(1.dp, shape) else Modifier).clip(shape)
+            .background(if (selected) MaterialTheme.colorScheme.surface else Color.Transparent).clickable { onClick() },
         contentAlignment = Alignment.Center
     ) {
-        Text(label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(label, fontSize = 13.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
+            color = if (selected) color else MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
