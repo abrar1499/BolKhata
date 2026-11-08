@@ -255,6 +255,8 @@ fun App(
     // Expense / Income accounts the owner set up, for the open book, and the profit report opened from them.
     var sides by remember(businessName) { mutableStateOf(store.loadSides()) }
     var profitOpen by remember { mutableStateOf(false) }
+    // The open business's own page (details and card), from the side menu.
+    var bizPage by remember { mutableStateOf(false) }
     // A person to open on Expense / Income (from the report's To get / To pay).
     var sideJump by remember { mutableStateOf<Pair<String, String>?>(null) }
     /** "Hamid ka khata kholo": the person's khata on the Party tab (the same screen as tapping the person). */
@@ -2098,6 +2100,7 @@ fun App(
     /** Opens another business (book): its entries, trash and accounts. */
     fun openBusiness(id: String) {
         store.business = id
+        bizPage = false
         entries = store.load()
         trash = store.loadTrash()
         businessName = store.businesses().firstOrNull { it.first == id }?.second ?: "My business"
@@ -2150,7 +2153,8 @@ fun App(
                 onBusiness = { id -> if (id != store.business) openBusiness(id); close() },
                 onRenameBusiness = { id, n -> store.renameBusiness(id, n); if (id == store.business) businessName = n; businessTick++ },
                 onDeleteBusiness = { id -> val wasOpen = id == store.business; store.deleteBusiness(id); if (wasOpen) openBusiness("") else businessTick++ },
-                onAddBusiness = { n -> openBusiness(store.addBusiness(n)); businessTick++; close() },
+                onAddBusiness = { n, ph, ad -> val id = store.addBusiness(n); store.saveBizInfo(BizInfo(phone = ph, address = ad), id); openBusiness(id); businessTick++; close() },
+                onBusinessPage = { bizPage = true; close() },
                 onName = { name = it; store.name = it; toast("✓ Name saved") },
                 onCurrency = { c -> currency = c; store.currency = c; toast("✓ Currency set to $c") },
                 onLang = { lang = it; store.language = it },
@@ -2193,7 +2197,7 @@ fun App(
                         voice = if (recorder != null) VoiceState(true, "Listening…", "sends when you stop", level = voiceLevel) { finishRecording() } else null,
                         navPad = false
                     )
-                    KhataNav(tab) { tab = it; profitOpen = false }
+                    KhataNav(tab) { tab = it; profitOpen = false; bizPage = false }
                 }
             } else {
                 // The khata tabs sit under the chat bar on the main screens.
@@ -2201,7 +2205,7 @@ fun App(
                 // The chat bar lives on Chat only; other screens keep just the tabs (entries go in from inside an account).
                 Column {
                     FlashStrip(flash) { flash = null }
-                    if (nav) KhataNav(tab) { tab = it; profitOpen = false } else Spacer(Modifier.navigationBarsPadding())
+                    if (nav) KhataNav(tab) { tab = it; profitOpen = false; bizPage = false } else Spacer(Modifier.navigationBarsPadding())
                 }
             }
         },
@@ -2235,6 +2239,11 @@ fun App(
                     )
                 }
                 who != null -> PeopleScreen(entries, currency, who, onBack = { people = null }, onEdit = { editing = it })
+                bizPage -> BusinessPage(
+                    businessName, remember(businessName, businessTick) { store.bizInfo() },
+                    onName = { n -> store.renameBusiness(store.business, n); businessName = n; businessTick++ },
+                    onInfo = { store.saveBizInfo(it) }, onBack = { bizPage = false }
+                )
                 profitOpen -> ProfitScreen(entries, currency, sides, onBack = { profitOpen = false }, onEdit = { editing = it }) { b, k ->
                     profitOpen = false; sideJump = b to k; tab = Tab.PARTIES
                 }

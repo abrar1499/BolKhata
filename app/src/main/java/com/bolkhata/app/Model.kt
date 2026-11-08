@@ -197,11 +197,24 @@ class Store(context: Context) {
         prefs.edit().putString("businessNames", businessNames().put(id, name.trim()).toString()).apply()
     }
 
+    /** A business's owner, phone, address and card style (empty when never set). */
+    fun bizInfo(id: String = business): BizInfo = try {
+        JSONObject(prefs.getString(scoped("bizInfo", id), null) ?: "{}").let {
+            BizInfo(it.optString("owner"), it.optString("phone"), it.optString("address"), it.optString("card", "Classic"))
+        }
+    } catch (_: Exception) { BizInfo() }
+
+    fun saveBizInfo(info: BizInfo, id: String = business) {
+        prefs.edit().putString(scoped("bizInfo", id), JSONObject().put("owner", info.owner.trim()).put("phone", info.phone.trim())
+            .put("address", info.address.trim()).put("card", info.card).toString()).apply()
+    }
+
     /** Deletes a business and its data. The first business can't be deleted. */
     fun deleteBusiness(id: String) {
         if (id.isEmpty()) return
         val o = businessNames().apply { remove(id) }
-        prefs.edit().putString("businessNames", o.toString()).remove(scoped("entries", id)).remove(scoped("trash", id)).apply()
+        prefs.edit().putString("businessNames", o.toString()).remove(scoped("entries", id)).remove(scoped("trash", id))
+            .remove(scoped("bizInfo", id)).apply()
         if (business == id) business = ""
     }
 

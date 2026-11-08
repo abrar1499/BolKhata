@@ -196,7 +196,9 @@ private val MENU_THEMES = listOf("Clean", "Red", "Green", "Navy")
 internal fun SideMenu(
     name: String, currency: String, lang: String, dark: Boolean, photo: Boolean, themeName: String, version: String,
     businesses: List<Pair<String, String>>, current: String,
-    onBusiness: (String) -> Unit, onAddBusiness: (String) -> Unit,
+    onBusiness: (String) -> Unit, onAddBusiness: (name: String, phone: String, address: String) -> Unit,
+    /** The open business's own page (details and card). */
+    onBusinessPage: () -> Unit,
     onRenameBusiness: (id: String, name: String) -> Unit, onDeleteBusiness: (id: String) -> Unit,
     onName: (String) -> Unit, onCurrency: (String) -> Unit, onLang: (String) -> Unit, onTheme: (String) -> Unit,
     page: Long, onPage: (Long) -> Unit, onDark: (Long) -> Unit, onPhoto: () -> Unit,
@@ -248,7 +250,8 @@ internal fun SideMenu(
             MenuCard {
                 businesses.forEach { (id, n) ->
                     // Tap opens the business; long-press: Rename / Delete, the same menu as accounts.
-                    MenuRow(onClick = { onBusiness(id) }, onLong = { bizMenu = id to n }) {
+                    // Tap: the open business shows its page; another one opens.
+                    MenuRow(onClick = { if (id == current) onBusinessPage() else onBusiness(id) }, onLong = { bizMenu = id to n }) {
                         GlassLogo(20.dp)
                         Spacer(Modifier.width(10.dp))
                         Text(n, fontSize = 13.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -310,7 +313,7 @@ internal fun SideMenu(
             }
         }
     }
-    if (addingBusiness) NamePopup("New business", "Business name", onDismiss = { addingBusiness = false }) { addingBusiness = false; onAddBusiness(it) }
+    if (addingBusiness) NewBusinessPopup(onDismiss = { addingBusiness = false }) { n, ph, ad -> addingBusiness = false; onAddBusiness(n, ph, ad) }
     if (naming) {
         var text by remember { mutableStateOf(name) }
         AlertDialog(

@@ -57,6 +57,9 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.toArgb
+import androidx.core.graphics.drawable.toBitmap
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -1743,6 +1746,89 @@ fun ProfitScreen(entries: List<Entry>, currency: String, setup: SideSetup, onBac
                 item(key = "n4") { ReportRow("Assets", "laptop, car, machines… at cost", withSign(worth.assets, "+"), GreenIn) { open = "Assets" } }
                 item(key = "n5") { ReportRow("To pay", "money you owe", withSign(worth.toPay, "−"), RedSpend) { open = "To pay" } }
                 item(key = "n6") { ReportRow("Net worth", "what you are worth today", plusMinus(worth.net).trimStart('+'), if (worth.net < 0) RedSpend else GreenIn, null) }
+            }
+        }
+    }
+}
+
+/** New business: its name, and phone and address if wanted (they go on bills, PDFs and the card). */
+@Composable
+internal fun NewBusinessPopup(onDismiss: () -> Unit, onSave: (name: String, phone: String, address: String) -> Unit) {
+    var name by remember { mutableStateOf("") }
+    var phone by remember { mutableStateOf("") }
+    var address by remember { mutableStateOf("") }
+    AppPopup("New business", "Add", onDismiss, { if (name.isNotBlank()) onSave(name.trim(), phone.trim(), address.trim()) }) {
+        WellField(name, { name = it }, "Business name")
+        WellField(phone, { phone = it }, "Phone (optional)")
+        WellField(address, { address = it }, "Address (optional)")
+    }
+}
+
+/**
+ * A business's own page (tap it in the side menu): its name, owner, phone and address, which go on bills and PDFs,
+ * then its business card in the style picked, to save or share. Changes are kept as they are typed.
+ */
+@Composable
+internal fun BusinessPage(name: String, info: BizInfo, onName: (String) -> Unit, onInfo: (BizInfo) -> Unit, onBack: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var n by remember(name) { mutableStateOf(name) }
+    var i by remember(info) { mutableStateOf(info) }
+    val h = LocalHeader.current
+    val colors = Triple(h.c1.toArgb(), h.c2.toArgb(), h.c3.toArgb())
+    val logo = remember { runCatching { context.packageManager.getApplicationIcon(context.packageName).toBitmap(160, 160) }.getOrNull() }
+    val cards = remember(n, i.owner, i.phone, i.address, colors) { CardArt.STYLES.associateWith { CardArt.draw(it, n, i, colors, logo) } }
+    val card = cards[i.card] ?: cards.getValue(CardArt.STYLES.first())
+    LaunchedEffect(i) { onInfo(i) }
+    fun leave() { if (n.isNotBlank() && n.trim() != name) onName(n.trim()); onBack() }
+    BackHandler { leave() }
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
+        item(key = "bh") { BackHead(n.ifBlank { "Business" }, "Business ›", { leave() }) {} }
+        item(key = "dl") { SectionLabel("DETAILS") }
+        item(key = "df") {
+            Column(Modifier.padding(horizontal = 10.dp).fillMaxWidth().shadow(1.dp, RoundedCornerShape(16.dp)).clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.surface).padding(start = 12.dp, end = 12.dp, bottom = 12.dp)) {
+                listOf(
+                    Triple("Business name", n) { v: String -> n = v },
+                    Triple("Your name (optional)", i.owner) { v: String -> i = i.copy(owner = v) },
+                    Triple("Phone (optional)", i.phone) { v: String -> i = i.copy(phone = v) },
+                    Triple("Address (optional)", i.address) { v: String -> i = i.copy(address = v) }
+                ).forEach { (label, value, set) ->
+                    Text(label, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 10.dp))
+                    WellField(value, set, label.removeSuffix(" (optional)"), Modifier.padding(top = 0.dp))
+                }
+            }
+        }
+        item(key = "cl") { SectionLabel("BUSINESS CARD · PICK A STYLE") }
+        item(key = "cp") {
+            LazyRow(contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(CardArt.STYLES) { st ->
+                    val on = st == i.card
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable { i = i.copy(card = st) }) {
+                        androidx.compose.foundation.Image(
+                            cards.getValue(st).asImageBitmap(), st,
+                            Modifier.width(100.dp).height(57.dp).clip(RoundedCornerShape(7.dp)).border(2.dp, if (on) Ember else Color.Transparent, RoundedCornerShape(7.dp))
+                        )
+                        Text(st, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = if (on) Ember else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+                    }
+                }
+            }
+        }
+        item(key = "cb") {
+            androidx.compose.foundation.Image(
+                card.asImageBitmap(), "Business card",
+                Modifier.padding(start = 14.dp, end = 14.dp, top = 8.dp).fillMaxWidth().aspectRatio(1.75f).shadow(10.dp, RoundedCornerShape(18.dp)).clip(RoundedCornerShape(18.dp))
+            )
+        }
+        item(key = "cbt") {
+            Row(Modifier.padding(start = 14.dp, end = 14.dp, top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surface)
+                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp)).clickable {
+                        val ok = saveImage(context, card, (n.ifBlank { "Business" }) + " card")
+                        android.widget.Toast.makeText(context, if (ok) "✓ Saved to Pictures" else "Couldn't save the picture", android.widget.Toast.LENGTH_SHORT).show()
+                    }, contentAlignment = Alignment.Center) { Text("Save image", fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+                Box(Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(12.dp)).background(EmberTop).clickable {
+                    shareFile(context, (n.ifBlank { "Business" }) + " card.png", "image/png") { f -> f.outputStream().use { card.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) } }
+                }, contentAlignment = Alignment.Center) { Text("Share card", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White) }
             }
         }
     }
