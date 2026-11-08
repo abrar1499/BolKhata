@@ -700,7 +700,7 @@ private fun PeopleView(
             if (actionName.isBlank()) emptyList()
             else targets.filter { it.contains(actionName.trim(), ignoreCase = true) }
         }
-        AlertDialog(
+        AppAlert(
             onDismissRequest = { editAction = null },
             shape = RoundedCornerShape(26.dp),
             title = {
@@ -897,7 +897,7 @@ fun MoveHistoryDialog(
     onRestore: (MoveBatch) -> Unit,
     onDismiss: () -> Unit
 ) {
-    AlertDialog(
+    AppAlert(
         onDismissRequest = onDismiss,
         title = { Text("Move history") },
         text = {

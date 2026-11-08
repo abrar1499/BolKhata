@@ -45,7 +45,7 @@ fun understoodLine(e: Entry, currency: String): String {
 /** Shown before saving when the app wasn't sure what was meant (the AI read it). */
 @Composable
 fun ConfirmCard(list: List<Entry>, currency: String, onSave: () -> Unit, onEdit: () -> Unit, onCancel: () -> Unit) {
-    AlertDialog(
+    AppAlert(
         onDismissRequest = onCancel,
         title = { Text(if (list.size == 1) "Is this right?" else "Are these right?") },
         text = {
@@ -73,7 +73,7 @@ fun ConfirmCard(list: List<Entry>, currency: String, onSave: () -> Unit, onEdit:
 /** Two or more saved people match the name that was said: which one? */
 @Composable
 fun WhoDialog(said: String, choices: List<String>, onPick: (String?) -> Unit, onCancel: () -> Unit) {
-    AlertDialog(
+    AppAlert(
         onDismissRequest = onCancel,
         title = { Text("Who is \"$said\"?") },
         text = {
@@ -91,7 +91,7 @@ fun WhoDialog(said: String, choices: List<String>, onPick: (String?) -> Unit, on
 @Composable
 fun SplitAskDialog(bill: String, missing: Int, onAnswer: (String) -> Unit, onMic: () -> Unit, onCancel: () -> Unit) {
     var text by remember { mutableStateOf("") }
-    AlertDialog(
+    AppAlert(
         onDismissRequest = onCancel,
         title = { Text(if (missing > 0) "Who were the other $missing?" else "Who was with you?") },
         text = {
@@ -124,7 +124,7 @@ fun RecatDialog(groups: List<Recat.Group>, currency: String, onApply: (Map<Strin
     // New guesses (from the AI) fill in names not picked yet; a choice the person made is kept.
     val touched = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateListOf<String>() }
     groups.forEach { g -> if (g.name !in touched) picked[g.name] = g.guess }
-    AlertDialog(
+    AppAlert(
         onDismissRequest = onCancel,
         title = { Text("Sort \"Other\" expenses", fontWeight = FontWeight.Bold) },
         text = {

@@ -266,7 +266,7 @@ fun ChatScreen(
     }
 
     if (confirmShare) {
-        AlertDialog(
+        AppAlert(
             onDismissRequest = { confirmShare = false },
             title = { Text("Share chat diagnostics?") },
             text = {
@@ -285,7 +285,7 @@ fun ChatScreen(
     }
 
     if (confirmClear) {
-        AlertDialog(
+        AppAlert(
             onDismissRequest = { confirmClear = false },
             title = { Text("Clear chat history?") },
             text = { Text("This removes the conversation from this phone. Your entries stay.") },

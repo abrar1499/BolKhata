@@ -7,6 +7,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.ui.draw.shadow
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.foundation.clickable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.foundation.layout.*
@@ -233,7 +236,10 @@ fun BolTheme(dark: Boolean, clear: Boolean = false, page: Long = PAGE_COLORS[0],
         surfaceVariant = Color(look.well),
         onSurfaceVariant = Color(0xFFA3A3A3),
         outline = Color(look.edge),
-        outlineVariant = Color(look.well)
+        outlineVariant = Color(look.well),
+        // Menus white-ish (the card), dialogs and sheets the page: no system purple tint anywhere.
+        surfaceContainerLowest = Color(look.card), surfaceContainerLow = bg, surfaceContainer = Color(look.card),
+        surfaceContainerHigh = bg, surfaceContainerHighest = Color(look.well), surfaceTint = Color.Transparent
     ) else lightColorScheme(
         primary = Color(0xFF059669),
         onPrimary = Color.White,
@@ -249,7 +255,10 @@ fun BolTheme(dark: Boolean, clear: Boolean = false, page: Long = PAGE_COLORS[0],
         surfaceVariant = Color(0xFFF7F5F3),
         onSurfaceVariant = Color(0xFF6B6560),
         outline = Color(0xFFE6E3DF),
-        outlineVariant = Color(0xFFECE7E3)
+        outlineVariant = Color(0xFFECE7E3),
+        // Menus white, dialogs and sheets the page colour: no system purple tint anywhere.
+        surfaceContainerLowest = Color.White, surfaceContainerLow = bg, surfaceContainer = Color.White,
+        surfaceContainerHigh = bg, surfaceContainerHighest = Color(0xFFF1F1F2), surfaceTint = Color.Transparent
     )
     androidx.compose.runtime.CompositionLocalProvider(LocalLook provides look, LocalPage provides bg) {
         MaterialTheme(colorScheme = if (clear) scheme.copy(background = Color.Transparent) else scheme, typography = AppTypography, content = content)
@@ -673,6 +682,45 @@ fun BoxScope.PickMenu(open: Boolean, onDismiss: () -> Unit, content: @Composable
             containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp, shadowElevation = 6.dp,
             content = content
         )
+    }
+}
+
+/**
+ * A compact pick list in a small white card under the row whose Box it is placed in: a search box when [search],
+ * then one short line per item (code in bold, name in grey), the picked one in the app's colour.
+ */
+@Composable
+fun BoxScope.CompactPicker(open: Boolean, items: List<Pair<String, String>>, selected: String, search: Boolean, onDismiss: () -> Unit, onPick: (String) -> Unit) {
+    if (!open) return
+    var q by remember { mutableStateOf("") }
+    Box(Modifier.align(Alignment.BottomEnd).padding(end = 12.dp)) {
+        androidx.compose.ui.window.Popup(
+            alignment = Alignment.TopEnd, onDismissRequest = onDismiss,
+            properties = androidx.compose.ui.window.PopupProperties(focusable = true)
+        ) {
+            val shape = RoundedCornerShape(14.dp)
+            Column(Modifier.width(230.dp).shadow(8.dp, shape).clip(shape).background(MaterialTheme.colorScheme.surface).padding(vertical = 6.dp)) {
+                if (search) androidx.compose.foundation.text.BasicTextField(
+                    q, { q = it }, singleLine = true,
+                    textStyle = TextStyle(fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface),
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp).fillMaxWidth().height(34.dp).fieldEdge(RoundedCornerShape(10.dp))
+                        .padding(horizontal = 10.dp).wrapContentHeight(Alignment.CenterVertically),
+                    decorationBox = { f -> Box { if (q.isEmpty()) Text("Search", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant); f() } }
+                )
+                val shown = items.filter { (k, n) -> q.isBlank() || k.contains(q.trim(), true) || n.contains(q.trim(), true) }
+                androidx.compose.foundation.lazy.LazyColumn(Modifier.heightIn(max = 300.dp)) {
+                    items(shown.size) { i ->
+                        val (k, n) = shown[i]
+                        val on = k == selected
+                        Row(Modifier.fillMaxWidth().clickable { onPick(k) }.padding(horizontal = 14.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(k.ifBlank { n }, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (on) Color(0xFFF0572E) else MaterialTheme.colorScheme.onSurface)
+                            if (k.isNotBlank() && n.isNotBlank() && n != k) Text("  $n", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

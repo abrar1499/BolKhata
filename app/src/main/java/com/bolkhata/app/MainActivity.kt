@@ -1502,7 +1502,7 @@ fun App(
         }
     }
     importText?.let { text ->
-        AlertDialog(
+        AppAlert(
             onDismissRequest = { importText = null },
             title = { Text("Import data?") },
             text = {
@@ -2174,7 +2174,7 @@ fun App(
         drawerContent = {
             fun close() = scope.launch { drawer.close() }
             SideMenu(
-                name = name, currency = currency, lang = lang, dark = dark, photo = photo, themeName = themeName,
+                currency = currency, lang = lang, dark = dark, photo = photo, themeName = themeName,
                 version = BuildConfig.VERSION_NAME,
                 businesses = remember(businessTick, businessName) { store.businesses() }, current = store.business,
                 onBusiness = { id -> if (id != store.business) openBusiness(id); close() },
@@ -2182,7 +2182,6 @@ fun App(
                 onDeleteBusiness = { id -> val wasOpen = id == store.business; store.deleteBusiness(id); if (wasOpen) openBusiness("") else businessTick++ },
                 onAddBusiness = { n, ph, ad -> val id = store.addBusiness(n); store.saveBizInfo(BizInfo(phone = ph, address = ad), id); openBusiness(id); businessTick++; close() },
                 onBusinessPage = { bizPage = true; close() },
-                onName = { name = it; store.name = it; toast("✓ Name saved") },
                 onCurrency = { c -> currency = c; store.currency = c; toast("✓ Currency set to $c") },
                 onLang = { lang = it; store.language = it },
                 onTheme = onTheme,
@@ -2570,7 +2569,7 @@ fun App(
                 }
             }
             if (confirmEmptyTrash) {
-                AlertDialog(
+                AppAlert(
                     onDismissRequest = { confirmEmptyTrash = false },
                     title = { Text("Permanently empty Trash?") },
                     text = { Text("This will permanently delete ${trash.size} entries. This action cannot be undone.") },
@@ -2858,7 +2857,7 @@ fun App(
     }
 
     if (bankHelp) {
-        AlertDialog(
+        AppAlert(
             onDismissRequest = { bankHelp = false },
             title = { Text("Turn on bank alerts") },
             text = {
@@ -2954,7 +2953,7 @@ fun App(
     }
 
     confirm?.let { (msg, ids) ->
-        AlertDialog(
+        AppAlert(
             onDismissRequest = { confirm = null; afterTrash = null },
             title = { Text("Are you sure?") },
             text = { Text(msg) },

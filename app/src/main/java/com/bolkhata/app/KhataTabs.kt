@@ -788,7 +788,7 @@ fun TrashScreen(
         )
     }
     if (askEmpty) {
-        AlertDialog(
+        AppAlert(
             onDismissRequest = { askEmpty = false },
             title = { Text("Empty trash?") },
             text = { Text("${trash.size} entries will be deleted forever. This cannot be undone.") },

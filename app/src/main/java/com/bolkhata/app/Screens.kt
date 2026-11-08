@@ -1614,7 +1614,7 @@ fun SettingsScreen(
     when (dialog) {
         "name" -> {
             var text by remember { mutableStateOf(name) }
-            AlertDialog(
+            AppAlert(
                 onDismissRequest = { dialog = null },
                 title = { Text("Your name") },
                 text = { OutlinedTextField(text, { text = it }, singleLine = true, modifier = Modifier.fillMaxWidth()) },
@@ -1622,7 +1622,7 @@ fun SettingsScreen(
                 dismissButton = { TextButton(onClick = { dialog = null }) { Text("Cancel") } }
             )
         }
-        "theme" -> AlertDialog(
+        "theme" -> AppAlert(
             onDismissRequest = { dialog = null },
             title = { Text("Theme") },
             text = {
@@ -1636,7 +1636,7 @@ fun SettingsScreen(
         )
         "groq" -> {
             var key by remember { mutableStateOf("") }
-            AlertDialog(
+            AppAlert(
                 onDismissRequest = { dialog = null },
                 title = { Text("Groq AI") },
                 text = {
@@ -1679,7 +1679,7 @@ fun SettingsScreen(
             var key by remember { mutableStateOf("") }
             var voiceId by remember { mutableStateOf(elevenVoice) }
             var agentId by remember { mutableStateOf(elevenAgent) }
-            AlertDialog(
+            AppAlert(
                 onDismissRequest = { dialog = null },
                 title = { Text("Call voice") },
                 text = {
@@ -1723,7 +1723,7 @@ fun SettingsScreen(
                 }
             )
         }
-        "review" -> AlertDialog(
+        "review" -> AppAlert(
             onDismissRequest = { dialog = null },
             text = { Column(Modifier.verticalScroll(rememberScrollState())) { ChatReviewPanel(logRepo, logTokenSet, logStatus, onLogSave, onLogSendNow, onLogOff) } },
             confirmButton = { TextButton(onClick = { dialog = null }) { Text("Close") } }
