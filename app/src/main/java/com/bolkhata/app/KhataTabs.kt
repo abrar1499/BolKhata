@@ -1866,25 +1866,27 @@ fun ProfitScreen(entries: List<Entry>, currency: String, setup: SideSetup, onBac
     }
 }
 
-/** New business: its name, and phone and address if wanted (they go on bills, PDFs and the card). */
+/** A small field of the business page: its name inside as the hint, white with a soft edge. */
 @Composable
-internal fun NewBusinessPopup(onDismiss: () -> Unit, onSave: (name: String, phone: String, address: String) -> Unit) {
-    var name by remember { mutableStateOf("") }
-    var phone by remember { mutableStateOf("") }
-    var address by remember { mutableStateOf("") }
-    AppPopup("New business", "Add", onDismiss, { if (name.isNotBlank()) onSave(name.trim(), phone.trim(), address.trim()) }) {
-        WellField(name, { name = it }, "Business name")
-        WellField(phone, { phone = it }, "Phone (optional)")
-        WellField(address, { address = it }, "Address (optional)")
-    }
+private fun CompactField(value: String, hint: String, modifier: Modifier = Modifier, onChange: (String) -> Unit) {
+    BasicTextField(
+        value, onChange, singleLine = true, textStyle = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface),
+        cursorBrush = SolidColor(EmberTop),
+        modifier = modifier.height(36.dp).fieldEdge(RoundedCornerShape(10.dp)).padding(horizontal = 10.dp).wrapContentHeight(Alignment.CenterVertically),
+        decorationBox = { f -> Box { if (value.isEmpty()) Text(hint, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1); f() } }
+    )
 }
 
 /**
- * A business's own page (tap it in the side menu): its name, owner, phone and address, which go on bills and PDFs,
- * then its business card in the style picked, to save or share. Changes are kept as they are typed.
+ * A business's own page, compact so it fits one screen: the details (name; your name and phone side by side; address),
+ * small card-style chips and the card. An open business saves as it is typed and has Save image / Share card; a new one
+ * ([isNew], from + Add business) ends with Cancel and Add business.
  */
 @Composable
-internal fun BusinessPage(name: String, info: BizInfo, onName: (String) -> Unit, onInfo: (BizInfo) -> Unit, onBack: () -> Unit) {
+internal fun BusinessPage(
+    name: String, info: BizInfo, onName: (String) -> Unit, onInfo: (BizInfo) -> Unit, onBack: () -> Unit,
+    isNew: Boolean = false, onAdd: (String, BizInfo) -> Unit = { _, _ -> }
+) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var n by remember(name) { mutableStateOf(name) }
     var i by remember(info) { mutableStateOf(info) }
@@ -1893,27 +1895,23 @@ internal fun BusinessPage(name: String, info: BizInfo, onName: (String) -> Unit,
     val logo = remember { runCatching { context.packageManager.getApplicationIcon(context.packageName).toBitmap(160, 160) }.getOrNull() }
     val cards = remember(n, i.owner, i.phone, i.address, colors) { CardArt.STYLES.associateWith { CardArt.draw(it, n, i, colors, logo) } }
     val card = cards[i.card] ?: cards.getValue(CardArt.STYLES.first())
-    LaunchedEffect(i) { onInfo(i) }
-    fun leave() { if (n.isNotBlank() && n.trim() != name) onName(n.trim()); onBack() }
+    LaunchedEffect(i) { if (!isNew) onInfo(i) }
+    fun leave() { if (!isNew && n.isNotBlank() && n.trim() != name) onName(n.trim()); onBack() }
     BackHandler { leave() }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
-        item(key = "bh") { BackHead(n.ifBlank { "Business" }, "Business ›", { leave() }) {} }
-        item(key = "dl") { SectionLabel("DETAILS") }
+        item(key = "bh") { BackHead(if (isNew) "New business" else n.ifBlank { "Business" }, "Business ›", { leave() }) {} }
         item(key = "df") {
-            Column(Modifier.padding(horizontal = 10.dp).fillMaxWidth().shadow(1.dp, RoundedCornerShape(16.dp)).clip(RoundedCornerShape(16.dp))
-                .background(MaterialTheme.colorScheme.surface).padding(start = 12.dp, end = 12.dp, bottom = 12.dp)) {
-                listOf(
-                    Triple("Business name", n) { v: String -> n = v },
-                    Triple("Your name (optional)", i.owner) { v: String -> i = i.copy(owner = v) },
-                    Triple("Phone (optional)", i.phone) { v: String -> i = i.copy(phone = v) },
-                    Triple("Address (optional)", i.address) { v: String -> i = i.copy(address = v) }
-                ).forEach { (label, value, set) ->
-                    Text(label, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 10.dp))
-                    WellField(value, set, label.removeSuffix(" (optional)"), Modifier.padding(top = 0.dp))
+            Column(Modifier.padding(start = 10.dp, end = 10.dp, top = 2.dp).fillMaxWidth().shadow(1.dp, RoundedCornerShape(16.dp)).clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.surface).padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                CompactField(n, "Business name", Modifier.fillMaxWidth()) { n = it }
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    CompactField(i.owner, "Your name (optional)", Modifier.weight(1f)) { i = i.copy(owner = it) }
+                    CompactField(i.phone, "Phone (optional)", Modifier.weight(1f)) { i = i.copy(phone = it) }
                 }
+                CompactField(i.address, "Address (optional)", Modifier.fillMaxWidth()) { i = i.copy(address = it) }
             }
         }
-        item(key = "cl") { SectionLabel("BUSINESS CARD · PICK A STYLE") }
+        item(key = "cl") { SectionLabel("CARD STYLE") }
         item(key = "cp") {
             LazyRow(contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(CardArt.STYLES) { st ->
@@ -1921,9 +1919,9 @@ internal fun BusinessPage(name: String, info: BizInfo, onName: (String) -> Unit,
                     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable { i = i.copy(card = st) }) {
                         androidx.compose.foundation.Image(
                             cards.getValue(st).asImageBitmap(), st,
-                            Modifier.width(100.dp).height(57.dp).clip(RoundedCornerShape(7.dp)).border(2.dp, if (on) Ember else Color.Transparent, RoundedCornerShape(7.dp))
+                            Modifier.width(72.dp).height(41.dp).clip(RoundedCornerShape(6.dp)).border(2.dp, if (on) Ember else Color.Transparent, RoundedCornerShape(6.dp))
                         )
-                        Text(st, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = if (on) Ember else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+                        Text(st, fontSize = 9.sp, fontWeight = FontWeight.Bold, color = if (on) Ember else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 3.dp))
                     }
                 }
             }
@@ -1931,19 +1929,28 @@ internal fun BusinessPage(name: String, info: BizInfo, onName: (String) -> Unit,
         item(key = "cb") {
             androidx.compose.foundation.Image(
                 card.asImageBitmap(), "Business card",
-                Modifier.padding(start = 14.dp, end = 14.dp, top = 8.dp).fillMaxWidth().aspectRatio(1.75f).shadow(10.dp, RoundedCornerShape(18.dp)).clip(RoundedCornerShape(18.dp))
+                Modifier.padding(start = 44.dp, end = 44.dp, top = 6.dp).fillMaxWidth().aspectRatio(1.75f).shadow(10.dp, RoundedCornerShape(16.dp)).clip(RoundedCornerShape(16.dp))
             )
         }
         item(key = "cbt") {
             Row(Modifier.padding(start = 14.dp, end = 14.dp, top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surface)
-                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp)).clickable {
-                        val ok = saveImage(context, card, (n.ifBlank { "Business" }) + " card")
-                        android.widget.Toast.makeText(context, if (ok) "✓ Saved to Pictures" else "Couldn't save the picture", android.widget.Toast.LENGTH_SHORT).show()
-                    }, contentAlignment = Alignment.Center) { Text("Save image", fontSize = 14.sp, fontWeight = FontWeight.Bold) }
-                Box(Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(12.dp)).background(EmberTop).clickable {
-                    shareFile(context, (n.ifBlank { "Business" }) + " card.png", "image/png") { f -> f.outputStream().use { card.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) } }
-                }, contentAlignment = Alignment.Center) { Text("Share card", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White) }
+                val shape = RoundedCornerShape(12.dp)
+                Box(Modifier.weight(1f).height(40.dp).clip(shape).background(MaterialTheme.colorScheme.surface)
+                    .border(1.dp, MaterialTheme.colorScheme.outline, shape).clickable {
+                        if (isNew) onBack()
+                        else {
+                            val ok = saveImage(context, card, (n.ifBlank { "Business" }) + " card")
+                            android.widget.Toast.makeText(context, if (ok) "✓ Saved to Pictures" else "Couldn't save the picture", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    }, contentAlignment = Alignment.Center) { Text(if (isNew) "Cancel" else "Save image", fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+                Box(Modifier.weight(1f).height(40.dp).clip(shape).background(EmberTop).clickable {
+                    if (isNew) {
+                        if (n.isBlank()) android.widget.Toast.makeText(context, "Type the business name", android.widget.Toast.LENGTH_SHORT).show()
+                        else onAdd(n.trim(), i)
+                    } else shareFile(context, (n.ifBlank { "Business" }) + " card.png", "image/png") { f ->
+                        f.outputStream().use { card.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+                    }
+                }, contentAlignment = Alignment.Center) { Text(if (isNew) "Add business" else "Share card", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White) }
             }
         }
     }

@@ -258,6 +258,8 @@ fun App(
     var profitOpen by remember { mutableStateOf(false) }
     // The open business's own page (details and card), from the side menu.
     var bizPage by remember { mutableStateOf(false) }
+    // The business page opened by + Add business, for a new one.
+    var bizNew by remember { mutableStateOf(false) }
     // A person to open on Expense / Income (from the report's To get / To pay).
     var sideJump by remember { mutableStateOf<Pair<String, String>?>(null) }
     /** "Hamid ka khata kholo": the person's khata on the Party tab (the same screen as tapping the person). */
@@ -2128,6 +2130,7 @@ fun App(
     fun openBusiness(id: String) {
         store.business = id
         bizPage = false
+        bizNew = false
         entries = store.load()
         trash = store.loadTrash()
         businessName = store.businesses().firstOrNull { it.first == id }?.second ?: "My business"
@@ -2180,7 +2183,7 @@ fun App(
                 onBusiness = { id -> if (id != store.business) openBusiness(id); close() },
                 onRenameBusiness = { id, n -> store.renameBusiness(id, n); if (id == store.business) businessName = n; businessTick++ },
                 onDeleteBusiness = { id -> val wasOpen = id == store.business; store.deleteBusiness(id); if (wasOpen) openBusiness("") else businessTick++ },
-                onAddBusiness = { n, ph, ad -> val id = store.addBusiness(n); store.saveBizInfo(BizInfo(phone = ph, address = ad), id); openBusiness(id); businessTick++; close() },
+                onAddBusiness = { bizNew = true; bizPage = true; close() },
                 onBusinessPage = { bizPage = true; close() },
                 onCurrency = { c -> currency = c; store.currency = c; toast("✓ Currency set to $c") },
                 onLang = { lang = it; store.language = it },
@@ -2215,7 +2218,8 @@ fun App(
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
             val main = results == null && people == null && account == null && ledger == null
-            if (main && tab == Tab.CHAT) {
+            // The chat bar belongs to Chat only, not to a page opened over it (business page, report).
+            if (main && tab == Tab.CHAT && !bizPage && !profitOpen) {
                 Column {
                     InputBar(
                         onSend = { chatInput(it) }, onMic = { startVoice(forChat = true) }, placeholder = "Speak, type or ask…",
@@ -2223,7 +2227,7 @@ fun App(
                         voice = if (recorder != null) VoiceState(true, "Listening…", "sends when you stop", level = voiceLevel) { finishRecording() } else null,
                         navPad = false
                     )
-                    KhataNav(tab) { tab = it; profitOpen = false; bizPage = false }
+                    KhataNav(tab) { tab = it; profitOpen = false; bizPage = false; bizNew = false }
                 }
             } else {
                 // The khata tabs sit under the chat bar on the main screens.
@@ -2231,7 +2235,7 @@ fun App(
                 // The chat bar lives on Chat only; other screens keep just the tabs (entries go in from inside an account).
                 Column {
                     FlashStrip(flash) { flash = null }
-                    if (nav) KhataNav(tab) { tab = it; profitOpen = false; bizPage = false } else Spacer(Modifier.navigationBarsPadding())
+                    if (nav) KhataNav(tab) { tab = it; profitOpen = false; bizPage = false; bizNew = false } else Spacer(Modifier.navigationBarsPadding())
                 }
             }
         },
@@ -2266,6 +2270,10 @@ fun App(
                     )
                 }
                 who != null -> PeopleScreen(entries, currency, who, onBack = { people = null }, onEdit = { editing = it })
+                bizPage && bizNew -> BusinessPage(
+                    "", BizInfo(), onName = {}, onInfo = {}, onBack = { bizPage = false; bizNew = false }, isNew = true,
+                    onAdd = { n, info -> val id = store.addBusiness(n); store.saveBizInfo(info, id); bizNew = false; openBusiness(id); businessTick++ }
+                )
                 bizPage -> BusinessPage(
                     businessName, remember(businessName, businessTick) { store.bizInfo() },
                     onName = { n -> store.renameBusiness(store.business, n); businessName = n; businessTick++ },

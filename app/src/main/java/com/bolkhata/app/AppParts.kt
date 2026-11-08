@@ -196,7 +196,9 @@ private val MENU_THEMES = listOf("Clean", "Red", "Green", "Navy")
 internal fun SideMenu(
     currency: String, lang: String, dark: Boolean, photo: Boolean, themeName: String, version: String,
     businesses: List<Pair<String, String>>, current: String,
-    onBusiness: (String) -> Unit, onAddBusiness: (name: String, phone: String, address: String) -> Unit,
+    onBusiness: (String) -> Unit,
+    /** + Add business: opens the business page for a new one. */
+    onAddBusiness: () -> Unit,
     /** The open business's own page (details and card). */
     onBusinessPage: () -> Unit,
     onRenameBusiness: (id: String, name: String) -> Unit, onDeleteBusiness: (id: String) -> Unit,
@@ -204,7 +206,6 @@ internal fun SideMenu(
     page: Long, onPage: (Long) -> Unit, onDark: (Long) -> Unit, onPhoto: () -> Unit,
     onExport: () -> Unit, onImport: () -> Unit, onTrash: () -> Unit, onVersion: () -> Unit
 ) {
-    var addingBusiness by remember { mutableStateOf(false) }
     var bizMenu by remember { mutableStateOf<Pair<String, String>?>(null) }
     var bizRename by remember { mutableStateOf<Pair<String, String>?>(null) }
     var bizDelete by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -257,7 +258,7 @@ internal fun SideMenu(
                         if (id == current) Text("✓", fontSize = 13.sp, color = GreenIn)
                     }
                 }
-                MenuRow(onClick = { addingBusiness = true }, last = true) {
+                MenuRow(onClick = onAddBusiness, last = true) {
                     Text("+ Add business", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = EmberTop)
                 }
             }
@@ -307,7 +308,6 @@ internal fun SideMenu(
             }
         }
     }
-    if (addingBusiness) NewBusinessPopup(onDismiss = { addingBusiness = false }) { n, ph, ad -> addingBusiness = false; onAddBusiness(n, ph, ad) }
 }
 
 /** A white rounded card of side-menu rows. */
