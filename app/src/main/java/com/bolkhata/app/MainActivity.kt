@@ -2215,6 +2215,7 @@ fun App(
             val acct = account
             CompositionLocalProvider(
                 LocalBarSpace provides pad.calculateBottomPadding(),
+                LocalCurrency provides currency,
                 LocalMainOpener provides { a: MainAcct -> ledger = a },
                 LocalEntryMenu provides { e: Entry -> menuFor = e },
                 LocalSelection provides selection

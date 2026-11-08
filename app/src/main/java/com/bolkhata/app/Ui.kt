@@ -208,6 +208,9 @@ val DARK_PAGES = DARK_LOOKS.map { it.page }
 /** The dark look in use, or null in light mode. */
 val LocalLook = staticCompositionLocalOf<DarkLook?> { null }
 
+/** The currency picked in the side menu (PKR, SAR…), shown small after amounts. */
+val LocalCurrency = staticCompositionLocalOf { "" }
+
 @Composable
 /** [clear]: a background photo shows through, so the page colour is see-through. [page]: the light page colour. */
 fun BolTheme(dark: Boolean, clear: Boolean = false, page: Long = PAGE_COLORS[0], content: @Composable () -> Unit) {

@@ -38,8 +38,8 @@ object Sides {
     /** People with only loans (gave / took), who are neither staff, suppliers nor customers. */
     const val PEOPLE = "People"
     const val INCOME = "Income received"
-    /** Expense › Purchases and Income › Sales: filled from the people's khatas, nothing is added in them. */
-    const val PURCHASES = "Purchases"
+    /** Expense › Business costs and Income › Sales: filled from the people's khatas, nothing is added in them. */
+    const val PURCHASES = "Business costs"
     const val SALES = "Sales"
 
     /** Expense categories offered as ready-made accounts, in this order. */
@@ -117,10 +117,11 @@ object Sides {
         val newest = all.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt })
         val extra = setup.kids[book.name].orEmpty()
         if (isAuto(book)) {
+            // The Party accounts (Customers, a workers' account, Coal…), each holding its people's sales or work.
             val t = if (book.side == Side.EXP) Type.PURCHASE else Type.SALE
-            return newest.filter { it.type == t && it.amount > 0 }.groupBy { it.person.trim().lowercase() }.values
-                .map { l -> Kid(l.first().person.trim().ifBlank { if (t == Type.SALE) "Cash sale" else "Cash purchase" }, l) }
-                .sortedByDescending { it.entries.first().date }
+            return newest.filter { it.type == t && it.amount > 0 }
+                .groupBy { if (it.person.isBlank()) (if (t == Type.SALE) "Cash sales" else "Cash purchases") else bookOf(it.person, all, setup) }
+                .map { (g, l) -> Kid(g, l) }.sortedByDescending { it.total }
         }
         if (book.people) {
             val byPerson = personEntries(newest).groupBy { it.person.trim().lowercase() }
@@ -210,6 +211,19 @@ object Sides {
                 s.groupBy { it.person.trim().ifBlank { "Cash sale" } }.map { (p, l) -> p to l.sumOf { it.qty } }.sortedByDescending { it.second }, i)
         }.sortedByDescending { it.amount }
     }
+
+    /** Goods or work, by item: how many and for how much. */
+    class Qty(val name: String, val qty: Double, val amount: Double)
+
+    /** The goods or work in [list] by item, the biggest count first (a shop's bags, a kiln's bricks, a tailor's suits). */
+    fun qtyOf(list: List<Entry>): List<Qty> =
+        list.filter { it.qty > 0 && it.item.isNotBlank() }.groupBy { it.item.trim().lowercase() }.values
+            .map { l -> Qty(l.first().item.trim(), l.sumOf { it.qty }, l.sumOf { it.amount }) }.sortedByDescending { it.qty }
+
+    /** The average rate the way the trade counts it: "350 each", or "400 per 1000" when one costs less than 1. */
+    fun rateText(amount: Double, qty: Double): String =
+        if (qty <= 0) "" else if (amount / qty >= 1) fmt(Math.round(amount / qty * 100) / 100.0) + " each"
+        else fmt(Math.round(amount / qty * 1000).toDouble()) + " per 1000"
 
     /** What one of [item] cost to make or buy, from what came in; 0 when nothing came in with a cost. */
     fun unitCost(item: Item): Double {
