@@ -307,7 +307,7 @@ fun PartyPicker(
     val sub = MaterialTheme.colorScheme.onSurfaceVariant
     val shape = RoundedCornerShape(12.dp)
     Dialog(onDismissRequest = onDismiss, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(Modifier.fillMaxWidth(0.86f), shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surface) {
+        Surface(Modifier.fillMaxWidth(0.86f), shape = RoundedCornerShape(18.dp), color = LocalPage.current) {
             Column(Modifier.padding(16.dp)) {
                 Text(title, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (subtitle.isNotBlank()) Text(subtitle, fontSize = 11.sp, color = sub, maxLines = 1, overflow = TextOverflow.Ellipsis)

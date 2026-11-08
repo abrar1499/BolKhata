@@ -53,7 +53,8 @@ fun FormPopup(onDismiss: () -> Unit, content: @Composable () -> Unit) {
                 .fillMaxWidth(0.88f)
                 .heightIn(max = maxH),
             shape = RoundedCornerShape(22.dp),
-            color = MaterialTheme.colorScheme.surface,
+            // The theme's page colour with white fields on it.
+            color = LocalPage.current,
             shadowElevation = 12.dp
         ) { content() }
     }
@@ -263,7 +264,7 @@ fun EntryForm(
                 } else {
                     OutlinedButton(
                         onClick = { askDelete = true },
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = RedSpend),
+                        colors = ButtonDefaults.outlinedButtonColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = RedSpend),
                         shape = RoundedCornerShape(12.dp)
                     ) { Text("Delete") }
                 }

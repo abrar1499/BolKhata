@@ -1328,15 +1328,16 @@ fun SideScreen(
 @Composable
 private fun AppPopup(title: String, action: String, onDismiss: () -> Unit, onAction: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
-        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.surface).padding(16.dp)) {
+        // The theme's page colour with white fields on it, like the pages with their cards.
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(LocalPage.current).padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(title, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
-                Box(Modifier.size(28.dp).clip(CircleShape).background(Well).clickable { onDismiss() }, contentAlignment = Alignment.Center) { Text("✕", fontSize = 12.sp) }
+                Box(Modifier.size(28.dp).shadow(1.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.surface).clickable { onDismiss() }, contentAlignment = Alignment.Center) { Text("✕", fontSize = 12.sp) }
             }
             content()
             Row(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(12.dp)).border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp))
-                    .clickable { onDismiss() }, contentAlignment = Alignment.Center) { Text("Cancel", fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+                Box(Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surface)
+                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp)).clickable { onDismiss() }, contentAlignment = Alignment.Center) { Text("Cancel", fontSize = 14.sp, fontWeight = FontWeight.Bold) }
                 Box(Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(12.dp)).background(EmberTop).clickable { onAction() },
                     contentAlignment = Alignment.Center) { Text(action, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White) }
             }
@@ -1456,7 +1457,7 @@ private fun AddSheet(r: AddReq, all: List<Entry>, onDismiss: () -> Unit, onSave:
     val q = qty.toDoubleOrNull() ?: 0.0
     val rt = rate.toDoubleOrNull() ?: 0.0
     val total = if (goods) (if (per1000) q / 1000 * rt else q * rt) else amount.toDoubleOrNull() ?: 0.0
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface, dragHandle = null,
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = LocalPage.current, dragHandle = null,
         shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)) {
         Column(Modifier.padding(16.dp).navigationBarsPadding().imePadding()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1464,7 +1465,7 @@ private fun AddSheet(r: AddReq, all: List<Entry>, onDismiss: () -> Unit, onSave:
                     Text("+ ${r.label}", fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
                     Text(r.crumb, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Box(Modifier.size(28.dp).clip(CircleShape).background(Well).clickable { onDismiss() }, contentAlignment = Alignment.Center) { Text("✕", fontSize = 12.sp) }
+                Box(Modifier.size(28.dp).shadow(1.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.surface).clickable { onDismiss() }, contentAlignment = Alignment.Center) { Text("✕", fontSize = 12.sp) }
             }
             if (r.money != null) Row(Modifier.padding(top = 12.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Well).padding(3.dp)) {
                 listOf((if (r.label == "Given") "Goods" else "Work") to false, "Money" to true).forEach { (label, v) ->

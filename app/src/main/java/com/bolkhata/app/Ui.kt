@@ -208,6 +208,9 @@ val DARK_PAGES = DARK_LOOKS.map { it.page }
 /** The dark look in use, or null in light mode. */
 val LocalLook = staticCompositionLocalOf<DarkLook?> { null }
 
+/** The page colour of the theme, even under a photo: popups and sheets wear it, with white fields on it. */
+val LocalPage = staticCompositionLocalOf { Color(0xFFE9E6E1) }
+
 /** The currency picked in the side menu (PKR, SAR…), shown small after amounts. */
 val LocalCurrency = staticCompositionLocalOf { "" }
 
@@ -248,7 +251,7 @@ fun BolTheme(dark: Boolean, clear: Boolean = false, page: Long = PAGE_COLORS[0],
         outline = Color(0xFFE6E3DF),
         outlineVariant = Color(0xFFECE7E3)
     )
-    androidx.compose.runtime.CompositionLocalProvider(LocalLook provides look) {
+    androidx.compose.runtime.CompositionLocalProvider(LocalLook provides look, LocalPage provides bg) {
         MaterialTheme(colorScheme = if (clear) scheme.copy(background = Color.Transparent) else scheme, typography = AppTypography, content = content)
     }
 }

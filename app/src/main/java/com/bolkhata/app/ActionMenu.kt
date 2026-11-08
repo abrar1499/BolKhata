@@ -109,7 +109,7 @@ fun RenameDialog(title: String, old: String, info: String = "", onRename: (Strin
     val ok = name.isNotBlank() && !name.trim().equals(old.trim(), true)
     val shape = RoundedCornerShape(12.dp)
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(Modifier.fillMaxWidth(0.82f), shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surface) {
+        Surface(Modifier.fillMaxWidth(0.82f), shape = RoundedCornerShape(18.dp), color = LocalPage.current) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Column {
                     Text(title, fontSize = 15.sp, fontWeight = FontWeight.Bold)
