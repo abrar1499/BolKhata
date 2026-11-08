@@ -1278,8 +1278,8 @@ private fun AppPopup(title: String, action: String, onDismiss: () -> Unit, onAct
 private fun WellField(value: String, onChange: (String) -> Unit, hint: String, modifier: Modifier = Modifier, big: Boolean = false, number: Boolean = false) {
     val style = TextStyle(fontSize = if (big) 20.sp else 14.sp, fontWeight = if (big) FontWeight.ExtraBold else FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
     Box(
-        modifier.padding(top = 10.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Well)
-            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 11.dp)
+        // White with a soft edge, like the search box: every popup's fields look the same.
+        modifier.padding(top = 10.dp).fillMaxWidth().fieldEdge(RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 11.dp)
     ) {
         if (value.isEmpty()) Text(hint, style = style.copy(color = MaterialTheme.colorScheme.onSurfaceVariant))
         BasicTextField(
@@ -1459,8 +1459,7 @@ private fun AddSheet(r: AddReq, all: List<Entry>, onDismiss: () -> Unit, onSave:
 @Composable
 private fun PickBox(text: String, modifier: Modifier, onClick: () -> Unit) {
     Box(
-        modifier.padding(top = 10.dp).clip(RoundedCornerShape(12.dp)).background(Well)
-            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp)).clickable { onClick() }.padding(horizontal = 12.dp, vertical = 11.dp)
+        modifier.padding(top = 10.dp).fieldEdge(RoundedCornerShape(12.dp)).clickable { onClick() }.padding(horizontal = 12.dp, vertical = 11.dp)
     ) { Text(text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold) }
 }
 

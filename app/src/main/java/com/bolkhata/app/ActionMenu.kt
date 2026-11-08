@@ -121,7 +121,7 @@ fun RenameDialog(title: String, old: String, info: String = "", onRename: (Strin
                     cursorBrush = SolidColor(MaterialTheme.colorScheme.onSurface),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = { if (ok) onRename(name.trim()) }),
-                    modifier = Modifier.fillMaxWidth().height(42.dp).clip(shape).background(MaterialTheme.colorScheme.background)
+                    modifier = Modifier.fillMaxWidth().height(42.dp).fieldEdge(shape)
                         .padding(horizontal = 12.dp).wrapContentHeight(Alignment.CenterVertically)
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
