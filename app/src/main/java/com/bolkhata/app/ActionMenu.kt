@@ -9,6 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DriveFileRenameOutline
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MergeType
 import androidx.compose.material.icons.filled.SwapHoriz
@@ -84,14 +85,19 @@ fun ActionMenu(
 
 /** Long-press menu of one entry: Edit, Move, Delete. */
 @Composable
-fun EntryMenu(e: Entry, currency: String, onEdit: () -> Unit, onRename: () -> Unit, onMove: () -> Unit, onSelect: () -> Unit, onDelete: () -> Unit, onDismiss: () -> Unit) {
+fun EntryMenu(
+    e: Entry, currency: String, onEdit: () -> Unit, onRename: () -> Unit, onMove: () -> Unit, onSelect: () -> Unit, onDelete: () -> Unit, onDismiss: () -> Unit,
+    /** A bill for goods given to a customer (shown only for such entries). */
+    onBill: (() -> Unit)? = null
+) {
     val out = isOutflowType(e.type)
     ActionMenu(
         title = entryTitle(e),
         subtitle = listOf(shortDateYear(e.date), e.category.label).joinToString(" · "),
         amount = (if (out) "−" else "+") + money(currency, e.amount),
         amountColor = if (out) RedSpend else GreenIn,
-        actions = listOf(
+        actions = listOfNotNull(
+            onBill?.let { MenuAction("Bill", Icons.Filled.Description, onClick = it) },
             MenuAction("Edit", Icons.Filled.Edit, onClick = onEdit),
             MenuAction("Rename", Icons.Filled.DriveFileRenameOutline, onClick = onRename),
             MenuAction("Move", Icons.Filled.SwapHoriz, onClick = onMove),

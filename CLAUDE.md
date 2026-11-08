@@ -99,8 +99,16 @@ Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Packa
   see-through edge, faint shadow, radius 16 (chat 19).
 - App text is plain English only (account, not khata); no country-specific words (ID card, not Iqama). Chat answers in
   short English; people may still type in their own language.
-- Report › Sales / Other income / Purchases / Expenses: a share bar (5 biggest in colours, rest grey) and rows with %,
-  then the things inside (Expenses), then the entries. Long-press a business in the side menu: Rename / Delete.
+- Report › Sales / Other income / Business costs / Expenses: a share bar (5 biggest in colours, rest grey) and rows with %,
+  then the accounts' things or people, then the entries. Long-press a business in the side menu: Rename / Delete.
+- Expense › Business costs (💼, was Purchases) and Income › Sales: grouped by Party account; an account shows WORK DONE /
+  SOLD (count, cost, rate "per 1000" or "each") and PEOPLE; nothing kiln-specific, item names are the owner's.
+- Amounts carry the currency small after them (`MoneyText`, `LocalCurrency`); ledger heads "OUT · PKR"; counts never do.
+- "⤓ PDF" top right on every page (`BackHead` / `KhataTop` onPdf → `LocalPdf`, `Pdf.kt`): business on top, title and
+  period, boxes, tables. Long-press a customer's Given entry: Bill. Popups and sheets wear the page colour (`LocalPage`)
+  with white fields.
+- Side menu › tap the open business: its page (name, owner, phone, address for bills and PDFs) and a business card in six
+  styles (`CardArt`: Classic, Minimal, Luxe, Split, Bold, Monogram) to save or share.
 - White business pill (`BusinessPill`: glossy logo + name, no arrow); tapping it opens the side menu, which is also
   Settings: businesses (+ Add business), Name, Currency, Language, Header dots, Background dots + photo, Backup, Trash,
   Version. No separate Settings page.

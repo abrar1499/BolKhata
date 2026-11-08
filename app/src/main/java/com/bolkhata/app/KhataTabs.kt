@@ -155,7 +155,7 @@ internal fun GlassHeader(modifier: Modifier) {
 @Composable
 private fun KhataTop(
     title: String, subtitle: String, onMenu: () -> Unit, back: Boolean = false,
-    business: String? = null, card: @Composable () -> Unit
+    business: String? = null, onPdf: (() -> Unit)? = null, card: @Composable () -> Unit
 ) {
     val theme = LocalHeader.current
     val banded = theme.name != "Clean"
@@ -165,7 +165,10 @@ private fun KhataTop(
     Box(Modifier.fillMaxWidth()
         .then(if (banded) Modifier.drawBehind { drawBand(theme, size.height - cardH / 2f) } else Modifier)) {
         Column(Modifier.statusBarsPadding().padding(horizontal = 12.dp)) {
-            if (business != null) BusinessPill(business, onMenu) else
+            if (business != null) Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f)) { BusinessPill(business, onMenu) }
+                onPdf?.let { PdfButton(it) }
+            } else
             Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onMenu) {
                     Icon(if (back) Icons.AutoMirrored.Filled.ArrowBack else Icons.Filled.Menu, contentDescription = if (back) "Back" else "Menu", tint = ink)
@@ -669,13 +672,20 @@ fun CashBookScreen(
     // A search looks through every month; otherwise only the picked month is listed.
     val list = remember(newest, month, q) { if (q.isBlank()) newest.filter { inMonth(it.date, month) } else newest.filter { matches(it, q) } }
     val state = rememberLazyListState()
+    val pdf = LocalPdf.current
+    val cur = LocalCurrency.current.let { if (it.isBlank()) "" else " $it" }
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
             stickyHeader { TabHead {
-                KhataTop("", "", onMenu, business = business) {
+                KhataTop("", "", onMenu, business = business, onPdf = {
+                    pdf(PdfDoc("Cashbook", if (q.isNotBlank()) "Search: $q" else monthLabel(months, month) ?: "All",
+                        listOf(fmt(hand) + cur to "Cash in hand", fmt(spentMonth) + cur to "Spent this month"),
+                        listOf(ledgerTable("", listOf("Out", "In"), list.map { e -> e to listOf(if (cashOut(e)) e.amount else 0.0, if (cashIn(e)) e.amount else 0.0) },
+                            { e -> title(e) + e.person.trim().ifBlank { e.category.label }.let { k -> if (k == title(e)) "" else " · $k" } }))))
+                }) {
                     SumCard(
-                        Triple(money(currency, hand), "Cash in hand", if (hand < 0) RedSpend else GreenIn),
-                        Triple(money(currency, spentMonth), "Spent this month", RedSpend),
+                        Triple(fmt(hand), "Cash in hand", if (hand < 0) RedSpend else GreenIn),
+                        Triple(fmt(spentMonth), "Spent this month", RedSpend),
                         "Report ›", onReport
                     )
                 }
@@ -727,7 +737,7 @@ fun TransactionsScreen(entries: List<Entry>, currency: String, onEdit: (Entry) -
         LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
             stickyHeader { TabHead {
                 KhataTop("All entries", if (entries.size == 1) "1 entry" else "${entries.size} entries", onMenu) {
-                    SumCard(Triple(money(currency, outT), "Out", RedSpend), Triple(money(currency, inT), "In", GreenIn), "Add", onAdd)
+                    SumCard(Triple(fmt(outT), "Out", RedSpend), Triple(fmt(inT), "In", GreenIn), "Add", onAdd)
                 }
                 Row(Modifier.horizontalScroll(rememberScrollState()).padding(start = 14.dp, end = 14.dp, top = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     kinds.forEachIndexed { i, t -> SmallChip(t, filter == i) { filter = i } }
@@ -763,7 +773,7 @@ fun TrashScreen(
             KhataTop("Trash", "Deleted entries stay here for 30 days", onMenu) {
                 SumCard(
                     Triple("${trash.size}", if (trash.size == 1) "Entry" else "Entries", MaterialTheme.colorScheme.onSurface),
-                    Triple(money(currency, trash.sumOf { it.amount }), "Total", RedSpend),
+                    Triple(fmt(trash.sumOf { it.amount }), "Total", RedSpend),
                     "Restore all", onRestoreAll
                 )
             }
@@ -874,9 +884,32 @@ private fun DashedAdd(label: String, onClick: () -> Unit) {
     )
 }
 
-/** An inner page's top: a round white back button, the path above the title, then the summary card. */
+private val pdfDay = SimpleDateFormat("d MMM yyyy", Locale.US)
+
+/** A ledger as a PDF table, oldest first: date, what it was, the amount columns, and with [running] the balance after each line. */
+private fun ledgerTable(heading: String, cols: List<String>, rows: List<Pair<Entry, List<Double>>>, title: (Entry) -> String, running: Boolean = false): PdfTable {
+    var bal = 0.0
+    val body = rows.sortedBy { it.first.date }.map { (e, v) ->
+        bal += v.getOrElse(0) { 0.0 } - v.getOrElse(1) { 0.0 }
+        listOf(pdfDay.format(Date(e.date)), title(e)) + v.map { if (it == 0.0) "" else fmt(it) } + (if (running) listOf(fmt(kotlin.math.abs(bal))) else emptyList())
+    }
+    val foot = listOf("Total", "") + cols.indices.map { i -> fmt(rows.sumOf { it.second.getOrElse(i) { 0.0 } }) } + (if (running) listOf("") else emptyList())
+    return PdfTable(heading, listOf("Date", "Detail") + cols + (if (running) listOf("Balance") else emptyList()), body, foot, left = 2)
+}
+
+/** "⤓ PDF": a small white pill at the top right of a page; it makes a PDF of what the page shows. */
 @Composable
-private fun BackHead(title: String, crumb: String, onBack: () -> Unit, card: @Composable () -> Unit) {
+private fun PdfButton(onClick: () -> Unit) {
+    Row(
+        Modifier.shadow(1.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape).clickable { onClick() }.padding(horizontal = 11.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) { Text("⤓ PDF", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface) }
+}
+
+/** An inner page's top: a round white back button, the path above the title, "⤓ PDF" on the right, then the summary card. */
+@Composable
+private fun BackHead(title: String, crumb: String, onBack: () -> Unit, onPdf: (() -> Unit)? = null, card: @Composable () -> Unit) {
     Column(Modifier.statusBarsPadding().padding(start = 12.dp, end = 12.dp, top = 12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
@@ -884,10 +917,11 @@ private fun BackHead(title: String, crumb: String, onBack: () -> Unit, card: @Co
                 contentAlignment = Alignment.Center
             ) { Text("‹", fontSize = 20.sp, fontWeight = FontWeight.Bold) }
             Spacer(Modifier.width(10.dp))
-            Column {
-                Text(crumb, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Column(Modifier.weight(1f)) {
+                Text(crumb, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(title, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
+            onPdf?.let { PdfButton(it) }
         }
         Spacer(Modifier.height(10.dp))
         card()
@@ -1029,6 +1063,9 @@ fun SideScreen(
     val ink = if (income) GreenIn else RedSpend
     val crumb = when (side) { Side.PARTY -> "Party"; Side.INC -> "Income"; Side.EXP -> "Expense" }
     val state = rememberLazyListState()
+    val pdf = LocalPdf.current
+    val cur = LocalCurrency.current
+    fun m(v: Double) = fmt(v) + if (cur.isBlank()) "" else " $cur"
     /** The word under an account's figure. */
     fun word(b: Book, inside: Boolean) = if (Sides.isAuto(b)) (if (income) "sold" else "cost") else if (income) (if (inside) "income" else "received") else "spent"
     Box(Modifier.fillMaxSize()) {
@@ -1042,11 +1079,20 @@ fun SideScreen(
                     val people = inside.groupBy { it.person.trim().ifBlank { group.name } }.map { (p, l) -> Kid(p, l) }.sortedByDescending { it.total }
                     val pk = people.firstOrNull { it.name == personName }
                     if (pk == null) {
+                        val qs = Sides.qtyOf(inside)
+                        fun qtyLine(k: Kid) = Sides.qtyOf(k.entries).joinToString(" · ") { it.name + " " + fmt(it.qty) }
+                        val toPdf = {
+                            pdf(PdfDoc(group.name, "${book.name} · ${per.label()}", listOf(m(inside.sumOf { it.amount }) to w.replaceFirstChar { it.uppercase() }), listOfNotNull(
+                                PdfTable(if (income) "Sold" else "Work done", listOf("Item", "Qty", "Amount", "Rate"),
+                                    qs.map { listOf(it.name, fmt(it.qty), m(it.amount), Sides.rateText(it.amount, it.qty)) }).takeIf { qs.isNotEmpty() },
+                                PdfTable("People", listOf("Name", if (income) "Goods" else "Work", "Amount"), people.map { listOf(it.name, qtyLine(it), m(it.total)) },
+                                    listOf("Total", "", m(inside.sumOf { it.amount })), left = 2)
+                            )))
+                        }
                         stickyHeader { TabHead {
-                            BackHead(group.name, "$crumb › ${book.name} ›", { kidName = null }) { SumCard(Triple(fmt(inside.sumOf { it.amount }), w, ink), null, "", {}) }
+                            BackHead(group.name, "$crumb › ${book.name} ›", { kidName = null }, toPdf) { SumCard(Triple(fmt(inside.sumOf { it.amount }), w, ink), null, "", {}) }
                             PeriodChips(newest, per) { period = it.encode() }
                         } }
-                        val qs = Sides.qtyOf(inside)
                         if (qs.isNotEmpty()) {
                             item(key = "wl") { SectionLabel(if (income) "SOLD" else "WORK DONE") }
                             qs.forEachIndexed { i, x ->
@@ -1060,20 +1106,23 @@ fun SideScreen(
                         if (people.isEmpty()) emptyNote("Nothing in this period.")
                         people.forEachIndexed { i, x ->
                             item(key = "p" + x.name.lowercase()) {
-                                ItRow("👤", x.name, Sides.qtyOf(x.entries).joinToString(" · ") { it.name + " " + fmt(it.qty) }.ifBlank { entryCount(x.entries.size) },
+                                ItRow("👤", x.name, qtyLine(x).ifBlank { entryCount(x.entries.size) },
                                     fmt(x.total), w, ink, i, people.size) { personName = x.name }
                             }
                         }
                     } else {
                         val qs = Sides.qtyOf(pk.entries)
+                        val label = if (income) "Sales" else "Work"
                         item(key = "ph") {
-                            BackHead(pk.name, "$crumb › ${book.name} › ${group.name} ›", { personName = null }) {
+                            BackHead(pk.name, "$crumb › ${book.name} › ${group.name} ›", { personName = null }, {
+                                pdf(PdfDoc(pk.name, "${group.name} · ${per.label()}", listOf(m(pk.total) to label) + qs.take(2).map { fmt(it.qty) to it.name },
+                                    listOf(ledgerTable("", listOf(label), pk.entries.map { it to listOf(it.amount) }, ::personLine))))
+                            }) {
                                 val plain = MaterialTheme.colorScheme.onSurface
                                 SumCard(Triple(fmt(pk.total), w, ink), qs.getOrNull(0)?.let { Triple(fmt(it.qty), it.name, plain) }, "", {},
                                     qs.getOrNull(1)?.let { Triple(fmt(it.qty), it.name, plain) }, plain = setOf(1, 2))
                             }
                         }
-                        val label = if (income) "Sales" else "Work"
                         val rows = pk.entries.map { e -> e to (if (income) listOf(0.0, e.amount) else listOf(e.amount, 0.0)) }
                         simpleLedger(if (income) listOf("" to ink, label to ink) else listOf(label to ink, "" to ink),
                             listOf(if (income) 0.0 else pk.total, if (income) pk.total else 0.0), rows, ::personLine, onEdit)
@@ -1082,7 +1131,19 @@ fun SideScreen(
                 book != null && kidName != null -> {
                     val kid = Sides.kids(book, entries, setup).firstOrNull { it.name.equals(kidName, true) } ?: Kid(kidName!!, emptyList())
                     item(key = "kh") {
-                        BackHead(kid.name, "$crumb › ${book.name} ›", { kidName = null }) {
+                        BackHead(kid.name, "$crumb › ${book.name} ›", { kidName = null }, {
+                            if (book.people) {
+                                // A statement: how many of each thing, the money each way, every line with the balance after it.
+                                val (plus, minus) = Sides.columns(book)
+                                val rows = kid.entries.map { e -> e to (if (personEffect(e) > 0) listOf(e.amount, 0.0) else listOf(0.0, e.amount)) }
+                                val (amt, what) = Sides.balanceText(book, kid.balance)
+                                pdf(PdfDoc("Statement", "${kid.name} · ${book.name}",
+                                    Sides.qtyOf(kid.entries).take(2).map { fmt(it.qty) to it.name } + listOf(m(rows.sumOf { it.second[0] }) to plus, m(rows.sumOf { it.second[1] }) to minus),
+                                    listOf(ledgerTable("", listOf(plus, minus), rows, ::personLine, running = true)),
+                                    note = "$what: $amt" + if (cur.isBlank()) "" else " $cur"))
+                            } else pdf(PdfDoc(kid.name, book.name, listOf(m(kid.total) to word(book, true)),
+                                listOf(ledgerTable("", listOf(if (income) "In" else "Out"), kid.entries.map { it to listOf(it.amount) }, { e -> e.note.ifBlank { e.item } }))))
+                        }) {
                             if (book.people) {
                                 val (amt, what) = Sides.balanceText(book, kid.balance)
                                 SumCard(Triple(amt, what.lowercase(), balanceColor(what)), null, "", {})
@@ -1106,7 +1167,12 @@ fun SideScreen(
                     val kids = Sides.kids(book, entries, setup)
                     val inc = book.side == Side.INC
                     stickyHeader { TabHead {
-                        BackHead(book.name, "$crumb ›", { bookName = null }) {
+                        BackHead(book.name, "$crumb ›", { bookName = null }, {
+                            pdf(PdfDoc(book.name, crumb, tables = listOf(
+                                if (book.people) PdfTable("", listOf("Name", "Balance"), kids.map { k -> Sides.balanceText(book, k.balance).let { (a, w) -> listOf(k.name, "$a ${cur.ifBlank { "" }} ${w.lowercase()}".replace("  ", " ")) } })
+                                else PdfTable("", listOf("Name", "Amount"), kids.map { listOf(it.name, m(it.total)) }, listOf("Total", m(kids.sumOf { it.total })))
+                            )))
+                        }) {
                             if (book.people) {
                                 val pos = kids.filter { it.balance > 0.5 }.sumOf { it.balance }
                                 val neg = kids.filter { it.balance < -0.5 }.sumOf { -it.balance }
@@ -1137,7 +1203,26 @@ fun SideScreen(
                 }
                 else -> {
                     stickyHeader { TabHead {
-                        KhataTop("", "", onMenu, business = business) {
+                        KhataTop("", "", onMenu, business = business, onPdf = {
+                            // The whole tab: Party, every account with its people; Expense / Income, every account with its share, then what is inside each.
+                            if (party) pdf(PdfDoc("Party", "Everyone you deal with", tables = books.map { b ->
+                                PdfTable(b.name, listOf("Name", "Balance"), Sides.kids(b, entries, setup).map { k ->
+                                    Sides.balanceText(b, k.balance).let { (a, w) -> listOf(k.name, a + (if (cur.isBlank()) "" else " $cur") + " " + w.lowercase()) }
+                                })
+                            }))
+                            else {
+                                val all = books.map { it to Sides.done(it, entries, setup, inPer) }.filter { it.second > 0 }
+                                val tt = all.sumOf { it.second }
+                                pdf(PdfDoc(if (income) "Income" else "Expenses", per.label(), listOf(m(tt) to if (income) "Income" else "Spent"),
+                                    listOf(PdfTable("By account", listOf("Account", "Amount", "Share"),
+                                        all.map { (b, v) -> listOf(b.name, m(v), "${(v / tt * 100).roundToInt()}%") }, listOf("Total", m(tt), "100%"))) +
+                                        all.map { (b, v) ->
+                                            PdfTable("${b.name} · ${m(v)}", listOf("", "Amount"), Sides.kids(b, entries, setup)
+                                                .map { k -> k.name to k.entries.filter { inPer(it.date) && Sides.counts(b, it) }.sumOf { it.amount } }
+                                                .filter { it.second > 0 }.map { (n, a) -> listOf(n, m(a)) })
+                                        }))
+                            }
+                        }) {
                             if (party) {
                                 val (get, give) = Sides.owed(entries, setup, inPer)
                                 SumCard(Triple(fmt(get), "To get", GreenIn), Triple(fmt(give), "To give", RedSpend), "Report ›", onReport)
@@ -1158,9 +1243,9 @@ fun SideScreen(
                                 // The period's net on the row; what is owed all time in the small line, as the account shows inside.
                                 val net = kids.sumOf { k -> k.entries.filter { inPer(it.date) }.sumOf { personEffect(it) } }
                                 val p = kids.filter { it.balance > 0.5 }.sumOf { it.balance }
-                                val m = kids.filter { it.balance < -0.5 }.sumOf { -it.balance }
+                                val give = kids.filter { it.balance < -0.5 }.sumOf { -it.balance }
                                 val sub = (if (kids.size == 1) "1 person" else "${kids.size} people") +
-                                    (if (p > 0.5) " · " + fmt(p) + " to get" else "") + (if (m > 0.5) " · " + fmt(m) + " to give" else "")
+                                    (if (p > 0.5) " · " + fmt(p) + " to get" else "") + (if (give > 0.5) " · " + fmt(give) + " to give" else "")
                                 ItRow("👤", b.name, sub, fmt(kotlin.math.abs(net)), (if (net >= 0) "to get" else "to give") + " · net",
                                     if (net >= 0) GreenIn else RedSpend, i, shown.size, onLong = { menu = b to null }) { bookName = b.name; q = "" }
                             } else {
@@ -1631,6 +1716,9 @@ fun ProfitScreen(entries: List<Entry>, currency: String, setup: SideSetup, onBac
     val get = people.filter { it.second.balance > 0.5 }
     val pay = people.filter { it.second.balance < -0.5 }
     val plain = MaterialTheme.colorScheme.onSurface
+    val pdf = LocalPdf.current
+    val cur = LocalCurrency.current
+    fun m(v: Double) = fmt(v) + if (cur.isBlank()) "" else " $cur"
     BackHandler { if (open3 != null) open3 = null else if (open2 != null) open2 = null else if (open != null) open = null else onBack() }
     LaunchedEffect(open) { open2 = null; open3 = null }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
@@ -1639,7 +1727,10 @@ fun ProfitScreen(entries: List<Entry>, currency: String, setup: SideSetup, onBac
             o == "To get" || o == "To pay" -> {
                 val list = if (o == "To get") get else pay
                 val color = if (o == "To get") GreenIn else RedSpend
-                item(key = "oh") { BackHead(o, "Cashbook › Report ›", { open = null }) { SumCard(Triple(fmt(list.sumOf { kotlin.math.abs(it.second.balance) }), o, color), null, "", {}) } }
+                item(key = "oh") { BackHead(o, "Cashbook › Report ›", { open = null }, {
+                    pdf(PdfDoc(o, "Everyone, today", tables = listOf(PdfTable("", listOf("Name", "Account", "Amount"),
+                        list.map { (b, k) -> listOf(k.name, b.name, m(kotlin.math.abs(k.balance))) }, listOf("Total", "", m(list.sumOf { kotlin.math.abs(it.second.balance) })), left = 2))))
+                }) { SumCard(Triple(fmt(list.sumOf { kotlin.math.abs(it.second.balance) }), o, color), null, "", {}) } }
                 if (list.isEmpty()) emptyNote("Nobody here.")
                 list.forEachIndexed { i, (b, k) ->
                     item(key = "op" + b.name + k.name) {
@@ -1649,7 +1740,10 @@ fun ProfitScreen(entries: List<Entry>, currency: String, setup: SideSetup, onBac
             }
             o == "Stock" -> {
                 val list = Sides.items(entries, setup).filter { it.inStock > 0.5 }
-                item(key = "sh") { BackHead(o, "Cashbook › Report ›", { open = null }) { SumCard(Triple(fmt(worth.stock), "Stock, at cost", GreenIn), null, "", {}) } }
+                item(key = "sh") { BackHead(o, "Cashbook › Report ›", { open = null }, {
+                    pdf(PdfDoc("Stock", "Today, at cost", tables = listOf(PdfTable("", listOf("Item", "In stock", "Cost"),
+                        list.map { listOf(it.name, fmt(it.inStock), m(it.inStock * Sides.unitCost(it))) }, listOf("Total", "", m(worth.stock))))))
+                }) { SumCard(Triple(fmt(worth.stock), "Stock, at cost", GreenIn), null, "", {}) } }
                 if (list.isEmpty()) emptyNote("Nothing in stock.")
                 list.forEachIndexed { i, x ->
                     item(key = "st" + x.name) { ItRow(iconFor(x.name), x.name, fmt(x.inStock) + " in stock", fmt(x.inStock * Sides.unitCost(x)), "at cost", plain, i, list.size, onClick = null) }
@@ -1659,7 +1753,11 @@ fun ProfitScreen(entries: List<Entry>, currency: String, setup: SideSetup, onBac
                 val cash = o == "Cash in hand"
                 val list = if (cash) newest.filter { cashIn(it) || cashOut(it) } else newest.filter { it.type == Type.KHARCHA && it.category == Cat.ASSETS }
                 val total = if (cash) worth.cash else worth.assets
-                item(key = "ch") { BackHead(o, "Cashbook › Report ›", { open = null }) { SumCard(Triple(plusMinus(total).trimStart('+'), o, if (total < 0) RedSpend else GreenIn), null, "", {}) } }
+                item(key = "ch") { BackHead(o, "Cashbook › Report ›", { open = null }, {
+                    pdf(PdfDoc(o, "Today", listOf(m(total) to o), listOf(ledgerTable("", if (cash) listOf("Out", "In") else listOf("Cost"),
+                        list.map { e -> e to (if (!cash) listOf(e.amount) else if (cashIn(e)) listOf(0.0, e.amount) else listOf(e.amount, 0.0)) },
+                        { e -> (if (e.person.isNotBlank()) e.person + " · " else "") + e.item.ifBlank { e.category.label } }))))
+                }) { SumCard(Triple(plusMinus(total).trimStart('+'), o, if (total < 0) RedSpend else GreenIn), null, "", {}) } }
                 simpleLedger(
                     if (cash) listOf("Out" to RedSpend, "In" to GreenIn) else listOf("Cost" to RedSpend, "" to RedSpend),
                     if (cash) listOf(list.filter(::cashOut).sumOf { it.amount }, list.filter(::cashIn).sumOf { it.amount }) else listOf(total, 0.0),
@@ -1691,7 +1789,10 @@ fun ProfitScreen(entries: List<Entry>, currency: String, setup: SideSetup, onBac
                     val total = groups.sumOf { it.second }
                     val trade = type == Type.SALE || type == Type.PURCHASE
                     stickyHeader { TabHead {
-                        BackHead(g1 ?: o, "Cashbook › Report ›" + (if (g1 != null) " $o ›" else ""), { if (g1 != null) open2 = null else open = null }) {
+                        BackHead(g1 ?: o, "Cashbook › Report ›" + (if (g1 != null) " $o ›" else ""), { if (g1 != null) open2 = null else open = null }, {
+                            pdf(PdfDoc(g1 ?: o, (if (g1 != null) "$o · " else "") + per.label(), listOf(m(total) to (g1 ?: o)), listOf(PdfTable("", listOf("", "Amount", "Share"),
+                                groups.map { (n, v) -> listOf(n, m(v), if (total > 0) "${(v / total * 100).roundToInt()}%" else "") }, listOf("Total", m(total), "100%")))))
+                        }) {
                             SumCard(Triple(fmt(total), g1 ?: o, color), null, "", {})
                         }
                         PeriodChips(newest, per) { period = it.encode() }
@@ -1710,7 +1811,10 @@ fun ProfitScreen(entries: List<Entry>, currency: String, setup: SideSetup, onBac
                 val t = open3 ?: g1 ?: o
                 val total = list.sumOf { it.amount }
                 item(key = "dh") {
-                    BackHead(t, "Cashbook › Report › $o ›" + (if (open3 != null) " $g1 ›" else ""), { if (open3 != null) open3 = null else open2 = null }) {
+                    BackHead(t, "Cashbook › Report › $o ›" + (if (open3 != null) " $g1 ›" else ""), { if (open3 != null) open3 = null else open2 = null }, {
+                        pdf(PdfDoc(t, per.label(), listOf(m(total) to t), listOf(ledgerTable("", listOf(o), list.map { it to listOf(it.amount) },
+                            { e -> (if (e.person.isNotBlank()) e.person + " · " else "") + if (e.qty > 0) personLine(e) else e.item.ifBlank { e.category.label } }))))
+                    }) {
                         SumCard(Triple(fmt(total), t, color), null, "", {})
                     }
                 }
@@ -1725,7 +1829,18 @@ fun ProfitScreen(entries: List<Entry>, currency: String, setup: SideSetup, onBac
             }
             else -> {
                 stickyHeader { TabHead {
-                    BackHead("Report · Profit", "Cashbook ›", onBack) {
+                    BackHead("Report · Profit", "Cashbook ›", onBack, {
+                        val ex = picked.filter { it.type == Type.KHARCHA && it.category != Cat.ASSETS }.groupBy { it.category.label }
+                            .map { (n, l) -> n to l.sumOf { it.amount } }.sortedByDescending { it.second }
+                        pdf(PdfDoc("Profit report", per.label(), listOf(m(p.profit) to if (p.profit < 0) "Loss" else "Profit", m(worth.net) to "Net worth"), listOf(
+                            PdfTable("Profit", listOf("", "Amount"), listOf(listOf("Sales", m(p.sale)), listOf("Other income", m(p.income)),
+                                listOf(Sides.PURCHASES, "− " + m(p.work)), listOf("Expenses", "− " + m(p.spent))), listOf(if (p.profit < 0) "Loss" else "Profit", m(p.profit))),
+                            PdfTable("Net worth · what you own", listOf("", "Amount"), listOf(listOf("Cash in hand", m(worth.cash)), listOf("To get", m(worth.toGet)),
+                                listOf("Stock", m(worth.stock)), listOf("Assets", m(worth.assets)), listOf("To pay", "− " + m(worth.toPay))), listOf("Net worth", m(worth.net))),
+                            PdfTable("Expenses by account", listOf("Account", "Amount", "Share"),
+                                ex.map { (n, v) -> listOf(n, m(v), if (p.spent > 0) "${(v / p.spent * 100).roundToInt()}%" else "") })
+                        )))
+                    }) {
                         SumCard(Triple(fmt(kotlin.math.abs(p.profit)), if (p.profit < 0) "Loss" else "Profit", if (p.profit < 0) RedSpend else GreenIn),
                             Triple(fmt(p.sale + p.income), "Earned", GreenIn), "", {})
                     }

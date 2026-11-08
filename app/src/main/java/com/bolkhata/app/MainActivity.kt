@@ -12,6 +12,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.FileProvider
+import androidx.core.graphics.drawable.toBitmap
 import java.io.File
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -1888,6 +1889,32 @@ fun App(
      * fluent but still be the wrong words. Urdu script is returned as said (shown that way in the chat; the chat
      * engine reads it itself); Hindi letters are returned in Roman Urdu.
      */
+    /** Makes [doc] into a PDF with this business on top and opens the share sheet. */
+    fun sharePdf(doc: PdfDoc) {
+        runCatching {
+            val logo = runCatching { context.packageManager.getApplicationIcon(context.packageName).toBitmap(120, 120) }.getOrNull()
+            shareFile(context, (doc.title + " " + doc.sub).replace("·", "-").take(60).trim() + ".pdf", "application/pdf") { f ->
+                Pdf.write(f, doc, businessName, store.bizInfo(), logo)
+            }
+        }.onFailure { toast("Couldn't make the PDF") }
+    }
+
+    /** A bill for goods given to a customer: number, date, the goods, this bill and what they owe in all. */
+    fun billDoc(e: Entry): PdfDoc {
+        fun m(v: Double) = fmt(v) + " " + currency
+        val no = entries.filter { it.type == Type.SALE }.sortedBy { it.date }.indexOfFirst { it.id == e.id } + 1
+        val owed = balances(entries).entries.firstOrNull { it.key.equals(e.person.trim(), true) }?.value ?: 0.0
+        val day = java.text.SimpleDateFormat("d MMM yyyy", java.util.Locale.US).format(java.util.Date(e.date))
+        val rate = if (e.rate > 0) fmt(e.rate) + (if (e.unit == "1000") " / 1000" else "") else ""
+        return PdfDoc(
+            "Bill", "No. " + String.format(java.util.Locale.US, "%04d", no) + " · " + day, billTo = e.person.trim(),
+            tables = listOf(PdfTable("", listOf("Item", "Qty", "Rate", "Amount"),
+                listOf(listOf(e.item.ifBlank { "Goods" }, if (e.qty > 0) fmt(e.qty) else "", rate, m(e.amount))), listOf("Total", "", "", m(e.amount)))),
+            totals = listOf("This bill" to m(e.amount), "Balance due" to m(maxOf(0.0, owed))),
+            note = "Thank you for your business."
+        )
+    }
+
     /** The person's people and goods, for the voice to expect and to spell the way they are saved. */
     fun voiceKnown(): List<String> =
         (personAccounts(entries).map { it.name } + sides.people.keys + Goods.known(entries)).map { it.trim() }.filter { it.isNotEmpty() }.distinctBy { it.lowercase() }
@@ -2220,6 +2247,7 @@ fun App(
             CompositionLocalProvider(
                 LocalBarSpace provides pad.calculateBottomPadding(),
                 LocalCurrency provides currency,
+                LocalPdf provides { doc: PdfDoc -> sharePdf(doc) },
                 LocalMainOpener provides { a: MainAcct -> ledger = a },
                 LocalEntryMenu provides { e: Entry -> menuFor = e },
                 LocalSelection provides selection
@@ -2611,7 +2639,8 @@ fun App(
                     onMove = { menuFor = null; moving = e },
                     onSelect = { menuFor = null; selection.ids.clear(); selection.ids.add(e.id); selection.active = true },
                     onDelete = { menuFor = null; confirm = "Move \"${entryTitle(e)}\" (${money(currency, e.amount)}) to Trash?" to setOf(e.id) },
-                    onDismiss = { menuFor = null }
+                    onDismiss = { menuFor = null },
+                    onBill = if (e.type == Type.SALE && e.person.isNotBlank()) ({ menuFor = null; sharePdf(billDoc(e)) }) else null
                 )
             }
             moving?.let { e ->
