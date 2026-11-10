@@ -65,7 +65,7 @@ object Drive {
     suspend fun link(store: Store, token: String): Boolean = withContext(Dispatchers.IO) {
         store.driveEmail = email(token).ifBlank { "Google account" }
         val remote = download(token)?.takeIf { store.backupEntries(it) >= 0 }
-        if (remote != null) quietly { store.importJson(merge(store.exportJson(sync = true), remote), sync = true) }
+        if (remote != null) quietly { store.importJson(DriveData.merge(store.exportJson(sync = true), remote), sync = true) }
         save(store, token)
         remote != null
     }
@@ -78,7 +78,7 @@ object Drive {
         val o = remote?.let { runCatching { JSONObject(it) }.getOrNull() }
         val newer = o != null && o.optString("device") != store.deviceId && o.optLong("at") > store.driveAt
         if (newer) {
-            quietly { store.importJson(if (store.driveDirty) merge(store.exportJson(sync = true), remote!!) else remote!!, sync = true) }
+            quietly { store.importJson(if (store.driveDirty) DriveData.merge(store.exportJson(sync = true), remote!!) else remote!!, sync = true) }
             store.driveAt = o!!.optLong("at")
         }
         if (store.driveDirty) runCatching { save(store, token) }
@@ -128,6 +128,46 @@ object Drive {
         try { block() } finally { muted = false }
     }
 
+    // ---------- Google Drive calls (on a background thread) ----------
+
+    private fun call(token: String, b: Request.Builder): ByteArray =
+        http.newCall(b.header("Authorization", "Bearer $token").build()).execute().use { r ->
+            if (!r.isSuccessful) throw IOException("Google Drive ${r.code}")
+            r.body?.bytes() ?: ByteArray(0)
+        }
+
+    private fun email(token: String): String =
+        runCatching { JSONObject(String(call(token, Request.Builder().url("https://www.googleapis.com/oauth2/v3/userinfo")))).optString("email") }.getOrDefault("")
+
+    private fun fileId(token: String): String? {
+        val url = "https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&fields=files(id)&q=name%3D%27$FILE%27"
+        return JSONObject(String(call(token, Request.Builder().url(url)))).optJSONArray("files")?.optJSONObject(0)?.optString("id")?.ifBlank { null }
+    }
+
+    /** The saved backup text, or null when Drive has none yet. */
+    private fun download(token: String): String? {
+        val id = fileId(token) ?: return null
+        val bytes = call(token, Request.Builder().url("https://www.googleapis.com/drive/v3/files/$id?alt=media"))
+        return GZIPInputStream(bytes.inputStream()).use { it.readBytes().toString(Charsets.UTF_8) }
+    }
+
+    private fun upload(token: String, text: String) {
+        val zipped = ByteArrayOutputStream().also { o -> GZIPOutputStream(o).use { it.write(text.toByteArray()) } }.toByteArray()
+        val body = zipped.toRequestBody("application/gzip".toMediaType())
+        val id = fileId(token)
+        if (id != null) call(token, Request.Builder().url("https://www.googleapis.com/upload/drive/v3/files/$id?uploadType=media").patch(body))
+        else {
+            val meta = JSONObject().put("name", FILE).put("parents", JSONArray().put("appDataFolder")).toString()
+            val parts = MultipartBody.Builder().setType("multipart/related".toMediaType())
+                .addPart(meta.toRequestBody("application/json; charset=UTF-8".toMediaType()))
+                .addPart(body).build()
+            call(token, Request.Builder().url("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart").post(parts))
+        }
+    }
+}
+
+/** Joining backups, kept apart from the Google sign-in code so it runs anywhere. */
+object DriveData {
     /**
      * Joins two backups into one: lists of entries (entries, trash, of every business) by id, this phone's copy winning
      * when both have it; maps (businesses, trash times) key by key; any other setting this phone's first. Nothing is dropped.
@@ -165,42 +205,5 @@ object Drive {
             return oa.toString()
         }
         return a
-    }
-
-    // ---------- Google Drive calls (on a background thread) ----------
-
-    private fun call(token: String, b: Request.Builder): ByteArray =
-        http.newCall(b.header("Authorization", "Bearer $token").build()).execute().use { r ->
-            if (!r.isSuccessful) throw IOException("Google Drive ${r.code}")
-            r.body?.bytes() ?: ByteArray(0)
-        }
-
-    private fun email(token: String): String =
-        runCatching { JSONObject(String(call(token, Request.Builder().url("https://www.googleapis.com/oauth2/v3/userinfo")))).optString("email") }.getOrDefault("")
-
-    private fun fileId(token: String): String? {
-        val url = "https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&fields=files(id)&q=name%3D%27$FILE%27"
-        return JSONObject(String(call(token, Request.Builder().url(url)))).optJSONArray("files")?.optJSONObject(0)?.optString("id")?.ifBlank { null }
-    }
-
-    /** The saved backup text, or null when Drive has none yet. */
-    private fun download(token: String): String? {
-        val id = fileId(token) ?: return null
-        val bytes = call(token, Request.Builder().url("https://www.googleapis.com/drive/v3/files/$id?alt=media"))
-        return GZIPInputStream(bytes.inputStream()).use { it.readBytes().toString(Charsets.UTF_8) }
-    }
-
-    private fun upload(token: String, text: String) {
-        val zipped = ByteArrayOutputStream().also { o -> GZIPOutputStream(o).use { it.write(text.toByteArray()) } }.toByteArray()
-        val body = zipped.toRequestBody("application/gzip".toMediaType())
-        val id = fileId(token)
-        if (id != null) call(token, Request.Builder().url("https://www.googleapis.com/upload/drive/v3/files/$id?uploadType=media").patch(body))
-        else {
-            val meta = JSONObject().put("name", FILE).put("parents", JSONArray().put("appDataFolder")).toString()
-            val parts = MultipartBody.Builder().setType("multipart/related".toMediaType())
-                .addPart(meta.toRequestBody("application/json; charset=UTF-8".toMediaType()))
-                .addPart(body).build()
-            call(token, Request.Builder().url("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart").post(parts))
-        }
     }
 }

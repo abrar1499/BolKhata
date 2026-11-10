@@ -16,7 +16,7 @@ class DriveTest {
     fun entriesFromBothPhonesAreJoinedOnce() {
         val phone = backup("entries" to s(JSONArray().put(entry("a", 100)).put(entry("b", 250)).toString()))
         val drive = backup("entries" to s(JSONArray().put(entry("b", 999)).put(entry("c", 40)).toString()))
-        val out = JSONObject(Drive.merge(phone, drive))
+        val out = JSONObject(DriveData.merge(phone, drive))
         val list = JSONArray(out.getJSONObject("data").getJSONObject("entries").getString("v"))
         assertEquals(listOf("a", "b", "c"), (0 until list.length()).map { list.getJSONObject(it).getString("id") })
         // The same entry on both: this phone's copy stays.
@@ -31,7 +31,7 @@ class DriveTest {
             "businessNames" to s("""{"b2":"Stitching"}"""), "currency" to s("SAR"),
             "entries@b2" to s(JSONArray().put(entry("x", 5)).toString())
         )
-        val data = JSONObject(Drive.merge(phone, drive)).getJSONObject("data")
+        val data = JSONObject(DriveData.merge(phone, drive)).getJSONObject("data")
         val names = JSONObject(data.getJSONObject("businessNames").getString("v"))
         assertEquals(setOf("b1", "b2"), names.keys().asSequence().toSet())
         assertEquals("PKR", data.getJSONObject("currency").getString("v"))
