@@ -338,7 +338,7 @@ fun App(
         scope.launch {
             snackbar.currentSnackbarData?.dismiss()
             val res = snackbar.showSnackbar(
-                "Moved ${gone.size} to Trash", actionLabel = "Undo", duration = SnackbarDuration.Long
+                "Moved ${gone.size} to Trash", actionLabel = "Undo", withDismissAction = true, duration = SnackbarDuration.Short
             )
             if (res == SnackbarResult.ActionPerformed) {
                 save(gone + entries)
@@ -379,7 +379,7 @@ fun App(
         scope.launch {
             val response = snackbar.showSnackbar(
                 if (merge) "Merged ${source.size} entries into $to" else "Renamed to $to",
-                actionLabel = "Undo", duration = SnackbarDuration.Long
+                actionLabel = "Undo", withDismissAction = true, duration = SnackbarDuration.Short
             )
             if (response == SnackbarResult.ActionPerformed) {
                 val restored = restoreMoveBatch(entries, record)
@@ -426,7 +426,7 @@ fun App(
         scope.launch {
             val moved = ids.size - skipped
             val msg = "✓ Moved $moved " + (if (moved == 1) "entry" else "entries") + " to $t" + (if (skipped > 0) " ($skipped skipped)" else "")
-            if (snackbar.showSnackbar(msg, actionLabel = "Undo", duration = SnackbarDuration.Long) == SnackbarResult.ActionPerformed) {
+            if (snackbar.showSnackbar(msg, actionLabel = "Undo", withDismissAction = true, duration = SnackbarDuration.Short) == SnackbarResult.ActionPerformed) {
                 val restored = restoreMoveBatch(entries, record)
                 if (restored != null) { save(restored); store.forgetMove(record.id) } else toast("Cannot undo: entries were changed after the move.")
             }
@@ -515,7 +515,7 @@ fun App(
                     val suffix = if (skippedDuplicates > 0) " · skipped $skippedDuplicates duplicate bank alert(s)" else ""
                     val res = snackbar.showSnackbar(
                         "✓ Added " + freshEntries.joinToString(", ") { understoodLine(it, currency) } + suffix,
-                        actionLabel = "Undo", duration = SnackbarDuration.Short
+                        actionLabel = "Undo", withDismissAction = true, duration = SnackbarDuration.Short
                     )
                     if (res == SnackbarResult.ActionPerformed) moveToTrash(ids)
                 }
@@ -545,7 +545,7 @@ fun App(
         plan.changed.forEach { (b, a) -> learnFrom(b, a) }
         scope.launch {
             snackbar.currentSnackbarData?.dismiss()
-            val res = snackbar.showSnackbar("✓ " + plan.message, actionLabel = "Undo", duration = SnackbarDuration.Long)
+            val res = snackbar.showSnackbar("✓ " + plan.message, actionLabel = "Undo", withDismissAction = true, duration = SnackbarDuration.Short)
             if (res == SnackbarResult.ActionPerformed) {
                 save(beforeEntries)
                 saveTrash(beforeTrash)
@@ -765,7 +765,7 @@ fun App(
             (if (owe != null) " · " + fmt(owe.amount) + " to pay " + owe.person else "")
         scope.launch {
             snackbar.currentSnackbarData?.dismiss()
-            val res = snackbar.showSnackbar(msg, actionLabel = "Undo", duration = SnackbarDuration.Long)
+            val res = snackbar.showSnackbar(msg, actionLabel = "Undo", withDismissAction = true, duration = SnackbarDuration.Short)
             if (res == SnackbarResult.ActionPerformed) moveToTrash(ids)
         }
     }
@@ -1055,7 +1055,7 @@ fun App(
                 save(listOf(myEntry, owe) + entries.filter { it.id !in gone })
                 scope.launch {
                     snackbar.currentSnackbarData?.dismiss()
-                    val res = snackbar.showSnackbar("✓ $payer paid", actionLabel = "Undo", duration = SnackbarDuration.Long)
+                    val res = snackbar.showSnackbar("✓ $payer paid", actionLabel = "Undo", withDismissAction = true, duration = SnackbarDuration.Short)
                     if (res == SnackbarResult.ActionPerformed) save(before)
                 }
                 "${entryTitle(h)} ${fmt(total)} paid by $payer → your share ${fmt(mine)} · you will give $payer ${fmt(mine)}"
@@ -1086,7 +1086,7 @@ fun App(
                 }
                 scope.launch {
                     snackbar.currentSnackbarData?.dismiss()
-                    val res = snackbar.showSnackbar("✓ Fixed ${swaps.size}", actionLabel = "Undo", duration = SnackbarDuration.Long)
+                    val res = snackbar.showSnackbar("✓ Fixed ${swaps.size}", actionLabel = "Undo", withDismissAction = true, duration = SnackbarDuration.Short)
                     if (res == SnackbarResult.ActionPerformed) save(before)
                 }
                 line
@@ -2548,8 +2548,8 @@ fun App(
                                         save(after)
                                         scope.launch {
                                             val result = snackbar.showSnackbar(
-                                                "Moved ${safeIds.size} entries", actionLabel = "Undo",
-                                                duration = SnackbarDuration.Long
+                                                "Moved ${safeIds.size} entries", actionLabel = "Undo", withDismissAction = true,
+                                                duration = SnackbarDuration.Short
                                             )
                                             if (result == SnackbarResult.ActionPerformed) {
                                                 val restored = restoreMoveBatch(entries, record)
@@ -2693,7 +2693,7 @@ fun App(
                     Parser.learned = store.loadLearned()
                     scope.launch {
                         snackbar.currentSnackbarData?.dismiss()
-                        val res = snackbar.showSnackbar("✓ Sorted ${change.size} expenses", actionLabel = "Undo", duration = SnackbarDuration.Long)
+                        val res = snackbar.showSnackbar("✓ Sorted ${change.size} expenses", actionLabel = "Undo", withDismissAction = true, duration = SnackbarDuration.Short)
                         if (res == SnackbarResult.ActionPerformed) save(before)
                     }
                 }, onCancel = { recat = null })

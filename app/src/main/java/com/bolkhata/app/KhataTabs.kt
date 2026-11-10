@@ -952,9 +952,9 @@ private val dayTimeFmt = SimpleDateFormat("EEE, d MMM yyyy · h:mma", Locale.US)
  * A person's or thing's own ledger, plain and white: the head (month or All, entry count, each column's name and
  * total), then one line per entry with its date and time under it. Tap edits an entry; hold opens its menu.
  */
-private fun LazyListScope.simpleLedger(cols: List<Pair<String, Color>>, totals: List<Double>, rows: List<Pair<Entry, List<Double>>>, title: (Entry) -> String, onEdit: (Entry) -> Unit) {
+private fun LazyListScope.simpleLedger(cols: List<Pair<String, Color>>, totals: List<Double>, rows: List<Pair<Entry, List<Double>>>, title: (Entry) -> String, onEdit: (Entry) -> Unit, label: String? = null) {
     val months = rows.map { monthKey(it.first.date) }.distinct()
-    val head = if (months.size == 1) monthFmt.format(Date(rows.first().first.date)) else "All"
+    val head = label ?: if (months.size == 1) monthFmt.format(Date(rows.first().first.date)) else "All"
     item(key = "klh") {
         Tight {
             val shape = RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp, bottomStart = if (rows.isEmpty()) 14.dp else 0.dp, bottomEnd = if (rows.isEmpty()) 14.dp else 0.dp)
@@ -1129,7 +1129,9 @@ fun SideScreen(
                     }
                 }
                 book != null && kidName != null -> {
-                    val kid = Sides.kids(book, entries, setup).firstOrNull { it.name.equals(kidName, true) } ?: Kid(kidName!!, emptyList())
+                    // A person shows the whole account; a thing shows the period picked.
+                    val kid = (Sides.kids(book, entries, setup).firstOrNull { it.name.equals(kidName, true) } ?: Kid(kidName!!, emptyList()))
+                        .let { if (book.people) it else Kid(it.name, it.entries.filter { e -> inPer(e.date) }) }
                     item(key = "kh") {
                         BackHead(kid.name, "$crumb › ${book.name} ›", { kidName = null }, {
                             if (book.people) {
@@ -1141,7 +1143,7 @@ fun SideScreen(
                                     Sides.qtyOf(kid.entries).take(2).map { fmt(it.qty) to it.name } + listOf(m(rows.sumOf { it.second[0] }) to plus, m(rows.sumOf { it.second[1] }) to minus),
                                     listOf(ledgerTable("", listOf(plus, minus), rows, ::personLine, running = true)),
                                     note = "$what: $amt" + if (cur.isBlank()) "" else " $cur"))
-                            } else pdf(PdfDoc(kid.name, book.name, listOf(m(kid.total) to word(book, true)),
+                            } else pdf(PdfDoc(kid.name, "${book.name} · ${per.label()}", listOf(m(kid.total) to word(book, true)),
                                 listOf(ledgerTable("", listOf(if (income) "In" else "Out"), kid.entries.map { it to listOf(it.amount) }, { e -> e.note.ifBlank { e.item } }))))
                         }) {
                             if (book.people) {
@@ -1150,6 +1152,7 @@ fun SideScreen(
                             } else SumCard(Triple(fmt(kid.total), word(book, true), ink), null, "", {})
                         }
                     }
+                    if (!book.people) item(key = "kp") { PeriodChips(newest, per) { period = it.encode() } }
                     if (book.people) {
                         val (plus, minus) = Sides.columns(book)
                         val rows = kid.entries.map { e -> e to (if (personEffect(e) > 0) listOf(e.amount, 0.0) else listOf(0.0, e.amount)) }
@@ -1159,16 +1162,19 @@ fun SideScreen(
                         val label = if (income) "In" else "Out"
                         val cols = if (income) listOf("" to ink, label to ink) else listOf(label to ink, "" to ink)
                         simpleLedger(cols, listOf(if (income) 0.0 else kid.total, if (income) kid.total else 0.0), rows,
-                            { e -> e.note.ifBlank { label } }, onEdit)
+                            { e -> e.note.ifBlank { label } }, onEdit, per.label())
+                        if (rows.isEmpty()) emptyNote("Nothing in this period.")
                     }
                 }
                 book != null -> {
                     val auto = Sides.isAuto(book)
-                    val kids = Sides.kids(book, entries, setup)
+                    // People accounts show what is owed all time; things show the period picked.
+                    val allKids = Sides.kids(book, entries, setup)
+                    val kids = if (book.people) allKids else allKids.map { Kid(it.name, it.entries.filter { e -> inPer(e.date) }) }
                     val inc = book.side == Side.INC
                     stickyHeader { TabHead {
                         BackHead(book.name, "$crumb ›", { bookName = null }, {
-                            pdf(PdfDoc(book.name, crumb, tables = listOf(
+                            pdf(PdfDoc(book.name, if (book.people) crumb else "$crumb · ${per.label()}", tables = listOf(
                                 if (book.people) PdfTable("", listOf("Name", "Balance"), kids.map { k -> Sides.balanceText(book, k.balance).let { (a, w) -> listOf(k.name, "$a ${cur.ifBlank { "" }} ${w.lowercase()}".replace("  ", " ")) } })
                                 else PdfTable("", listOf("Name", "Amount"), kids.map { listOf(it.name, m(it.total)) }, listOf("Total", m(kids.sumOf { it.total })))
                             )))
@@ -1180,6 +1186,7 @@ fun SideScreen(
                                     Triple(fmt(neg), Sides.balanceText(book, -1.0).second, if (inc) OweInk else RedSpend), "", {})
                             } else SumCard(Triple(fmt(kids.sumOf { it.total }), word(book, true).replaceFirstChar { it.uppercase() }, ink), null, "", {})
                         }
+                        if (!book.people) PeriodChips(newest, per) { period = it.encode() }
                     } }
                     kids.forEachIndexed { i, k ->
                         item(key = "k" + k.name.lowercase()) {
@@ -1190,7 +1197,8 @@ fun SideScreen(
                                     .ifBlank { k.entries.map { it.person.trim().lowercase() }.distinct().size.let { n -> if (n == 1) "1 person" else "$n people" } }
                                 else entryCount(k.entries.size), amt, what.lowercase(),
                                 if (book.people) balanceColor(what) else ink, i, kids.size,
-                                onLong = if (auto) null else ({ menu = book to k })
+                                // Rename, Move and Delete act on the whole thing, not only the period shown.
+                                onLong = if (auto) null else ({ menu = book to allKids[i] })
                             ) { kidName = k.name }
                         }
                     }
