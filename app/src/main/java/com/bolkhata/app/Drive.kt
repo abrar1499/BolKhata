@@ -63,10 +63,11 @@ object Drive {
 
     /** After the person picked a Gmail: joins this phone with Drive and saves the result to both. True when Drive had data. */
     suspend fun link(store: Store, token: String): Boolean = withContext(Dispatchers.IO) {
-        store.driveEmail = email(token).ifBlank { "Google account" }
         val remote = download(token)?.takeIf { store.backupEntries(it) >= 0 }
         if (remote != null) quietly { store.importJson(DriveData.merge(store.exportJson(sync = true), remote), sync = true) }
         save(store, token)
+        // Signed in only once Drive really holds the data.
+        store.driveEmail = email(token).ifBlank { "Google account" }
         remote != null
     }
 

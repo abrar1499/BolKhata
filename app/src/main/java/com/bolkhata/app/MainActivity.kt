@@ -1494,7 +1494,8 @@ fun App(
                 if (had) (context as? android.app.Activity)?.recreate()
             }
             .onFailure { e ->
-                android.widget.Toast.makeText(context, "Could not reach Google Drive (${e.message ?: "no internet"}). Try again.", android.widget.Toast.LENGTH_LONG).show()
+                android.widget.Toast.makeText(context, if (e.message.orEmpty().contains("quota", true)) "This Google account's storage is full. Free some space or pick another Gmail."
+                    else "Could not reach Google Drive (${e.message ?: "no internet"}). Try again.", android.widget.Toast.LENGTH_LONG).show()
             }
     }
     val driveAsk = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { res ->
