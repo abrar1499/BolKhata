@@ -1486,7 +1486,7 @@ fun App(
     var driveEmail by remember { mutableStateOf(store.driveEmail) }
     fun driveToast(msg: String) = android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
     fun driveLink(token: String) = scope.launch {
-        runCatching { Drive.link(store, token) }
+        runCatching { Drive.link(context, store, token) }
             .onSuccess { had ->
                 driveEmail = store.driveEmail
                 Drive.watch(context, store)
@@ -1494,7 +1494,8 @@ fun App(
                 if (had) (context as? android.app.Activity)?.recreate()
             }
             .onFailure { e ->
-                android.widget.Toast.makeText(context, "Could not reach Google Drive (${e.message ?: "no internet"}). Try again.", android.widget.Toast.LENGTH_LONG).show()
+                toast(if (e.message.orEmpty().contains("quota", true)) "This Google account's storage is full. Free some space or pick another Gmail."
+                    else "Could not reach Google Drive (${e.message ?: "no internet"}). Try again.")
             }
     }
     val driveAsk = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { res ->
@@ -1510,7 +1511,7 @@ fun App(
                 if (r.hasResolution() && ask != null) driveAsk.launch(androidx.activity.result.IntentSenderRequest.Builder(ask.intentSender).build())
                 else r.accessToken?.let { driveLink(it) }
             }
-            .addOnFailureListener { driveToast("Google sign-in is not available on this phone yet.") }
+            .addOnFailureListener { toast("Google sign-in is not available on this phone yet.") }
     }
     // When the app opens: take what another phone saved, then keep saving changes.
     LaunchedEffect(Unit) {
@@ -2252,7 +2253,7 @@ fun App(
                         if (changed) (context as? android.app.Activity)?.recreate()
                     }
                 },
-                onSignOut = { Drive.signOut(store); driveEmail = ""; toast("Signed out · your data stays on this phone") }
+                onSignOut = { Drive.signOut(context, store); driveEmail = ""; toast("Signed out · your data stays on this phone") }
             )
         }
     ) {
