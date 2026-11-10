@@ -150,8 +150,13 @@ fun App(
     var logToken by remember { mutableStateOf(store.logToken) }
     // Without a key of their own, people use the built-in key (when the build has one), unless they turned Groq off.
     // Groq is switched off for now (Groq.ENABLED): the app reads and answers every message by itself.
-    fun groqKeyNow() = if (!Groq.ENABLED) "" else store.groqKey.ifBlank { if (Groq.sharedReady && !store.groqOff) Groq.SHARED else "" }
+    // Test feature (APK build only): an AI key of any provider, saved in the side menu, runs the chat instead; see Ai.
+    remember {
+        if (!BuildConfig.PLAY) { Ai.key = store.llmKey; Ai.model = store.llmModel; Ai.sink = { i, o -> store.llmIn += i; store.llmOut += o } }
+    }
+    fun groqKeyNow() = Ai.key.ifBlank { if (!Groq.ENABLED) "" else store.groqKey.ifBlank { if (Groq.sharedReady && !store.groqOff) Groq.SHARED else "" } }
     var groqKey by remember { mutableStateOf(groqKeyNow()) }
+    var aiTick by remember { mutableIntStateOf(0) }
     var groqVoice by remember { mutableStateOf(store.groqVoice) }
     // The Play build has no ElevenLabs voice: calls always use the phone's own voice.
     var elevenKey by remember { mutableStateOf(if (BuildConfig.PLAY) "" else store.elevenKey) }
@@ -1747,7 +1752,7 @@ fun App(
         if (!voiceOn) return
         voicePartial = ""
         voiceStatus = "Listening…"
-        if (groqKey.isNotBlank() && groqVoice) {
+        if (Ai.hasVoice(groqKey) && groqVoice) {
             startRecording(
                 heard = { said -> if (voiceOn) heardInCall(said) },
                 missed = {
@@ -2083,7 +2088,7 @@ fun App(
     fun toggleVoice() {
         if (voiceOn) { stopVoice(); return }
         val agent = elevenKey.isNotBlank() && elevenAgent.isNotBlank()
-        if (!agent && recognizer == null && !(groqKey.isNotBlank() && groqVoice)) { toast("Speech recognition is not available on this phone."); return }
+        if (!agent && recognizer == null && !(Ai.hasVoice(groqKey) && groqVoice)) { toast("Speech recognition is not available on this phone."); return }
         val granted = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) ==
             android.content.pm.PackageManager.PERMISSION_GRANTED
         if (granted) beginCall() else micPermission.launch(android.Manifest.permission.RECORD_AUDIO)
@@ -2104,7 +2109,7 @@ fun App(
 
     fun startVoice(forChat: Boolean = false) {
         voiceForChat = forChat
-        if (groqKey.isNotBlank() && groqVoice) {
+        if (Ai.hasVoice(groqKey) && groqVoice) {
             startRecording(
                 heard = { text -> Normalizer.voiceFix(text, voiceKnown()).let { if (forChat) chatInput(it) else homeInput(it) } },
                 missed = { toast("Couldn't catch that. Try again.") }
@@ -2244,6 +2249,26 @@ fun App(
                         else { tab = Tab.CHAT; drawer.close() }
                     }
                 },
+                ai = if (BuildConfig.PLAY) null else remember(aiTick, groqKey) {
+                    AiInfo(Ai.provider(Ai.key)?.name.orEmpty(), store.llmModel, Ai.modelNow(),
+                        if (store.llmIn + store.llmOut == 0L) "" else Ai.usageText(store.llmIn, store.llmOut))
+                },
+                onAiOpen = { aiTick++ },
+                onAiSave = save@{ key, model ->
+                    if (key.isNotBlank() && Ai.provider(key) == null) { driveToast("This key is not recognised"); return@save }
+                    // A new key or model starts the token count again.
+                    if ((key.isNotBlank() && key != Ai.key) || model != store.llmModel) { store.llmIn = 0; store.llmOut = 0 }
+                    if (key.isNotBlank()) store.llmKey = key
+                    store.llmModel = model
+                    Ai.key = store.llmKey; Ai.model = store.llmModel
+                    groqKey = groqKeyNow(); aiTick++
+                    if (Ai.key.isNotBlank()) scope.launch {
+                        val error = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Ai.test() }
+                        aiTick++
+                        driveToast(if (error.isBlank()) "✓ ${Ai.provider(Ai.key)?.name} is on · ${Ai.modelNow()}" else "AI key did not work: $error")
+                    }
+                },
+                onAiOff = { store.llmKey = ""; Ai.key = ""; groqKey = groqKeyNow(); aiTick++; driveToast("AI is off. The app answers by itself again.") },
                 driveEmail = driveEmail, driveStatus = if (driveEmail.isBlank()) driveError else Drive.status, driveBusy = Drive.busy,
                 onSignIn = { driveSignIn() },
                 onSyncNow = {

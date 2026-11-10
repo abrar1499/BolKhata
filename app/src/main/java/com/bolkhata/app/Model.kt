@@ -228,7 +228,7 @@ class Store(context: Context) {
 
     /** Keys left out of a backup: AI keys are private and stay on this phone, as do this phone's Drive sync notes. */
     private val notBackedUp = setOf("aiKey", "fastKey", "aiModel", "fileKey", "groqKey", "elevenKey", "logToken",
-        "driveEmail", "driveAt", "driveDirty", "deviceId")
+        "driveEmail", "driveAt", "driveDirty", "deviceId", "llmKey", "llmModel", "llmIn", "llmOut")
 
     /** Also kept off Google Drive: the chat history and the background photo (a file on this phone). */
     private val phoneOnly = setOf("chatMessages", "bgPhoto")
@@ -612,6 +612,20 @@ class Store(context: Context) {
         set(v) = prefs.edit().putString("logRepo", v.trim()).apply()
 
     /** The owner's own Groq API key. Blank means the app stays fully offline. Never backed up or uploaded. */
+    /** Test feature: one AI key of any provider that runs the chat (see Ai), its model and the tokens used so far. */
+    var llmKey: String
+        get() = prefs.getString("llmKey", "") ?: ""
+        set(v) = prefs.edit().putString("llmKey", v.trim()).apply()
+    var llmModel: String
+        get() = prefs.getString("llmModel", "") ?: ""
+        set(v) = prefs.edit().putString("llmModel", v.trim()).apply()
+    var llmIn: Long
+        get() = prefs.getLong("llmIn", 0L)
+        set(v) = prefs.edit().putLong("llmIn", v).apply()
+    var llmOut: Long
+        get() = prefs.getLong("llmOut", 0L)
+        set(v) = prefs.edit().putLong("llmOut", v).apply()
+
     var groqKey: String
         get() = prefs.getString("groqKey", "") ?: ""
         set(v) = prefs.edit().putString("groqKey", v.trim()).apply()

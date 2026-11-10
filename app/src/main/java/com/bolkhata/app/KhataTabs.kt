@@ -1451,7 +1451,7 @@ internal fun AppPopup(
 
 /** A plain field in the popups and the add sheet: grey well, thin edge, hint inside. */
 @Composable
-private fun WellField(value: String, onChange: (String) -> Unit, hint: String, modifier: Modifier = Modifier, big: Boolean = false, number: Boolean = false) {
+internal fun WellField(value: String, onChange: (String) -> Unit, hint: String, modifier: Modifier = Modifier, big: Boolean = false, number: Boolean = false) {
     val style = TextStyle(fontSize = if (big) 20.sp else 14.sp, fontWeight = if (big) FontWeight.ExtraBold else FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
     Box(
         // White with a soft edge, like the search box: every popup's fields look the same.
