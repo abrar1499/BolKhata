@@ -379,8 +379,10 @@ internal fun PeriodChips(newest: List<Entry>, period: Period, onPick: (Period) -
     val months = remember(newest, year) { monthsOf(newest.filter { yearOf(it.date) == year }) }
     val first = (if (period.from > 0) period.label() else if (period.year > 0) period.year.toString() else "All") + " ▾"
     // No background of its own: the header behind it already has one, and a fill here would cut the card's shadow above.
+    // Opens with the picked month in view (the chip before it first), also after coming back from a page inside.
+    val row = rememberLazyListState(initialFirstVisibleItemIndex = months.indexOfFirst { it.first == period.month }.coerceAtLeast(0))
     LazyRow(
-        Modifier.fillMaxWidth(),
+        Modifier.fillMaxWidth(), state = row,
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         item(key = "first") {
@@ -1257,7 +1259,10 @@ fun SideScreen(
                                 ItRow("👤", b.name, sub, fmt(kotlin.math.abs(net)), (if (net >= 0) "to get" else "to give") + " · net",
                                     if (net >= 0) GreenIn else RedSpend, i, shown.size, onLong = { menu = b to null }) { bookName = b.name; q = "" }
                             } else {
-                                ItRow(bookIcon(b), b.name, kids.take(4).joinToString(", ") { it.name }, fmt(Sides.done(b, entries, setup, inPer)), word(b, false), ink, i, shown.size,
+                                // The small line names what the period's money is in, the biggest first (none: the account's first things).
+                                val inside = kids.map { k -> k to k.entries.filter { inPer(it.date) && Sides.counts(b, it) }.sumOf { it.amount } }
+                                    .filter { it.second > 0 }.sortedByDescending { it.second }.map { it.first }.ifEmpty { kids }
+                                ItRow(bookIcon(b), b.name, inside.take(4).joinToString(", ") { it.name }, fmt(Sides.done(b, entries, setup, inPer)), word(b, false), ink, i, shown.size,
                                     onLong = if (Sides.isAuto(b)) null else ({ menu = b to null })) { bookName = b.name; q = "" }
                             }
                         }
