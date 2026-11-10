@@ -1493,7 +1493,7 @@ fun App(
                 if (had) (context as? android.app.Activity)?.recreate()
             }
             .onFailure { e ->
-                driveError = if (e.message.orEmpty().contains("quota", true)) "This Gmail's storage is full. Free some space or pick another Gmail."
+                driveError = if (e.message.orEmpty().contains("quota", true)) "Storage full"
                     else "Could not reach Google Drive (${e.message ?: "no internet"}). Try again."
             }
     }
