@@ -1,39 +1,6 @@
 package com.bolkhata.app
 
-import android.app.Notification
-import android.content.ComponentName
-import android.content.Context
-import android.provider.Settings
-import android.service.notification.NotificationListenerService
-import android.service.notification.StatusBarNotification
-
-/**
- * Reads notifications from bank, wallet and SMS apps. When one looks like a payment
- * ("Purchase SAR 25.00 at PANDA"), it is saved as a suggestion for the person to review.
- * Nothing leaves the phone.
- */
-class BankListener : NotificationListenerService() {
-
-    override fun onNotificationPosted(sbn: StatusBarNotification) {
-        if (sbn.packageName == packageName) return
-        val extras = sbn.notification?.extras ?: return
-        val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
-        val text = extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString()
-            ?: extras.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty()
-        val full = "$title\n$text".trim()
-        val entry = BankParser.parse(full, sbn.postTime) ?: return
-        Store(this).addSuggestion(entry, key = sbn.packageName + "|" + text.trim())
-    }
-
-    companion object {
-        fun isEnabled(context: Context): Boolean {
-            val flat = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners") ?: return false
-            val me = ComponentName(context, BankListener::class.java).flattenToString()
-            return flat.split(":").any { it == me }
-        }
-    }
-}
-
+/** Reads a bank or wallet payment message ("Purchase SAR 25.00 at PANDA") into an entry; used for pasted messages and statements. */
 object BankParser {
 
     private val cur = """SAR|SR|S\.R|ر\.س|ريال|PKR|Rs\.?|AED|USD|\$"""

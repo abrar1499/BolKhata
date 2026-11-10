@@ -174,8 +174,6 @@ fun App(
     var answerText by remember { mutableStateOf<String?>(null) }
     var suggestions by remember { mutableStateOf(store.loadSuggestions()) }
     var reviewing by remember { mutableStateOf(false) }
-    var bankOn by remember { mutableStateOf(BankListener.isEnabled(context)) }
-    var bankHelp by remember { mutableStateOf(false) }
     // A sale or purchase opened from the Stock tab, waiting to be confirmed in the form.
     var trade by remember { mutableStateOf<Entry?>(null) }
     // The account opened by tapping an entry (People › Shahbaz, Transport › Aldrees…).
@@ -237,7 +235,6 @@ fun App(
     DisposableEffect(lifecycle) {
         val obs = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
-                bankOn = BankListener.isEnabled(context)
                 suggestions = store.loadSuggestions()
             }
         }
@@ -2562,8 +2559,6 @@ fun App(
                         store.logToken = ""; logToken = ""
                         logStatus = "Chat log sending is off"
                     },
-                    bankOn = bankOn,
-                    onBank = { bankHelp = true },
                     onExport = {
                         val day = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
                         exportFile.launch("SmartExpense-backup-$day.json")
@@ -2911,35 +2906,6 @@ fun App(
                 }
             }
         }
-    }
-
-    if (bankHelp) {
-        AppAlert(
-            onDismissRequest = { bankHelp = false },
-            title = { Text("Turn on bank alerts") },
-            text = {
-                Text(
-                    "On the next screen, find Smart Expense and switch it on.\n\n" +
-                        "If Android says \"Restricted setting\": open Settings → Apps → Smart Expense → ⋮ (top right) → " +
-                        "Allow restricted settings, then try again.\n\n" +
-                        "Only payment messages are read, and nothing leaves your phone."
-                )
-            },
-            confirmButton = {
-                Button(onClick = {
-                    bankHelp = false
-                    try {
-                        context.startActivity(
-                            Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
-                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        )
-                    } catch (e: Exception) {
-                        toast("Open Settings → Notifications → Device & app notifications")
-                    }
-                }) { Text("Open settings") }
-            },
-            dismissButton = { TextButton(onClick = { bankHelp = false }) { Text("Later") } }
-        )
     }
 
     if (reviewing) {

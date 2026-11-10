@@ -32,15 +32,6 @@
         </provider>
         <!-- Hears how a self-update went; asks the person only when Android insists. -->
         <receiver android:name=".Updater$InstallResult" android:exported="false" />
-        <service
-            android:name=".BankListener"
-            android:exported="true"
-            android:label="Smart Expense bank alerts"
-            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
-            <intent-filter>
-                <action android:name="android.service.notification.NotificationListenerService" />
-            </intent-filter>
-        </service>
         <activity
             android:name=".MainActivity"
             android:exported="true"

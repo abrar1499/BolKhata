@@ -1,11 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Play Store build: Play installs updates, and the app never reads other apps' notifications. -->
+<!-- Play Store build: Play installs updates. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" tools:node="remove" />
     <application>
-        <!-- No self-updater and no notification reading in the Play build. -->
+        <!-- No self-updater in the Play build. -->
         <receiver android:name="com.bolkhata.app.Updater$InstallResult" tools:node="remove" />
-        <service android:name="com.bolkhata.app.BankListener" tools:node="remove" />
     </application>
 </manifest>
