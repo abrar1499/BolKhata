@@ -51,6 +51,10 @@ object Drive {
     var status by mutableStateOf("")
         private set
 
+    /** While signing in and fetching the data: the Gmail once known ("" before that); null otherwise. */
+    var busy by mutableStateOf<String?>(null)
+        private set
+
     /** What the app asks Google for: its own hidden Drive folder and the Gmail address. */
     fun request(): AuthorizationRequest = AuthorizationRequest.builder().setRequestedScopes(scopes).build()
 
@@ -63,7 +67,9 @@ object Drive {
 
     /** After the person picked a Gmail: joins this phone with Drive and saves the result to both. True when Drive had data. */
     suspend fun link(context: Context, store: Store, token: String): Boolean = withContext(Dispatchers.IO) {
+        busy = ""
         val mail = email(token).ifBlank { "Google account" }
+        busy = mail
         try {
             val remote = download(token)?.takeIf { store.backupEntries(it) >= 0 }
             if (remote != null) quietly { store.importJson(DriveData.merge(store.exportJson(sync = true), remote), sync = true) }
@@ -75,6 +81,8 @@ object Drive {
             // Not signed in after all (e.g. that Gmail's storage is full): the next try offers every Gmail again.
             forget(context, mail)
             throw e
+        } finally {
+            busy = null
         }
     }
 

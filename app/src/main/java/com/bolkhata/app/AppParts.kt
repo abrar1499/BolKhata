@@ -207,6 +207,8 @@ internal fun SideMenu(
     onExport: () -> Unit, onImport: () -> Unit, onTrash: () -> Unit, onVersion: () -> Unit,
     /** The Gmail synced with Google Drive ("" when not signed in) and how the last save went. */
     driveEmail: String = "", driveStatus: String = "",
+    /** Signing in and fetching the data: the Gmail once known; null when not. */
+    driveBusy: String? = null,
     onSignIn: () -> Unit = {}, onSyncNow: () -> Unit = {}, onSignOut: () -> Unit = {}
 ) {
     var driveOpen by remember { mutableStateOf(false) }
@@ -276,7 +278,11 @@ internal fun SideMenu(
             }
             Spacer(Modifier.height(8.dp))
             MenuCard {
-                MenuRow(onClick = { if (driveEmail.isBlank()) onSignIn() else driveOpen = true }, last = true) {
+                if (driveBusy != null) {
+                    // Fetching: a ring turns round the Gmail's letter and a thin line runs under the row.
+                    MenuRow(onClick = null, last = true) { DriveRow(driveBusy.ifBlank { "Signing in…" }, "", Modifier.weight(1f), busy = true) }
+                    LinearProgressIndicator(Modifier.fillMaxWidth().height(3.dp), color = EmberTop, trackColor = Color.Transparent)
+                } else MenuRow(onClick = { if (driveEmail.isBlank()) onSignIn() else driveOpen = true }, last = true) {
                     DriveRow(driveEmail, driveStatus, Modifier.weight(1f))
                     MenuValue("›")
                 }
@@ -329,24 +335,29 @@ internal fun SideMenu(
     }
 }
 
-/** The Google sign-in line: the G and "Sign in with Google", or the Gmail's first letter, the Gmail and how syncing went. */
+/** The Google sign-in line: the G and "Sign in with Google", or the Gmail's first letter, the Gmail and how syncing went ([busy]: fetching). */
 @Composable
-private fun DriveRow(email: String, status: String, modifier: Modifier = Modifier) {
+private fun DriveRow(email: String, status: String, modifier: Modifier = Modifier, busy: Boolean = false) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            Modifier.size(30.dp).shadow(if (email.isBlank()) 1.dp else 0.dp, CircleShape).clip(CircleShape)
-                .background(if (email.isBlank()) Color.White else Color(0xFF7C3AED)),
-            contentAlignment = Alignment.Center
-        ) {
-            if (email.isBlank()) Text("G", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF4285F4))
-            else Text(email.take(1).uppercase(), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
+        // The ring is drawn a little outside the 30 circle without making the row taller.
+        Box(Modifier.size(30.dp), contentAlignment = Alignment.Center) {
+            if (busy) CircularProgressIndicator(Modifier.requiredSize(38.dp), color = EmberTop, strokeWidth = 2.5.dp)
+            Box(
+                Modifier.size(30.dp).shadow(if (email.isBlank()) 1.dp else 0.dp, CircleShape).clip(CircleShape)
+                    .background(if (email.isBlank()) Color.White else Color(0xFF7C3AED)),
+                contentAlignment = Alignment.Center
+            ) {
+                if (email.isBlank()) Text("G", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF4285F4))
+                else Text(email.take(1).uppercase(), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            }
         }
         Spacer(Modifier.width(10.dp))
         Column {
             Text(email.ifBlank { "Sign in with Google" }, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
-                if (email.isBlank()) "Keep your data on every phone" else status.ifBlank { "✓ Synced" }, fontSize = 10.sp, maxLines = 1,
-                color = if (email.isNotBlank() && !status.startsWith("Not")) GreenIn else MaterialTheme.colorScheme.onSurfaceVariant
+                if (busy) "Getting your data…" else if (email.isBlank()) "Keep your data on every phone" else status.ifBlank { "✓ Synced" },
+                fontSize = 10.sp, maxLines = 1,
+                color = if (busy) EmberTop else if (email.isNotBlank() && !status.startsWith("Not")) GreenIn else MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }

@@ -2241,7 +2241,7 @@ fun App(
                         else { tab = Tab.CHAT; drawer.close() }
                     }
                 },
-                driveEmail = driveEmail, driveStatus = Drive.status,
+                driveEmail = driveEmail, driveStatus = Drive.status, driveBusy = Drive.busy,
                 onSignIn = { driveSignIn() },
                 onSyncNow = {
                     scope.launch {
