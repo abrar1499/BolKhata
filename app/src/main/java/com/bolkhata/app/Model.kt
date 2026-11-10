@@ -226,14 +226,43 @@ class Store(context: Context) {
 
     // ---------- Backup: everything the app keeps, in one file ----------
 
-    /** Keys left out of a backup: AI keys are private and stay on this phone. */
-    private val notBackedUp = setOf("aiKey", "fastKey", "aiModel", "fileKey", "groqKey", "elevenKey", "logToken")
+    /** Keys left out of a backup: AI keys are private and stay on this phone, as do this phone's Drive sync notes. */
+    private val notBackedUp = setOf("aiKey", "fastKey", "aiModel", "fileKey", "groqKey", "elevenKey", "logToken",
+        "driveEmail", "driveAt", "driveDirty", "deviceId")
 
-    /** All saved data (entries, trash, chat, memory, settings) as one JSON text. */
-    fun exportJson(): String {
+    /** Also kept off Google Drive: the chat history and the background photo (a file on this phone). */
+    private val phoneOnly = setOf("chatMessages", "bgPhoto")
+
+    /** The Gmail whose Drive this phone syncs with; "" when not signed in. */
+    var driveEmail: String
+        get() = prefs.getString("driveEmail", "") ?: ""
+        set(v) = prefs.edit().putString("driveEmail", v).apply()
+
+    /** When the Drive copy this phone last saved or took was made. */
+    var driveAt: Long
+        get() = prefs.getLong("driveAt", 0L)
+        set(v) = prefs.edit().putLong("driveAt", v).apply()
+
+    /** Changes made since the last save to Drive. */
+    var driveDirty: Boolean
+        get() = prefs.getBoolean("driveDirty", false)
+        set(v) = prefs.edit().putBoolean("driveDirty", v).apply()
+
+    /** This phone's own id, to tell its Drive saves from another phone's. */
+    val deviceId: String
+        get() = prefs.getString("deviceId", null) ?: java.util.UUID.randomUUID().toString().also { prefs.edit().putString("deviceId", it).apply() }
+
+    /** Calls [onChange] when saved data changes (not for keys that stay on this phone). Keep the result: it is held weakly. */
+    fun watch(onChange: () -> Unit): android.content.SharedPreferences.OnSharedPreferenceChangeListener =
+        android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == null || (key !in notBackedUp && key !in phoneOnly)) onChange()
+        }.also { prefs.registerOnSharedPreferenceChangeListener(it) }
+
+    /** All saved data (entries, trash, chat, memory, settings) as one JSON text; for Drive [sync] leaves the chat and photo out. */
+    fun exportJson(sync: Boolean = false): String {
         val data = JSONObject()
         for ((k, v) in prefs.all) {
-            if (k in notBackedUp || v == null) continue
+            if (k in notBackedUp || v == null || (sync && k in phoneOnly)) continue
             val item = when (v) {
                 is String -> JSONObject().put("t", "s").put("v", v)
                 is Boolean -> JSONObject().put("t", "b").put("v", v)
@@ -263,10 +292,10 @@ class Store(context: Context) {
         if (o.optString("app") != "Smart Expense" || !o.has("data")) -1 else backupEntryCount(o.getJSONObject("data"))
     }.getOrDefault(-1)
 
-    /** Replaces all saved data with a backup (AI keys on this phone are kept). */
-    fun importJson(text: String) {
+    /** Replaces all saved data with a backup (AI keys and sync notes on this phone are kept; for Drive [sync] the chat and photo too). */
+    fun importJson(text: String, sync: Boolean = false) {
         val data = JSONObject(text).getJSONObject("data")
-        val keep = notBackedUp.associateWith { prefs.all[it] }
+        val keep = (if (sync) notBackedUp + phoneOnly else notBackedUp).associateWith { prefs.all[it] }
         val ed = prefs.edit().clear()
         for (k in data.keys()) {
             val item = data.getJSONObject(k)
@@ -282,7 +311,9 @@ class Store(context: Context) {
                 }
             }
         }
-        keep.forEach { (k, v) -> if (v is String) ed.putString(k, v) }
+        keep.forEach { (k, v) ->
+            when (v) { is String -> ed.putString(k, v); is Long -> ed.putLong(k, v); is Boolean -> ed.putBoolean(k, v) }
+        }
         ed.commit()
     }
 

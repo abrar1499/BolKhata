@@ -1482,6 +1482,42 @@ fun App(
         }
     }
 
+    // ---------- Google Drive: sign in once, then every change is saved to the person's own Drive ----------
+    var driveEmail by remember { mutableStateOf(store.driveEmail) }
+    fun driveToast(msg: String) = android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+    fun driveLink(token: String) = scope.launch {
+        runCatching { Drive.link(store, token) }
+            .onSuccess { had ->
+                driveEmail = store.driveEmail
+                Drive.watch(context, store)
+                driveToast("✓ Signed in · ${store.load().size} entries, all synced")
+                if (had) (context as? android.app.Activity)?.recreate()
+            }
+            .onFailure { driveToast("Could not reach Google Drive. Check the internet and try again.") }
+    }
+    val driveAsk = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { res ->
+        val token = runCatching {
+            com.google.android.gms.auth.api.identity.Identity.getAuthorizationClient(context).getAuthorizationResultFromIntent(res.data).accessToken
+        }.getOrNull()
+        if (token != null) driveLink(token)
+    }
+    fun driveSignIn() {
+        com.google.android.gms.auth.api.identity.Identity.getAuthorizationClient(context).authorize(Drive.request())
+            .addOnSuccessListener { r ->
+                val ask = r.pendingIntent
+                if (r.hasResolution() && ask != null) driveAsk.launch(androidx.activity.result.IntentSenderRequest.Builder(ask.intentSender).build())
+                else r.accessToken?.let { driveLink(it) }
+            }
+            .addOnFailureListener { driveToast("Google sign-in is not available on this phone yet.") }
+    }
+    // When the app opens: take what another phone saved, then keep saving changes.
+    LaunchedEffect(Unit) {
+        if (store.driveEmail.isNotBlank()) {
+            Drive.watch(context, store)
+            if (Drive.pull(context, store)) (context as? android.app.Activity)?.recreate()
+        }
+    }
+
     // ---------- Backup: export and import all data ----------
     var importText by remember { mutableStateOf<String?>(null) }
     val exportFile = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
@@ -2204,7 +2240,17 @@ fun App(
                         else if (newVersion == null) toast("You have the latest version")
                         else { tab = Tab.CHAT; drawer.close() }
                     }
-                }
+                },
+                driveEmail = driveEmail, driveStatus = Drive.status,
+                onSignIn = { driveSignIn() },
+                onSyncNow = {
+                    scope.launch {
+                        val changed = Drive.pull(context, store)
+                        if (Drive.push(context, store)) toast("✓ Synced with Google Drive") else toast("Not saved yet. Check the internet.")
+                        if (changed) (context as? android.app.Activity)?.recreate()
+                    }
+                },
+                onSignOut = { Drive.signOut(store); driveEmail = ""; toast("Signed out · your data stays on this phone") }
             )
         }
     ) {
