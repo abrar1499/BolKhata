@@ -62,13 +62,30 @@ object Drive {
     }
 
     /** After the person picked a Gmail: joins this phone with Drive and saves the result to both. True when Drive had data. */
-    suspend fun link(store: Store, token: String): Boolean = withContext(Dispatchers.IO) {
-        val remote = download(token)?.takeIf { store.backupEntries(it) >= 0 }
-        if (remote != null) quietly { store.importJson(DriveData.merge(store.exportJson(sync = true), remote), sync = true) }
-        save(store, token)
-        // Signed in only once Drive really holds the data.
-        store.driveEmail = email(token).ifBlank { "Google account" }
-        remote != null
+    suspend fun link(context: Context, store: Store, token: String): Boolean = withContext(Dispatchers.IO) {
+        val mail = email(token).ifBlank { "Google account" }
+        try {
+            val remote = download(token)?.takeIf { store.backupEntries(it) >= 0 }
+            if (remote != null) quietly { store.importJson(DriveData.merge(store.exportJson(sync = true), remote), sync = true) }
+            save(store, token)
+            // Signed in only once Drive really holds the data.
+            store.driveEmail = mail
+            remote != null
+        } catch (e: Exception) {
+            // Not signed in after all (e.g. that Gmail's storage is full): the next try offers every Gmail again.
+            forget(context, mail)
+            throw e
+        }
+    }
+
+    /** Google forgets the app's access to [mail]'s Drive. */
+    private fun forget(context: Context, mail: String) {
+        runCatching {
+            Identity.getAuthorizationClient(context).revokeAccess(
+                com.google.android.gms.auth.api.identity.RevokeAccessRequest.builder()
+                    .setAccount(android.accounts.Account(mail, "com.google")).setScopes(scopes).build()
+            )
+        }
     }
 
     /** When the app opens: takes what another phone saved (joined with this phone's unsaved changes). True when data changed. */
@@ -107,9 +124,10 @@ object Drive {
         }
     }
 
-    /** Stops syncing; the data stays on the phone. */
-    fun signOut(store: Store) {
+    /** Stops syncing; the data stays on the phone. Google forgets the app's access, so the next sign-in offers every Gmail again. */
+    fun signOut(context: Context, store: Store) {
         pending?.cancel()
+        forget(context, store.driveEmail)
         store.driveEmail = ""
         store.driveAt = 0
         status = ""

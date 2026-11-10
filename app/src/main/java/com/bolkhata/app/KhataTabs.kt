@@ -1425,9 +1425,12 @@ fun SideScreen(
     }
 }
 
-/** The app's popup: a white rounded card with its title and ✕, the content, then Cancel and a coloured main button. */
+/** The app's popup: a white rounded card with its title and ✕, the content, then Cancel (or [second]) and a coloured main button. */
 @Composable
-private fun AppPopup(title: String, action: String, onDismiss: () -> Unit, onAction: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+internal fun AppPopup(
+    title: String, action: String, onDismiss: () -> Unit, onAction: () -> Unit,
+    second: String = "Cancel", onSecond: () -> Unit = onDismiss, content: @Composable ColumnScope.() -> Unit
+) {
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
         // The theme's page colour with white fields on it, like the pages with their cards.
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(LocalPage.current).padding(16.dp)) {
@@ -1438,7 +1441,7 @@ private fun AppPopup(title: String, action: String, onDismiss: () -> Unit, onAct
             content()
             Row(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surface)
-                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp)).clickable { onDismiss() }, contentAlignment = Alignment.Center) { Text("Cancel", fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp)).clickable { onSecond() }, contentAlignment = Alignment.Center) { Text(second, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
                 Box(Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(12.dp)).background(EmberTop).clickable { onAction() },
                     contentAlignment = Alignment.Center) { Text(action, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White) }
             }
