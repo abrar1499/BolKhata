@@ -132,7 +132,10 @@ object Drive {
 
     private fun call(token: String, b: Request.Builder): ByteArray =
         http.newCall(b.header("Authorization", "Bearer $token").build()).execute().use { r ->
-            if (!r.isSuccessful) throw IOException("Google Drive ${r.code}")
+            // Google's own reason goes along (e.g. "API not enabled"), so a failed sign-in can be understood.
+            if (!r.isSuccessful) throw IOException("${r.code} " + runCatching {
+                JSONObject(r.body?.string().orEmpty()).getJSONObject("error").optString("message").take(90)
+            }.getOrDefault(""))
             r.body?.bytes() ?: ByteArray(0)
         }
 

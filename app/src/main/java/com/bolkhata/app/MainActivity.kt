@@ -1493,7 +1493,9 @@ fun App(
                 driveToast("✓ Signed in · ${store.load().size} entries, all synced")
                 if (had) (context as? android.app.Activity)?.recreate()
             }
-            .onFailure { driveToast("Could not reach Google Drive. Check the internet and try again.") }
+            .onFailure { e ->
+                android.widget.Toast.makeText(context, "Could not reach Google Drive (${e.message ?: "no internet"}). Try again.", android.widget.Toast.LENGTH_LONG).show()
+            }
     }
     val driveAsk = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { res ->
         val token = runCatching {
