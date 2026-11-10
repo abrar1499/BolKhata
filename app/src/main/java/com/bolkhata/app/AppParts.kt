@@ -355,9 +355,11 @@ private fun DriveRow(email: String, status: String, modifier: Modifier = Modifie
         Column {
             Text(email.ifBlank { "Sign in with Google" }, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
-                if (busy) "Getting your data…" else if (email.isBlank()) "Keep your data on every phone" else status.ifBlank { "✓ Synced" },
-                fontSize = 10.sp, maxLines = 1,
-                color = if (busy) EmberTop else if (email.isNotBlank() && !status.startsWith("Not")) GreenIn else MaterialTheme.colorScheme.onSurfaceVariant
+                // Not signed in with a [status]: why the last sign-in failed, in red and in full.
+                if (busy) "Getting your data…" else if (email.isBlank()) status.ifBlank { "Keep your data on every phone" } else status.ifBlank { "✓ Synced" },
+                fontSize = 10.sp, lineHeight = 13.sp, maxLines = if (email.isBlank()) 3 else 1,
+                color = if (busy) EmberTop else if (email.isBlank() && status.isNotBlank()) RedSpend
+                    else if (email.isNotBlank() && !status.startsWith("Not")) GreenIn else MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }

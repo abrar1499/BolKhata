@@ -1481,6 +1481,8 @@ fun App(
 
     // ---------- Google Drive: sign in once, then every change is saved to the person's own Drive ----------
     var driveEmail by remember { mutableStateOf(store.driveEmail) }
+    // Why the last sign-in failed; shown in red right in the sign-in row, where the person is looking.
+    var driveError by remember { mutableStateOf("") }
     fun driveToast(msg: String) = android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
     fun driveLink(token: String) = scope.launch {
         runCatching { Drive.link(context, store, token) }
@@ -1491,8 +1493,8 @@ fun App(
                 if (had) (context as? android.app.Activity)?.recreate()
             }
             .onFailure { e ->
-                toast(if (e.message.orEmpty().contains("quota", true)) "This Google account's storage is full. Free some space or pick another Gmail."
-                    else "Could not reach Google Drive (${e.message ?: "no internet"}). Try again.")
+                driveError = if (e.message.orEmpty().contains("quota", true)) "This Gmail's storage is full. Free some space or pick another Gmail."
+                    else "Could not reach Google Drive (${e.message ?: "no internet"}). Try again."
             }
     }
     val driveAsk = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { res ->
@@ -1502,6 +1504,7 @@ fun App(
         if (token != null) driveLink(token)
     }
     fun driveSignIn() {
+        driveError = ""
         com.google.android.gms.auth.api.identity.Identity.getAuthorizationClient(context).authorize(Drive.request())
             .addOnSuccessListener { r ->
                 val ask = r.pendingIntent
@@ -2241,7 +2244,7 @@ fun App(
                         else { tab = Tab.CHAT; drawer.close() }
                     }
                 },
-                driveEmail = driveEmail, driveStatus = Drive.status, driveBusy = Drive.busy,
+                driveEmail = driveEmail, driveStatus = if (driveEmail.isBlank()) driveError else Drive.status, driveBusy = Drive.busy,
                 onSignIn = { driveSignIn() },
                 onSyncNow = {
                     scope.launch {
