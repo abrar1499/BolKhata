@@ -1500,8 +1500,6 @@ fun SettingsScreen(
     onMenu: () -> Unit,
     themeName: String,
     onTheme: (String) -> Unit,
-    bankOn: Boolean = false,
-    onBank: () -> Unit = {},
     onExport: () -> Unit = {},
     onImport: () -> Unit = {},
     logRepo: String = "",
