@@ -1494,9 +1494,7 @@ fun App(
                 if (had) (context as? android.app.Activity)?.recreate()
             }
             .onFailure { e ->
-                // 403: the Drive box was left unticked on Google's page, so the app may not save there.
-                driveToast(if (e.message.orEmpty().contains("403")) "Tick the Google Drive box when signing in, then try again."
-                else "Could not reach Google Drive (${e.message ?: "no internet"}). Try again.")
+                android.widget.Toast.makeText(context, "Could not reach Google Drive (${e.message ?: "no internet"}). Try again.", android.widget.Toast.LENGTH_LONG).show()
             }
     }
     val driveAsk = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { res ->
