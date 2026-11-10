@@ -338,7 +338,7 @@ fun App(
         scope.launch {
             snackbar.currentSnackbarData?.dismiss()
             val res = snackbar.showSnackbar(
-                "Moved ${gone.size} to Trash", actionLabel = "Undo", duration = SnackbarDuration.Long
+                "Moved ${gone.size} to Trash", actionLabel = "Undo", withDismissAction = true, duration = SnackbarDuration.Short
             )
             if (res == SnackbarResult.ActionPerformed) {
                 save(gone + entries)
@@ -379,7 +379,7 @@ fun App(
         scope.launch {
             val response = snackbar.showSnackbar(
                 if (merge) "Merged ${source.size} entries into $to" else "Renamed to $to",
-                actionLabel = "Undo", duration = SnackbarDuration.Long
+                actionLabel = "Undo", withDismissAction = true, duration = SnackbarDuration.Short
             )
             if (response == SnackbarResult.ActionPerformed) {
                 val restored = restoreMoveBatch(entries, record)
@@ -426,7 +426,7 @@ fun App(
         scope.launch {
             val moved = ids.size - skipped
             val msg = "✓ Moved $moved " + (if (moved == 1) "entry" else "entries") + " to $t" + (if (skipped > 0) " ($skipped skipped)" else "")
-            if (snackbar.showSnackbar(msg, actionLabel = "Undo", duration = SnackbarDuration.Long) == SnackbarResult.ActionPerformed) {
+            if (snackbar.showSnackbar(msg, actionLabel = "Undo", withDismissAction = true, duration = SnackbarDuration.Short) == SnackbarResult.ActionPerformed) {
                 val restored = restoreMoveBatch(entries, record)
                 if (restored != null) { save(restored); store.forgetMove(record.id) } else toast("Cannot undo: entries were changed after the move.")
             }
@@ -515,7 +515,7 @@ fun App(
                     val suffix = if (skippedDuplicates > 0) " · skipped $skippedDuplicates duplicate bank alert(s)" else ""
                     val res = snackbar.showSnackbar(
                         "✓ Added " + freshEntries.joinToString(", ") { understoodLine(it, currency) } + suffix,
-                        actionLabel = "Undo", duration = SnackbarDuration.Short
+                        actionLabel = "Undo", withDismissAction = true, duration = SnackbarDuration.Short
                     )
                     if (res == SnackbarResult.ActionPerformed) moveToTrash(ids)
                 }
@@ -545,7 +545,7 @@ fun App(
         plan.changed.forEach { (b, a) -> learnFrom(b, a) }
         scope.launch {
             snackbar.currentSnackbarData?.dismiss()
-            val res = snackbar.showSnackbar("✓ " + plan.message, actionLabel = "Undo", duration = SnackbarDuration.Long)
+            val res = snackbar.showSnackbar("✓ " + plan.message, actionLabel = "Undo", withDismissAction = true, duration = SnackbarDuration.Short)
             if (res == SnackbarResult.ActionPerformed) {
                 save(beforeEntries)
                 saveTrash(beforeTrash)
@@ -765,7 +765,7 @@ fun App(
             (if (owe != null) " · " + fmt(owe.amount) + " to pay " + owe.person else "")
         scope.launch {
             snackbar.currentSnackbarData?.dismiss()
-            val res = snackbar.showSnackbar(msg, actionLabel = "Undo", duration = SnackbarDuration.Long)
+            val res = snackbar.showSnackbar(msg, actionLabel = "Undo", withDismissAction = true, duration = SnackbarDuration.Short)
             if (res == SnackbarResult.ActionPerformed) moveToTrash(ids)
         }
     }
@@ -1055,7 +1055,7 @@ fun App(
                 save(listOf(myEntry, owe) + entries.filter { it.id !in gone })
                 scope.launch {
                     snackbar.currentSnackbarData?.dismiss()
-                    val res = snackbar.showSnackbar("✓ $payer paid", actionLabel = "Undo", duration = SnackbarDuration.Long)
+                    val res = snackbar.showSnackbar("✓ $payer paid", actionLabel = "Undo", withDismissAction = true, duration = SnackbarDuration.Short)
                     if (res == SnackbarResult.ActionPerformed) save(before)
                 }
                 "${entryTitle(h)} ${fmt(total)} paid by $payer → your share ${fmt(mine)} · you will give $payer ${fmt(mine)}"
@@ -1086,7 +1086,7 @@ fun App(
                 }
                 scope.launch {
                     snackbar.currentSnackbarData?.dismiss()
-                    val res = snackbar.showSnackbar("✓ Fixed ${swaps.size}", actionLabel = "Undo", duration = SnackbarDuration.Long)
+                    val res = snackbar.showSnackbar("✓ Fixed ${swaps.size}", actionLabel = "Undo", withDismissAction = true, duration = SnackbarDuration.Short)
                     if (res == SnackbarResult.ActionPerformed) save(before)
                 }
                 line
@@ -1479,6 +1479,42 @@ fun App(
                 chatLoading = false
                 loadingLabel = "Thinking…"
             }
+        }
+    }
+
+    // ---------- Google Drive: sign in once, then every change is saved to the person's own Drive ----------
+    var driveEmail by remember { mutableStateOf(store.driveEmail) }
+    fun driveToast(msg: String) = android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+    fun driveLink(token: String) = scope.launch {
+        runCatching { Drive.link(store, token) }
+            .onSuccess { had ->
+                driveEmail = store.driveEmail
+                Drive.watch(context, store)
+                driveToast("✓ Signed in · ${store.load().size} entries, all synced")
+                if (had) (context as? android.app.Activity)?.recreate()
+            }
+            .onFailure { driveToast("Could not reach Google Drive. Check the internet and try again.") }
+    }
+    val driveAsk = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { res ->
+        val token = runCatching {
+            com.google.android.gms.auth.api.identity.Identity.getAuthorizationClient(context).getAuthorizationResultFromIntent(res.data).accessToken
+        }.getOrNull()
+        if (token != null) driveLink(token)
+    }
+    fun driveSignIn() {
+        com.google.android.gms.auth.api.identity.Identity.getAuthorizationClient(context).authorize(Drive.request())
+            .addOnSuccessListener { r ->
+                val ask = r.pendingIntent
+                if (r.hasResolution() && ask != null) driveAsk.launch(androidx.activity.result.IntentSenderRequest.Builder(ask.intentSender).build())
+                else r.accessToken?.let { driveLink(it) }
+            }
+            .addOnFailureListener { driveToast("Google sign-in is not available on this phone yet.") }
+    }
+    // When the app opens: take what another phone saved, then keep saving changes.
+    LaunchedEffect(Unit) {
+        if (store.driveEmail.isNotBlank()) {
+            Drive.watch(context, store)
+            if (Drive.pull(context, store)) (context as? android.app.Activity)?.recreate()
         }
     }
 
@@ -2204,7 +2240,17 @@ fun App(
                         else if (newVersion == null) toast("You have the latest version")
                         else { tab = Tab.CHAT; drawer.close() }
                     }
-                }
+                },
+                driveEmail = driveEmail, driveStatus = Drive.status,
+                onSignIn = { driveSignIn() },
+                onSyncNow = {
+                    scope.launch {
+                        val changed = Drive.pull(context, store)
+                        if (Drive.push(context, store)) toast("✓ Synced with Google Drive") else toast("Not saved yet. Check the internet.")
+                        if (changed) (context as? android.app.Activity)?.recreate()
+                    }
+                },
+                onSignOut = { Drive.signOut(store); driveEmail = ""; toast("Signed out · your data stays on this phone") }
             )
         }
     ) {
@@ -2548,8 +2594,8 @@ fun App(
                                         save(after)
                                         scope.launch {
                                             val result = snackbar.showSnackbar(
-                                                "Moved ${safeIds.size} entries", actionLabel = "Undo",
-                                                duration = SnackbarDuration.Long
+                                                "Moved ${safeIds.size} entries", actionLabel = "Undo", withDismissAction = true,
+                                                duration = SnackbarDuration.Short
                                             )
                                             if (result == SnackbarResult.ActionPerformed) {
                                                 val restored = restoreMoveBatch(entries, record)
@@ -2693,7 +2739,7 @@ fun App(
                     Parser.learned = store.loadLearned()
                     scope.launch {
                         snackbar.currentSnackbarData?.dismiss()
-                        val res = snackbar.showSnackbar("✓ Sorted ${change.size} expenses", actionLabel = "Undo", duration = SnackbarDuration.Long)
+                        val res = snackbar.showSnackbar("✓ Sorted ${change.size} expenses", actionLabel = "Undo", withDismissAction = true, duration = SnackbarDuration.Short)
                         if (res == SnackbarResult.ActionPerformed) save(before)
                     }
                 }, onCancel = { recat = null })

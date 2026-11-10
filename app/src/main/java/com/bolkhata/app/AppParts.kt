@@ -204,8 +204,30 @@ internal fun SideMenu(
     onRenameBusiness: (id: String, name: String) -> Unit, onDeleteBusiness: (id: String) -> Unit,
     onCurrency: (String) -> Unit, onLang: (String) -> Unit, onTheme: (String) -> Unit,
     page: Long, onPage: (Long) -> Unit, onDark: (Long) -> Unit, onPhoto: () -> Unit,
-    onExport: () -> Unit, onImport: () -> Unit, onTrash: () -> Unit, onVersion: () -> Unit
+    onExport: () -> Unit, onImport: () -> Unit, onTrash: () -> Unit, onVersion: () -> Unit,
+    /** The Gmail synced with Google Drive ("" when not signed in) and how the last save went. */
+    driveEmail: String = "", driveStatus: String = "",
+    onSignIn: () -> Unit = {}, onSyncNow: () -> Unit = {}, onSignOut: () -> Unit = {}
 ) {
+    var driveOpen by remember { mutableStateOf(false) }
+    if (driveOpen) {
+        AppAlert(
+            onDismissRequest = { driveOpen = false },
+            title = { Text("Google Drive") },
+            text = {
+                Column {
+                    DriveRow(driveEmail, driveStatus)
+                    Text(
+                        "Saves by itself after every change, in a hidden folder of your own Google Drive that only Smart Expense " +
+                            "can open. Sign in on any phone to get your data back.",
+                        fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 10.dp)
+                    )
+                }
+            },
+            confirmButton = { TextButton(onClick = { driveOpen = false; onSyncNow() }) { Text("Sync now") } },
+            dismissButton = { TextButton(onClick = { driveOpen = false; onSignOut() }) { Text("Sign out") } }
+        )
+    }
     var bizMenu by remember { mutableStateOf<Pair<String, String>?>(null) }
     var bizRename by remember { mutableStateOf<Pair<String, String>?>(null) }
     var bizDelete by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -264,6 +286,13 @@ internal fun SideMenu(
             }
             Spacer(Modifier.height(8.dp))
             MenuCard {
+                MenuRow(onClick = { if (driveEmail.isBlank()) onSignIn() else driveOpen = true }, last = true) {
+                    DriveRow(driveEmail, driveStatus, Modifier.weight(1f))
+                    MenuValue("›")
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            MenuCard {
                 Box {
                     var open by remember { mutableStateOf(false) }
                     MenuRow(onClick = { open = true }) { MenuLabel("💱", "Currency"); MenuValue("$currency ▾") }
@@ -306,6 +335,29 @@ internal fun SideMenu(
                 MenuRow(onClick = onTrash) { MenuLabel("🗑", "Trash"); MenuValue("›") }
                 MenuRow(onClick = onVersion, last = true) { MenuLabel("⬆️", "Version"); MenuValue(version) }
             }
+        }
+    }
+}
+
+/** The Google sign-in line: the G and "Sign in with Google", or the Gmail's first letter, the Gmail and how syncing went. */
+@Composable
+private fun DriveRow(email: String, status: String, modifier: Modifier = Modifier) {
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            Modifier.size(30.dp).shadow(if (email.isBlank()) 1.dp else 0.dp, CircleShape).clip(CircleShape)
+                .background(if (email.isBlank()) Color.White else Color(0xFF7C3AED)),
+            contentAlignment = Alignment.Center
+        ) {
+            if (email.isBlank()) Text("G", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF4285F4))
+            else Text(email.take(1).uppercase(), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
+        }
+        Spacer(Modifier.width(10.dp))
+        Column {
+            Text(email.ifBlank { "Sign in with Google" }, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                if (email.isBlank()) "Keep your data on every phone" else status.ifBlank { "✓ Synced" }, fontSize = 10.sp, maxLines = 1,
+                color = if (email.isNotBlank() && !status.startsWith("Not")) GreenIn else MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

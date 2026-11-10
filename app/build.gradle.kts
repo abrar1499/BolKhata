@@ -100,6 +100,8 @@ dependencies {
     implementation("com.tom-roush:pdfbox-android:2.0.27.0")
     // Bundled Latin OCR model: text recognition works without a network request at runtime.
     implementation("com.google.mlkit:text-recognition:16.0.1")
+    // Sign in with Google and sync to the person's own Google Drive (hidden app folder).
+    implementation("com.google.android.gms:play-services-auth:21.2.0")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-core")
