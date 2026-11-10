@@ -209,9 +209,32 @@ internal fun SideMenu(
     driveEmail: String = "", driveStatus: String = "",
     /** Signing in and fetching the data: the Gmail once known; null when not. */
     driveBusy: String? = null,
+    /** Test feature: the AI key row (null: not in this build). */
+    ai: AiInfo? = null, onAiOpen: () -> Unit = {}, onAiSave: (key: String, model: String) -> Unit = { _, _ -> }, onAiOff: () -> Unit = {},
     onSignIn: () -> Unit = {}, onSyncNow: () -> Unit = {}, onSignOut: () -> Unit = {}
 ) {
     var driveOpen by remember { mutableStateOf(false) }
+    var aiOpen by remember { mutableStateOf(false) }
+    if (aiOpen && ai != null) {
+        var key by remember { mutableStateOf("") }
+        var model by remember { mutableStateOf(ai.model) }
+        // What a key being typed belongs to, before it is saved.
+        val typed = Ai.provider(key)
+        AppPopup("AI key", "Save", onDismiss = { aiOpen = false }, onAction = { aiOpen = false; onAiSave(key, model) },
+            second = if (ai.name.isBlank()) "Cancel" else "Turn off", onSecond = { aiOpen = false; if (ai.name.isNotBlank()) onAiOff() }) {
+            WellField(key, { key = it.trim() }, if (ai.name.isBlank()) "Paste any AI key" else "${ai.name} key saved · paste to change")
+            WellField(model, { model = it.trim() }, "Model: " + (typed?.model ?: ai.modelNow.ifBlank { "the usual one" }))
+            Text(
+                when {
+                    key.isNotBlank() -> typed?.let { "${it.name} key" } ?: "This key is not recognised"
+                    ai.name.isBlank() -> "Claude, Gemini, ChatGPT, Groq or OpenRouter. With a key, the AI reads every chat message. Your message and matching names are sent to it; totals still come from your entries."
+                    else -> "${ai.name} · ${ai.modelNow}" + (if (ai.used.isBlank()) "" else "\nUsed: ${ai.used}") +
+                        (Ai.price(ai.modelNow)?.let { (i, o) -> "\nPrice per 1M tokens: $" + i + " in · $" + o + " out" } ?: "")
+                },
+                fontSize = 11.sp, lineHeight = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 2.dp, end = 2.dp, top = 10.dp)
+            )
+        }
+    }
     if (driveOpen) {
         // The app's own popup: the Gmail in a white box, then Sign out and Sync now.
         AppPopup("Google Drive", "Sync now", onDismiss = { driveOpen = false }, onAction = { driveOpen = false; onSyncNow() },
@@ -328,12 +351,16 @@ internal fun SideMenu(
                         DropdownMenuItem(text = { Text("Import data") }, onClick = { open = false; onImport() })
                     }
                 }
+                if (ai != null) MenuRow(onClick = { onAiOpen(); aiOpen = true }) { MenuLabel("🤖", "AI key"); MenuValue(ai.name.ifBlank { "Off" }) }
                 MenuRow(onClick = onTrash) { MenuLabel("🗑", "Trash"); MenuValue("›") }
                 MenuRow(onClick = onVersion, last = true) { MenuLabel("⬆️", "Version"); MenuValue(version) }
             }
         }
     }
 }
+
+/** Test feature: what the AI key row shows: the provider's name ("" when off), the model typed, the model in use, tokens used. */
+class AiInfo(val name: String, val model: String, val modelNow: String, val used: String)
 
 /** The Google sign-in line: the G and "Sign in with Google", or the Gmail's first letter, the Gmail and how syncing went ([busy]: fetching). */
 @Composable

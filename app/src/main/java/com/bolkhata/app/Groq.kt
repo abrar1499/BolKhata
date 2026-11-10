@@ -473,11 +473,14 @@ object Groq {
         val ms = usedMs.getAndSet(0)
         val tokens = usedTokens.getAndSet(0)
         if (ms == 0L) return ""
+        Ai.takeUsage(ms)?.let { return it }
         return "Groq · " + String.format(java.util.Locale.US, "%.1fs", ms / 1000.0) + if (tokens > 0) " · $tokens tokens" else ""
     }
 
     private fun post(url: String, key: String, type: String, body: ByteArray): Pair<Int, String> {
         val started = System.currentTimeMillis()
+        // The test AI key (any provider) takes the chat requests; see Ai.
+        if (url == CHAT_URL && Ai.handles(key)) try { return Ai.post(body) } finally { usedMs.addAndGet(System.currentTimeMillis() - started) }
         try { return send(url, key, type, body).also { (_, text) ->
             usedTokens.addAndGet(runCatching { JSONObject(text).getJSONObject("usage").optInt("total_tokens") }.getOrDefault(0))
         } } finally { usedMs.addAndGet(System.currentTimeMillis() - started) }
