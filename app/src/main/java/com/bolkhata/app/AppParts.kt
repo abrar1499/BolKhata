@@ -211,16 +211,11 @@ internal fun SideMenu(
 ) {
     var driveOpen by remember { mutableStateOf(false) }
     if (driveOpen) {
-        // The app's own popup, as in the mock-up: the Gmail in a white box, a short note, Sign out and Sync now.
+        // The app's own popup: the Gmail in a white box, then Sign out and Sync now.
         AppPopup("Google Drive", "Sync now", onDismiss = { driveOpen = false }, onAction = { driveOpen = false; onSyncNow() },
             second = "Sign out", onSecond = { driveOpen = false; onSignOut() }) {
             DriveRow(driveEmail, driveStatus, Modifier.padding(top = 10.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp))
                 .background(MaterialTheme.colorScheme.surface).padding(horizontal = 12.dp, vertical = 10.dp))
-            Text(
-                "Saves by itself after every change, in a hidden folder of your own Google Drive that only Smart Expense " +
-                    "can open. Sign in on any phone to get your data back.",
-                fontSize = 11.sp, lineHeight = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 2.dp, end = 2.dp, top = 10.dp)
-            )
         }
     }
     var bizMenu by remember { mutableStateOf<Pair<String, String>?>(null) }
