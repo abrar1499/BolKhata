@@ -1493,7 +1493,11 @@ fun App(
                 driveToast("✓ Signed in · ${store.load().size} entries, all synced")
                 if (had) (context as? android.app.Activity)?.recreate()
             }
-            .onFailure { driveToast("Could not reach Google Drive. Check the internet and try again.") }
+            .onFailure { e ->
+                // 403: the Drive box was left unticked on Google's page, so the app may not save there.
+                driveToast(if (e.message.orEmpty().contains("403")) "Tick the Google Drive box when signing in, then try again."
+                else "Could not reach Google Drive (${e.message ?: "no internet"}). Try again.")
+            }
     }
     val driveAsk = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { res ->
         val token = runCatching {
