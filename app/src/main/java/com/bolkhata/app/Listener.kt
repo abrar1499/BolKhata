@@ -11,7 +11,8 @@ import android.speech.SpeechRecognizer
 
 /**
  * Listens with the phone's own recogniser inside the app, with no pop-up: the words show while they are spoken, a busy
- * recogniser is tried again, and a tap on the mic ends it. One sentence at a time; everything runs on the main thread.
+ * recogniser is tried again, and a tap on the mic ends it. A pause does not send: it goes on listening and adds to what
+ * was said, until the tap or a long silence. Everything runs on the main thread.
  */
 class Listener(context: Context) {
     private val app = context.applicationContext
@@ -23,6 +24,10 @@ class Listener(context: Context) {
     /** Counts the sessions, so a late timer of an old one does nothing. */
     private var run = 0
     private var soFar = ""
+    /** What the finished parts of this message said; the recogniser ends a part at every pause. */
+    private var said = ""
+    private var stopping = false
+    private var quiet = 0
 
     var onPartial: (String) -> Unit = {}
     var onFinal: (String) -> Unit = {}
@@ -42,18 +47,23 @@ class Listener(context: Context) {
         override fun onRmsChanged(rmsdB: Float) { if (wanted) onLevel(((rmsdB + 2f) / 12f).coerceIn(0f, 1f)) }
         override fun onPartialResults(partialResults: Bundle?) {
             if (!wanted) return
-            best(partialResults).takeIf { it.isNotBlank() }?.let { soFar = it; onPartial(it) }
+            best(partialResults).takeIf { it.isNotBlank() }?.let { soFar = it; onPartial(whole()) }
         }
         override fun onResults(results: Bundle?) {
             if (!wanted) return
-            done(best(results).ifBlank { soFar })
+            said = (said + " " + best(results).ifBlank { soFar }).trim()
+            soFar = ""; quiet = 0
+            // A pause only ends a part: it listens on, unless the mic was tapped.
+            if (stopping) done(said) else { onPartial(said); again(120) }
         }
         override fun onError(error: Int) {
             if (!wanted) return
             when (error) {
                 // Still closing the last session: start afresh a moment later, a few times.
                 SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> if (busyTries < 3) { busyTries++; reset(); again(400) } else fail("Voice is busy. Try again.")
-                SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> done(soFar)
+                // Silence: after something was said that sends it; before, it waits one more round.
+                SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT ->
+                    if (stopping || whole().isNotBlank() || ++quiet >= 2) done(whole()) else again(120)
                 SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> fail("No internet for voice. Try again when online.")
                 SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> fail("Allow the microphone for Smart Expense to talk.")
                 // 12 / 13: no recogniser for this language on the phone; its default language is used instead.
@@ -66,7 +76,7 @@ class Listener(context: Context) {
     /** Starts listening in [language] (a tag like "ur-PK"; blank for the phone's own). */
     fun start(language: String) {
         this.language = language
-        wanted = true; busyTries = 0; soFar = ""; run++
+        wanted = true; busyTries = 0; soFar = ""; said = ""; stopping = false; quiet = 0; run++
         onListening(true)
         begin()
     }
@@ -85,6 +95,8 @@ class Listener(context: Context) {
         })
     }
 
+    private fun whole() = (said + " " + soFar).trim()
+
     private fun again(afterMs: Long) {
         val mine = run
         main.postDelayed({ if (wanted && run == mine) begin() }, afterMs)
@@ -93,9 +105,10 @@ class Listener(context: Context) {
     /** The mic was tapped again: ends the sentence; what was heard comes as the result, or after a short wait as it stands. */
     fun stop() {
         if (!wanted) return
+        stopping = true
         recognizer?.stopListening()
         val mine = run
-        main.postDelayed({ if (wanted && run == mine) { recognizer?.cancel(); done(soFar) } }, 2500)
+        main.postDelayed({ if (wanted && run == mine) { recognizer?.cancel(); done(whole()) } }, 2500)
     }
 
     /** Stops without a result. */
