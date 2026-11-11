@@ -1679,10 +1679,13 @@ fun App(
             val said = Groq.transcribe(Ai.voiceKeyFor(groqKey), file, contactNames() + entries.filter { it.type == Type.AAMDANI }.map { source(it) })
             // In the chat (not the call) the recording is kept, named with its length, and shown as a voice note.
             voiceNote[0] = if (voiceOn || said.isFailure) null else runCatching {
-                val ms = android.media.MediaMetadataRetriever().run {
-                    setDataSource(file.absolutePath)
-                    (extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L).also { release() }
-                }
+                // The length is only for show: when it can't be read the note is still kept.
+                val ms = runCatching {
+                    android.media.MediaMetadataRetriever().run {
+                        setDataSource(file.absolutePath)
+                        (extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L).also { release() }
+                    }
+                }.getOrDefault(0L)
                 File(context.filesDir, "voice").apply { mkdirs() }.let { dir -> File(dir, "voice-" + System.currentTimeMillis() + "-" + ms + ".m4a") }
                     .also { file.copyTo(it, overwrite = true) }.absolutePath
             }.getOrNull()
