@@ -155,7 +155,11 @@ object AiAgent {
           person, item, qty and rate. Work done or goods supplied by a worker or supplier, to be paid for ("Hamid ne 500
           shirts silai ki 40 ke hisaab se"), is type work. The app multiplies qty by rate; per_1000 when the rate is per
           thousand; paid_now when settled in cash on the spot. When no rate is said, save with qty and no rate: the
-          app uses the person's last rate. Never ask for a rate unless the tool says none is known. A worker or
+          app uses the person's last rate. Never ask for a rate unless the tool says none is known. For item, use
+          a name from "Work and goods names in use" exactly whenever it is the same work or thing; add no words to it
+          (not "molding", "work", "making"). A new name is only for a really different work or thing.
+          Two names for one work ("X ko Y mein kar do", "ye dono ek hain"): find_entries with items X, then
+          update_entries on those ids with set item Y. Do it without asking. A worker or
           supplier with a count of things they made, did or brought and no money word ("Hamid ne 10000 kachi eent
           dali", "Hamid 300 shirts") is work with that qty: save it, do not ask whether it is money. Money a customer pays later is received_back; money paid
           to a worker or supplier is lent. Profit, loss, sales, costs, net worth: the report tool.
@@ -208,6 +212,8 @@ object AiAgent {
                     "About $p: in " + Sides.bookOf(p, host.entries(), host.setup()) +
                         (if (last == null) "" else "; last " + (if (last.type == Type.SALE) "sale" else "work") + ": " + last.item + " at " + plainNumber(last.rate) + (if (last.unit == "1000") " per 1000" else "")) + "\n"
                 } +
+                // The names works and goods already have, so the same one is not saved under a second name.
+                Goods.known(host.entries()).take(15).let { if (it.isEmpty()) "" else "Work and goods names in use: " + it.joinToString(", ") + "\n" } +
                 (if (!spoken) "" else "The message came by voice and may be misheard." +
                     (if (heardAlso.isEmpty()) "" else " It was also heard as: " + heardAlso.joinToString(" | ") { it.take(200) }) + "\n") +
                 "Message: " + said.take(600) +
@@ -570,7 +576,8 @@ object AiAgent {
         // A said day keeps the current time of day, so the entries of one message stay in order.
         val day = runCatching { dayFmt.parse(o.optString("date").trim())!!.time }.getOrNull()
         val date = if (day == null) now else day + (now - dayFmt.parse(dayFmt.format(Date(now)))!!.time)
-        val item = o.optString("item").trim().take(40).replaceFirstChar { it.uppercase() }
+        // A work or thing keeps the one name it was first saved with, however the AI words it this time.
+        val item = o.optString("item").trim().take(40).replaceFirstChar { it.uppercase() }.let { if (goods) Goods.sameAs(it, Goods.known(host.entries())) else it }
         return Entry(
             id = "e" + System.nanoTime() + i, type = type, amount = amount, category = category,
             item = if (goods) item else item.ifBlank { category.label },
