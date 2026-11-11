@@ -16,10 +16,13 @@ class AiAgentTest {
         entry("new2", Type.KHARCHA, 40.0, Cat.KHANA, "Tea", "", now - 7 * 86_400_000L, now - 5 * 60_000L)
     )
     private val trashed = mutableSetOf<String>()
+    private var setup = SideSetup()
+    private var made: PdfDoc? = null
     private val host = AiAgent.Host(
         entries = { saved }, add = { saved = it + saved },
         update = { changed -> saved = saved.map { e -> changed.firstOrNull { it.id == e.id } ?: e } },
-        trash = { ids -> trashed += ids; saved = saved.filter { it.id !in ids } }, names = { listOf("Hamid Akram") }, currency = "PKR"
+        trash = { ids -> trashed += ids; saved = saved.filter { it.id !in ids } }, names = { listOf("Hamid Akram") }, currency = "PKR",
+        setup = { setup }, saveSetup = { setup = it }, pdf = { made = it }
     )
 
     private fun entry(id: String, type: Type, amount: Double, cat: Cat, item: String, person: String, date: Long, created: Long) =
@@ -38,6 +41,46 @@ class AiAgentTest {
     }
 
     @Test
+    fun peopleArePutInAnAccountWithoutAnEntry() {
+        use("put_in_account", """{"account": "staff", "people": ["Nargis Salim Rashid", "hamid akram"]}""")
+        // New people sit in Staff; one who was elsewhere moves there (one person, one account).
+        assertEquals("Staff", Sides.bookOf("Nargis Salim Rashid", saved, setup))
+        assertEquals("Staff", Sides.bookOf("Hamid Akram", saved, setup))
+        val party = use("accounts", "{}").getJSONArray("party")
+        val staff = (0 until party.length()).map { party.getJSONObject(it) }.first { it.getString("name") == "Staff" }
+        assertEquals(2, staff.getJSONArray("people").length())
+        use("put_in_account", """{"account": "Drivers", "people": ["Hamid Akram"]}""")
+        assertEquals("Drivers", Sides.bookOf("Hamid Akram", saved, setup))
+        assertEquals("Fuel", use("add_account", """{"side": "expense", "name": "Fuel"}""").getString("made"))
+        assertEquals(true, setup.books.any { it.name == "Fuel" && !it.people && it.side == Side.EXP })
+    }
+
+    @Test
+    fun aPdfHoldsEveryMatchingEntryWithTotals() {
+        val out = use("make_pdf", """{"title": "Expenses", "types": ["expense"], "group_by": "category"}""")
+        assertEquals(3, out.getInt("entries"))
+        val doc = made!!
+        assertEquals("Expenses", doc.title)
+        // A summary, then Food (2 entries) and Transport (1), the biggest first.
+        assertEquals(listOf("Summary", "Food", "Transport"), doc.tables.map { it.heading })
+        assertEquals(listOf("Total", "3", "440 PKR"), doc.tables[0].foot)
+        assertEquals(2, doc.tables[1].rows.size)
+        assertEquals("340 PKR", doc.tables[1].foot!!.last())
+        assertEquals("Tea", doc.tables[1].rows[0][1])
+    }
+
+    @Test
+    fun aListIsShownAsTheAppsOwnCard() {
+        val notes = AiAgent.Notes()
+        val out = JSONObject(AiAgent.use("show", JSONObject("""{"view": "list", "types": ["expense"]}"""), host, now, notes))
+        assertEquals(true, out.getBoolean("shown_to_the_person"))
+        // The same text the app writes without the AI: one line per entry, then the total.
+        assertEquals(Query.answer(saved.filter { it.type == Type.KHARCHA }.sortedByDescending { it.date }, "list",
+            Query.Filter(types = setOf(Type.KHARCHA)), "PKR"), notes.card)
+        assertEquals(listOf("new1", "old1", "new2"), notes.listIds)
+    }
+
+    @Test
     fun theAppDoesTheSums() {
         val t = use("totals", """{"types": ["expense"], "group_by": "category"}""")
         assertEquals(440.0, t.getDouble("total"), 0.001)
@@ -52,9 +95,10 @@ class AiAgentTest {
 
     @Test
     fun newAndChangedEntriesAreSaved() {
-        val added = mutableListOf<String>()
+        val notes = AiAgent.Notes()
+        val added = notes.added
         val out = JSONObject(AiAgent.use("add_entries", JSONObject("""{"entries": [{"type": "expense", "amount": 50, "category": "Food", "item": "chai"},
-            {"type": "lent", "amount": 200, "person": "Hamid Akram"}]}"""), host, now, added))
+            {"type": "lent", "amount": 200, "person": "Hamid Akram"}]}"""), host, now, notes))
         assertEquals(2, out.getInt("saved"))
         assertEquals(2, added.size)
         val chai = saved.first { it.id == added[0] }
