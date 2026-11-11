@@ -1244,6 +1244,8 @@ fun App(
     val aiPdf = remember { arrayOfNulls<(PdfDoc) -> Unit>(1) }
     // How the AI's last look-up picked its entries, so a follow-up ("detail do") goes on from it.
     var aiPicked by remember { mutableStateOf("") }
+    // The entries the AI's last answer saved, so a correction ("nahi 40 tha") can change them.
+    var aiSaved by remember { mutableStateOf(emptyList<String>()) }
     /** Without AI (no key, or no internet): save clear entries, answer simple questions, never stay silent. */
     fun chatInput(raw: String) {
         if (chatMessages.isEmpty()) lastGroqQuery = ""
@@ -1297,12 +1299,14 @@ fun App(
                     )
                     // The AI is asked off the main thread; each tool then runs on it, where the entries live.
                     val answer = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                        AiAgent.run(text, recent, host, roman = roman, previous = aiPicked) { tool -> kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.Main) { tool() } }
+                        AiAgent.run(text, recent, host, roman = roman, previous = aiPicked, justSaved = aiSaved) { tool -> kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.Main) { tool() } }
                     }
                     val usage = Ai.takeUsage(System.currentTimeMillis() - started).orEmpty()
                     lastSpeech = answer?.text ?: ("The AI did not answer (" + Ai.lastError.ifBlank { "no reply" } + "). Try again.")
                     // A list or breakdown the AI asked for is the app's own card; its other replies are plain text, never read as a report.
-                    answer?.filter?.takeIf { it.isNotBlank() }?.let { aiPicked = it }
+                    // Only the very next message goes on from a look-up or a save; older ones would mislead.
+                    aiPicked = answer?.filter.orEmpty()
+                    aiSaved = answer?.added.orEmpty()
                     val card = answer?.card.orEmpty()
                     postChat(card.ifBlank { lastSpeech }, isUser = false, entryIds = answer?.added.orEmpty(), listIds = answer?.listIds.orEmpty(),
                         meta = "engine=AI; intent=agent" + (if (card.isBlank()) "; plain" else "") + (if (usage.isBlank()) "" else "; usage=" + usage))

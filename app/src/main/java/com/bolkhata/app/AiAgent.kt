@@ -33,7 +33,7 @@ object AiAgent {
     /** What the tools of one message leave for the chat: saved entries and the card to show. */
     class Notes(val added: MutableList<String> = mutableListOf(), var card: String = "", var listIds: List<String> = emptyList(),
         /** How the last look-up picked its entries, so "detail do" or "aur food?" can go on from it. */
-        var filter: String = "")
+        var filter: String = "", var found: Int = 0)
 
     /** A long list in the chat shows this many rows, then "+N more" and the total of all. */
     private const val LIST_ROWS = 30
@@ -83,6 +83,7 @@ object AiAgent {
                 "per_1000" to JSONObject().put("type", "boolean").put("description", "True when the rate is per thousand"),
                 "unit" to text("kg, piece, bag... when said"),
                 "paid_now" to JSONObject().put("type", "boolean").put("description", "A sale or work settled in cash on the spot (not on credit)"),
+                "again" to JSONObject().put("type", "boolean").put("description", "True only when the person clearly wants a second, identical entry"),
                 "category" to JSONObject().put("type", "string").put("enum", JSONArray(EXPENSE_CATS.map { it.label })).put("description", "For an expense"),
                 "item" to text("1-3 words, e.g. Petrol"),
                 "person" to text("The other person, saved spelling if it matches; needed for lent, borrowed, received_back, paid_back"),
@@ -137,7 +138,12 @@ object AiAgent {
           shirts silai ki 40 ke hisaab se"), is type work. The app multiplies qty by rate; per_1000 when the rate is per
           thousand; paid_now when settled in cash on the spot. Money a customer pays later is received_back; money paid
           to a worker or supplier is lent. Profit, loss, sales, costs, net worth: the report tool.
-          Use the saved name that sounds closest; a new name keeps the spelling that reads most like a real name.
+          Use a saved name only when it is the same person (the same name, or a misspelling or short form of it). A
+          saved name that joins two people ("A & B", "A and B") is its own account: a message naming only one of them
+          means a separate, single person. A new name keeps the spelling that reads most like a real name.
+        - A correction of what was just saved ("sirf Hamid se", "nahi 40 tha", "ye kal ka tha") changes those entries
+          with update_entries (their ids are under "Just saved"); never add the same entry a second time.
+        - A khata or account for a person, with no kind said, is put_in_account People; do not ask which kind.
         - To change or delete, first find_entries for the ids. When it is clear which entries are meant, do it without
           asking again; when it is not, ask one short question instead of guessing. Deleted entries go to Trash.
         - "is mahine" is the 1st of this month to today, "kal" yesterday, "aaj tak" / "ab tak" all time (no dates).
@@ -156,6 +162,7 @@ object AiAgent {
      */
     fun run(
         said: String, recent: String, host: Host, now: Long = System.currentTimeMillis(), roman: String = said, previous: String = "",
+        justSaved: List<String> = emptyList(),
         onMain: (() -> String) -> String = { it() }
     ): Answer? = runCatching {
         val notes = Notes()
@@ -164,6 +171,8 @@ object AiAgent {
             "Now: " + timeFmt.format(Date(now)) + " (" + SimpleDateFormat("EEEE", Locale.US).format(Date(now)) + ")\n" +
                 (if (recent.isBlank()) "" else "Conversation so far:\n" + recent.takeLast(1200) + "\n") +
                 (if (previous.isBlank()) "" else "Previous look-up picked: " + previous.take(400) + "\n") +
+                // What the last message saved, with ids, so "sirf Hamid se" or "nahi 40 tha" can change it.
+                host.entries().filter { it.id in justSaved }.take(12).let { l -> if (l.isEmpty()) "" else "Just saved: " + JSONArray(l.map { show(it) }) + "\n" } +
                 "Message: " + said.take(600) +
                 // Urdu or Hindi script also goes in Roman letters by its sound, so a word is not swapped for another.
                 (if (roman.trim().equals(said.trim(), true)) "" else "\nThe same message by sound, in Roman letters: " + roman.take(600))
@@ -176,7 +185,7 @@ object AiAgent {
                 c to onMain { runCatching { use(c.name, c.input, host, now, notes) }.getOrElse { JSONObject().put("error", it.message ?: "failed").toString() } }
             }
             // Only asked to show a card, and it is shown: the chat shows the card, not the AI's closing sentence, so that step is not paid for.
-            if (step.calls.all { it.name == "show" } && notes.card.isNotBlank() && done.none { it.second.contains("\"error\"") })
+            if (step.calls.all { it.name == "show" } && notes.card.isNotBlank() && notes.found > 0 && done.none { it.second.contains("\"error\"") })
                 return@runCatching Answer(step.text, notes.added, notes.card, notes.listIds, notes.filter)
             Ai.results(messages, done)
         }
@@ -196,7 +205,10 @@ object AiAgent {
                 else Query.answer(list, what, f, host.currency, LIST_ROWS)
             notes.listIds = if (what == "list") list.take(LIST_ROWS).map { it.id } else emptyList()
             notes.filter = picked(input)
-            JSONObject().put("shown_to_the_person", true).put("count", list.size).put("total", list.sumOf { it.amount }).toString()
+            notes.found = list.size
+            // Nothing matched: no card, and the AI is told, so it can look again or say so itself.
+            if (list.isEmpty()) notes.card = ""
+            JSONObject().put("shown_to_the_person", list.isNotEmpty()).put("count", list.size).put("total", list.sumOf { it.amount }).toString()
         }
         "find_entries" -> {
             val list = pick(input, host, now)
@@ -242,10 +254,18 @@ object AiAgent {
         }
         "add_entries" -> {
             val list = input.optJSONArray("entries") ?: JSONArray()
-            val fresh = (0 until list.length()).map { make(list.getJSONObject(it), now, it, host) }
+            val made = (0 until list.length()).map { make(list.getJSONObject(it), now, it, host) to list.getJSONObject(it).optBoolean("again", false) }
+            // The same entry typed in minutes ago (same kind, amount, person and day) is not saved twice unless asked for.
+            val recent = host.entries().filter { now - it.createdAt in 0..15 * 60_000L }
+            fun twin(e: Entry) = recent.firstOrNull { o -> o.type == e.type && o.amount == e.amount && o.person.trim().equals(e.person.trim(), true) &&
+                o.item.equals(e.item, true) && dayFmt.format(Date(o.date)) == dayFmt.format(Date(e.date)) }
+            val fresh = made.filter { (e, again) -> again || twin(e) == null }.map { it.first }
+            val twins = made.filter { (e, again) -> !again && twin(e) != null }.map { twin(it.first)!! }
             host.add(fresh)
             notes.added += fresh.map { it.id }
-            JSONObject().put("saved", fresh.size).put("entries", JSONArray(fresh.map { show(it) })).toString()
+            JSONObject().put("saved", fresh.size).put("entries", JSONArray(fresh.map { show(it) })).apply {
+                if (twins.isNotEmpty()) put("already_saved_minutes_ago_not_added_again", JSONArray(twins.map { show(it) }))
+            }.toString()
         }
         "update_entries" -> {
             val ids = strings(input, "ids").toSet()

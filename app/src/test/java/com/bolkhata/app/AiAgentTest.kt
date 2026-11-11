@@ -124,6 +124,28 @@ class AiAgentTest {
     }
 
     @Test
+    fun theSameEntryIsNotSavedTwiceWithinMinutes() {
+        val loan = """{"entries": [{"type": "borrowed", "amount": 300, "person": "Hamid Akram"}]}"""
+        assertEquals(1, use("add_entries", loan).getInt("saved"))
+        val before = saved.size
+        // Said again a moment later: nothing new is saved, and the AI is told the entry is already there.
+        val again = use("add_entries", loan)
+        assertEquals(0, again.getInt("saved"))
+        assertEquals(1, again.getJSONArray("already_saved_minutes_ago_not_added_again").length())
+        assertEquals(before, saved.size)
+        // Asked for on purpose, a second one is saved.
+        assertEquals(1, use("add_entries", """{"entries": [{"type": "borrowed", "amount": 300, "person": "Hamid Akram", "again": true}]}""").getInt("saved"))
+    }
+
+    @Test
+    fun aCardThatFindsNothingIsNotShown() {
+        val notes = AiAgent.Notes()
+        val out = JSONObject(AiAgent.use("show", JSONObject("""{"view": "list", "persons": ["Nobody Here"]}"""), host, now, notes))
+        assertEquals(false, out.getBoolean("shown_to_the_person"))
+        assertEquals("", notes.card)
+    }
+
+    @Test
     fun theAppDoesTheSums() {
         val t = use("totals", """{"types": ["expense"], "group_by": "category"}""")
         assertEquals(440.0, t.getDouble("total"), 0.001)
