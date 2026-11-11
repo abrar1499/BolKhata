@@ -100,6 +100,9 @@ object Parser {
     private val giveWords = listOf("give", "gave", "given", "diye", "diya", "diay", "dye", "de", "dia", "d", "دیے", "دیا")
 
     private val notNames = setOf(
+        // Days of the week are when, never who.
+        "itwar", "itwaar", "peer", "somwar", "mangal", "budh", "jumerat", "jumrat", "jumeraat", "juma", "jumma", "jummah", "sanichar",
+        "sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday",
         "ghar", "aaj", "kal", "maine", "main", "mujhe", "dukan", "dukaan", "market", "shop", "store", "baqala",
         "bakala", "supermarket", "pump", "workshop", "hotel", "restaurant", "pharmacy", "mall", "us", "is", "un",
         "riyal", "riyals", "rupay", "rupee", "rupees", "sar", "pkr", "ka", "ki", "ke", "ko", "se", "ne", "to",
@@ -501,6 +504,8 @@ object Parser {
                 }
                 income != null -> entries += make(Type.AAMDANI, Cat.TANKHWAH, income.first, "")
                 spend != null -> entries += make(Type.KHARCHA, spend.first, spend.second, "")
+                // "100 laundry wale ko diye": paid to a seller, named by what they sell; an expense, not a person's account.
+                sellerThing(words) != null -> entries += make(Type.KHARCHA, Cat.OTHER, sellerThing(words)!!, "")
                 person.isNotEmpty() && (hasKo || hasSe || hasNe || takes || giveWords.any { words.contains(it) } ||
                     neGiveWords.any { words.contains(it) }) -> {
                     val type = when {
@@ -522,6 +527,8 @@ object Parser {
                         else -> entries += make(type, Cat.UDHAAR, "Loans", person)
                     }
                 }
+                // "100 rupay bleach par lagay", "30 puncture pr": money that went on a thing no rule knows.
+                person.isEmpty() && thingPaidFor(words) != null -> entries += make(Type.KHARCHA, Cat.OTHER, thingPaidFor(words)!!, "")
                 else -> {
                     val guess = person.ifEmpty { guessName(words) }
                     if (groupType != null && guess.isNotEmpty()) {
@@ -681,6 +688,27 @@ object Parser {
         val words = t.split(Regex("""[^\p{L}\p{N}]+""")).filter { it.isNotEmpty() }
         rules.firstOrNull { r -> r.cat == e.category && r.keys.any { matches(it, t, words) } }?.let { return it.item }
         return if (e.category == Cat.TRANSPORT && repairWords.any { matches(it, t, words) }) "Car repair" else "Other"
+    }
+
+    /** Words that are never the thing money was spent on. */
+    private val notThings = setOf(
+        "rpy", "rupay", "rupaye", "rupees", "rupee", "rs", "riyal", "riyals", "sar", "pkr", "aj", "aaj", "kal", "mene", "maine", "main", "ne",
+        "ka", "ki", "ke", "k", "ko", "liye", "meri", "mera", "mere", "ye", "wo", "aur", "ar", "or", "and", "tha", "thay", "the", "hai", "ha"
+    )
+    private fun thing(w: String) = w.length >= 3 && w.all { it.isLetter() } && w !in notThings
+
+    /** The thing before "par / pe / pr" ("bleach par lagay", "brake shoe pr"): one or two words, as typed; null when there is none. */
+    private fun thingPaidFor(words: List<String>): String? {
+        val at = words.indexOfFirst { it in setOf("par", "pr", "pe", "pay", "py") }
+        if (at < 1 || !thing(words[at - 1])) return null
+        return listOfNotNull(words.getOrNull(at - 2)?.takeIf(::thing), words[at - 1]).joinToString(" ").replaceFirstChar { it.uppercase() }
+    }
+
+    /** "laundry wale ko diye": the thing a seller is named by; null when the sentence has no such seller. */
+    private fun sellerThing(words: List<String>): String? {
+        val at = words.indexOfFirst { it in setOf("wale", "waly", "walay", "wala", "wali") }
+        if (at < 1 || words.getOrNull(at + 1) != "ko" || !thing(words[at - 1])) return null
+        return words[at - 1].replaceFirstChar { it.uppercase() }
     }
 
     private fun matchSpending(t: String, words: List<String>): Pair<Cat, String>? {

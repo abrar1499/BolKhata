@@ -15,7 +15,9 @@ object NativeChatEngine {
         val unsure: Boolean = false
     )
 
-    private val expense = setOf("expense", "expenses", "spent", "spend", "spending", "kharcha", "kharch", "cashout")
+    private val expense = setOf("expense", "expenses", "spent", "spend", "spending", "kharcha", "kharch", "kharche", "khrcha", "khrch", "khrche", "cashout")
+    /** "kitna laga", "kahan lagay": money that went on something. */
+    private val went = setOf("laga", "lga", "lagay", "lage", "lagy", "lgy")
     private val income = setOf("income", "aamdani", "salary", "tankhwah", "earning", "earned", "cashin")
     private val lent = setOf("lent", "gave", "given", "diya", "diye", "udhar", "udhaar")
     private val borrowed = setOf("borrowed", "borrow", "took", "liya", "liye", "lia")
@@ -25,7 +27,10 @@ object NativeChatEngine {
         "have", "has", "had", "what", "which", "when", "where", "who", "how", "much", "many", "show", "find", "search",
         "list", "tell", "please", "plz", "about", "of", "for", "on", "in", "at", "to", "from", "with", "and", "or",
         "all", "every", "entries", "entry", "records", "record", "transactions", "transaction", "spent", "spend",
-        "spending", "expense", "expenses", "kharcha", "kharch", "ka", "ki", "ke", "ko", "se", "ne", "mein", "men",
+        "spending", "expense", "expenses", "kharcha", "kharch", "kharche", "khrcha", "khrch", "khrche", "laga", "lga", "lagay", "lage", "lagy", "lgy",
+        "ab", "abi", "abhi", "tak", "tk", "bta", "btak", "bola", "bnta", "banta", "ha", "ye", "yeh", "thay", "pichlay", "pichly", "pichli", "din", "dino", "dinon",
+        "hafte", "haftay", "hafty", "hisab", "hisaab", "dl", "dlt", "del", "delet", "dlete", "kr", "itwar", "itwaar", "peer", "pir", "somwar", "mangal", "budh",
+        "jumerat", "jumrat", "jumeraat", "juma", "jumma", "jummah", "sanichar", "sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "ka", "ki", "ke", "ko", "se", "ne", "mein", "men",
         "par", "pe", "per", "kitna", "kitne", "kitni", "kitnay", "kitny", "hua", "huwa", "hue", "huay", "hai", "hain",
         "tha", "thi", "the", "batao", "btao", "dikhao", "karo", "kar", "do", "dein", "mujhe", "mera", "meri", "mere",
         "today", "yesterday", "aaj", "aj", "kal", "parso", "parson", "parsu", "parsoon", "parsun", "this", "last", "month", "months", "week", "weeks",
@@ -139,6 +144,11 @@ object NativeChatEngine {
             val base = lastSearchFromHistory(history, entries, contacts, wordFixes, currency, now)
             if (base != null) return Fixed("", "ask", "", "list", base.filter)
         }
+        // "ye monthly kitna banta hai", "per month batao": the last question month by month, with the average.
+        if (history.isNotEmpty() && isMonthly(lower) && words.size <= 7 && lower.none(Char::isDigit)) {
+            val base = lastSearchFromHistory(history, entries, contacts, wordFixes, currency, now)
+            if (base != null) return Fixed("", "ask", "", "months", base.filter)
+        }
         // "kahan kahan laga", "kis cheez par": the last question's spending by category.
         if (history.isNotEmpty() && isBreakdownFollowUp(lower)) {
             val base = lastSearchFromHistory(history, entries, contacts, wordFixes, currency, now)
@@ -180,7 +190,7 @@ object NativeChatEngine {
         // Pronouns can only refer to stable IDs explicitly attached to the last assistant result.
         val ids = history.lastOrNull { !it.isUser && it.entryIds.isNotEmpty() }?.entryIds.orEmpty().toSet()
         if (ids.isNotEmpty() && Regex("""\b(it|that|this|those|these|isko|usko|ye|yeh|inko)\b""").containsMatchIn(lower)) {
-            if (has(words, setOf("delete", "remove", "hatao", "mitao", "del", "dlt")))
+            if (has(words, setOf("delete", "delet", "dlete", "remove", "hatao", "mitao", "del", "dl", "dlt")))
                 return Fixed("", "delete", "", filter = Query.Filter(ids = ids))
             val n = Regex("""(?<!\d)(\d[\d,]*(?:\.\d{1,2})?)(?!\d)""").find(lower)?.groupValues?.get(1)
             if (n != null && has(words, setOf("change", "update", "edit", "badlo", "make")))
@@ -288,7 +298,7 @@ object NativeChatEngine {
         val planned = if (showOnly) null else runCatching { Edits.plan(text, entries, now) }.getOrNull()
         if (planned != null) return Fixed("", "plan", "", plan = EditPlan(planned.changed, planned.deleted, planned.message))
 
-        val delete = has(words, setOf("delete", "delet", "del", "dlt", "remove", "hatao", "hata", "mitao", "مٹاؤ"))
+        val delete = has(words, setOf("delete", "delet", "dlete", "del", "dl", "dlt", "remove", "hatao", "hata", "mitao", "مٹاؤ"))
         val clear = has(words, setOf("clear", "wipe"))
         val all = has(words, setOf("all", "every", "sab", "sari", "saari", "tamam", "everything"))
         // "Is saal ka kharcha kholo", "is mahine ka total kharcha open karein": open means show, not edit.
@@ -372,15 +382,16 @@ object NativeChatEngine {
             val knownDomain = has(words, expense + income + lent + borrowed + setOf(
                 "entries", "entry", "transactions", "transaction", "records", "record", "balance", "profit", "stock",
                 "khata", "qarz", "udhar", "udhaar", "report", "summary", "overview", "total", "hisab", "hisaab", "cashbook"
-            )) || words.any { token -> categories.values.any { token in it } } || dateBounds(lower, now) != null
+            )) || words.any { token -> categories.values.any { token in it } } || dateBounds(lower, now) != null || isMonthly(lower)
             if (!knownDomain)
                 return Fixed("", "chat", "Sorry, I didn't get that. Try 'food this month' or 'last 5 entries'.", unsure = true)
             val periodWords = setOf("today", "yesterday", "aaj", "aj", "kal", "this", "last", "month", "week", "year",
                 "mahina", "mahine", "saal", "all", "time", "overall", "lifetime", "ever", "alltime")
             val simpleLookup = (words.any { token -> categories.values.any { token in it } } || has(words, expense + income)) &&
                 !has(words, setOf("how", "much", "many", "kitna", "kitne", "kitni", "total", "sum", "count")) &&
-                !has(words, periodWords - setOf("all"))
+                !has(words, periodWords - setOf("all")) && dateBounds(lower, now) == null
             val what = when {
+                isMonthly(lower) -> "months"
                 has(words, setOf("highest", "largest", "biggest", "maximum", "max", "most")) -> "highest"
                 has(words, setOf("count", "howmany", "kitne", "kitni", "number")) -> "count"
                 has(words, setOf("show", "find", "search", "list", "which", "kahan", "kab", "dikhao", "dikha", "cashbook")) ||
@@ -388,8 +399,9 @@ object NativeChatEngine {
                 else -> "sum"
             }
             // "kal kitna huwa tha" names no kind of money: people mean what they spent.
-            val bare = what == "sum" && filter.types.isEmpty() && filter.cats.isEmpty() && filter.persons.isEmpty() &&
-                filter.items.isEmpty() && filter.from != null
+            // "pichle 10 din ka hisab" asks for the whole account of those days, so it keeps every kind; a monthly question with nothing named is about spending.
+            val bare = (what == "sum" && filter.from != null && !has(words, setOf("hisab", "hisaab", "summary", "overview")) || what == "months") &&
+                filter.types.isEmpty() && filter.cats.isEmpty() && filter.persons.isEmpty() && filter.items.isEmpty()
             return Fixed("", "ask", "", what, if (bare) withTypes(filter, setOf(Type.KHARCHA)) else filter)
         }
 
@@ -659,6 +671,7 @@ object NativeChatEngine {
         val types = when {
             has(w, expense) -> setOf(Type.KHARCHA)
             has(w, income) -> setOf(Type.AAMDANI)
+            has(w, went) -> setOf(Type.KHARCHA)
             has(w, lent) -> setOf(Type.DIYA, Type.WAPIS_MILA)
             has(w, borrowed) -> setOf(Type.LIYA, Type.WAPIS_DIYA)
             has(w, setOf("sale", "sales", "bikri")) -> setOf(Type.SALE)
@@ -721,14 +734,6 @@ object NativeChatEngine {
         Regex("""\b(?:aaj|aj|ab|abhi|abi)\s+(?:tak|tk)\b|\ball\s+time\b|\b(?:alltime|overall|lifetime|ever)\b""").containsMatchIn(text)
 
     private fun dateBounds(text: String, now: Long): Bounds? {
-        // "19 aug se aaj tak", "from 19 aug to today": from the first day to the end of the second.
-        (Regex("""^(.*?)\s+(?:se|sy|say)\s+(.*?)\s+(?:tak|tk|takk|until|till)\b""").find(text)
-            ?: Regex("""\bfrom\s+(.+?)\s+(?:to|till|until)\s+(.+)$""").find(text))?.let { m ->
-            val a = dateBounds(m.groupValues[1], now)
-            val b = dateBounds(m.groupValues[2], now)
-            if (a != null && b != null) return Bounds(minOf(a.from, b.from), maxOf(a.to, b.to))
-        }
-        if (soFar(text)) return null
         val w = tokens(text)
         fun day(offset: Int): Bounds {
             val c = Calendar.getInstance().apply { timeInMillis = now; add(Calendar.DAY_OF_YEAR, offset) }
@@ -740,6 +745,14 @@ object NativeChatEngine {
             }.timeInMillis
             return Bounds(start, end)
         }
+        // "19 aug se aaj tak", "17 aug 26 se ab tak", "from 19 aug to today": from the first day to the end of the second.
+        (Regex("""^(.*?)\s+(?:se|sy|say)\s+(.*?)\s+(?:tak|tk|takk|until|till)\b""").find(text)
+            ?: Regex("""\bfrom\s+(.+?)\s+(?:to|till|until)\s+(.+)$""").find(text))?.let { m ->
+            val a = dateBounds(m.groupValues[1], now)
+            val b = dateBounds(m.groupValues[2], now) ?: day(0).takeIf { tokens(m.groupValues[2]).let { t -> t.isNotEmpty() && t.all { it in setOf("ab", "abi", "abhi", "now") } } }
+            if (a != null && b != null) return Bounds(minOf(a.from, b.from), maxOf(a.to, b.to))
+        }
+        if (soFar(text)) return null
         when {
             w.any { it in dayBeforeYesterday } || text.contains("day before yesterday") -> return day(-2)
             w.any { it in setOf("yesterday", "kal", "kl") } -> return day(-1)
@@ -752,8 +765,18 @@ object NativeChatEngine {
             "last" in w && w.any { it in setOf("year", "saal") } -> return yearBounds(now, -1)
             w.any { it in thisWords } && w.any { it in setOf("year", "saal") } -> return yearBounds(now, 0)
         }
-        val lastDays = Regex("""\b(?:last|past)\s+(\d{1,3})\s+days?\b""").find(text)?.groupValues?.get(1)?.toIntOrNull()
-        if (lastDays != null) return Bounds(now - lastDays.coerceAtMost(365) * 86_400_000L, now)
+        // "last 10 days", "pichlay 10 din", "pichle 2 hafte", "last 3 months": that many days back from now.
+        Regex("""\b(?:last|past|pichle|pichlay|pichly|pichhle|guzishta)\s+(\d{1,3})\s+(days?|din|dino|dinon|weeks?|hafte|haftay|hafty|months?|mahine|mahiny|mahina)\b""").find(text)?.let { m ->
+            val unit = m.groupValues[2]
+            val days = m.groupValues[1].toInt() * (if (unit.startsWith("w") || unit.startsWith("haf")) 7 else if (unit.startsWith("mo") || unit.startsWith("mah")) 30 else 1)
+            return Bounds(now - days.coerceAtMost(730) * 86_400_000L, now)
+        }
+        // "pichli jumerat", "last friday", "is juma": the latest such day (before today when "last" is said).
+        weekdays.entries.firstOrNull { it.key in w }?.let { (_, dayOfWeek) ->
+            val today = Calendar.getInstance().apply { timeInMillis = now }.get(Calendar.DAY_OF_WEEK)
+            val back = ((today - dayOfWeek + 7) % 7).let { if (it == 0 && w.any { x -> x in setOf("last", "pichli", "pichle", "pichlay", "pichly", "pichhle", "guzishta", "previous") }) 7 else it }
+            return day(-back)
+        }
         if (Regex("""\b(last|past|previous)\s+day\b""").containsMatchIn(text)) return day(-1)
         if (Regex("""\blast\s+24\s+hours?\b""").containsMatchIn(text)) return Bounds(now - 86_400_000L, now)
 
@@ -764,14 +787,17 @@ object NativeChatEngine {
             "aug" to 8, "august" to 8, "sep" to 9, "sept" to 9, "september" to 9,
             "oct" to 10, "october" to 10, "nov" to 11, "november" to 11, "dec" to 12, "december" to 12
         )
-        val dayMonth = Regex("""\b(\d{1,2})(?:st|nd|rd|th)?[\s,/-]+([a-z]+)(?:[\s,/-]+(\d{4}))?\b""")
+        val dayMonth = Regex("""\b(\d{1,2})(?:st|nd|rd|th)?[\s,/-]+([a-z]+)(?:[\s,/-]+(\d{2,4}))?\b""")
             .find(text)
         val monthDay = Regex("""\b([a-z]+)[\s,/-]+(\d{1,2})(?:st|nd|rd|th)?(?:[\s,/-]+(\d{4}))?\b""")
             .find(text)
         val explicitMonth = dayMonth?.groupValues?.get(2) ?: monthDay?.groupValues?.get(1)
         val explicitDay = (dayMonth?.groupValues?.get(1) ?: monthDay?.groupValues?.get(2))?.toIntOrNull()
+        val thisYear = Calendar.getInstance().apply { timeInMillis = now }.get(Calendar.YEAR)
+        // "17 aug 26", "17 aug 026": a short year, taken only when it is near this one (else it is an amount).
         val explicitYear = (dayMonth?.groupValues?.get(3)?.takeIf { it.isNotBlank() }
             ?: monthDay?.groupValues?.get(3)?.takeIf { it.isNotBlank() })?.toIntOrNull()
+            ?.let { if (it < 1000) it + 2000 else it }?.takeIf { kotlin.math.abs(it - thisYear) <= 5 }
         val explicitMonthNumber = explicitMonth?.let { monthNumbers[it] }
         if (explicitDay != null && explicitMonthNumber != null) {
             val year = explicitYear ?: Calendar.getInstance().apply { timeInMillis = now }.get(Calendar.YEAR)
@@ -810,6 +836,17 @@ object NativeChatEngine {
         }
         return null
     }
+
+    /** The days of the week as people type them, to Calendar's numbers. */
+    private val weekdays = mapOf(
+        "sunday" to Calendar.SUNDAY, "itwar" to Calendar.SUNDAY, "itwaar" to Calendar.SUNDAY,
+        "monday" to Calendar.MONDAY, "peer" to Calendar.MONDAY, "pir" to Calendar.MONDAY, "somwar" to Calendar.MONDAY,
+        "tuesday" to Calendar.TUESDAY, "mangal" to Calendar.TUESDAY,
+        "wednesday" to Calendar.WEDNESDAY, "budh" to Calendar.WEDNESDAY,
+        "thursday" to Calendar.THURSDAY, "jumerat" to Calendar.THURSDAY, "jumrat" to Calendar.THURSDAY, "jumeraat" to Calendar.THURSDAY,
+        "friday" to Calendar.FRIDAY, "juma" to Calendar.FRIDAY, "jumma" to Calendar.FRIDAY, "jummah" to Calendar.FRIDAY,
+        "saturday" to Calendar.SATURDAY, "sanichar" to Calendar.SATURDAY
+    )
 
     private fun weekBounds(now: Long, offset: Int): Bounds {
         val c = Calendar.getInstance().apply {
@@ -939,6 +976,10 @@ object NativeChatEngine {
     }
 
     /** "detail do", "details", "tafseel batao", "list dikhao": show the entries behind the last answer. */
+    /** "monthly", "per month", "mahana", "har mahine", "month wise": a question for the totals month by month. */
+    private fun isMonthly(text: String): Boolean = has(tokens(text), setOf("monthly", "mahana", "mahwar", "monthwise", "mahinewar")) ||
+        Regex("""\b(per|har|each|every)\s+(month|mahine|mahina|mahiny)\b|\b(month|mahine|mahina)\s+(wise|war)\b""").containsMatchIn(text)
+
     private fun isDetailFollowUp(text: String): Boolean {
         val w = tokens(text)
         val ask = setOf("detail", "details", "detailed", "tafseel", "tafsil", "breakdown", "list", "entries")
@@ -950,10 +991,11 @@ object NativeChatEngine {
     /** "kahan kahan laga", "kis cheez par kharch hua", "breakdown do": where the money of the last answer went. */
     private fun isBreakdownFollowUp(text: String): Boolean {
         val w = tokens(text)
-        val ask = setOf("kahan", "kahaan", "kahn", "kidhar", "where", "breakdown", "category", "categories", "categorywise")
+        val ask = setOf("kahan", "kahaan", "kahn", "kidhar", "kidhr", "kidher", "where", "breakdown", "category", "categories", "catagory", "catagories", "categorywise")
         val filler = ask + setOf("kis", "cheez", "chez", "cheezon", "par", "pe", "laga", "lage", "lagi", "gaya", "gaye", "gya",
             "hua", "huwa", "hue", "kharch", "kharcha", "spent", "went", "did", "it", "go", "money", "paisa", "pese", "paise",
-            "wise", "wo", "ye", "batao", "btao", "dikhao", "kya", "the", "tha", "thi", "me", "mein", "aur", "or", "sab", "by", "show")
+            "wise", "wo", "ye", "batao", "btao", "dikhao", "kya", "the", "tha", "thi", "me", "mein", "aur", "or", "sab", "by", "show",
+            "main", "bola", "kaha", "mene", "maine", "ne")
         return w.isNotEmpty() && w.size <= 7 && has(w, ask + "kis") && w.all { it in filler }
     }
 

@@ -666,6 +666,14 @@ class Store(context: Context) {
         }.getOrDefault(emptyMap())
         set(v) = prefs.edit().putString("learned", org.json.JSONObject(v.entries.toList().takeLast(500).associate { it.key to it.value }).toString()).apply()
 
+    /** What the app learnt from the AI: a message's shape to the entries the AI made of it (see AiAgent.lesson). */
+    var aiLearned: Map<String, String>
+        get() = runCatching {
+            val o = org.json.JSONObject(prefs.getString("aiLearned", "{}") ?: "{}")
+            o.keys().asSequence().associateWith { o.getString(it) }
+        }.getOrDefault(emptyMap())
+        set(v) = prefs.edit().putString("aiLearned", org.json.JSONObject(v.entries.toList().takeLast(500).associate { it.key to it.value }).toString()).apply()
+
     /** Use Groq Whisper for the mic and the voice call instead of the phone's speech recognition. */
     var groqVoice: Boolean
         get() = prefs.getBoolean("groqVoice", true)

@@ -115,10 +115,10 @@ class AiAgentTest {
         assertEquals(
             "By month (recharge):\n" + month(now) + " · 2 entries · 150 PKR\n" + month(now - 40 * 86_400_000L) + " · 1 entry · 60 PKR\n" +
                 "Total: 210 PKR · Average a month 105 PKR",
-            AiAgent.grouped(list, "month", "recharge", "PKR")
+            Query.grouped(list, "month", "recharge", "PKR")
         )
         // The chat reads it as a card: a row per month, the total and the average under it.
-        val card = Report.parse(AiAgent.grouped(list, "month", "recharge", "PKR"), "PKR")!!
+        val card = Report.parse(Query.grouped(list, "month", "recharge", "PKR"), "PKR")!!
         assertEquals(2, card.rows.size)
         assertEquals(listOf("Total", "Average a month"), card.total.map { it.label })
     }
@@ -143,6 +143,30 @@ class AiAgentTest {
         val out = JSONObject(AiAgent.use("show", JSONObject("""{"view": "list", "persons": ["Nobody Here"]}"""), host, now, notes))
         assertEquals(false, out.getBoolean("shown_to_the_person"))
         assertEquals("", notes.card)
+    }
+
+    @Test
+    fun theAppLearnsASentenceFromTheAi() {
+        // The AI read "hamid ne 50 diye aur chai pr 20 lagay" as two entries: the app keeps them, each number by its place.
+        val said = "Hamid ne 50 diye aur chai pr 20 lagay"
+        val lesson = AiAgent.lesson(listOf("add_entries" to JSONObject("""{"entries": [
+            {"type": "received_back", "amount": 50, "person": "Hamid Akram"}, {"type": "expense", "amount": 20, "category": "Food", "item": "Chai"}]}""")), said)!!
+        // The same sentence with other numbers has the same shape, and is done by the app alone.
+        val again = "hamid ne 300 diye aur chai pr 15 lagay"
+        assertEquals(AiAgent.shape(said), AiAgent.shape(again))
+        val notes = AiAgent.Notes()
+        AiAgent.use("add_entries", AiAgent.recall(lesson, again)!!, host, now, notes)
+        val made = saved.filter { it.id in notes.added }.sortedByDescending { it.amount }
+        assertEquals(listOf(300.0, 15.0), made.map { it.amount })
+        assertEquals(Type.WAPIS_MILA, made[0].type); assertEquals("Hamid Akram", made[0].person)
+        assertEquals("Chai", made[1].item); assertEquals(Cat.KHANA, made[1].category)
+        // "150k" is one number; other words give another shape.
+        assertEquals(listOf(150_000.0, 120_400.0), AiAgent.numbers("salim 150k and rashid 120.4k"))
+        assertEquals(false, AiAgent.shape("hamid ko 50 diye") == AiAgent.shape("hamid ne 50 diye"))
+        // Not learnt: a day the AI worked out, an amount that was not said, or more than one step.
+        assertEquals(null, AiAgent.lesson(listOf("add_entries" to JSONObject("""{"entries": [{"type": "expense", "amount": 50, "date": "2026-11-10"}]}""")), "kal chai 50"))
+        assertEquals(null, AiAgent.lesson(listOf("add_entries" to JSONObject("""{"entries": [{"type": "expense", "amount": 75}]}""")), "chai 50"))
+        assertEquals(null, AiAgent.lesson(listOf("find_entries" to JSONObject("{}"), "add_entries" to JSONObject("""{"entries": [{"type": "expense", "amount": 50}]}""")), "chai 50"))
     }
 
     @Test
