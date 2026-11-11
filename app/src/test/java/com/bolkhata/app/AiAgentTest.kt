@@ -17,11 +17,12 @@ class AiAgentTest {
     )
     private val trashed = mutableSetOf<String>()
     private var setup = SideSetup()
+    private var made: PdfDoc? = null
     private val host = AiAgent.Host(
         entries = { saved }, add = { saved = it + saved },
         update = { changed -> saved = saved.map { e -> changed.firstOrNull { it.id == e.id } ?: e } },
         trash = { ids -> trashed += ids; saved = saved.filter { it.id !in ids } }, names = { listOf("Hamid Akram") }, currency = "PKR",
-        setup = { setup }, saveSetup = { setup = it }
+        setup = { setup }, saveSetup = { setup = it }, pdf = { made = it }
     )
 
     private fun entry(id: String, type: Type, amount: Double, cat: Cat, item: String, person: String, date: Long, created: Long) =
@@ -52,6 +53,20 @@ class AiAgentTest {
         assertEquals("Drivers", Sides.bookOf("Hamid Akram", saved, setup))
         assertEquals("Fuel", use("add_account", """{"side": "expense", "name": "Fuel"}""").getString("made"))
         assertEquals(true, setup.books.any { it.name == "Fuel" && !it.people && it.side == Side.EXP })
+    }
+
+    @Test
+    fun aPdfHoldsEveryMatchingEntryWithTotals() {
+        val out = use("make_pdf", """{"title": "Expenses", "types": ["expense"], "group_by": "category"}""")
+        assertEquals(3, out.getInt("entries"))
+        val doc = made!!
+        assertEquals("Expenses", doc.title)
+        // A summary, then Food (2 entries) and Transport (1), the biggest first.
+        assertEquals(listOf("Summary", "Food", "Transport"), doc.tables.map { it.heading })
+        assertEquals(listOf("Total", "3", "440 PKR"), doc.tables[0].foot)
+        assertEquals(2, doc.tables[1].rows.size)
+        assertEquals("340 PKR", doc.tables[1].foot!!.last())
+        assertEquals("Tea", doc.tables[1].rows[0][1])
     }
 
     @Test

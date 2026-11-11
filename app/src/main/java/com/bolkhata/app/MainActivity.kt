@@ -1240,6 +1240,8 @@ fun App(
     /** The last lookup Groq made (its JSON), so a follow-up ("income kya thi") changes only what it names. */
     var lastGroqQuery by remember { mutableStateOf("") }
 
+    // The PDF maker is written further down; the AI's PDF tool reaches it through this.
+    val aiPdf = remember { arrayOfNulls<(PdfDoc) -> Unit>(1) }
     /** Without AI (no key, or no internet): save clear entries, answer simple questions, never stay silent. */
     fun chatInput(raw: String) {
         if (chatMessages.isEmpty()) lastGroqQuery = ""
@@ -1286,7 +1288,7 @@ fun App(
                         entries = { entries }, add = { save(it + entries) },
                         update = { changed -> save(entries.map { e -> changed.firstOrNull { it.id == e.id } ?: e }) },
                         trash = { ids -> moveToTrash(ids) }, names = { names0 }, currency = currency,
-                        setup = { sides }, saveSetup = { s -> sides = s; store.saveSides(s) }
+                        setup = { sides }, saveSetup = { s -> sides = s; store.saveSides(s) }, pdf = { doc -> aiPdf[0]?.invoke(doc) }
                     )
                     // The AI is asked off the main thread; each tool then runs on it, where the entries live.
                     val answer = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
@@ -1964,6 +1966,7 @@ fun App(
             }
         }.onFailure { toast("Couldn't make the PDF") }
     }
+    aiPdf[0] = { doc -> sharePdf(doc) }
 
     /** A bill for goods given to a customer: number, date, the goods, this bill and what they owe in all. */
     fun billDoc(e: Entry): PdfDoc {

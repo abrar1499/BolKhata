@@ -19,7 +19,9 @@ object AiAgent {
         val entries: () -> List<Entry>, val add: (List<Entry>) -> Unit, val update: (List<Entry>) -> Unit,
         val trash: (Set<String>) -> Unit, val names: () -> List<String>, val currency: String,
         /** The owner's accounts and who sits in which people account. */
-        val setup: () -> SideSetup = { SideSetup() }, val saveSetup: (SideSetup) -> Unit = {}
+        val setup: () -> SideSetup = { SideSetup() }, val saveSetup: (SideSetup) -> Unit = {},
+        /** Builds the PDF and opens the share sheet. */
+        val pdf: (PdfDoc) -> Unit = {}
     )
 
     /** The AI's reply and the entries it saved (shown as the Saved card). */
@@ -83,6 +85,10 @@ object AiAgent {
         Ai.Tool("add_account", "Makes a new empty Expense or Income account (a thing money goes to or comes from).", shape(
             "side" to JSONObject().put("type", "string").put("enum", JSONArray(listOf("expense", "income"))), "name" to text("Account name"),
             required = listOf("side", "name"))),
+        Ai.Tool("make_pdf", "Makes a PDF of every matching entry (date, item, detail, amount, with totals) and opens the share sheet. Use it when a PDF, record, statement or report to share is asked for.",
+            shape(*picking, "title" to text("Heading of the PDF, e.g. Expenses"),
+                "group_by" to JSONObject().put("type", "string").put("enum", JSONArray(listOf("category", "person", "month"))).put("description", "A table per group, with a summary first"),
+                required = listOf("title"))),
         Ai.Tool("delete_entries", "Moves saved entries to Trash (ids from find_entries); the person can restore them.", shape("ids" to words("Entry ids"), required = listOf("ids")))
     )
 
@@ -105,6 +111,8 @@ object AiAgent {
         - People are kept in Party accounts: Customers, Suppliers, Staff (workers, employees, labour), People (anyone
           else), or an account the owner names. To make an account or put people in one, use put_in_account; it needs
           no entry. An advance or payment to a worker is "lent" with that person, and the person goes in Staff.
+        - A PDF, record, statement or report to share is make_pdf with the same picking fields: the app puts every
+          matching entry in it and opens the share sheet; then say shortly that it is ready.
         - Greet only when the message itself greets. Small talk: answer briefly, no tools. You only know this app;
           for anything else say so shortly.
     """.trimIndent() + if (names.isEmpty()) "" else "\nSaved names: " + names.joinToString(", ")
@@ -187,6 +195,38 @@ object AiAgent {
             }
             host.update(changed)
             JSONObject().put("changed", changed.size).put("entries", JSONArray(changed.take(40).map { show(it) })).toString()
+        }
+        "make_pdf" -> {
+            val list = pick(input, host, now).sortedBy { it.date }
+            if (list.isEmpty()) error("no entries match")
+            val show = SimpleDateFormat("d MMM yyyy", Locale.US)
+            fun money(v: Double) = (if (v == Math.floor(v)) String.format(Locale.US, "%,d", v.toLong()) else String.format(Locale.US, "%,.2f", v)) +
+                if (host.currency.isBlank()) "" else " " + host.currency
+            fun rows(l: List<Entry>) = l.map { e ->
+                listOf(show.format(Date(e.date)), e.item.ifBlank { e.category.label }, e.person.ifBlank { if (e.type == Type.KHARCHA) e.category.label else e.type.label }, money(e.amount))
+            }
+            val cols = listOf("Date", "Item", "Detail", "Amount")
+            val by: ((Entry) -> String)? = when (input.optString("group_by")) {
+                "category" -> { e -> e.category.label }
+                "person" -> { e -> e.person.ifBlank { "No person" } }
+                "month" -> { e -> SimpleDateFormat("MMM yyyy", Locale.US).format(Date(e.date)) }
+                else -> null
+            }
+            val total = list.sumOf { it.amount }
+            val tables = if (by == null) listOf(PdfTable("", cols, rows(list), listOf("Total", "", "", money(total)), left = 3))
+            else list.groupBy(by).entries.sortedByDescending { g -> g.value.sumOf { it.amount } }.let { groups ->
+                // A summary first, then every group with its own entries and total.
+                listOf(PdfTable("Summary", listOf("", "Entries", "Amount"), groups.map { (k, l) -> listOf(k, l.size.toString(), money(l.sumOf { it.amount })) },
+                    listOf("Total", list.size.toString(), money(total)))) +
+                    groups.map { (k, l) -> PdfTable(k, cols, rows(l), listOf("Total", "", "", money(l.sumOf { it.amount })), left = 3) }
+            }
+            val period = listOf("from", "to").map { input.optString(it).trim() }.let { (a, b) ->
+                fun nice(s: String) = runCatching { show.format(dayFmt.parse(s)!!) }.getOrDefault(s)
+                if (a.isBlank() && b.isBlank()) show.format(Date(list.first().date)) + " – " + show.format(Date(list.last().date))
+                else (if (a.isBlank()) "Up to" else nice(a)) + (if (b.isBlank()) " onwards" else (if (a.isBlank()) " " else " – ") + nice(b))
+            }
+            host.pdf(PdfDoc(input.optString("title").trim().ifBlank { "Entries" }, period, listOf(money(total) to "Total", list.size.toString() to "Entries"), tables))
+            JSONObject().put("pdf_ready", true).put("entries", list.size).put("total", total).toString()
         }
         "accounts" -> {
             val all = host.entries()
