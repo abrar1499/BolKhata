@@ -228,7 +228,7 @@ class Store(context: Context) {
 
     /** Keys left out of a backup: AI keys are private and stay on this phone, as do this phone's Drive sync notes. */
     private val notBackedUp = setOf("aiKey", "fastKey", "aiModel", "fileKey", "groqKey", "elevenKey", "logToken",
-        "driveEmail", "driveAt", "driveDirty", "deviceId", "llmKey", "llmModel", "llmIn", "llmOut", "llmMicro")
+        "driveEmail", "driveAt", "driveDirty", "deviceId", "llmKey", "llmModel", "llmIn", "llmOut", "llmMicro", "llmVoice")
 
     /** Also kept off Google Drive: the chat history and the background photo (a file on this phone). */
     private val phoneOnly = setOf("chatMessages", "bgPhoto")
@@ -616,6 +616,10 @@ class Store(context: Context) {
     var llmKey: String
         get() = prefs.getString("llmKey", "") ?: ""
         set(v) = prefs.edit().putString("llmKey", v.trim()).apply()
+    /** A Groq key used only to hear the mic's recording (Whisper). */
+    var llmVoice: String
+        get() = prefs.getString("llmVoice", "") ?: ""
+        set(v) = prefs.edit().putString("llmVoice", v.trim()).apply()
     var llmModel: String
         get() = prefs.getString("llmModel", "") ?: ""
         set(v) = prefs.edit().putString("llmModel", v.trim()).apply()

@@ -210,7 +210,7 @@ internal fun SideMenu(
     /** Signing in and fetching the data: the Gmail once known; null when not. */
     driveBusy: String? = null,
     /** Test feature: the AI key row (null: not in this build). */
-    ai: AiInfo? = null, onAiOpen: () -> Unit = {}, onAiSave: (key: String, model: String) -> Unit = { _, _ -> }, onAiOff: () -> Unit = {},
+    ai: AiInfo? = null, onAiOpen: () -> Unit = {}, onAiSave: (key: String, model: String, voice: String) -> Unit = { _, _, _ -> }, onAiOff: () -> Unit = {},
     onSignIn: () -> Unit = {}, onSyncNow: () -> Unit = {}, onSignOut: () -> Unit = {}
 ) {
     var driveOpen by remember { mutableStateOf(false) }
@@ -218,12 +218,15 @@ internal fun SideMenu(
     if (aiOpen && ai != null) {
         var key by remember { mutableStateOf("") }
         var model by remember { mutableStateOf(ai.model) }
+        var voice by remember { mutableStateOf("") }
         // What a key being typed belongs to, before it is saved.
         val typed = Ai.provider(key)
-        AppPopup("AI key", "Save", onDismiss = { aiOpen = false }, onAction = { aiOpen = false; onAiSave(key, model) },
+        AppPopup("AI key", "Save", onDismiss = { aiOpen = false }, onAction = { aiOpen = false; onAiSave(key, model, voice) },
             second = if (ai.name.isBlank()) "Cancel" else "Turn off", onSecond = { aiOpen = false; if (ai.name.isNotBlank()) onAiOff() }) {
             WellField(key, { key = it.trim() }, if (ai.name.isBlank()) "Paste any AI key" else "${ai.name} key saved · paste to change")
             WellField(model, { model = it.trim() }, "Model: " + (typed?.model ?: ai.modelNow.ifBlank { "the usual one" }))
+            // Optional: the mic's recording is sent to Groq's Whisper, which hears Urdu far better than the phone.
+            WellField(voice, { voice = it.trim() }, if (ai.voice) "Voice key saved · paste to change" else "Voice key (Groq, optional)")
             Text(
                 when {
                     key.isNotBlank() -> typed?.let { "${it.name} key" } ?: "This key is not recognised"
@@ -360,7 +363,7 @@ internal fun SideMenu(
 }
 
 /** Test feature: what the AI key row shows: the provider's name ("" when off), the model typed, the model in use, tokens used. */
-class AiInfo(val name: String, val model: String, val modelNow: String, val used: String)
+class AiInfo(val name: String, val model: String, val modelNow: String, val used: String, val voice: Boolean = false)
 
 /** The Google sign-in line: the G and "Sign in with Google", or the Gmail's first letter, the Gmail and how syncing went ([busy]: fetching). */
 @Composable
