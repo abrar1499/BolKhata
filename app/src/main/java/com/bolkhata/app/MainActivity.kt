@@ -3185,31 +3185,11 @@ fun App(
     }
 
     editing?.let { e ->
-        FormPopup(onDismiss = { editing = null }) {
-            EntryForm(
-                initial = e,
-                title = "Edit entry",
-                question = null,
-                askType = false,
-                currency = currency,
-                all = entries,
-                saveLabel = "Save",
-                onSave = { changed ->
-                    learnFrom(e, changed)
-                    val updated = entries.map { if (it.id == changed.id) changed else it }
-                    // Moving one shop's expense out of Other moves that shop's other Other expenses too.
-                    val moved = Recat.sameShop(updated, e, changed)
-                    val more = moved.indices.count { moved[it] !== updated[it] }
-                    save(moved)
-                    editing = null
-                    toast(if (more > 0) "✓ Saved · $more more from this shop moved to ${changed.category.label}" else "✓ Saved")
-                },
-                onDelete = {
-                    editing = null
-                    moveToTrash(setOf(e.id))
-                },
-                onCancel = { editing = null }
-            )
+        EditSheet(e, entries, onDismiss = { editing = null }, onDelete = { editing = null; moveToTrash(setOf(e.id)) }) { changed ->
+            learnFrom(e, changed)
+            save(entries.map { if (it.id == changed.id) changed else it })
+            editing = null
+            toast("✓ Saved")
         }
     }
 

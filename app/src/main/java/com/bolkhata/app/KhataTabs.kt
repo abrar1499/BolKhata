@@ -1062,8 +1062,8 @@ fun SideScreen(
     val newest = remember(entries) { entries.sortedByDescending { it.date } }
     val per = remember(period, newest) { Period.decode(period) ?: Period.newestMonth(newest) }
     val inPer = { ms: Long -> per.has(ms) }
-    // A saved entry opens in the same sheet it was added with; other kinds keep the full form.
-    val edit: (Entry) -> Unit = { e -> editReq(e, listOfNotNull(bookName, kidName).joinToString(" › "))?.let { sheet = it } ?: onEdit(e) }
+    // A saved entry opens in the same sheet it was added with.
+    val edit: (Entry) -> Unit = { e -> sheet = editReq(e, listOfNotNull(bookName, kidName).joinToString(" › ")) }
     val upKid = { kidName = null; if (leave != null) { bookName = null; leave() } }
     BackHandler(enabled = bookName != null) { if (personName != null) personName = null else if (kidName != null) upKid() else bookName = null }
     LaunchedEffect(kidName) { personName = null }
@@ -1545,8 +1545,8 @@ private class AddReq(val template: Entry, val label: String, val color: Color, v
     /** [template] is a saved entry being changed: the sheet opens filled, and Save keeps its id. */
     val edit: Boolean = false)
 
-/** The add sheet opened on a saved entry, so changing looks the same as adding; null for kinds the sheet does not make. */
-private fun editReq(e: Entry, crumb: String): AddReq? {
+/** The add sheet opened on a saved entry, so changing looks the same as adding. */
+private fun editReq(e: Entry, crumb: String): AddReq {
     val (label, color) = when (e.type) {
         Type.PURCHASE -> "Work" to OweButton
         Type.SALE -> "Given" to OweButton
@@ -1554,7 +1554,10 @@ private fun editReq(e: Entry, crumb: String): AddReq? {
         Type.WAPIS_MILA -> "Received" to GreenIn
         Type.KHARCHA -> "Out" to RedSpend
         Type.AAMDANI -> "In" to GreenIn
-        else -> return null
+        Type.LIYA -> "Taken" to OweButton
+        Type.WAPIS_DIYA -> "Paid back" to RedSpend
+        Type.TRANSFER_IN -> "Transfer in" to GreenIn
+        Type.TRANSFER_OUT -> "Transfer out" to RedSpend
     }
     // Qty and rate show only when they make the saved amount; else the amount itself is changed.
     val made = if (e.unit == "1000") e.qty / 1000 * e.rate else e.qty * e.rate
@@ -1664,6 +1667,11 @@ private fun AddSheet(r: AddReq, all: List<Entry>, onDismiss: () -> Unit, onDelet
         }
     }
 }
+
+/** A saved entry opened to change, from anywhere in the app: the same sheet as adding, filled, with Delete. */
+@Composable
+internal fun EditSheet(e: Entry, all: List<Entry>, onDismiss: () -> Unit, onDelete: () -> Unit, onSave: (Entry) -> Unit) =
+    AddSheet(editReq(e, listOf(e.person.trim().ifBlank { e.category.label }, e.item.trim()).filter { it.isNotBlank() }.distinct().joinToString(" › ")), all, onDismiss, onDelete, onSave)
 
 /** A grey box showing a date or time; tap to change it. */
 @Composable
