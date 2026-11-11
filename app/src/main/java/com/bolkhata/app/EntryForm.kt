@@ -242,6 +242,8 @@ fun EntryForm(
             confirm = { creating -> if (creating) "Create & select" else "Select" },
             onPick = { person = it; khata = null; pickCat = null; picking = false }, onDismiss = { picking = false },
             categories = expenseCats, onCategory = { pickCat = it; khata = "expense"; person = ""; out = true; picking = false },
+            // A category's sub-categories open under it; the picked one becomes the entry's item.
+            subs = { subsFor(it, all) }, onSub = { c, s -> pickCat = c; item = s; khata = "expense"; person = ""; out = true; picking = false },
             stockNames = stockNames, onStock = { item = it; khata = "stock"; person = ""; picking = false },
             incomeNames = incomeNames, onIncome = { item = it; khata = "income"; person = ""; out = false; picking = false }
         )

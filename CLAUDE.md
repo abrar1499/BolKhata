@@ -45,6 +45,7 @@ Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Packa
 - Every fix to a chat mistake gets a unit test in `app/src/test/java/com/bolkhata/app/NativeChatEngineTest.kt`.
 
 ## Style
+- Things to tap look like the chat mic button: plain white, round, a soft shadow, no border, no heavy 3D edge. Simple first.
 - Clean look: Inter font, off-white page, white cards, coloured line icons, red money out / green money in.
 - Floating ChatGPT-style message bar (`AppParts.kt` `InputBar`); screens scroll under it, lists end with
   `barSpace()`.

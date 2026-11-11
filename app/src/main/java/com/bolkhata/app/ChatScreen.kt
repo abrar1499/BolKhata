@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
@@ -63,6 +64,8 @@ fun ChatScreen(
     onRate: (id: String, good: Boolean) -> Unit = { _, _ -> },
     onUndo: (List<String>) -> Unit,
     onEditEntry: (Entry) -> Unit,
+    /** An option card was answered: the entry to save for that message, or null when it was closed. */
+    onAsked: (id: String, e: Entry?) -> Unit = { _, _ -> },
     onAddSuggestions: (List<Entry>) -> Unit,
     onIgnoreSuggestions: (Set<String>) -> Unit,
     imports: List<Entry> = emptyList(),
@@ -163,7 +166,8 @@ fun ChatScreen(
                     Row(Modifier.fillMaxWidth()) {
                     GlassLogo(20.dp, Modifier.padding(top = 8.dp))
                     Column(Modifier.weight(1f)) {
-                        if (message.entryIds.isNotEmpty()) SavedCard(message, byId, currency, onUndo, onEditEntry)
+                        if (message.entryIds.isEmpty() && message.meta.startsWith("ask=")) OptionCard(message, byId.values) { onAsked(message.id, it) }
+                        else if (message.entryIds.isNotEmpty()) SavedCard(message, byId, currency, onUndo, onEditEntry)
                         // The AI's own sentences ("plain") are never read as a report.
                         else remember(message.text, currency) { if (message.meta.contains("; plain")) null else Report.parse(message.text, currency) }
                             ?.let { ReportCard(it, message.text) } ?: AssistantBubble(message.text)
@@ -590,6 +594,95 @@ private fun SavedCard(
             }
         }
     }
+}
+
+/**
+ * "hamid 10000" says who and how much, not what happened: a small card asks with pills (Paid, Work, Received). Work and
+ * Given then offer the person's last items with their rate, or two small fields for another one. Meta: ask=person|n|kinds|staff.
+ */
+@Composable
+private fun OptionCard(message: ChatMessage, all: Collection<Entry>, onDone: (Entry?) -> Unit) {
+    val parts = message.meta.removePrefix("ask=").split("|")
+    val person = parts[0]
+    val n = parts.getOrNull(1)?.toDoubleOrNull() ?: return
+    val kinds = parts.getOrNull(2).orEmpty().split(",").filter { it.isNotBlank() }
+    val staff = parts.getOrNull(3) == "staff"
+    // "" asks what happened; then the picked goods kind; "+" with it types another item.
+    var kind by remember(message.id) { mutableStateOf("") }
+    var other by remember(message.id) { mutableStateOf(false) }
+    var item by remember(message.id) { mutableStateOf("") }
+    var rate by remember(message.id) { mutableStateOf("") }
+    var per1000 by remember(message.id) { mutableStateOf(false) }
+    val sub = MaterialTheme.colorScheme.onSurfaceVariant
+    val shape = RoundedCornerShape(10.dp)
+    fun save(k: String, i: String = "", r: Double = 0.0, p: Boolean = false) = onDone(Ask.entry(k, person, n, staff, System.currentTimeMillis(), i, r, p))
+    Column(
+        Modifier.padding(start = 8.dp).widthIn(max = 250.dp).shadow(1.dp, shape).clip(shape).background(MaterialTheme.colorScheme.surface)
+            .padding(start = 3.dp, top = 3.dp, end = 7.dp, bottom = 6.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(22.dp).clip(RoundedCornerShape(7.dp)).background(OrangeOwe.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) { Text("👥", fontSize = 11.sp) }
+            Text(person + (if (kind.isEmpty()) "" else " · $kind"), Modifier.padding(start = 6.dp).weight(1f, fill = false), fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(fmt(n), Modifier.padding(start = 18.dp), fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+        }
+        if (other) Row(Modifier.padding(start = 3.dp, top = 5.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            SmallField(item, { item = it }, if (kind == "Work") "Work name" else "Item", Modifier.weight(1f))
+            SmallField(rate, { rate = it.filter { c -> c.isDigit() || c == '.' } }, "Rate", Modifier.width(54.dp), number = true)
+            Text((if (per1000) "☑" else "☐") + " /1000", fontSize = 9.sp, color = sub, maxLines = 1, modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { per1000 = !per1000 }.padding(2.dp))
+        }
+        Row(Modifier.padding(start = 3.dp, top = 5.dp).horizontalScroll(rememberScrollState()).padding(bottom = 2.dp, end = 2.dp), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            when {
+                kind.isEmpty() -> {
+                    kinds.forEach { k ->
+                        val (sym, color) = when (k) { "Paid" -> "↑" to RedSpend; "Received" -> "↓" to GreenIn; "Work" -> "🛠" to OrangeOwe; else -> "📦" to OrangeOwe }
+                        OptionPill(sym, k, color) { if (Ask.goods(k)) kind = k else save(k) }
+                    }
+                    OptionPill("", "✕", sub) { onDone(null) }
+                }
+                other -> {
+                    OptionPill("✓", "Save", GreenIn) { rate.toDoubleOrNull()?.takeIf { it > 0 && item.isNotBlank() }?.let { save(kind, item, it, per1000) } }
+                    OptionPill("", "‹", sub) { other = false }
+                }
+                else -> {
+                    Ask.usual(kind, person, all).forEach { e ->
+                        OptionPill(if (kind == "Work") "🛠" else "📦", e.item + " · " + fmt(e.rate) + (if (e.unit == "1000") "/1000" else ""), MaterialTheme.colorScheme.onSurface) { save(kind, e.item, e.rate, e.unit == "1000") }
+                    }
+                    OptionPill("+", "Other", MaterialTheme.colorScheme.onSurface) { other = true }
+                    OptionPill("", "‹", sub) { kind = "" }
+                }
+            }
+        }
+    }
+}
+
+/** One choice in an option card: a small white pill with a soft shadow, like the mic button. */
+@Composable
+private fun OptionPill(symbol: String, label: String, color: Color, onClick: () -> Unit) {
+    Row(
+        Modifier.height(22.dp).shadow(2.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.surface).clickable { onClick() }.padding(start = 6.dp, end = 8.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+        if (symbol.isNotEmpty()) Text(symbol, fontSize = 10.sp, color = color)
+        Text(label, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = color, maxLines = 1)
+    }
+}
+
+/** A small one-line field inside an option card. */
+@Composable
+private fun SmallField(value: String, onChange: (String) -> Unit, hint: String, modifier: Modifier, number: Boolean = false) {
+    androidx.compose.foundation.text.BasicTextField(
+        value, onChange, singleLine = true,
+        textStyle = LocalTextStyle.current.copy(fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface),
+        cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.onSurface),
+        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = if (number) androidx.compose.ui.text.input.KeyboardType.Decimal else androidx.compose.ui.text.input.KeyboardType.Text),
+        modifier = modifier.height(24.dp).fieldEdge(RoundedCornerShape(8.dp)).padding(horizontal = 7.dp),
+        decorationBox = { field ->
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.CenterStart) {
+                if (value.isEmpty()) Text(hint, fontSize = 10.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                field()
+            }
+        }
+    )
 }
 
 /** The one word under a saved entry: what happened with a person (Given, Received), else its category. */
