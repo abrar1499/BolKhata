@@ -561,41 +561,41 @@ private fun SavedCard(
         Text("Entry deleted", fontSize = 11.sp, color = sub, modifier = Modifier.padding(start = 10.dp, top = 10.dp))
         return
     }
-    val copyText = (listOf(message.text) + live.map { entryTitle(it) + " " + fmt(it.amount) + " " + currency }).joinToString("\n")
-    // A compact white card: "✓ Saved", one small line per entry, then Undo.
-    Column(
-        Modifier
-            .padding(start = 8.dp)
-            .fillMaxWidth(0.85f)
-            .shadow(1.dp, BotShape)
-            .clip(BotShape)
-            .copyable(copyText)
-            .background(MaterialTheme.colorScheme.surface)
-            .padding(horizontal = 10.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        Text("✓ " + (if (live.size == 1) "Saved" else "${live.size} entries saved"), color = GreenIn, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-        // The assistant's own short line ("Saved: breakfast 7 SAR"), when it wrote one.
-        if (!message.text.startsWith("✓")) Text(message.text, fontSize = 12.sp, lineHeight = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+    val copyText = (listOf(message.text) + live.map { entryTitle(it) + " " + fmt(it.amount) + " " + currency }).filter { it.isNotBlank() }.joinToString("\n")
+    Column(Modifier.padding(start = 8.dp).copyable(copyText), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        // The assistant's own line, when it had something to say or ask.
+        if (message.text.isNotBlank() && !message.text.startsWith("✓")) Text(message.text, fontSize = 12.sp, lineHeight = 16.sp,
+            color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.fillMaxWidth(0.85f).shadow(1.dp, BotShape).clip(BotShape)
+                .background(MaterialTheme.colorScheme.surface).padding(horizontal = 10.dp, vertical = 7.dp))
+        // One small row per entry, like an account row: icon, name over one word, amount, Undo. Tap to change.
         live.forEach { e ->
+            val shape = RoundedCornerShape(12.dp)
             Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
-                    .clickable { onEditEntry(e) }.padding(horizontal = 8.dp, vertical = 6.dp),
+                Modifier.widthIn(max = 300.dp).shadow(1.dp, shape).clip(shape).background(MaterialTheme.colorScheme.surface)
+                    .clickable { onEditEntry(e) }.padding(start = 5.dp, end = 4.dp, top = 5.dp, bottom = 5.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(e.category.label, fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1,
-                    modifier = Modifier.clip(CircleShape).background(catColor(e.category).copy(alpha = 0.16f)).padding(horizontal = 6.dp, vertical = 2.dp))
-                Spacer(Modifier.width(6.dp))
-                Text(entryTitle(e), Modifier.weight(1f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(moneyA(currency, e.amount, prefix(e.type)), color = signColor(e.type), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                Box(Modifier.size(26.dp).clip(RoundedCornerShape(8.dp)).background(signColor(e.type).copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+                    Text(if (e.person.isNotBlank()) "👥" else if (signColor(e.type) == GreenIn) "💵" else "🧾", fontSize = 13.sp)
+                }
+                Column(Modifier.padding(start = 8.dp).weight(1f, fill = false)) {
+                    Text(e.person.trim().ifBlank { entryTitle(e) }, fontSize = 12.sp, lineHeight = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(savedWord(e), fontSize = 9.5.sp, lineHeight = 11.sp, color = sub, maxLines = 1)
+                }
+                Text(moneyA(currency, e.amount), color = signColor(e.type), fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1,
+                    modifier = Modifier.padding(start = 18.dp, end = 8.dp))
+                Box(Modifier.width(1.dp).height(14.dp).background(sub.copy(alpha = 0.25f)))
+                Text("Undo", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = GreenIn,
+                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { onUndo(listOf(e.id)) }.padding(horizontal = 8.dp, vertical = 4.dp))
             }
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Tap to change", fontSize = 10.sp, color = sub, modifier = Modifier.weight(1f))
-            Text("Undo", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = GreenIn,
-                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { onUndo(live.map { it.id }) }.padding(horizontal = 6.dp, vertical = 2.dp))
-        }
     }
+}
+
+/** The one word under a saved entry: what happened with a person (Given, Received), else its category. */
+private fun savedWord(e: Entry): String = if (e.person.isBlank()) e.category.label else when (e.type) {
+    Type.DIYA -> "Given"; Type.LIYA -> "Taken"; Type.WAPIS_MILA, Type.AAMDANI -> "Received"; Type.WAPIS_DIYA, Type.KHARCHA -> "Paid"
+    Type.SALE -> "Sold"; Type.PURCHASE -> "Bought"; Type.TRANSFER_IN, Type.TRANSFER_OUT -> "Transfer"
 }
 
 /** A list to tick and add: bank payments, or transactions read from a statement. */
