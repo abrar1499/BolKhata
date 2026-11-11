@@ -1251,7 +1251,8 @@ fun App(
         if (text.isEmpty() || chatLoading) return
         val previousUser = chatMessages.lastOrNull { it.isUser }
         val latestAssistant = chatMessages.lastOrNull { !it.isUser }
-        if (previousUser != null && latestAssistant != null &&
+        // With an AI key the AI reads every message; the app's own quick answers stand aside.
+        if (!Ai.handles(groqKey) && previousUser != null && latestAssistant != null &&
             Accounts.isRecentDuplicateMutationRequest(
                 previousUser.text, previousUser.timestamp, latestAssistant.text, latestAssistant.timestamp,
                 latestAssistant.entryIds.isNotEmpty(), text, System.currentTimeMillis()
