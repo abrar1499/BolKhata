@@ -1300,6 +1300,7 @@ fun App(
                 // Test feature: with an AI key saved, the AI does the whole job itself through tools (see AiAgent).
                 if (Ai.handles(groqKey)) {
                     val started = System.currentTimeMillis()
+                    val spoken = aiHeard[0] != null
                     val heardAlso = aiHeard[0].orEmpty()
                     aiHeard[0] = null
                     val recent = history.takeLast(6).joinToString("\n") { (if (it.isUser) "Person: " else "App: ") + it.text.take(200) }
@@ -1311,7 +1312,7 @@ fun App(
                     )
                     // The AI is asked off the main thread; each tool then runs on it, where the entries live.
                     val answer = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                        AiAgent.run(text, recent, host, roman = roman, previous = aiPicked, justSaved = aiSaved, heardAlso = heardAlso) { tool -> kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.Main) { tool() } }
+                        AiAgent.run(text, recent, host, roman = roman, previous = aiPicked, justSaved = aiSaved, heardAlso = heardAlso, spoken = spoken) { tool -> kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.Main) { tool() } }
                     }
                     val usage = Ai.takeUsage(System.currentTimeMillis() - started).orEmpty()
                     lastSpeech = answer?.text ?: ("The AI did not answer (" + Ai.lastError.ifBlank { "no reply" } + "). Try again.")
@@ -1681,7 +1682,12 @@ fun App(
         loadingLabel = "Listening…"
         if (voiceOn) voiceStatus = "Thinking…"
         scope.launch {
-            val said = Groq.transcribe(Ai.voiceKeyFor(groqKey), file, contactNames() + entries.filter { it.type == Type.AAMDANI }.map { source(it) })
+            // With the AI reading the message, Whisper is not shown the saved names (it then turns a new name into a
+            // saved one that only sounds a little alike) and gives the words as it heard them; the AI matches the names.
+            val ai = Ai.handles(groqKey)
+            val said = Groq.transcribe(Ai.voiceKeyFor(groqKey), file,
+                if (ai) emptyList() else contactNames() + entries.filter { it.type == Type.AAMDANI }.map { source(it) }, roman = !ai)
+            if (ai && said.isSuccess) aiHeard[0] = emptyList()
             // In the chat (not the call) the recording is kept, named with its length, and shown as a voice note.
             voiceNote[0] = if (voiceOn || said.isFailure) null else runCatching {
                 // The length is only for show: when it can't be read the note is still kept.
@@ -2177,7 +2183,8 @@ fun App(
         voiceForChat = forChat
         if (whisperOn()) {
             startRecording(
-                heard = { text -> Normalizer.voiceFix(text, voiceKnown()).let { if (forChat) chatInput(it) else homeInput(it) } },
+                // With the AI reading it, the words go as heard: the AI does the fixing, with the saved names in view.
+                heard = { text -> (if (Ai.handles(groqKey)) text else Normalizer.voiceFix(text, voiceKnown())).let { if (forChat) chatInput(it) else homeInput(it) } },
                 missed = { toast("Couldn't catch that. Try again.") }
             )
             return

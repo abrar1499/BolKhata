@@ -146,7 +146,9 @@ object AiAgent {
           saved name that joins two people ("A & B", "A and B") is its own account: a message naming only one of them
           means a separate, single person. A new name keeps the spelling that reads most like a real name.
         - A voice message may be misheard: read it with its other hearings and take the words that make sense for a
-          ledger and match a saved name or a usual item; amounts must agree between the hearings, else ask.
+          ledger. A person's name is kept as heard: change it to a saved name only when the two sound almost the same
+          (Hamid / Hameed); a different name (Ahmed is not Ashraf) is a new person. Amounts must agree between the
+          hearings, else ask.
         - A correction of what was just saved ("sirf Hamid se", "nahi 40 tha", "ye kal ka tha") changes those entries
           with update_entries (their ids are under "Just saved"); never add the same entry a second time.
         - A khata or account for a person, with no kind said, is put_in_account People; do not ask which kind.
@@ -168,7 +170,7 @@ object AiAgent {
      */
     fun run(
         said: String, recent: String, host: Host, now: Long = System.currentTimeMillis(), roman: String = said, previous: String = "",
-        justSaved: List<String> = emptyList(), heardAlso: List<String> = emptyList(),
+        justSaved: List<String> = emptyList(), heardAlso: List<String> = emptyList(), spoken: Boolean = heardAlso.isNotEmpty(),
         onMain: (() -> String) -> String = { it() }
     ): Answer? = runCatching {
         val notes = Notes()
@@ -179,7 +181,8 @@ object AiAgent {
                 (if (previous.isBlank()) "" else "Previous look-up picked: " + previous.take(400) + "\n") +
                 // What the last message saved, with ids, so "sirf Hamid se" or "nahi 40 tha" can change it.
                 host.entries().filter { it.id in justSaved }.take(12).let { l -> if (l.isEmpty()) "" else "Just saved: " + JSONArray(l.map { show(it) }) + "\n" } +
-                (if (heardAlso.isEmpty()) "" else "The message came by voice and may be misheard. It was also heard as: " + heardAlso.joinToString(" | ") { it.take(200) } + "\n") +
+                (if (!spoken) "" else "The message came by voice and may be misheard." +
+                    (if (heardAlso.isEmpty()) "" else " It was also heard as: " + heardAlso.joinToString(" | ") { it.take(200) }) + "\n") +
                 "Message: " + said.take(600) +
                 // Urdu or Hindi script also goes in Roman letters by its sound, so a word is not swapped for another.
                 (if (roman.trim().equals(said.trim(), true)) "" else "\nThe same message by sound, in Roman letters: " + roman.take(600))
