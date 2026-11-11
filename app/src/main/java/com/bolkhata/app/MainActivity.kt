@@ -1335,7 +1335,7 @@ fun App(
                     }
                     // The AI is asked off the main thread; each tool then runs on it, where the entries live.
                     val answer = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                        AiAgent.run(text, recent, host, roman = roman, previous = aiPicked, justSaved = aiSaved, heardAlso = heardAlso, spoken = spoken, known = store.aiLearned) { tool -> kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.Main) { tool() } }
+                        AiAgent.run(text, recent, host, roman = roman, previous = aiPicked, justSaved = aiSaved, heardAlso = heardAlso, spoken = spoken, known = store.aiLearned, lastShown = history.lastOrNull { !it.isUser }?.text.orEmpty()) { tool -> kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.Main) { tool() } }
                     }
                     val usage = Ai.takeUsage(System.currentTimeMillis() - started).orEmpty()
                     // The AI could not tell what happened with a person and a number: the option card asks.

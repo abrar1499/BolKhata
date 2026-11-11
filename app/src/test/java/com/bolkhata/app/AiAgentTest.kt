@@ -181,6 +181,18 @@ class AiAgentTest {
     }
 
     @Test
+    fun theSameCardAskedAgainShowsTheEntries() {
+        use("add_entries", """{"entries": [{"type": "income", "amount": 500}, {"type": "income", "amount": 700}]}""")
+        val first = AiAgent.Notes()
+        AiAgent.use("show", JSONObject("""{"view": "total", "types": ["income"]}"""), host, now, first)
+        // "Detail" brings the same total again: the list of entries is shown instead.
+        val second = AiAgent.Notes(lastShown = first.card)
+        AiAgent.use("show", JSONObject("""{"view": "total", "types": ["income"]}"""), host, now, second)
+        assertTrue(second.card != first.card)
+        assertEquals(2, second.listIds.size)
+    }
+
+    @Test
     fun anAmountTypedAgainIsSavedAgain() {
         val loan = JSONObject("""{"entries": [{"type": "lent", "amount": 30, "person": "Hamid Akram"}]}""")
         val first = AiAgent.Notes(said = listOf(30.0))

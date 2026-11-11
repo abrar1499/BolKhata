@@ -39,7 +39,9 @@ object AiAgent {
         /** How the last look-up picked its entries, so "detail do" or "aur food?" can go on from it. */
         var filter: String = "", var found: Int = 0,
         /** The amounts written in the message itself: saving one of them is meant, even when the same entry was saved minutes ago. */
-        var said: List<Double> = emptyList(), var skipped: Int = 0, var ask: String = "")
+        var said: List<Double> = emptyList(), var skipped: Int = 0, var ask: String = "",
+        /** The card the chat showed last: asked again ("detail"), the same card is no answer, the entries are. */
+        var lastShown: String = "")
 
     /** A long list in the chat shows this many rows, then "+N more" and the total of all. */
     private const val LIST_ROWS = 30
@@ -188,10 +190,10 @@ object AiAgent {
     fun run(
         said: String, recent: String, host: Host, now: Long = System.currentTimeMillis(), roman: String = said, previous: String = "",
         justSaved: List<String> = emptyList(), heardAlso: List<String> = emptyList(), spoken: Boolean = heardAlso.isNotEmpty(),
-        known: Map<String, String> = emptyMap(),
+        known: Map<String, String> = emptyMap(), lastShown: String = "",
         onMain: (() -> String) -> String = { it() }
     ): Answer? = runCatching {
-        val notes = Notes(said = numbers(roman))
+        val notes = Notes(said = numbers(roman), lastShown = lastShown)
         val calls = mutableListOf<Pair<String, JSONObject>>()
         val names = host.names().take(80)
         val messages = Ai.opening(
@@ -349,10 +351,15 @@ object AiAgent {
             val f = filterOf(input, now)
             val list = Query.select(host.entries(), f).sortedByDescending { it.date }
             val view = input.optString("view")
-            val what = when (view) { "breakdown" -> "report"; "total" -> "sum"; "count" -> "count"; "highest" -> "highest"; else -> "list" }
+            var what = when (view) { "breakdown" -> "report"; "total" -> "sum"; "count" -> "count"; "highest" -> "highest"; else -> "list" }
             // The app's own answer, the same text and card as without the AI; month by month (or by person or item) is a card of its own.
             notes.card = if (view.startsWith("by_") && list.isNotEmpty()) Query.grouped(list, view.removePrefix("by_"), Query.label(f), host.currency)
                 else Query.answer(list, what, f, host.currency, LIST_ROWS)
+            // The very card that is already on the screen ("detail" after a total with one category): the entries themselves.
+            if (what != "list" && list.isNotEmpty() && notes.lastShown.isNotBlank() && notes.card.trim() == notes.lastShown.trim()) {
+                what = "list"
+                notes.card = Query.answer(list, what, f, host.currency, LIST_ROWS)
+            }
             notes.listIds = if (what == "list") list.take(LIST_ROWS).map { it.id } else emptyList()
             notes.filter = picked(input)
             notes.found = list.size
