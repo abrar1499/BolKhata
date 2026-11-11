@@ -211,6 +211,20 @@ class NativeChatEngineTest {
         assertEquals(setOf(Type.KHARCHA), result.filter.types)
     }
 
+    @Test fun entriesAddedInTheLastMinutesAreFoundByWhenTheyWereEntered() {
+        val del = read("abhi 20 mints me jitni entry dali delete kar do")
+        assertEquals("delete", del.kind)
+        assertEquals(now - 20 * 60_000L, del.filter.createdFrom)
+        assertEquals(0, del.filter.last)
+        assertEquals(emptyList<String>(), del.filter.items)
+        val show = read("sirf jo last 20 mint me add ki")
+        assertEquals("ask", show.kind)
+        assertEquals(now - 20 * 60_000L, show.filter.createdFrom)
+        assertEquals(0, show.filter.last)
+        assertEquals(emptyList<String>(), show.filter.items)
+        assertEquals(now - 2 * 3_600_000L, read("pichle 2 ghante ki entries dikhao").filter.createdFrom)
+    }
+
     @Test fun newExpenseIsReturnedAsAnEntryIntent() {
         val result = read("chai 12")
         assertEquals("entry", result.kind)
