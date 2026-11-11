@@ -2365,6 +2365,7 @@ fun App(
                         driveToast(if (error.isBlank()) "✓ ${Ai.provider(Ai.key)?.name} is on · ${Ai.modelNow()}" else "AI key did not work: $error")
                     }
                 },
+                onVoiceOff = { store.llmVoice = ""; Ai.voiceKey = ""; aiTick++; driveToast("Voice key removed · the mic listens with the phone") },
                 onAiOff = { store.llmKey = ""; Ai.key = ""; store.llmVoice = ""; Ai.voiceKey = ""; groqKey = groqKeyNow(); aiTick++; driveToast("AI is off. The app answers by itself again.") },
                 driveEmail = driveEmail, driveStatus = if (driveEmail.isBlank()) driveError else Drive.status, driveBusy = Drive.busy,
                 onSignIn = { driveSignIn() },

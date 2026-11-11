@@ -210,7 +210,7 @@ internal fun SideMenu(
     /** Signing in and fetching the data: the Gmail once known; null when not. */
     driveBusy: String? = null,
     /** Test feature: the AI key row (null: not in this build). */
-    ai: AiInfo? = null, onAiOpen: () -> Unit = {}, onAiSave: (key: String, model: String, voice: String) -> Unit = { _, _, _ -> }, onAiOff: () -> Unit = {},
+    ai: AiInfo? = null, onAiOpen: () -> Unit = {}, onAiSave: (key: String, model: String, voice: String) -> Unit = { _, _, _ -> }, onAiOff: () -> Unit = {}, onVoiceOff: () -> Unit = {},
     onSignIn: () -> Unit = {}, onSyncNow: () -> Unit = {}, onSignOut: () -> Unit = {}
 ) {
     var driveOpen by remember { mutableStateOf(false) }
@@ -227,6 +227,9 @@ internal fun SideMenu(
             WellField(model, { model = it.trim() }, "Model: " + (typed?.model ?: ai.modelNow.ifBlank { "the usual one" }))
             // Optional: the mic's recording is sent to Groq's Whisper, which hears Urdu far better than the phone.
             WellField(voice, { voice = it.trim() }, if (ai.voice) "Voice key saved · paste to change" else "Voice key (Groq, optional)")
+            // Takes only the voice key away: the mic goes back to the phone's own listening, the AI stays on.
+            if (ai.voice) Text("Remove voice key", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = RedSpend,
+                modifier = Modifier.padding(top = 6.dp).clip(RoundedCornerShape(8.dp)).clickable { aiOpen = false; onVoiceOff() }.padding(horizontal = 4.dp, vertical = 4.dp))
             Text(
                 when {
                     key.isNotBlank() -> typed?.let { "${it.name} key" } ?: "This key is not recognised"
