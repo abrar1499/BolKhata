@@ -90,20 +90,97 @@ object Ai {
         }
         val i = r.optInt("in")
         val out = r.optInt("out")
-        usedIn.addAndGet(i)
-        usedOut.addAndGet(out)
-        sink?.invoke(i, out)
+        count(i, out)
         return code to JSONObject().put("choices", JSONArray().put(JSONObject().put("message", JSONObject().put("content", content))))
             .put("usage", JSONObject().put("total_tokens", i + out)).toString()
+    }
+
+    // ---------- Tools: the AI works the app itself (see AiAgent) ----------
+
+    class Tool(val name: String, val description: String, val schema: JSONObject)
+    class Call(val id: String, val name: String, val input: JSONObject)
+    /** One answer of the model: its text, and the tools it wants run before it goes on. */
+    class Step(val text: String, val calls: List<Call>)
+
+    /** The conversation so far in the provider's own format; starts with what the person said. */
+    fun opening(said: String): JSONArray = JSONArray().put(JSONObject().put("role", "user").put("content", said))
+
+    /** Asks the model for its next step and adds its turn to [messages]; null when the provider failed or declined. */
+    fun step(system: String, tools: List<Tool>, messages: JSONArray): Step? {
+        val p = provider(key) ?: return null
+        val m = modelNow()
+        if (p === CLAUDE) {
+            val req = JSONObject().put("model", m).put("max_tokens", 4000).put("system", system).put("messages", messages)
+                .put("tools", JSONArray().apply { tools.forEach { put(JSONObject().put("name", it.name).put("description", it.description).put("input_schema", it.schema)) } })
+                // The instructions and tools are the same every time: cached, they cost a fraction on the next call.
+                .put("cache_control", JSONObject().put("type", "ephemeral"))
+            if (!m.contains("haiku-4") && !m.contains("sonnet-4-5")) req.put("output_config", JSONObject().put("effort", "low"))
+            val fallback = listOf("claude-fable-5", "claude-opus-5", "claude-sonnet-5-5").any { m.startsWith(it) }
+            if (fallback) req.put("fallbacks", "default")
+            val headers = mutableMapOf("x-api-key" to key, "anthropic-version" to "2026-10-21")
+            if (fallback) headers["anthropic-beta"] = "server-side-fallback-2026-07-01"
+            val (code, text) = send(CLAUDE.url, headers, req.toString())
+            if (code !in 200..299) { lastError = "$code " + errorOf(text); return null }
+            val r = JSONObject(text)
+            val usage = r.optJSONObject("usage") ?: JSONObject()
+            count(usage.optInt("input_tokens") + usage.optInt("cache_creation_input_tokens") + usage.optInt("cache_read_input_tokens"), usage.optInt("output_tokens"))
+            if (r.optString("stop_reason") == "refusal") { lastError = "declined"; return null }
+            // The whole turn goes back unchanged (thinking blocks included), as the API asks.
+            val blocks = r.optJSONArray("content") ?: JSONArray()
+            messages.put(JSONObject().put("role", "assistant").put("content", blocks))
+            val all = (0 until blocks.length()).map { blocks.getJSONObject(it) }
+            return Step(
+                all.filter { it.optString("type") == "text" }.joinToString("") { it.optString("text") }.trim(),
+                all.filter { it.optString("type") == "tool_use" }.map { Call(it.optString("id"), it.optString("name"), it.optJSONObject("input") ?: JSONObject()) }
+            )
+        }
+        val req = JSONObject().put("model", m)
+            .put("messages", JSONArray().put(JSONObject().put("role", "system").put("content", system)).apply { for (i in 0 until messages.length()) put(messages.get(i)) })
+            .put("tools", JSONArray().apply { tools.forEach { put(JSONObject().put("type", "function").put("function", JSONObject().put("name", it.name).put("description", it.description).put("parameters", it.schema))) } })
+            .put(if (p === OPENAI) "max_completion_tokens" else "max_tokens", 4000)
+        val (code, text) = send(p.url, mapOf("Authorization" to "Bearer $key"), req.toString())
+        if (code !in 200..299) { lastError = "$code " + errorOf(text); return null }
+        val r = JSONObject(text)
+        val usage = r.optJSONObject("usage") ?: JSONObject()
+        count(usage.optInt("prompt_tokens"), usage.optInt("completion_tokens"))
+        val message = r.getJSONArray("choices").getJSONObject(0).getJSONObject("message")
+        messages.put(message)
+        val calls = message.optJSONArray("tool_calls") ?: JSONArray()
+        return Step(
+            (if (message.isNull("content")) "" else message.optString("content")).trim(),
+            (0 until calls.length()).map { calls.getJSONObject(it) }.map { c ->
+                val f = c.optJSONObject("function") ?: JSONObject()
+                Call(c.optString("id"), f.optString("name"), runCatching { JSONObject(f.optString("arguments")) }.getOrDefault(JSONObject()))
+            }
+        )
+    }
+
+    /** Adds what the tools gave back to [messages], each result with its call. */
+    fun results(messages: JSONArray, done: List<Pair<Call, String>>) {
+        if (provider(key) === CLAUDE) messages.put(JSONObject().put("role", "user").put("content", JSONArray().apply {
+            done.forEach { (c, out) -> put(JSONObject().put("type", "tool_result").put("tool_use_id", c.id).put("content", out)) }
+        }))
+        else done.forEach { (c, out) -> messages.put(JSONObject().put("role", "tool").put("tool_call_id", c.id).put("content", out)) }
+    }
+
+    /** Why the last call failed, for the chat's small line. */
+    @Volatile var lastError = ""
+
+    private fun errorOf(text: String) = runCatching {
+        JSONObject(text).optJSONObject("error")?.optString("message") ?: JSONArray(text).getJSONObject(0).getJSONObject("error").optString("message")
+    }.getOrDefault("").take(120)
+
+    private fun count(input: Int, output: Int) {
+        usedIn.addAndGet(input)
+        usedOut.addAndGet(output)
+        sink?.invoke(input, output)
     }
 
     /** A tiny request to check a new key: "" when it works, else what the provider said. */
     fun test(): String = runCatching {
         val (code, text) = post(JSONObject().put("max_tokens", 50).put("messages", JSONArray()
             .put(JSONObject().put("role", "user").put("content", "Reply with the single word OK."))).toString().toByteArray())
-        if (code in 200..299) "" else "$code " + runCatching {
-            JSONObject(text).optJSONObject("error")?.optString("message") ?: JSONArray(text).getJSONObject(0).getJSONObject("error").optString("message")
-        }.getOrDefault("").take(120)
+        if (code in 200..299) "" else "$code " + errorOf(text)
     }.getOrElse { it.message ?: "no internet" }
 
     /** Claude's Messages API: the system text apart, thinking kept light for a quick chat answer. */

@@ -1278,6 +1278,25 @@ fun App(
                 // Reading the message runs off the main thread, so the chat keeps scrolling smoothly with many entries.
                 val scoped = scopeKhataEntries(entries)
                 val names0 = contactNames()
+                // Test feature: with an AI key saved, the AI does the whole job itself through tools (see AiAgent).
+                if (Ai.handles(groqKey)) {
+                    val started = System.currentTimeMillis()
+                    val recent = history.takeLast(6).joinToString("\n") { (if (it.isUser) "Person: " else "App: ") + it.text.take(200) }
+                    val host = AiAgent.Host(
+                        entries = { entries }, add = { save(it + entries) },
+                        update = { changed -> save(entries.map { e -> changed.firstOrNull { it.id == e.id } ?: e }) },
+                        trash = { ids -> moveToTrash(ids) }, names = { names0 }, currency = currency
+                    )
+                    // The AI is asked off the main thread; each tool then runs on it, where the entries live.
+                    val answer = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        AiAgent.run(text, recent, host) { tool -> kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.Main) { tool() } }
+                    }
+                    val usage = Ai.takeUsage(System.currentTimeMillis() - started).orEmpty()
+                    lastSpeech = answer?.text ?: ("The AI did not answer (" + Ai.lastError.ifBlank { "no reply" } + "). Try again.")
+                    postChat(lastSpeech, isUser = false, entryIds = answer?.added.orEmpty(),
+                        meta = "engine=AI; intent=agent" + (if (usage.isBlank()) "" else "; usage=" + usage))
+                    return@launch
+                }
                 // With Groq on, Groq reads every message first: money and app requests become a clear command that the
                 // local engine runs against the saved records (totals, reports, cashbook); anything else Groq answers.
                 var groqTrace = ""
