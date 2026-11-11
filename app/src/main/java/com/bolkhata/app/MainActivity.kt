@@ -1285,7 +1285,8 @@ fun App(
                     val host = AiAgent.Host(
                         entries = { entries }, add = { save(it + entries) },
                         update = { changed -> save(entries.map { e -> changed.firstOrNull { it.id == e.id } ?: e }) },
-                        trash = { ids -> moveToTrash(ids) }, names = { names0 }, currency = currency
+                        trash = { ids -> moveToTrash(ids) }, names = { names0 }, currency = currency,
+                        setup = { sides }, saveSetup = { s -> sides = s; store.saveSides(s) }
                     )
                     // The AI is asked off the main thread; each tool then runs on it, where the entries live.
                     val answer = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {

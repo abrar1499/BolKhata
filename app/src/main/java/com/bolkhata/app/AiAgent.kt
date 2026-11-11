@@ -17,7 +17,9 @@ object AiAgent {
     /** What the AI may do to the app. */
     class Host(
         val entries: () -> List<Entry>, val add: (List<Entry>) -> Unit, val update: (List<Entry>) -> Unit,
-        val trash: (Set<String>) -> Unit, val names: () -> List<String>, val currency: String
+        val trash: (Set<String>) -> Unit, val names: () -> List<String>, val currency: String,
+        /** The owner's accounts and who sits in which people account. */
+        val setup: () -> SideSetup = { SideSetup() }, val saveSetup: (SideSetup) -> Unit = {}
     )
 
     /** The AI's reply and the entries it saved (shown as the Saved card). */
@@ -74,6 +76,13 @@ object AiAgent {
                 "person" to text("New person"), "note" to text("New note"), "date" to text("New day, YYYY-MM-DD"),
                 "type" to JSONObject().put("type", "string").put("enum", JSONArray(TYPES.keys.toList()))),
             required = listOf("ids", "set"))),
+        Ai.Tool("accounts", "Lists the accounts: the Party accounts (Customers, Suppliers, Staff, People or the owner's own) with the people in each, and the Expense and Income accounts.", shape()),
+        Ai.Tool("put_in_account", "Puts people into a Party account, making the account and the people if new (no entry is needed). A person sits in one account only.", shape(
+            "account" to text("Customers, Suppliers, Staff, People, or the owner's own account name"),
+            "people" to words("Names, saved spelling if they match"), required = listOf("account", "people"))),
+        Ai.Tool("add_account", "Makes a new empty Expense or Income account (a thing money goes to or comes from).", shape(
+            "side" to JSONObject().put("type", "string").put("enum", JSONArray(listOf("expense", "income"))), "name" to text("Account name"),
+            required = listOf("side", "name"))),
         Ai.Tool("delete_entries", "Moves saved entries to Trash (ids from find_entries); the person can restore them.", shape("ids" to words("Entry ids"), required = listOf("ids")))
     )
 
@@ -81,8 +90,8 @@ object AiAgent {
     fun system(currency: String, names: List<String>) = """
         You run a ledger and expense app for its owner through the tools. Currency: ${currency.ifBlank { "none shown" }}.
         People write Roman Urdu, Urdu or Hindi script, or English, often misspelled or heard from voice.
-        - Do what is asked with the tools, then answer in one or two short sentences, in the person's language and style
-          (English gets English, Roman Urdu gets Roman Urdu). Plain text only: no tables, no markdown.
+        - Do what is asked with the tools, then answer in one or two short sentences, in the language and script of the
+          latest message (English gets English, Roman Urdu gets Roman Urdu). Plain text only: no tables, no markdown.
         - Every amount, total, count or balance you state must come from a tool result of this turn. Never add up or
           guess money yourself: ask the totals tool. You may list at most 10 entries, one short line each.
         - New money ("chai 50", "Ali ko 500 diye", "kal salary 3000 aayi") is add_entries, amounts exactly as said.
@@ -91,7 +100,11 @@ object AiAgent {
         - To change or delete, first find_entries for the ids. When it is clear which entries are meant, do it without
           asking again; when it is not, ask one short question instead of guessing. Deleted entries go to Trash.
         - "is mahine" is the 1st of this month to today, "kal" yesterday, "aaj tak" / "ab tak" all time (no dates).
-        - A greeting or small talk: answer briefly, no tools. You only know this app; for anything else say so shortly.
+        - People are kept in Party accounts: Customers, Suppliers, Staff (workers, employees, labour), People (anyone
+          else), or an account the owner names. To make an account or put people in one, use put_in_account; it needs
+          no entry. An advance or payment to a worker is "lent" with that person, and the person goes in Staff.
+        - Greet only when the message itself greets. Small talk: answer briefly, no tools. You only know this app;
+          for anything else say so shortly.
     """.trimIndent() + if (names.isEmpty()) "" else "\nSaved names: " + names.joinToString(", ")
 
     /**
@@ -167,6 +180,33 @@ object AiAgent {
             }
             host.update(changed)
             JSONObject().put("changed", changed.size).put("entries", JSONArray(changed.take(40).map { show(it) })).toString()
+        }
+        "accounts" -> {
+            val all = host.entries()
+            val setup = host.setup()
+            JSONObject().put("party", JSONArray(Sides.books(Side.PARTY, all, setup).map { b ->
+                JSONObject().put("name", b.name).put("people", JSONArray(Sides.kids(b, all, setup).map { it.name }.take(60)))
+            })).put("expense", JSONArray(Sides.books(Side.EXP, all, setup).map { it.name }))
+                .put("income", JSONArray(Sides.books(Side.INC, all, setup).map { it.name })).toString()
+        }
+        "put_in_account" -> {
+            val account = input.optString("account").trim().ifBlank { error("account is needed") }
+            val people = strings(input, "people").ifEmpty { error("people are needed") }
+            val setup = host.setup()
+            // The usual accounts show by themselves once someone sits in them; an own one is made (Customers keep Given | Received).
+            val usual = listOf(Sides.CUSTOMERS, Sides.SUPPLIERS, Sides.STAFF, Sides.PEOPLE).firstOrNull { it.equals(account, true) }
+            val name = usual ?: setup.books.firstOrNull { it.people && it.name.equals(account, true) }?.name ?: account
+            val books = if (usual != null || setup.books.any { it.people && it.name.equals(name, true) }) setup.books else setup.books + Book(Side.EXP, name, true)
+            // One person, one account: putting them here takes them out of any other.
+            host.saveSetup(setup.copy(books = books, people = setup.people.filterKeys { k -> people.none { it.equals(k.trim(), true) } } + people.associateWith { name }))
+            JSONObject().put("account", name).put("people_now_in_it", JSONArray(people)).toString()
+        }
+        "add_account" -> {
+            val side = if (input.optString("side") == "income") Side.INC else Side.EXP
+            val name = input.optString("name").trim().ifBlank { error("name is needed") }
+            val setup = host.setup()
+            if (Sides.books(side, host.entries(), setup).any { it.name.equals(name, true) }) JSONObject().put("already_there", name).toString()
+            else { host.saveSetup(setup.copy(books = setup.books + Book(side, name, false))); JSONObject().put("made", name).toString() }
         }
         "delete_entries" -> {
             val ids = strings(input, "ids").toSet().intersect(host.entries().map { it.id }.toSet())

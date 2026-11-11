@@ -16,10 +16,12 @@ class AiAgentTest {
         entry("new2", Type.KHARCHA, 40.0, Cat.KHANA, "Tea", "", now - 7 * 86_400_000L, now - 5 * 60_000L)
     )
     private val trashed = mutableSetOf<String>()
+    private var setup = SideSetup()
     private val host = AiAgent.Host(
         entries = { saved }, add = { saved = it + saved },
         update = { changed -> saved = saved.map { e -> changed.firstOrNull { it.id == e.id } ?: e } },
-        trash = { ids -> trashed += ids; saved = saved.filter { it.id !in ids } }, names = { listOf("Hamid Akram") }, currency = "PKR"
+        trash = { ids -> trashed += ids; saved = saved.filter { it.id !in ids } }, names = { listOf("Hamid Akram") }, currency = "PKR",
+        setup = { setup }, saveSetup = { setup = it }
     )
 
     private fun entry(id: String, type: Type, amount: Double, cat: Cat, item: String, person: String, date: Long, created: Long) =
@@ -35,6 +37,21 @@ class AiAgentTest {
         assertEquals(2, use("delete_entries", JSONObject().put("ids", JSONArray(ids(found))).toString()).getInt("moved_to_trash"))
         assertEquals(setOf("new1", "new2"), trashed)
         assertEquals(listOf("old1", "old2"), saved.map { it.id })
+    }
+
+    @Test
+    fun peopleArePutInAnAccountWithoutAnEntry() {
+        use("put_in_account", """{"account": "staff", "people": ["Nargis Salim Rashid", "hamid akram"]}""")
+        // New people sit in Staff; one who was elsewhere moves there (one person, one account).
+        assertEquals("Staff", Sides.bookOf("Nargis Salim Rashid", saved, setup))
+        assertEquals("Staff", Sides.bookOf("Hamid Akram", saved, setup))
+        val party = use("accounts", "{}").getJSONArray("party")
+        val staff = (0 until party.length()).map { party.getJSONObject(it) }.first { it.getString("name") == "Staff" }
+        assertEquals(2, staff.getJSONArray("people").length())
+        use("put_in_account", """{"account": "Drivers", "people": ["Hamid Akram"]}""")
+        assertEquals("Drivers", Sides.bookOf("Hamid Akram", saved, setup))
+        assertEquals("Fuel", use("add_account", """{"side": "expense", "name": "Fuel"}""").getString("made"))
+        assertEquals(true, setup.books.any { it.name == "Fuel" && !it.people && it.side == Side.EXP })
     }
 
     @Test
