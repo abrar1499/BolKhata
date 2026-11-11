@@ -146,6 +146,30 @@ class AiAgentTest {
     }
 
     @Test
+    fun theAppLearnsASentenceFromTheAi() {
+        // The AI read "hamid ne 50 diye aur chai pr 20 lagay" as two entries: the app keeps them, each number by its place.
+        val said = "Hamid ne 50 diye aur chai pr 20 lagay"
+        val lesson = AiAgent.lesson(listOf("add_entries" to JSONObject("""{"entries": [
+            {"type": "received_back", "amount": 50, "person": "Hamid Akram"}, {"type": "expense", "amount": 20, "category": "Food", "item": "Chai"}]}""")), said)!!
+        // The same sentence with other numbers has the same shape, and is done by the app alone.
+        val again = "hamid ne 300 diye aur chai pr 15 lagay"
+        assertEquals(AiAgent.shape(said), AiAgent.shape(again))
+        val notes = AiAgent.Notes()
+        AiAgent.use("add_entries", AiAgent.recall(lesson, again)!!, host, now, notes)
+        val made = saved.filter { it.id in notes.added }.sortedByDescending { it.amount }
+        assertEquals(listOf(300.0, 15.0), made.map { it.amount })
+        assertEquals(Type.WAPIS_MILA, made[0].type); assertEquals("Hamid Akram", made[0].person)
+        assertEquals("Chai", made[1].item); assertEquals(Cat.KHANA, made[1].category)
+        // "150k" is one number; other words give another shape.
+        assertEquals(listOf(150_000.0, 120_400.0), AiAgent.numbers("salim 150k and rashid 120.4k"))
+        assertEquals(false, AiAgent.shape("hamid ko 50 diye") == AiAgent.shape("hamid ne 50 diye"))
+        // Not learnt: a day the AI worked out, an amount that was not said, or more than one step.
+        assertEquals(null, AiAgent.lesson(listOf("add_entries" to JSONObject("""{"entries": [{"type": "expense", "amount": 50, "date": "2026-11-10"}]}""")), "kal chai 50"))
+        assertEquals(null, AiAgent.lesson(listOf("add_entries" to JSONObject("""{"entries": [{"type": "expense", "amount": 75}]}""")), "chai 50"))
+        assertEquals(null, AiAgent.lesson(listOf("find_entries" to JSONObject("{}"), "add_entries" to JSONObject("""{"entries": [{"type": "expense", "amount": 50}]}""")), "chai 50"))
+    }
+
+    @Test
     fun theAppDoesTheSums() {
         val t = use("totals", """{"types": ["expense"], "group_by": "category"}""")
         assertEquals(440.0, t.getDouble("total"), 0.001)

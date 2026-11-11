@@ -28,7 +28,9 @@ object AiAgent {
      * The AI's reply and the entries it saved (shown as the Saved card). When it asked the app to show a list or a
      * breakdown, [card] is the app's own answer text (drawn as the usual card) and [listIds] the rows in it.
      */
-    class Answer(val text: String, val added: List<String>, val card: String = "", val listIds: List<String> = emptyList(), val filter: String = "")
+    class Answer(val text: String, val added: List<String>, val card: String = "", val listIds: List<String> = emptyList(), val filter: String = "",
+        /** What the app may remember from this answer (see [lesson]); "" when it is not something to learn. */
+        val lesson: String = "")
 
     /** What the tools of one message leave for the chat: saved entries and the card to show. */
     class Notes(val added: MutableList<String> = mutableListOf(), var card: String = "", var listIds: List<String> = emptyList(),
@@ -174,6 +176,7 @@ object AiAgent {
         onMain: (() -> String) -> String = { it() }
     ): Answer? = runCatching {
         val notes = Notes()
+        val calls = mutableListOf<Pair<String, JSONObject>>()
         val names = host.names().take(80)
         val messages = Ai.opening(
             "Now: " + timeFmt.format(Date(now)) + " (" + SimpleDateFormat("EEEE", Locale.US).format(Date(now)) + ")\n" +
@@ -190,7 +193,9 @@ object AiAgent {
         val system = system(host.currency, names)
         for (round in 1..8) {
             val step = Ai.step(system, tools, messages) ?: return@runCatching null
-            if (step.calls.isEmpty()) return@runCatching Answer(step.text.ifBlank { "Done." }, notes.added, notes.card, notes.listIds, notes.filter)
+            if (step.calls.isEmpty()) return@runCatching Answer(step.text.ifBlank { "Done." }, notes.added, notes.card, notes.listIds, notes.filter,
+                lesson(calls, roman).takeIf { notes.added.isNotEmpty() }.orEmpty())
+            calls += step.calls.map { it.name to it.input }
             val done = step.calls.map { c ->
                 c to onMain { runCatching { use(c.name, c.input, host, now, notes) }.getOrElse { JSONObject().put("error", it.message ?: "failed").toString() } }
             }
@@ -202,6 +207,51 @@ object AiAgent {
         Ai.lastError = "too many steps"
         null
     }.getOrElse { Ai.lastError = it.message ?: "no internet"; null }
+
+    // ---------- The app learns from the AI: a sentence it has read once is done by the app alone the next time ----------
+
+    private val NUMBER = Regex("""(\d[\d,]*(?:\.\d+)?)(k)?(?![\p{L}\p{N}])""")
+
+    /** A message's shape: lower case with every number a "#", so "chai 50" and "chai 60" are one shape. */
+    fun shape(said: String): String = NUMBER.replace(said.lowercase(Locale.ROOT), "#").replace(Regex("""[^\p{L}\p{N}#]+"""), " ").trim()
+
+    /** The numbers of a message in the order said ("150k" is 150000). */
+    fun numbers(said: String): List<Double> = NUMBER.findAll(said.lowercase(Locale.ROOT))
+        .map { it.groupValues[1].replace(",", "").toDouble() * if (it.groupValues[2].isNotEmpty()) 1000 else 1 }.toList()
+
+    /**
+     * What to remember from the AI's work on [said]: its new entries with each number swapped for its place in the
+     * message ("#0", "#1"), as JSON text. Null unless the AI did exactly one thing, saving entries, with every amount
+     * said in the message and no day worked out (a day like "kal" must be worked out afresh each time).
+     */
+    fun lesson(calls: List<Pair<String, JSONObject>>, said: String): String? {
+        val (name, input) = calls.singleOrNull() ?: return null
+        val list = input.optJSONArray("entries") ?: return null
+        val said = numbers(said)
+        if (name != "add_entries" || said.isEmpty() || list.length() == 0) return null
+        val out = JSONArray()
+        for (i in 0 until list.length()) {
+            val e = JSONObject(list.getJSONObject(i).toString())
+            if (e.optString("date").isNotBlank()) return null
+            for (field in listOf("amount", "qty", "rate")) if (e.has(field)) {
+                val at = said.indexOf(e.optDouble(field))
+                if (at < 0) return null
+                e.put(field, "#$at")
+            }
+            out.put(e)
+        }
+        return out.toString()
+    }
+
+    /** A remembered [lesson] filled with the numbers of a new message of the same shape, ready for add_entries; null when it does not fit. */
+    fun recall(lesson: String, said: String): JSONObject? = runCatching {
+        val now = numbers(said)
+        val list = JSONArray(lesson)
+        for (i in 0 until list.length()) list.getJSONObject(i).let { e ->
+            for (field in listOf("amount", "qty", "rate")) if (e.has(field)) e.put(field, now[e.getString(field).removePrefix("#").toInt()])
+        }
+        JSONObject().put("entries", list)
+    }.getOrNull()
 
     /** Runs one tool on the app's data and gives its result as JSON text; what it saved or showed is noted in [notes]. */
     fun use(name: String, input: JSONObject, host: Host, now: Long, notes: Notes = Notes()): String = when (name) {
