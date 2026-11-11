@@ -1246,6 +1246,13 @@ fun App(
     var aiPicked by remember { mutableStateOf("") }
     // The entries the AI's last answer saved, so a correction ("nahi 40 tha") can change them.
     var aiSaved by remember { mutableStateOf(emptyList<String>()) }
+    // The other ways the phone heard the last voice message; the AI picks the one that makes sense.
+    val aiHeard = remember { arrayOfNulls<List<String>>(1) }
+    /** Every different hearing of a voice message in Roman letters, the likeliest first; [said] is the one sent. */
+    fun keepHearings(guesses: List<String>, said: String) {
+        aiHeard[0] = guesses.map { g -> runCatching { Translit.toRoman(g) }.getOrDefault(g).trim() }
+            .filter { it.isNotBlank() && !it.equals(said, true) }.distinctBy { it.lowercase() }.take(4)
+    }
     /** Without AI (no key, or no internet): save clear entries, answer simple questions, never stay silent. */
     fun chatInput(raw: String) {
         if (chatMessages.isEmpty()) lastGroqQuery = ""
@@ -1290,6 +1297,8 @@ fun App(
                 // Test feature: with an AI key saved, the AI does the whole job itself through tools (see AiAgent).
                 if (Ai.handles(groqKey)) {
                     val started = System.currentTimeMillis()
+                    val heardAlso = aiHeard[0].orEmpty()
+                    aiHeard[0] = null
                     val recent = history.takeLast(6).joinToString("\n") { (if (it.isUser) "Person: " else "App: ") + it.text.take(200) }
                     val host = AiAgent.Host(
                         entries = { entries }, add = { save(it + entries) },
@@ -1299,7 +1308,7 @@ fun App(
                     )
                     // The AI is asked off the main thread; each tool then runs on it, where the entries live.
                     val answer = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                        AiAgent.run(text, recent, host, roman = roman, previous = aiPicked, justSaved = aiSaved) { tool -> kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.Main) { tool() } }
+                        AiAgent.run(text, recent, host, roman = roman, previous = aiPicked, justSaved = aiSaved, heardAlso = heardAlso) { tool -> kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.Main) { tool() } }
                     }
                     val usage = Ai.takeUsage(System.currentTimeMillis() - started).orEmpty()
                     lastSpeech = answer?.text ?: ("The AI did not answer (" + Ai.lastError.ifBlank { "no reply" } + "). Try again.")
@@ -2023,11 +2032,10 @@ fun App(
             }
             override fun onResults(results: Bundle?) {
                 if (!voiceOn) return
-                val said = bestVoiceGuess(
-                    results?.getStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION).orEmpty(),
-                    results?.getFloatArray(android.speech.SpeechRecognizer.CONFIDENCE_SCORES)
-                )
+                val guesses = results?.getStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION).orEmpty()
+                val said = bestVoiceGuess(guesses, results?.getFloatArray(android.speech.SpeechRecognizer.CONFIDENCE_SCORES))
                 if (said.isBlank()) { listenNow(); return }
+                keepHearings(guesses, said)
                 callHeard(said)
             }
             override fun onError(error: Int) {
@@ -2133,11 +2141,10 @@ fun App(
 
     val voice = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
         if (res.resultCode == Activity.RESULT_OK) {
-            val said = bestVoiceGuess(
-                res.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS).orEmpty(),
-                res.data?.getFloatArrayExtra(RecognizerIntent.EXTRA_CONFIDENCE_SCORES)
-            )
+            val guesses = res.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS).orEmpty()
+            val said = bestVoiceGuess(guesses, res.data?.getFloatArrayExtra(RecognizerIntent.EXTRA_CONFIDENCE_SCORES))
             if (said.isNotBlank()) {
+                keepHearings(guesses, said)
                 val fixed = Normalizer.voiceFix(said, voiceKnown())
                 if (voiceForChat) chatInput(fixed) else homeInput(fixed)
             } else toast("Couldn't catch that. Tap the mic again and speak a little slower.")
@@ -2158,8 +2165,7 @@ fun App(
             addAll(voiceKnown())
             addAll(entries.take(30).flatMap { listOf(it.item, it.person) })
             addAll(listOf(
-                "kal", "aaj", "parson", "subah", "shaam", "raat", "tarikh", "eint", "awal eint", "doyam eint", "kachi eint",
-                "pakki eint", "becha", "bechi", "diye", "liye", "mile", "wapis", "riyal", "rupay",
+                "kal", "aaj", "parson", "subah", "shaam", "raat", "tarikh", "becha", "bechi", "diye", "liye", "mile", "wapis", "riyal", "rupay",
                 "kharcha", "aamdani", "pese", "paise", "payment", "receive", "received", "nahi mili",
                 "nahi hui", "stock", "sale", "purchase", "udhaar", "cash", "bank", "salary", "petrol",
                 "kiraya", "grocery", "entry", "last entry", "pichli entry", "change entry", "badal do"
