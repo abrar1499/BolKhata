@@ -133,6 +133,10 @@ object AiAgent {
           (the sound "blij" is bleach, not bill). Keep the thing that was said as the item; never swap it for another word.
         - New money ("chai 50", "Ali ko 500 diye", "kal salary 3000 aayi") is add_entries, amounts exactly as said.
           lent = gave a loan or paid someone on credit; borrowed = took one; received_back / paid_back = a loan returning.
+        - Money with a person needs no question about its kind: "X ne diye", "X se mile", "X se liye" (money came from
+          X) is received_back, the app's "Received"; "X ko diye" (money went to X) is lent, the app's "Paid". The app
+          keeps one running balance per person, so both loans and returns fit these two. Use borrowed or paid_back only
+          when the words qarz, udhaar or loan are said about money the owner took.
         - Business: goods given to a customer on credit ("Nargis ko 200 shirts 350 ke hisaab se di") is type sale with
           person, item, qty and rate. Work done or goods supplied by a worker or supplier, to be paid for ("Hamid ne 500
           shirts silai ki 40 ke hisaab se"), is type work. The app multiplies qty by rate; per_1000 when the rate is per

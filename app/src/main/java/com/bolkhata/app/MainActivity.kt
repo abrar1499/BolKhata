@@ -1634,6 +1634,11 @@ fun App(
     var voiceMisses by remember { mutableIntStateOf(0) }
     // Set when the phone has no recognizer for the chosen language; voice chat then uses the phone's default.
     var voiceDefaultLanguage by remember { mutableStateOf(false) }
+    /**
+     * True when the mic records and sends to Whisper. A voice key saved in the AI key box always does; the old Groq
+     * setup also needs its own voice switch (which may have been turned off long ago) to be on.
+     */
+    fun whisperOn() = Ai.voiceKey.isNotBlank() || (Ai.voiceKeyFor(groqKey).isNotBlank() && groqVoice)
     /** The language to listen in: the one picked, else guessed from how the person writes (see Normalizer.voiceLanguage). */
     fun voiceLang() = Normalizer.voiceLanguage(lang, chatMessages.filter { it.isUser }.map { it.text })
     val ttsReady = remember { mutableStateOf(false) }
@@ -1679,10 +1684,13 @@ fun App(
             val said = Groq.transcribe(Ai.voiceKeyFor(groqKey), file, contactNames() + entries.filter { it.type == Type.AAMDANI }.map { source(it) })
             // In the chat (not the call) the recording is kept, named with its length, and shown as a voice note.
             voiceNote[0] = if (voiceOn || said.isFailure) null else runCatching {
-                val ms = android.media.MediaMetadataRetriever().run {
-                    setDataSource(file.absolutePath)
-                    (extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L).also { release() }
-                }
+                // The length is only for show: when it can't be read the note is still kept.
+                val ms = runCatching {
+                    android.media.MediaMetadataRetriever().run {
+                        setDataSource(file.absolutePath)
+                        (extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L).also { release() }
+                    }
+                }.getOrDefault(0L)
                 File(context.filesDir, "voice").apply { mkdirs() }.let { dir -> File(dir, "voice-" + System.currentTimeMillis() + "-" + ms + ".m4a") }
                     .also { file.copyTo(it, overwrite = true) }.absolutePath
             }.getOrNull()
@@ -1811,7 +1819,7 @@ fun App(
         if (!voiceOn) return
         voicePartial = ""
         voiceStatus = "Listening…"
-        if (Ai.voiceKeyFor(groqKey).isNotBlank() && groqVoice) {
+        if (whisperOn()) {
             startRecording(
                 heard = { said -> if (voiceOn) heardInCall(said) },
                 missed = {
@@ -2147,7 +2155,7 @@ fun App(
     fun toggleVoice() {
         if (voiceOn) { stopVoice(); return }
         val agent = elevenKey.isNotBlank() && elevenAgent.isNotBlank()
-        if (!agent && recognizer == null && !(Ai.voiceKeyFor(groqKey).isNotBlank() && groqVoice)) { toast("Speech recognition is not available on this phone."); return }
+        if (!agent && recognizer == null && !(whisperOn())) { toast("Speech recognition is not available on this phone."); return }
         val granted = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) ==
             android.content.pm.PackageManager.PERMISSION_GRANTED
         if (granted) beginCall() else micPermission.launch(android.Manifest.permission.RECORD_AUDIO)
@@ -2167,7 +2175,7 @@ fun App(
 
     fun startVoice(forChat: Boolean = false) {
         voiceForChat = forChat
-        if (Ai.voiceKeyFor(groqKey).isNotBlank() && groqVoice) {
+        if (whisperOn()) {
             startRecording(
                 heard = { text -> Normalizer.voiceFix(text, voiceKnown()).let { if (forChat) chatInput(it) else homeInput(it) } },
                 missed = { toast("Couldn't catch that. Try again.") }
