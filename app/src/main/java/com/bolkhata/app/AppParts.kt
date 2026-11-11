@@ -1,16 +1,7 @@
 package com.bolkhata.app
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -85,13 +76,22 @@ internal fun InputBar(
     val talking = voice?.on == true
     val hint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
     // The field sits on the page itself (no white strip behind it), 6 above the tabs.
+    // While the mic is on: the seconds so far, shown in the bar itself.
+    var seconds by remember(talking) { mutableIntStateOf(0) }
+    LaunchedEffect(talking) { while (talking) { kotlinx.coroutines.delay(1000); seconds++ } }
     Column(Modifier.fillMaxWidth()) {
-        if (talking) VoicePanel(voice!!)
         Box(Modifier.fillMaxWidth().then(if (navPad) Modifier.navigationBarsPadding() else Modifier)
             .padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = if (navPad) 8.dp else 6.dp)) {
-            Surface(shape = RoundedCornerShape(19.dp), color = Color.Transparent, modifier = Modifier.fillMaxWidth().fieldEdge(RoundedCornerShape(19.dp))) {
+            Surface(shape = RoundedCornerShape(19.dp), color = Color.Transparent, modifier = Modifier.fillMaxWidth().fieldEdge(RoundedCornerShape(19.dp))
+                .then(if (talking) Modifier.border(1.dp, RedSpend, RoundedCornerShape(19.dp)) else Modifier)) {
                 Row(Modifier.heightIn(min = 38.dp).padding(start = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    BasicTextField(
+                    // Recording or listening: a red line with the time (or the words heard so far); the button sends.
+                    if (talking) Text(
+                        "● " + if (voice!!.heard.isNotBlank() && voice.heard != "tap to send") voice.heard
+                            else voice.status + " " + seconds / 60 + ":" + (seconds % 60).toString().padStart(2, '0') + " · tap to send",
+                        color = RedSpend, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f).padding(horizontal = 4.dp, vertical = 7.dp)
+                    ) else BasicTextField(
                         value = text,
                         onValueChange = { text = it },
                         modifier = Modifier.weight(1f).padding(horizontal = 4.dp, vertical = 7.dp),
@@ -113,7 +113,7 @@ internal fun InputBar(
                             .size(30.dp)
                             .shadow(1.dp, CircleShape)
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surface)
+                            .background(if (talking) RedSpend else MaterialTheme.colorScheme.surface)
                             .clickable(enabled = talking || !busy) {
                                 when {
                                     talking -> voice!!.toggle()
@@ -124,7 +124,7 @@ internal fun InputBar(
                         contentAlignment = Alignment.Center
                     ) {
                         when {
-                            talking -> Box(Modifier.size(12.dp).clip(RoundedCornerShape(3.dp)).background(ink))
+                            talking -> Icon(Icons.Filled.ArrowUpward, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(18.dp))
                             busy -> CircularProgressIndicator(Modifier.size(18.dp), color = ink, strokeWidth = 2.dp)
                             text.isNotBlank() -> Icon(Icons.Filled.ArrowUpward, contentDescription = "Send", tint = ink, modifier = Modifier.size(20.dp))
                             else -> Icon(Icons.Outlined.Mic, contentDescription = "Speak", tint = ink, modifier = Modifier.size(19.dp))
@@ -137,53 +137,13 @@ internal fun InputBar(
 }
 
 /**
- * The voice call as the message bar shows it: on/off, what it is doing, what it heard so far, what the assistant
- * is saying ([reply]) and how loud the mic is (0..1); [toggle] connects or stops.
+ * The mic as the message bar shows it: on/off, what it is doing ("Recording", "Listening"), what it heard so far,
+ * and [toggle], which ends it and sends.
  */
 class VoiceState(
     val on: Boolean, val status: String, val heard: String,
     val reply: String = "", val level: Float = 0f, val toggle: () -> Unit
 )
-
-/** Above the bar while voice is on: the assistant's words (or the words heard), then a sound wave across the bar. */
-@Composable
-private fun VoicePanel(voice: VoiceState) {
-    val speaking = voice.status.startsWith("Speaking")
-    val words = if (speaking || voice.heard.isBlank()) voice.reply else voice.heard
-    Column(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 6.dp)) {
-        if (words.isNotBlank()) Text(
-            words, fontSize = 15.sp, lineHeight = 20.sp, maxLines = 4, overflow = TextOverflow.Ellipsis,
-            color = if (words == voice.reply) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 6.dp)
-        )
-        val strength = when {
-            speaking -> 1f
-            voice.status.startsWith("Listening") -> 0.25f + 0.75f * voice.level.coerceIn(0f, 1f)
-            else -> 0.15f
-        }
-        VoiceWave(GreenDeep, strength, Modifier.fillMaxWidth().height(36.dp))
-    }
-}
-
-/** Moving bars like a voice wave; taller with more [strength] (0..1). */
-@Composable
-private fun VoiceWave(color: Color, strength: Float, modifier: Modifier) {
-    val phase by rememberInfiniteTransition(label = "wave").animateFloat(
-        0f, (2 * Math.PI).toFloat(),
-        infiniteRepeatable(tween(1200, easing = LinearEasing), RepeatMode.Restart), label = "phase"
-    )
-    Canvas(modifier) {
-        val bars = 36
-        val gap = size.width / bars
-        val w = (gap * 0.45f).coerceAtMost(4.dp.toPx())
-        for (i in 0 until bars) {
-            val wave = (kotlin.math.sin(phase + i * 0.55f) * 0.5f + 0.5f) * (kotlin.math.sin(i * 0.33f) * 0.3f + 0.7f)
-            val h = (size.height * (0.12f + 0.88f * wave * strength)).coerceAtLeast(w)
-            val x = gap * i + gap / 2
-            drawLine(color, Offset(x, (size.height - h) / 2), Offset(x, (size.height + h) / 2), w, StrokeCap.Round)
-        }
-    }
-}
 
 /** Header themes offered in the side menu (the app's glossy bands), in this order. */
 private val MENU_THEMES = listOf("Clean", "Red", "Green", "Navy")
