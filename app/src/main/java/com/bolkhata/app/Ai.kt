@@ -39,38 +39,52 @@ object Ai {
     @Volatile var key = ""
     @Volatile var model = ""
     /** Told the tokens of every call, to keep the running total. */
-    @Volatile var sink: ((input: Int, output: Int) -> Unit)? = null
+    @Volatile var sink: ((input: Int, output: Int, microDollars: Long) -> Unit)? = null
 
     fun handles(k: String) = key.isNotBlank() && k == key
     fun modelNow(): String = model.ifBlank { provider(key)?.model.orEmpty() }
     /** Only Groq has the speech-to-text the mic and the call use. */
     fun hasVoice(k: String) = k.isNotBlank() && (!handles(k) || provider(k) === GROQ)
 
-    /** US dollars per million tokens (in, out) for the Claude models; null when the price is not known here. */
-    fun price(model: String): Pair<Double, Double>? = when {
-        model.startsWith("claude-fable-5-2") -> 8.0 to 40.0
-        model.startsWith("claude-opus-5-5") -> 4.0 to 20.0
-        model.startsWith("claude-opus-5") -> 5.0 to 25.0
-        model.startsWith("claude-sonnet-5") -> 2.0 to 10.0
-        model.startsWith("claude-haiku-5-5") -> 0.10 to 0.50
-        model.startsWith("claude-haiku-4-5") -> 1.0 to 5.0
+    /** US dollars per million tokens (in, out, read back from the cache) for the Claude models; null when the price is not known here. */
+    fun price(model: String): Triple<Double, Double, Double>? = when {
+        model.startsWith("claude-fable-5-2") -> Triple(8.0, 40.0, 0.20)
+        model.startsWith("claude-opus-5-5") -> Triple(4.0, 20.0, 0.20)
+        model.startsWith("claude-opus-5") -> Triple(5.0, 25.0, 0.50)
+        model.startsWith("claude-sonnet-5-5") -> Triple(2.0, 10.0, 0.10)
+        model.startsWith("claude-sonnet-5") -> Triple(2.0, 10.0, 0.20)
+        model.startsWith("claude-haiku-5-5") -> Triple(0.10, 0.50, 0.01)
+        model.startsWith("claude-haiku-4-5") -> Triple(1.0, 5.0, 0.10)
         else -> null
     }
 
-    /** "340 in · 120 out · $0.0038" (no price part when it is not known). */
-    fun usageText(input: Long, output: Long, model: String = modelNow()): String =
-        "%,d in · %,d out".format(Locale.US, input, output) +
-            (price(model)?.let { (i, o) -> " · $" + String.format(Locale.US, "%.4f", (input * i + output * o) / 1_000_000) } ?: "")
+    /**
+     * What a call cost in dollars: [input] counts every token read, of which [cached] came from the cache (cheap) and
+     * [written] were put into it (a quarter dearer than usual). Null when the model's price is not known here.
+     */
+    fun cost(model: String, input: Long, output: Long, cached: Long = 0, written: Long = 0): Double? = price(model)?.let { (i, o, read) ->
+        ((input - cached - written) * i + written * i * 1.25 + cached * read + output * o) / 1_000_000
+    }
+
+    /** "7,687 in (6,100 cached) · 551 out · $0.0004" (no price part when it is not known). */
+    fun usageText(input: Long, output: Long, model: String = modelNow(), cached: Long = 0, dollars: Double? = cost(model, input, output, cached)): String =
+        "%,d in".format(Locale.US, input) + (if (cached > 0) " (%,d cached)".format(Locale.US, cached) else "") + " · %,d out".format(Locale.US, output) +
+            (dollars?.let { " · $" + String.format(Locale.US, "%.4f", it) } ?: "")
 
     private val usedIn = java.util.concurrent.atomic.AtomicInteger()
     private val usedOut = java.util.concurrent.atomic.AtomicInteger()
+    private val usedCached = java.util.concurrent.atomic.AtomicInteger()
+    private val usedMicro = java.util.concurrent.atomic.AtomicLong()
 
     /** What the calls since the last ask used, as "Claude · 1.2s · 340 in · 120 out · $0.0038"; null when this key made none. */
     fun takeUsage(ms: Long): String? {
         val i = usedIn.getAndSet(0)
         val o = usedOut.getAndSet(0)
+        val cached = usedCached.getAndSet(0)
+        val micro = usedMicro.getAndSet(0)
         if (i == 0 && o == 0) return null
-        return (provider(key)?.name ?: "AI") + " · " + String.format(Locale.US, "%.1fs", ms / 1000.0) + " · " + usageText(i.toLong(), o.toLong())
+        return (provider(key)?.name ?: "AI") + " · " + String.format(Locale.US, "%.1fs", ms / 1000.0) + " · " +
+            usageText(i.toLong(), o.toLong(), cached = cached.toLong(), dollars = if (price(modelNow()) == null) null else micro / 1_000_000.0)
     }
 
     /**
@@ -123,7 +137,8 @@ object Ai {
             if (code !in 200..299) { lastError = "$code " + errorOf(text); return null }
             val r = JSONObject(text)
             val usage = r.optJSONObject("usage") ?: JSONObject()
-            count(usage.optInt("input_tokens") + usage.optInt("cache_creation_input_tokens") + usage.optInt("cache_read_input_tokens"), usage.optInt("output_tokens"))
+            count(usage.optInt("input_tokens") + usage.optInt("cache_creation_input_tokens") + usage.optInt("cache_read_input_tokens"), usage.optInt("output_tokens"),
+                usage.optInt("cache_read_input_tokens"), usage.optInt("cache_creation_input_tokens"))
             if (r.optString("stop_reason") == "refusal") { lastError = "declined"; return null }
             // The whole turn goes back unchanged (thinking blocks included), as the API asks.
             val blocks = r.optJSONArray("content") ?: JSONArray()
@@ -170,10 +185,13 @@ object Ai {
         JSONObject(text).optJSONObject("error")?.optString("message") ?: JSONArray(text).getJSONObject(0).getJSONObject("error").optString("message")
     }.getOrDefault("").take(120)
 
-    private fun count(input: Int, output: Int) {
+    private fun count(input: Int, output: Int, cached: Int = 0, written: Int = 0) {
+        val micro = ((cost(modelNow(), input.toLong(), output.toLong(), cached.toLong(), written.toLong()) ?: 0.0) * 1_000_000).toLong()
         usedIn.addAndGet(input)
         usedOut.addAndGet(output)
-        sink?.invoke(input, output)
+        usedCached.addAndGet(cached)
+        usedMicro.addAndGet(micro)
+        sink?.invoke(input, output, micro)
     }
 
     /** A tiny request to check a new key: "" when it works, else what the provider said. */

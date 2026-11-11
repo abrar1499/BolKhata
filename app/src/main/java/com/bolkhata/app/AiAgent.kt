@@ -77,8 +77,8 @@ object AiAgent {
         Ai.Tool("delete_entries", "Moves saved entries to Trash (ids from find_entries); the person can restore them.", shape("ids" to words("Entry ids"), required = listOf("ids")))
     )
 
-    /** The same for every message, so the provider can cache it; today's date and the saved names go with the message. */
-    fun system(currency: String) = """
+    /** The same from message to message (until a new name is saved), so the provider can cache it; the time goes with the message. */
+    fun system(currency: String, names: List<String>) = """
         You run a ledger and expense app for its owner through the tools. Currency: ${currency.ifBlank { "none shown" }}.
         People write Roman Urdu, Urdu or Hindi script, or English, often misspelled or heard from voice.
         - Do what is asked with the tools, then answer in one or two short sentences, in the person's language and style
@@ -92,7 +92,7 @@ object AiAgent {
           asking again; when it is not, ask one short question instead of guessing. Deleted entries go to Trash.
         - "is mahine" is the 1st of this month to today, "kal" yesterday, "aaj tak" / "ab tak" all time (no dates).
         - A greeting or small talk: answer briefly, no tools. You only know this app; for anything else say so shortly.
-    """.trimIndent()
+    """.trimIndent() + if (names.isEmpty()) "" else "\nSaved names: " + names.joinToString(", ")
 
     /**
      * Lets the AI work until it answers (at most 8 rounds); null when the provider failed (see [Ai.lastError]).
@@ -103,11 +103,10 @@ object AiAgent {
         val names = host.names().take(80)
         val messages = Ai.opening(
             "Now: " + timeFmt.format(Date(now)) + " (" + SimpleDateFormat("EEEE", Locale.US).format(Date(now)) + ")\n" +
-                (if (names.isEmpty()) "" else "Saved names: " + names.joinToString(", ") + "\n") +
                 (if (recent.isBlank()) "" else "Conversation so far:\n" + recent.takeLast(1200) + "\n") +
                 "Message: " + said.take(600)
         )
-        val system = system(host.currency)
+        val system = system(host.currency, names)
         for (round in 1..8) {
             val step = Ai.step(system, tools, messages) ?: return@runCatching null
             if (step.calls.isEmpty()) return@runCatching Answer(step.text.ifBlank { "Done." }, added)
@@ -124,7 +123,7 @@ object AiAgent {
         "find_entries" -> {
             val list = pick(input, host, now)
             JSONObject().put("count", list.size).put("total", list.sumOf { it.amount })
-                .put("entries", JSONArray(list.take(40).map(::show))).put("not_shown", (list.size - 40).coerceAtLeast(0)).toString()
+                .put("entries", JSONArray(list.take(40).map { show(it, input.has("added_in_last_minutes")) })).put("not_shown", (list.size - 40).coerceAtLeast(0)).toString()
         }
         "totals" -> {
             val list = pick(input, host, now)
@@ -155,7 +154,7 @@ object AiAgent {
             val fresh = (0 until list.length()).map { make(list.getJSONObject(it), now, it) }
             host.add(fresh)
             added += fresh.map { it.id }
-            JSONObject().put("saved", fresh.size).put("entries", JSONArray(fresh.map(::show))).toString()
+            JSONObject().put("saved", fresh.size).put("entries", JSONArray(fresh.map { show(it) })).toString()
         }
         "update_entries" -> {
             val ids = strings(input, "ids").toSet()
@@ -167,7 +166,7 @@ object AiAgent {
                 x
             }
             host.update(changed)
-            JSONObject().put("changed", changed.size).put("entries", JSONArray(changed.take(40).map(::show))).toString()
+            JSONObject().put("changed", changed.size).put("entries", JSONArray(changed.take(40).map { show(it) })).toString()
         }
         "delete_entries" -> {
             val ids = strings(input, "ids").toSet().intersect(host.entries().map { it.id }.toSet())
@@ -181,9 +180,14 @@ object AiAgent {
 
     private fun typeName(t: Type) = TYPES.entries.firstOrNull { it.value == t }?.key ?: t.label
 
-    /** An entry as the AI sees it. */
-    private fun show(e: Entry) = JSONObject().put("id", e.id).put("type", typeName(e.type)).put("amount", e.amount).put("category", e.category.label)
-        .put("item", e.item).put("person", e.person).put("note", e.note.take(80)).put("date", dayFmt.format(Date(e.date))).put("added", timeFmt.format(Date(e.createdAt)))
+    /** An entry as the AI sees it, kept short (every token is paid for): empty fields are left out, [added] only when asked by it. */
+    private fun show(e: Entry, added: Boolean = false): JSONObject = JSONObject().put("id", e.id).put("type", typeName(e.type)).put("amount", e.amount)
+        .put("item", e.item).put("date", dayFmt.format(Date(e.date))).apply {
+            if (e.type == Type.KHARCHA) put("category", e.category.label)
+            if (e.person.isNotBlank()) put("person", e.person)
+            if (e.note.isNotBlank() && !e.note.equals(e.item, true)) put("note", e.note.take(60))
+            if (added) put("added", timeFmt.format(Date(e.createdAt)))
+        }
 
     /** The saved entries a tool's filter picks, newest first. */
     private fun pick(o: JSONObject, host: Host, now: Long): List<Entry> {
