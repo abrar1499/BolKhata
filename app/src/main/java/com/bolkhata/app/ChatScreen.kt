@@ -190,7 +190,7 @@ fun ChatScreen(
                         AnswerActions(ratings[message.id]) { good -> onRate(message.id, good) }
                         // "Groq · 1.2s · 340 tokens" under an answer Groq helped with.
                         Regex("""usage=([^;]+)""").find(message.meta)?.let {
-                            Text(it.groupValues[1], fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            Text(it.groupValues[1], fontSize = 7.sp, lineHeight = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                 modifier = Modifier.padding(start = 14.dp).offset(y = (-6).dp))
                         }
                     }

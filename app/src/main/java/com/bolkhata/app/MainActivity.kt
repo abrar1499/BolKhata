@@ -151,7 +151,7 @@ fun App(
     // Groq is switched off for now (Groq.ENABLED): the app reads and answers every message by itself.
     // Test feature (APK build only): an AI key of any provider, saved in the side menu, runs the chat instead; see Ai.
     remember {
-        if (!BuildConfig.PLAY) { Ai.key = store.llmKey; Ai.model = store.llmModel; Ai.voiceKey = store.llmVoice; Ai.sink = { i, o, micro -> store.llmIn += i; store.llmOut += o; store.llmMicro += micro } }
+        if (!BuildConfig.PLAY) { Ai.key = if (store.llmOn) store.llmKey else ""; Ai.model = store.llmModel; Ai.voiceKey = store.llmVoice; Ai.sink = { i, o, micro -> store.llmIn += i; store.llmOut += o; store.llmMicro += micro } }
     }
     fun groqKeyNow() = Ai.key.ifBlank { if (!Groq.ENABLED) "" else store.groqKey.ifBlank { if (Groq.sharedReady && !store.groqOff) Groq.SHARED else "" } }
     var groqKey by remember { mutableStateOf(groqKeyNow()) }
@@ -2343,7 +2343,7 @@ fun App(
                     }
                 },
                 ai = if (BuildConfig.PLAY) null else remember(aiTick, groqKey) {
-                    AiInfo(Ai.provider(Ai.key)?.name.orEmpty(), store.llmModel, Ai.modelNow(), voice = store.llmVoice.isNotBlank(), used =
+                    AiInfo(Ai.provider(store.llmKey)?.name.orEmpty(), store.llmModel, Ai.modelNow(), voice = store.llmVoice.isNotBlank(), on = store.llmOn, used =
                         if (store.llmIn + store.llmOut == 0L) "" else Ai.usageText(store.llmIn, store.llmOut,
                             dollars = if (Ai.price(Ai.modelNow()) == null) null else store.llmMicro / 1_000_000.0))
                 },
@@ -2355,9 +2355,10 @@ fun App(
                     if (key.isNotBlank() && Ai.provider(key) == null) { driveToast("This key is not recognised"); return@save }
                     // A new key or model starts the token count again.
                     if ((key.isNotBlank() && key != Ai.key) || model != store.llmModel) { store.llmIn = 0; store.llmOut = 0; store.llmMicro = 0 }
-                    if (key.isNotBlank()) store.llmKey = key
+                    // A newly pasted key is switched on.
+                    if (key.isNotBlank()) { store.llmKey = key; store.llmOn = true }
                     store.llmModel = model
-                    Ai.key = store.llmKey; Ai.model = store.llmModel
+                    Ai.key = if (store.llmOn) store.llmKey else ""; Ai.model = store.llmModel
                     groqKey = groqKeyNow(); aiTick++
                     if (Ai.key.isNotBlank()) scope.launch {
                         val error = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Ai.test() }
@@ -2366,7 +2367,13 @@ fun App(
                     }
                 },
                 onVoiceOff = { store.llmVoice = ""; Ai.voiceKey = ""; aiTick++; driveToast("Voice key removed · the mic listens with the phone") },
-                onAiOff = { store.llmKey = ""; Ai.key = ""; store.llmVoice = ""; Ai.voiceKey = ""; groqKey = groqKeyNow(); aiTick++; driveToast("AI is off. The app answers by itself again.") },
+                // The switch: off keeps the key on the phone, so on needs no key again.
+                onAiOn = { on ->
+                    store.llmOn = on
+                    Ai.key = if (on) store.llmKey else ""
+                    groqKey = groqKeyNow(); aiTick++
+                    driveToast(if (on) "AI is on" else "AI is off · the key is kept. The app answers by itself.")
+                },
                 driveEmail = driveEmail, driveStatus = if (driveEmail.isBlank()) driveError else Drive.status, driveBusy = Drive.busy,
                 onSignIn = { driveSignIn() },
                 onSyncNow = {
