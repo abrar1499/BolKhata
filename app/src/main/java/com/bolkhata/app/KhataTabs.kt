@@ -661,15 +661,18 @@ fun CashBookScreen(
     val newest = remember(entries) {
         entries.filter { cashIn(it) || cashOut(it) }.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt })
     }
-    val hand = remember(newest) { newest.sumOf { if (cashIn(it)) it.amount else -it.amount } }
-    // This month's net cash: in minus out.
     val nowKey = monthKey(System.currentTimeMillis())
-    // The head shows what was spent this month (Expense entries), like the Expense tab.
-    val spentMonth = remember(newest, nowKey) { newest.filter { it.type == Type.KHARCHA && monthKey(it.date) == nowKey }.sumOf { it.amount } }
     val months = remember(newest) { monthsOf(newest) }
     var month by rememberSaveable(months.firstOrNull()?.first) { mutableIntStateOf(months.firstOrNull()?.first ?: 0) }
     // A remembered month that no longer has entries (the khata changed since) falls back to the newest month.
     if (month != ALL_MONTHS && months.none { it.first == month }) month = months.firstOrNull()?.first ?: ALL_MONTHS
+    // The head follows the picked month: the cash there was at its end (today's for this month or All), and what was
+    // spent in it (Expense entries, like the Expense tab).
+    val past = month != ALL_MONTHS && month < nowKey
+    val hand = remember(newest, month) { newest.filter { !past || monthKey(it.date) <= month }.sumOf { if (cashIn(it)) it.amount else -it.amount } }
+    val spentMonth = remember(newest, month) { newest.filter { it.type == Type.KHARCHA && inMonth(it.date, month) }.sumOf { it.amount } }
+    val handWord = if (past) "Cash at month end" else "Cash in hand"
+    val spentWord = when (month) { ALL_MONTHS -> "Spent in all"; nowKey -> "Spent this month"; else -> "Spent in " + monthName(month) }
     var q by rememberSaveable { mutableStateOf("") }
     // A search looks through every month; otherwise only the picked month is listed.
     val list = remember(newest, month, q) { if (q.isBlank()) newest.filter { inMonth(it.date, month) } else newest.filter { matches(it, q) } }
@@ -681,13 +684,13 @@ fun CashBookScreen(
             stickyHeader { TabHead {
                 KhataTop("", "", onMenu, business = business, onPdf = {
                     pdf(PdfDoc("Cashbook", if (q.isNotBlank()) "Search: $q" else monthLabel(months, month) ?: "All",
-                        listOf(fmt(hand) + cur to "Cash in hand", fmt(spentMonth) + cur to "Spent this month"),
+                        listOf(fmt(hand) + cur to handWord, fmt(spentMonth) + cur to spentWord),
                         listOf(ledgerTable("", listOf("Out", "In"), list.map { e -> e to listOf(if (cashOut(e)) e.amount else 0.0, if (cashIn(e)) e.amount else 0.0) },
                             { e -> title(e) + e.person.trim().ifBlank { e.category.label }.let { k -> if (k == title(e)) "" else " · $k" } }))))
                 }) {
                     SumCard(
-                        Triple(fmt(hand), "Cash in hand", if (hand < 0) RedSpend else GreenIn),
-                        Triple(fmt(spentMonth), "Spent this month", RedSpend),
+                        Triple(fmt(hand), handWord, if (hand < 0) RedSpend else GreenIn),
+                        Triple(fmt(spentMonth), spentWord, RedSpend),
                         "Report ›", onReport
                     )
                 }
