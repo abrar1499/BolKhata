@@ -145,7 +145,9 @@ object AiAgent {
           person, item, qty and rate. Work done or goods supplied by a worker or supplier, to be paid for ("Hamid ne 500
           shirts silai ki 40 ke hisaab se"), is type work. The app multiplies qty by rate; per_1000 when the rate is per
           thousand; paid_now when settled in cash on the spot. When no rate is said, save with qty and no rate: the
-          app uses the person's last rate. Never ask for a rate unless the tool says none is known. Money a customer pays later is received_back; money paid
+          app uses the person's last rate. Never ask for a rate unless the tool says none is known. A worker or
+          supplier with a count of things they made, did or brought and no money word ("Hamid ne 10000 kachi eent
+          dali", "Hamid 300 shirts") is work with that qty: save it, do not ask whether it is money. Money a customer pays later is received_back; money paid
           to a worker or supplier is lent. Profit, loss, sales, costs, net worth: the report tool.
           Use a saved name only when it is the same person (the same name, or a misspelling or short form of it). A
           saved name that joins two people ("A & B", "A and B") is its own account: a message naming only one of them
@@ -188,6 +190,12 @@ object AiAgent {
                 (if (previous.isBlank()) "" else "Previous look-up picked: " + previous.take(400) + "\n") +
                 // What the last message saved, with ids, so "sirf Hamid se" or "nahi 40 tha" can change it.
                 host.entries().filter { it.id in justSaved }.take(12).let { l -> if (l.isEmpty()) "" else "Just saved: " + JSONArray(l.map { show(it) }) + "\n" } +
+                // Who the named people are, so "Hamid ne 3000 banai" is read as a worker's work, at their usual rate.
+                people(roman, who(names, known)).take(3).joinToString("") { p ->
+                    val last = host.entries().filter { it.person.equals(p, true) && it.rate > 0 }.maxByOrNull { it.date }
+                    "About $p: in " + Sides.bookOf(p, host.entries(), host.setup()) +
+                        (if (last == null) "" else "; last " + (if (last.type == Type.SALE) "sale" else "work") + ": " + last.item + " at " + plainNumber(last.rate) + (if (last.unit == "1000") " per 1000" else "")) + "\n"
+                } +
                 (if (!spoken) "" else "The message came by voice and may be misheard." +
                     (if (heardAlso.isEmpty()) "" else " It was also heard as: " + heardAlso.joinToString(" | ") { it.take(200) }) + "\n") +
                 "Message: " + said.take(600) +
@@ -220,6 +228,8 @@ object AiAgent {
     // ---------- The app learns from the AI: a sentence it has read once is done by the app alone the next time ----------
 
     private val NUMBER = Regex("""(\d[\d,]*(?:\.\d+)?)(k)?(?![\p{L}\p{N}])""")
+
+    private fun plainNumber(n: Double) = if (n == Math.floor(n)) n.toLong().toString() else n.toString()
 
     private fun plain(said: String) = NUMBER.replace(said.lowercase(Locale.ROOT), "#").replace(Regex("""[^\p{L}\p{N}#]+"""), " ").trim()
 
