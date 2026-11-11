@@ -1759,23 +1759,23 @@ fun App(
         var lastSound = start
         // Background noise level, learnt while recording, so a noisy room still counts as a pause. Speech only has to
         // be a little above it, so a soft voice is heard too; steady noise slowly becomes the new level.
-        // The floor is capped, so a soft voice or a headset mic never raises it above speech.
-        var floor = 300f
+        // The floor is capped low, so a soft voice or a headset mic never raises it above speech.
+        var floor = 150f
         var peak = 0
         while (recorder === r) {
             kotlinx.coroutines.delay(150)
             val now = System.currentTimeMillis()
             val amp = runCatching { r.maxAmplitude }.getOrDefault(0)
             peak = maxOf(peak, amp)
-            voiceLevel = (amp / 6_000f).coerceAtMost(1f)
-            val loud = maxOf(450f, floor * 1.8f)
+            voiceLevel = (amp / 3_000f).coerceAtMost(1f)
+            val loud = maxOf(220f, floor * 1.5f)
             if (amp > loud) { spoke = true; lastSound = now }
-            else floor = (floor * 0.9f + amp * 0.1f).coerceAtMost(1_200f)
-            // A call answers sooner after a pause than the mic, so it feels live.
-            if (spoke && now - lastSound > (if (voiceOn) 900 else 1200)) { finishRecording(); break }
+            else floor = (floor * 0.9f + amp * 0.1f).coerceAtMost(700f)
+            // A call answers sooner after a pause than the mic, so it feels live; a soft voice dips, so the mic waits a little longer.
+            if (spoke && now - lastSound > (if (voiceOn) 900 else 1500)) { finishRecording(); break }
             // No clear start heard: anything above a whisper still goes to Whisper (its noise filter drops silence).
             if (!spoke && now - start > 8000) {
-                if (peak > 350) finishRecording() else { finishRecording(send = false); recordMissed() }
+                if (peak > 150) finishRecording() else { finishRecording(send = false); recordMissed() }
                 break
             }
         }
@@ -1789,8 +1789,8 @@ fun App(
         val file = File(context.cacheDir, "voice.m4a")
         val r = (if (Build.VERSION.SDK_INT >= 31) android.media.MediaRecorder(context) else @Suppress("DEPRECATION") android.media.MediaRecorder())
         runCatching {
-            // The phone's voice-call mic: its noise suppression keeps fans, traffic and other voices down.
-            r.setAudioSource(android.media.MediaRecorder.AudioSource.VOICE_COMMUNICATION)
+            // The mic as tuned for speech recognition: it keeps a soft voice (the voice-call mic took one for noise and cut it).
+            r.setAudioSource(android.media.MediaRecorder.AudioSource.VOICE_RECOGNITION)
             r.setOutputFormat(android.media.MediaRecorder.OutputFormat.MPEG_4)
             r.setAudioEncoder(android.media.MediaRecorder.AudioEncoder.AAC)
             r.setAudioSamplingRate(16_000)
@@ -2365,6 +2365,7 @@ fun App(
                         driveToast(if (error.isBlank()) "✓ ${Ai.provider(Ai.key)?.name} is on · ${Ai.modelNow()}" else "AI key did not work: $error")
                     }
                 },
+                onVoiceOff = { store.llmVoice = ""; Ai.voiceKey = ""; aiTick++; driveToast("Voice key removed · the mic listens with the phone") },
                 onAiOff = { store.llmKey = ""; Ai.key = ""; store.llmVoice = ""; Ai.voiceKey = ""; groqKey = groqKeyNow(); aiTick++; driveToast("AI is off. The app answers by itself again.") },
                 driveEmail = driveEmail, driveStatus = if (driveEmail.isBlank()) driveError else Drive.status, driveBusy = Drive.busy,
                 onSignIn = { driveSignIn() },
