@@ -322,11 +322,56 @@ private fun Modifier.copyable(text: String): Modifier {
 }
 
 /** Chat bubbles like the mock-up: white cards with one small corner pointing at the speaker. */
+/**
+ * A voice note in the dark bubble: a round play button, the sound's bars and its length ("0:04", kept in the file's
+ * name). A tap plays the recording, another stops it.
+ */
+@Composable
+private fun VoiceBubble(path: String) {
+    var player by remember(path) { mutableStateOf<android.media.MediaPlayer?>(null) }
+    DisposableEffect(path) { onDispose { runCatching { player?.release() } } }
+    val seconds = (path.substringAfterLast('-').removeSuffix(".m4a").toLongOrNull() ?: 0L) / 1000
+    val bars = remember(path) { listOf(8, 14, 20, 11, 17, 22, 9, 15, 19, 12, 7, 16, 21, 10, 13, 18, 8, 12) }
+    val light = MaterialTheme.colorScheme.surface
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+        Row(
+            Modifier.clip(MeShape).background(MaterialTheme.colorScheme.onSurface).clickable {
+                val playing = player
+                if (playing != null) { runCatching { playing.release() }; player = null }
+                else runCatching {
+                    player = android.media.MediaPlayer().apply {
+                        setDataSource(path)
+                        setOnCompletionListener { runCatching { it.release() }; player = null }
+                        prepare()
+                        start()
+                    }
+                }
+            }.padding(start = 8.dp, end = 12.dp, top = 7.dp, bottom = 7.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(Modifier.size(26.dp).clip(CircleShape).background(light), contentAlignment = Alignment.Center) {
+                Text(if (player == null) "▶" else "■", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface)
+            }
+            Spacer(Modifier.width(8.dp))
+            Row(Modifier.height(22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                bars.forEach { Box(Modifier.width(2.5.dp).height(it.dp).clip(RoundedCornerShape(2.dp)).background(light.copy(alpha = 0.85f))) }
+            }
+            Spacer(Modifier.width(8.dp))
+            Text("%d:%02d".format(seconds / 60, seconds % 60), fontSize = 10.sp, color = light.copy(alpha = 0.75f))
+        }
+    }
+}
+
 private val MeShape = RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp, bottomStart = 14.dp, bottomEnd = 4.dp)
 private val BotShape = RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp, bottomStart = 4.dp, bottomEnd = 14.dp)
 
 @Composable
 private fun UserBubble(text: String, attachment: String = "") {
+    // A message spoken with the mic shows as a voice note, not as its words.
+    if (attachment.endsWith(".m4a")) {
+        VoiceBubble(attachment)
+        return
+    }
     if (attachment.isNotBlank()) {
         AttachmentBubble(attachment, text)
         return

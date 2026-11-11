@@ -43,8 +43,11 @@ object Ai {
 
     fun handles(k: String) = key.isNotBlank() && k == key
     fun modelNow(): String = model.ifBlank { provider(key)?.model.orEmpty() }
-    /** Only Groq has the speech-to-text the mic and the call use. */
-    fun hasVoice(k: String) = k.isNotBlank() && (!handles(k) || provider(k) === GROQ)
+    /** A Groq key only for hearing (Whisper), when the AI key is another provider's; "" for none. */
+    @Volatile var voiceKey = ""
+
+    /** The key the mic's recording is sent with, or "" when the phone's own hearing is used. [k] is the chat's key. */
+    fun voiceKeyFor(k: String): String = voiceKey.ifBlank { if (k.isNotBlank() && (!handles(k) || provider(k) === GROQ)) k else "" }
 
     /** US dollars per million tokens (in, out, read back from the cache) for the Claude models; null when the price is not known here. */
     fun price(model: String): Triple<Double, Double, Double>? = when {

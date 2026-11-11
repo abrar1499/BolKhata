@@ -152,7 +152,7 @@ fun App(
     // Groq is switched off for now (Groq.ENABLED): the app reads and answers every message by itself.
     // Test feature (APK build only): an AI key of any provider, saved in the side menu, runs the chat instead; see Ai.
     remember {
-        if (!BuildConfig.PLAY) { Ai.key = store.llmKey; Ai.model = store.llmModel; Ai.sink = { i, o, micro -> store.llmIn += i; store.llmOut += o; store.llmMicro += micro } }
+        if (!BuildConfig.PLAY) { Ai.key = store.llmKey; Ai.model = store.llmModel; Ai.voiceKey = store.llmVoice; Ai.sink = { i, o, micro -> store.llmIn += i; store.llmOut += o; store.llmMicro += micro } }
     }
     fun groqKeyNow() = Ai.key.ifBlank { if (!Groq.ENABLED) "" else store.groqKey.ifBlank { if (Groq.sharedReady && !store.groqOff) Groq.SHARED else "" } }
     var groqKey by remember { mutableStateOf(groqKeyNow()) }
@@ -1242,6 +1242,8 @@ fun App(
 
     // The PDF maker is written further down; the AI's PDF tool reaches it through this.
     val aiPdf = remember { arrayOfNulls<(PdfDoc) -> Unit>(1) }
+    // The recording of a voice message just heard: the chat shows it as a voice note in place of its words.
+    val voiceNote = remember { arrayOfNulls<String>(1) }
     // How the AI's last look-up picked its entries, so a follow-up ("detail do") goes on from it.
     var aiPicked by remember { mutableStateOf("") }
     // The entries the AI's last answer saved, so a correction ("nahi 40 tha") can change them.
@@ -1274,7 +1276,8 @@ fun App(
         val roman = runCatching { Translit.toRoman(text) }.getOrDefault(text)
         // A long window, so a follow-up still knows the search or list from many turns back.
         val history = chatMessages.takeLast(60)
-        postChat(text, isUser = true)
+        postChat(text, isUser = true, attachment = voiceNote[0].orEmpty())
+        voiceNote[0] = null
 
         if (!Ai.handles(groqKey)) NativeMemory.handle(text, store.memory)?.let { memory ->
             store.memory = memory.facts
@@ -1670,15 +1673,24 @@ fun App(
         val missed = recordMissed
         if (file.length() < 2_000) { missed(); return }
         chatLoading = true
-        loadingLabel = "Listening with Groq…"
+        loadingLabel = "Listening…"
         if (voiceOn) voiceStatus = "Thinking…"
         scope.launch {
-            val said = Groq.transcribe(groqKey, file, contactNames() + entries.filter { it.type == Type.AAMDANI }.map { source(it) })
+            val said = Groq.transcribe(Ai.voiceKeyFor(groqKey), file, contactNames() + entries.filter { it.type == Type.AAMDANI }.map { source(it) })
+            // In the chat (not the call) the recording is kept, named with its length, and shown as a voice note.
+            voiceNote[0] = if (voiceOn || said.isFailure) null else runCatching {
+                val ms = android.media.MediaMetadataRetriever().run {
+                    setDataSource(file.absolutePath)
+                    (extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L).also { release() }
+                }
+                File(context.filesDir, "voice").apply { mkdirs() }.let { dir -> File(dir, "voice-" + System.currentTimeMillis() + "-" + ms + ".m4a") }
+                    .also { file.copyTo(it, overwrite = true) }.absolutePath
+            }.getOrNull()
             runCatching { file.delete() }
             chatLoading = false
             loadingLabel = "Thinking…"
             said.fold(
-                onSuccess = { text -> if (Groq.isNoise(text)) missed() else heard(text.trim()) },
+                onSuccess = { text -> if (Groq.isNoise(text)) { voiceNote[0]?.let { runCatching { File(it).delete() } }; voiceNote[0] = null; missed() } else heard(text.trim()) },
                 onFailure = { toast((it.message ?: "Groq voice failed") + ". You can turn off Groq voice in Settings."); missed() }
             )
         }
@@ -1799,7 +1811,7 @@ fun App(
         if (!voiceOn) return
         voicePartial = ""
         voiceStatus = "Listening…"
-        if (Ai.hasVoice(groqKey) && groqVoice) {
+        if (Ai.voiceKeyFor(groqKey).isNotBlank() && groqVoice) {
             startRecording(
                 heard = { said -> if (voiceOn) heardInCall(said) },
                 missed = {
@@ -2135,7 +2147,7 @@ fun App(
     fun toggleVoice() {
         if (voiceOn) { stopVoice(); return }
         val agent = elevenKey.isNotBlank() && elevenAgent.isNotBlank()
-        if (!agent && recognizer == null && !(Ai.hasVoice(groqKey) && groqVoice)) { toast("Speech recognition is not available on this phone."); return }
+        if (!agent && recognizer == null && !(Ai.voiceKeyFor(groqKey).isNotBlank() && groqVoice)) { toast("Speech recognition is not available on this phone."); return }
         val granted = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) ==
             android.content.pm.PackageManager.PERMISSION_GRANTED
         if (granted) beginCall() else micPermission.launch(android.Manifest.permission.RECORD_AUDIO)
@@ -2155,7 +2167,7 @@ fun App(
 
     fun startVoice(forChat: Boolean = false) {
         voiceForChat = forChat
-        if (Ai.hasVoice(groqKey) && groqVoice) {
+        if (Ai.voiceKeyFor(groqKey).isNotBlank() && groqVoice) {
             startRecording(
                 heard = { text -> Normalizer.voiceFix(text, voiceKnown()).let { if (forChat) chatInput(it) else homeInput(it) } },
                 missed = { toast("Couldn't catch that. Try again.") }
@@ -2301,12 +2313,15 @@ fun App(
                     }
                 },
                 ai = if (BuildConfig.PLAY) null else remember(aiTick, groqKey) {
-                    AiInfo(Ai.provider(Ai.key)?.name.orEmpty(), store.llmModel, Ai.modelNow(),
+                    AiInfo(Ai.provider(Ai.key)?.name.orEmpty(), store.llmModel, Ai.modelNow(), voice = store.llmVoice.isNotBlank(), used =
                         if (store.llmIn + store.llmOut == 0L) "" else Ai.usageText(store.llmIn, store.llmOut,
                             dollars = if (Ai.price(Ai.modelNow()) == null) null else store.llmMicro / 1_000_000.0))
                 },
                 onAiOpen = { aiTick++ },
-                onAiSave = save@{ key, model ->
+                onAiSave = save@{ key, model, voice ->
+                    // The voice key hears the mic's recording; it is Groq's (Whisper).
+                    if (voice.isNotBlank() && Ai.provider(voice) !== Ai.GROQ) { driveToast("The voice key must be a Groq key (gsk_…)"); return@save }
+                    if (voice.isNotBlank()) { store.llmVoice = voice; Ai.voiceKey = store.llmVoice; driveToast("✓ Voice key saved · the mic now records and sends") }
                     if (key.isNotBlank() && Ai.provider(key) == null) { driveToast("This key is not recognised"); return@save }
                     // A new key or model starts the token count again.
                     if ((key.isNotBlank() && key != Ai.key) || model != store.llmModel) { store.llmIn = 0; store.llmOut = 0; store.llmMicro = 0 }
@@ -2320,7 +2335,7 @@ fun App(
                         driveToast(if (error.isBlank()) "✓ ${Ai.provider(Ai.key)?.name} is on · ${Ai.modelNow()}" else "AI key did not work: $error")
                     }
                 },
-                onAiOff = { store.llmKey = ""; Ai.key = ""; groqKey = groqKeyNow(); aiTick++; driveToast("AI is off. The app answers by itself again.") },
+                onAiOff = { store.llmKey = ""; Ai.key = ""; store.llmVoice = ""; Ai.voiceKey = ""; groqKey = groqKeyNow(); aiTick++; driveToast("AI is off. The app answers by itself again.") },
                 driveEmail = driveEmail, driveStatus = if (driveEmail.isBlank()) driveError else Drive.status, driveBusy = Drive.busy,
                 onSignIn = { driveSignIn() },
                 onSyncNow = {
@@ -2350,7 +2365,7 @@ fun App(
                     InputBar(
                         onSend = { chatInput(it) }, onMic = { startVoice(forChat = true) }, placeholder = "Speak, type or ask…",
                         busy = chatLoading,
-                        voice = if (recorder != null) VoiceState(true, "Listening…", "sends when you stop", level = voiceLevel) { finishRecording() } else null,
+                        voice = if (recorder != null) VoiceState(true, "Recording", "tap to send", level = voiceLevel) { finishRecording() } else null,
                         navPad = false
                     )
                     KhataNav(tab) { tab = it; profitOpen = false; bizPage = false; bizNew = false }
