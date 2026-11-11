@@ -170,7 +170,7 @@ internal fun SideMenu(
     /** Signing in and fetching the data: the Gmail once known; null when not. */
     driveBusy: String? = null,
     /** Test feature: the AI key row (null: not in this build). */
-    ai: AiInfo? = null, onAiOpen: () -> Unit = {}, onAiSave: (key: String, model: String, voice: String) -> Unit = { _, _, _ -> }, onAiOff: () -> Unit = {}, onVoiceOff: () -> Unit = {},
+    ai: AiInfo? = null, onAiOpen: () -> Unit = {}, onAiSave: (key: String, model: String, voice: String) -> Unit = { _, _, _ -> }, onAiOn: (Boolean) -> Unit = {}, onVoiceOff: () -> Unit = {},
     onSignIn: () -> Unit = {}, onSyncNow: () -> Unit = {}, onSignOut: () -> Unit = {}
 ) {
     var driveOpen by remember { mutableStateOf(false) }
@@ -182,7 +182,7 @@ internal fun SideMenu(
         // What a key being typed belongs to, before it is saved.
         val typed = Ai.provider(key)
         AppPopup("AI key", "Save", onDismiss = { aiOpen = false }, onAction = { aiOpen = false; onAiSave(key, model, voice) },
-            second = if (ai.name.isBlank()) "Cancel" else "Turn off", onSecond = { aiOpen = false; if (ai.name.isNotBlank()) onAiOff() }) {
+            second = if (ai.name.isBlank()) "Cancel" else if (ai.on) "Turn off" else "Turn on", onSecond = { aiOpen = false; if (ai.name.isNotBlank()) onAiOn(!ai.on) }) {
             WellField(key, { key = it.trim() }, if (ai.name.isBlank()) "Paste any AI key" else "${ai.name} key saved · paste to change")
             WellField(model, { model = it.trim() }, "Model: " + (typed?.model ?: ai.modelNow.ifBlank { "the usual one" }))
             // Optional: the mic's recording is sent to Groq's Whisper, which hears Urdu far better than the phone.
@@ -194,6 +194,7 @@ internal fun SideMenu(
                 when {
                     key.isNotBlank() -> typed?.let { "${it.name} key" } ?: "This key is not recognised"
                     ai.name.isBlank() -> "Claude, Gemini, ChatGPT, Groq or OpenRouter. With a key, the AI reads every chat message. Your message and matching names are sent to it; totals still come from your entries."
+                    !ai.on -> "AI is off. The key is kept on this phone: Turn on to use it again."
                     else -> "${ai.name} · ${ai.modelNow}" + (if (ai.used.isBlank()) "" else "\nUsed: ${ai.used}") +
                         (Ai.price(ai.modelNow)?.let { (i, o) -> "\nPrice per 1M tokens: $" + i + " in · $" + o + " out" } ?: "")
                 },
@@ -317,7 +318,7 @@ internal fun SideMenu(
                         DropdownMenuItem(text = { Text("Import data") }, onClick = { open = false; onImport() })
                     }
                 }
-                if (ai != null) MenuRow(onClick = { onAiOpen(); aiOpen = true }) { MenuLabel("🤖", "AI key"); MenuValue(ai.name.ifBlank { "Off" }) }
+                if (ai != null) MenuRow(onClick = { onAiOpen(); aiOpen = true }) { MenuLabel("🤖", "AI key"); MenuValue(if (ai.name.isBlank() || !ai.on) "Off" else ai.name) }
                 MenuRow(onClick = onTrash) { MenuLabel("🗑", "Trash"); MenuValue("›") }
                 MenuRow(onClick = onVersion, last = true) { MenuLabel("⬆️", "Version"); MenuValue(version) }
             }
@@ -325,8 +326,8 @@ internal fun SideMenu(
     }
 }
 
-/** Test feature: what the AI key row shows: the provider's name ("" when off), the model typed, the model in use, tokens used. */
-class AiInfo(val name: String, val model: String, val modelNow: String, val used: String, val voice: Boolean = false)
+/** The saved AI key as the menu shows it: whose key ([name], blank for none), its model and use, and whether it is switched [on]. */
+class AiInfo(val name: String, val model: String, val modelNow: String, val used: String, val voice: Boolean = false, val on: Boolean = true)
 
 /** The Google sign-in line: the G and "Sign in with Google", or the Gmail's first letter, the Gmail and how syncing went ([busy]: fetching). */
 @Composable
