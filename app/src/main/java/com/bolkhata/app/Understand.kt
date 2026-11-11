@@ -59,7 +59,8 @@ object Understand {
         "Arif", "Asim", "Atif", "Azhar", "Fawad", "Hafeez", "Hanif", "Ishaq", "Jabbar", "Kaleem", "Khurram", "Liaqat", "Mehmood",
         "Mohsin", "Munir", "Nasir", "Nawaz", "Obaid", "Pervez", "Rafiq", "Rauf", "Sadiq", "Salman", "Sami", "Shafqat", "Shakir",
         "Sharjeel", "Shaukat", "Talha", "Taimoor", "Waheed", "Yaqoob", "Yousaf", "Zain", "Zaheer", "Fatima", "Ayesha", "Maryam",
-        "Sana", "Saima", "Nadia", "Rabia", "Hina", "Amina", "Khadija", "Zainab", "Uzma", "Sadia", "Shazia", "Bushra", "Farah"
+        "Sana", "Saima", "Nadia", "Rabia", "Hina", "Amina", "Khadija", "Zainab", "Uzma", "Sadia", "Shazia", "Bushra", "Farah",
+        "Mudassar", "Akhtar", "Mukhtar", "Naveed"
     )
     /** Everyday words that sound like a name ("saman" ~ Salman) but are things. */
     private val notNameItems = setOf("saman", "samaan", "zafran", "zafraan", "sona", "chandi", "kamra", "kamre", "dukan", "makan",
@@ -125,7 +126,19 @@ object Understand {
         val sim = Normalizer.similarity(said, name)
         val dist = Normalizer.distance(said, name)
         val maxEdits = if (name.length <= 4) 1 else 2
-        return (sim >= 0.88 && dist <= maxEdits) || (Names.key(said).length >= 3 && Names.key(said) == Names.key(name))
+        return (sim >= 0.88 && dist <= maxEdits) || (Names.key(said).length >= 3 && Names.key(said) == Names.key(name)) || shortFor(said, name)
+    }
+
+    /**
+     * True when [said] is [name] typed without (some of) its vowels: "hmd" for Hamid, "ahmd" for Ahmed. The letters
+     * must be the name's own, in order, from its first letter, with every consonant kept; so "ahmd" is not Hamid.
+     */
+    fun shortFor(said: String, name: String): Boolean {
+        fun bones(s: String) = s.filter { it !in "aeiouy" }
+        if (said.length < 3 || said.length >= name.length || said.first() != name.first() || bones(said) != bones(name)) return false
+        var at = 0
+        for (c in name) if (at < said.length && said[at] == c) at++
+        return at == said.length
     }
 
     private val clockRx = Regex("""(?<![\d.])(\d{1,2})(?:[:.](\d{2}))?\s*baje\b""")

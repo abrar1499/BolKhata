@@ -276,6 +276,21 @@ class NativeChatEngineTest {
         assertTrue(Parser.parse("pichly juma ko 300 liya tha").entries.none { it.person.equals("Juma", true) })
     }
 
+    @Test fun wordsAndNamesTypedWithoutVowelsAreRead() {
+        val saved = listOf("Hamid Akram", "Nargis Salim Rashid")
+        fun text(q: String) = Understand.read(q, saved).text
+        // A saved name without its vowels is that person; "diy" is diye.
+        assertEquals("Hamid Akram ko 500 diye", text("hmd ko 500 diy"))
+        assertEquals("Nargis Salim Rashid ne 200 diye", text("nrgs ne 200 diy"))
+        // Every consonant must be there, from the first letter: "ahmd" is Ahmed, never Hamid.
+        assertEquals("Ahmed ko 50 diye", text("ahmd ko 50 diy"))
+        assertTrue(Understand.shortFor("hmd", "hamid")); assertTrue(!Understand.shortFor("ahmd", "hamid")); assertTrue(!Understand.shortFor("hmd", "hamza"))
+        // Everyday names and things.
+        assertEquals("Imran ne 300 diye", text("imrn ne 300 diy"))
+        assertEquals("Mudassar ko 20 diye", text("mdsr ko 20 dy"))
+        assertEquals("chai 50", text("chye 50")); assertEquals("grocery 150", text("grcry 150"))
+    }
+
     @Test fun newExpenseIsReturnedAsAnEntryIntent() {
         val result = read("chai 12")
         assertEquals("entry", result.kind)

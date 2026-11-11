@@ -45,6 +45,12 @@ object Normalizer {
         v("last", "lst", "lastt", "laast", "akhri", "aakhri", "aakhiri", "akhiri", "pichli", "pichhli", "pichle")
         v("khata", "khaata", "khta", "khatta", "khaataa", "kahta", "khataa", "account", "ledger")
         v("undo", "undoo", "andu", "undu", "wapas karo")
+        // Short forms typed without their vowels.
+        v("diye", "diy", "dy", "dya", "diyay")
+        v("liye", "liy", "lye", "lya", "liay")
+        v("chai", "chye", "chy", "chay", "chae")
+        v("khana", "khna", "khanaa")
+        v("grocery", "grcry", "grosry", "grocry", "grocri")
         v("summary", "sumary", "summery", "samri", "sammary", "hisaab", "hisab", "hesab", "report")
         // Food and drink
         v("roti", "rote", "rotti", "rooti", "roty", "rotti", "rotiyan", "roteyan")
