@@ -78,6 +78,8 @@ class AiAgentTest {
         assertEquals(Query.answer(saved.filter { it.type == Type.KHARCHA }.sortedByDescending { it.date }, "list",
             Query.Filter(types = setOf(Type.KHARCHA)), "PKR"), notes.card)
         assertEquals(listOf("new1", "old1", "new2"), notes.listIds)
+        // What it picked is kept, so a follow-up ("detail do") stays on the same entries.
+        assertEquals("""{"types":["expense"]}""", notes.filter)
     }
 
     @Test

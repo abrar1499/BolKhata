@@ -28,10 +28,15 @@ object AiAgent {
      * The AI's reply and the entries it saved (shown as the Saved card). When it asked the app to show a list or a
      * breakdown, [card] is the app's own answer text (drawn as the usual card) and [listIds] the rows in it.
      */
-    class Answer(val text: String, val added: List<String>, val card: String = "", val listIds: List<String> = emptyList())
+    class Answer(val text: String, val added: List<String>, val card: String = "", val listIds: List<String> = emptyList(), val filter: String = "")
 
     /** What the tools of one message leave for the chat: saved entries and the card to show. */
-    class Notes(val added: MutableList<String> = mutableListOf(), var card: String = "", var listIds: List<String> = emptyList())
+    class Notes(val added: MutableList<String> = mutableListOf(), var card: String = "", var listIds: List<String> = emptyList(),
+        /** How the last look-up picked its entries, so "detail do" or "aur food?" can go on from it. */
+        var filter: String = "")
+
+    /** A long list in the chat shows this many rows, then "+N more" and the total of all. */
+    private const val LIST_ROWS = 30
 
     private val TYPES = mapOf(
         "expense" to Type.KHARCHA, "income" to Type.AAMDANI, "lent" to Type.DIYA, "borrowed" to Type.LIYA,
@@ -117,7 +122,10 @@ object AiAgent {
           guess money yourself: ask the totals tool.
         - When the person wants to see entries, a detail, a list or where the money went, call show: the app draws
           it as a card. Never write lists, rows or tables yourself; after show, say one short sentence at most and do
-          not repeat the rows or amounts.
+          not repeat the rows or amounts. "detail", "details", "tafseel" or "kahan kahan laga" after a total is the
+          breakdown view; "list" or "entries" is the list view; "category" or "main category" is the breakdown.
+        - A follow-up ("detail do", "aur food?", "list me batao", "main category bola tha") keeps what the previous
+          look-up picked (types, dates, people, categories) and changes only what the new message changes.
         - A word in Urdu, Arabic or Hindi script is read by its sound and may be an English word written that way
           (the sound "blij" is bleach, not bill). Keep the thing that was said as the item; never swap it for another word.
         - New money ("chai 50", "Ali ko 500 diye", "kal salary 3000 aayi") is add_entries, amounts exactly as said.
@@ -145,7 +153,7 @@ object AiAgent {
      * [onMain] runs a tool where the app's data may be changed.
      */
     fun run(
-        said: String, recent: String, host: Host, now: Long = System.currentTimeMillis(), roman: String = said,
+        said: String, recent: String, host: Host, now: Long = System.currentTimeMillis(), roman: String = said, previous: String = "",
         onMain: (() -> String) -> String = { it() }
     ): Answer? = runCatching {
         val notes = Notes()
@@ -153,6 +161,7 @@ object AiAgent {
         val messages = Ai.opening(
             "Now: " + timeFmt.format(Date(now)) + " (" + SimpleDateFormat("EEEE", Locale.US).format(Date(now)) + ")\n" +
                 (if (recent.isBlank()) "" else "Conversation so far:\n" + recent.takeLast(1200) + "\n") +
+                (if (previous.isBlank()) "" else "Previous look-up picked: " + previous.take(400) + "\n") +
                 "Message: " + said.take(600) +
                 // Urdu or Hindi script also goes in Roman letters by its sound, so a word is not swapped for another.
                 (if (roman.trim().equals(said.trim(), true)) "" else "\nThe same message by sound, in Roman letters: " + roman.take(600))
@@ -160,7 +169,7 @@ object AiAgent {
         val system = system(host.currency, names)
         for (round in 1..8) {
             val step = Ai.step(system, tools, messages) ?: return@runCatching null
-            if (step.calls.isEmpty()) return@runCatching Answer(step.text.ifBlank { "Done." }, notes.added, notes.card, notes.listIds)
+            if (step.calls.isEmpty()) return@runCatching Answer(step.text.ifBlank { "Done." }, notes.added, notes.card, notes.listIds, notes.filter)
             Ai.results(messages, step.calls.map { c ->
                 c to onMain { runCatching { use(c.name, c.input, host, now, notes) }.getOrElse { JSONObject().put("error", it.message ?: "failed").toString() } }
             })
@@ -176,17 +185,20 @@ object AiAgent {
             val list = Query.select(host.entries(), f).sortedByDescending { it.date }
             val what = when (input.optString("view")) { "breakdown" -> "report"; "total" -> "sum"; "count" -> "count"; "highest" -> "highest"; else -> "list" }
             // The app's own answer, the same text and card as without the AI.
-            notes.card = Query.answer(list, what, f, host.currency)
-            notes.listIds = if (what == "list") Query.shown(list).map { it.id } else emptyList()
+            notes.card = Query.answer(list, what, f, host.currency, LIST_ROWS)
+            notes.listIds = if (what == "list") list.take(LIST_ROWS).map { it.id } else emptyList()
+            notes.filter = picked(input)
             JSONObject().put("shown_to_the_person", true).put("count", list.size).put("total", list.sumOf { it.amount }).toString()
         }
         "find_entries" -> {
             val list = pick(input, host, now)
+            notes.filter = picked(input)
             JSONObject().put("count", list.size).put("total", list.sumOf { it.amount })
                 .put("entries", JSONArray(list.take(40).map { show(it, input.has("added_in_last_minutes")) })).put("not_shown", (list.size - 40).coerceAtLeast(0)).toString()
         }
         "totals" -> {
             val list = pick(input, host, now)
+            notes.filter = picked(input)
             val out = JSONObject().put("count", list.size).put("total", list.sumOf { it.amount })
             val by: ((Entry) -> String)? = when (input.optString("group_by")) {
                 "category" -> { e -> e.category.label }
@@ -304,6 +316,9 @@ object AiAgent {
         }
         else -> JSONObject().put("error", "no such tool").toString()
     }
+
+    /** Only the picking fields of a tool call, as JSON text. */
+    private fun picked(o: JSONObject): String = JSONObject().apply { picking.forEach { (k, _) -> if (o.has(k)) put(k, o.get(k)) } }.toString()
 
     private fun strings(o: JSONObject, key: String) = o.optJSONArray(key)?.let { a -> (0 until a.length()).map { a.optString(it).trim() } }.orEmpty().filter { it.isNotBlank() }
 
