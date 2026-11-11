@@ -70,6 +70,17 @@ class AiAgentTest {
     }
 
     @Test
+    fun aListIsShownAsTheAppsOwnCard() {
+        val notes = AiAgent.Notes()
+        val out = JSONObject(AiAgent.use("show", JSONObject("""{"view": "list", "types": ["expense"]}"""), host, now, notes))
+        assertEquals(true, out.getBoolean("shown_to_the_person"))
+        // The same text the app writes without the AI: one line per entry, then the total.
+        assertEquals(Query.answer(saved.filter { it.type == Type.KHARCHA }.sortedByDescending { it.date }, "list",
+            Query.Filter(types = setOf(Type.KHARCHA)), "PKR"), notes.card)
+        assertEquals(listOf("new1", "old1", "new2"), notes.listIds)
+    }
+
+    @Test
     fun theAppDoesTheSums() {
         val t = use("totals", """{"types": ["expense"], "group_by": "category"}""")
         assertEquals(440.0, t.getDouble("total"), 0.001)
@@ -84,9 +95,10 @@ class AiAgentTest {
 
     @Test
     fun newAndChangedEntriesAreSaved() {
-        val added = mutableListOf<String>()
+        val notes = AiAgent.Notes()
+        val added = notes.added
         val out = JSONObject(AiAgent.use("add_entries", JSONObject("""{"entries": [{"type": "expense", "amount": 50, "category": "Food", "item": "chai"},
-            {"type": "lent", "amount": 200, "person": "Hamid Akram"}]}"""), host, now, added))
+            {"type": "lent", "amount": 200, "person": "Hamid Akram"}]}"""), host, now, notes))
         assertEquals(2, out.getInt("saved"))
         assertEquals(2, added.size)
         val chai = saved.first { it.id == added[0] }

@@ -24,8 +24,14 @@ object AiAgent {
         val pdf: (PdfDoc) -> Unit = {}
     )
 
-    /** The AI's reply and the entries it saved (shown as the Saved card). */
-    class Answer(val text: String, val added: List<String>)
+    /**
+     * The AI's reply and the entries it saved (shown as the Saved card). When it asked the app to show a list or a
+     * breakdown, [card] is the app's own answer text (drawn as the usual card) and [listIds] the rows in it.
+     */
+    class Answer(val text: String, val added: List<String>, val card: String = "", val listIds: List<String> = emptyList())
+
+    /** What the tools of one message leave for the chat: saved entries and the card to show. */
+    class Notes(val added: MutableList<String> = mutableListOf(), var card: String = "", var listIds: List<String> = emptyList())
 
     private val TYPES = mapOf(
         "expense" to Type.KHARCHA, "income" to Type.AAMDANI, "lent" to Type.DIYA, "borrowed" to Type.LIYA,
@@ -85,6 +91,8 @@ object AiAgent {
         Ai.Tool("add_account", "Makes a new empty Expense or Income account (a thing money goes to or comes from).", shape(
             "side" to JSONObject().put("type", "string").put("enum", JSONArray(listOf("expense", "income"))), "name" to text("Account name"),
             required = listOf("side", "name"))),
+        Ai.Tool("show", "Shows the person the matching entries as a proper card drawn by the app: a list of entries, a breakdown by category with totals, a total, a count, or the highest expenses. Use it whenever they want to see a list, detail or breakdown.",
+            shape(*picking, "view" to JSONObject().put("type", "string").put("enum", JSONArray(listOf("list", "breakdown", "total", "count", "highest"))), required = listOf("view"))),
         Ai.Tool("make_pdf", "Makes a PDF of every matching entry (date, item, detail, amount, with totals) and opens the share sheet. Use it when a PDF, record, statement or report to share is asked for.",
             shape(*picking, "title" to text("Heading of the PDF, e.g. Expenses"),
                 "group_by" to JSONObject().put("type", "string").put("enum", JSONArray(listOf("category", "person", "month"))).put("description", "A table per group, with a summary first"),
@@ -99,7 +107,10 @@ object AiAgent {
         - Do what is asked with the tools, then answer in one or two short sentences, in the language and script of the
           latest message (English gets English, Roman Urdu gets Roman Urdu). Plain text only: no tables, no markdown.
         - Every amount, total, count or balance you state must come from a tool result of this turn. Never add up or
-          guess money yourself: ask the totals tool. You may list at most 10 entries, one short line each.
+          guess money yourself: ask the totals tool.
+        - When the person wants to see entries, a detail, a list or where the money went, call show: the app draws
+          it as a card. Never write lists, rows or tables yourself; after show, say one short sentence at most and do
+          not repeat the rows or amounts.
         - A word in Urdu, Arabic or Hindi script is read by its sound and may be an English word written that way
           (the sound "blij" is bleach, not bill). Keep the thing that was said as the item; never swap it for another word.
         - New money ("chai 50", "Ali ko 500 diye", "kal salary 3000 aayi") is add_entries, amounts exactly as said.
@@ -125,7 +136,7 @@ object AiAgent {
         said: String, recent: String, host: Host, now: Long = System.currentTimeMillis(), roman: String = said,
         onMain: (() -> String) -> String = { it() }
     ): Answer? = runCatching {
-        val added = mutableListOf<String>()
+        val notes = Notes()
         val names = host.names().take(80)
         val messages = Ai.opening(
             "Now: " + timeFmt.format(Date(now)) + " (" + SimpleDateFormat("EEEE", Locale.US).format(Date(now)) + ")\n" +
@@ -137,17 +148,26 @@ object AiAgent {
         val system = system(host.currency, names)
         for (round in 1..8) {
             val step = Ai.step(system, tools, messages) ?: return@runCatching null
-            if (step.calls.isEmpty()) return@runCatching Answer(step.text.ifBlank { "Done." }, added)
+            if (step.calls.isEmpty()) return@runCatching Answer(step.text.ifBlank { "Done." }, notes.added, notes.card, notes.listIds)
             Ai.results(messages, step.calls.map { c ->
-                c to onMain { runCatching { use(c.name, c.input, host, now, added) }.getOrElse { JSONObject().put("error", it.message ?: "failed").toString() } }
+                c to onMain { runCatching { use(c.name, c.input, host, now, notes) }.getOrElse { JSONObject().put("error", it.message ?: "failed").toString() } }
             })
         }
         Ai.lastError = "too many steps"
         null
     }.getOrElse { Ai.lastError = it.message ?: "no internet"; null }
 
-    /** Runs one tool on the app's data and gives its result as JSON text; ids of entries it saved are noted in [added]. */
-    fun use(name: String, input: JSONObject, host: Host, now: Long, added: MutableList<String> = mutableListOf()): String = when (name) {
+    /** Runs one tool on the app's data and gives its result as JSON text; what it saved or showed is noted in [notes]. */
+    fun use(name: String, input: JSONObject, host: Host, now: Long, notes: Notes = Notes()): String = when (name) {
+        "show" -> {
+            val f = filterOf(input, now)
+            val list = Query.select(host.entries(), f).sortedByDescending { it.date }
+            val what = when (input.optString("view")) { "breakdown" -> "report"; "total" -> "sum"; "count" -> "count"; "highest" -> "highest"; else -> "list" }
+            // The app's own answer, the same text and card as without the AI.
+            notes.card = Query.answer(list, what, f, host.currency)
+            notes.listIds = if (what == "list") Query.shown(list).map { it.id } else emptyList()
+            JSONObject().put("shown_to_the_person", true).put("count", list.size).put("total", list.sumOf { it.amount }).toString()
+        }
         "find_entries" -> {
             val list = pick(input, host, now)
             JSONObject().put("count", list.size).put("total", list.sumOf { it.amount })
@@ -181,7 +201,7 @@ object AiAgent {
             val list = input.optJSONArray("entries") ?: JSONArray()
             val fresh = (0 until list.length()).map { make(list.getJSONObject(it), now, it) }
             host.add(fresh)
-            added += fresh.map { it.id }
+            notes.added += fresh.map { it.id }
             JSONObject().put("saved", fresh.size).put("entries", JSONArray(fresh.map { show(it) })).toString()
         }
         "update_entries" -> {
@@ -277,17 +297,18 @@ object AiAgent {
         }
 
     /** The saved entries a tool's filter picks, newest first. */
-    private fun pick(o: JSONObject, host: Host, now: Long): List<Entry> {
+    private fun pick(o: JSONObject, host: Host, now: Long): List<Entry> = Query.select(host.entries(), filterOf(o, now)).sortedByDescending { it.date }
+
+    private fun filterOf(o: JSONObject, now: Long): Query.Filter {
         fun day(key: String, end: Boolean) = runCatching { dayFmt.parse(o.optString(key).trim())!!.time + if (end) 86_400_000L - 1 else 0 }.getOrNull()
         fun amount(key: String) = if (o.has(key)) o.optDouble(key).takeIf { !it.isNaN() } else null
-        val f = Query.Filter(
+        return Query.Filter(
             from = day("from", false), to = day("to", true), types = strings(o, "types").mapNotNull { TYPES[it.lowercase()] }.toSet(),
             persons = strings(o, "persons"), cats = strings(o, "categories").mapNotNull { n -> Cat.entries.firstOrNull { it.label.equals(n, true) } }.toSet(),
             items = strings(o, "words").map { it.lowercase() }, min = amount("min_amount"), max = amount("max_amount"),
             last = o.optInt("last", 0).coerceIn(0, 500),
             createdFrom = amount("added_in_last_minutes")?.takeIf { it > 0 }?.let { now - (it * 60_000).toLong() }
         )
-        return Query.select(host.entries(), f).sortedByDescending { it.date }
     }
 
     /** A new entry from the AI's fields; a bad one throws, and the AI is told. */

@@ -164,7 +164,8 @@ fun ChatScreen(
                     GlassLogo(20.dp, Modifier.padding(top = 8.dp))
                     Column(Modifier.weight(1f)) {
                         if (message.entryIds.isNotEmpty()) SavedCard(message, byId, currency, onUndo, onEditEntry)
-                        else remember(message.text, currency) { Report.parse(message.text, currency) }
+                        // The AI's own sentences ("plain") are never read as a report.
+                        else remember(message.text, currency) { if (message.meta.contains("; plain")) null else Report.parse(message.text, currency) }
                             ?.let { ReportCard(it, message.text) } ?: AssistantBubble(message.text)
                         // "Which A or B do you mean?": one tap on a name opens that khata.
                         if (message == messages.lastOrNull()) {

@@ -1296,8 +1296,10 @@ fun App(
                     }
                     val usage = Ai.takeUsage(System.currentTimeMillis() - started).orEmpty()
                     lastSpeech = answer?.text ?: ("The AI did not answer (" + Ai.lastError.ifBlank { "no reply" } + "). Try again.")
-                    postChat(lastSpeech, isUser = false, entryIds = answer?.added.orEmpty(),
-                        meta = "engine=AI; intent=agent" + (if (usage.isBlank()) "" else "; usage=" + usage))
+                    // A list or breakdown the AI asked for is the app's own card; its other replies are plain text, never read as a report.
+                    val card = answer?.card.orEmpty()
+                    postChat(card.ifBlank { lastSpeech }, isUser = false, entryIds = answer?.added.orEmpty(), listIds = answer?.listIds.orEmpty(),
+                        meta = "engine=AI; intent=agent" + (if (card.isBlank()) "; plain" else "") + (if (usage.isBlank()) "" else "; usage=" + usage))
                     return@launch
                 }
                 // With Groq on, Groq reads every message first: money and app requests become a clear command that the
