@@ -162,6 +162,25 @@ class AiAgentTest {
     }
 
     @Test
+    fun aPersonAndANumberAloneAskWhatHappened() {
+        val who = AiAgent.who(listOf("Hamid Akram", "Nargis Salim Rashid"), emptyMap())
+        assertEquals("Hamid Akram" to 10_000.0, Ask.of("hmd 10000", who))
+        assertEquals("Nargis Salim Rashid" to 500.0, Ask.of("500 nargis salim", who))
+        // A word for what happened, or a thing, is not for the card.
+        assertEquals(null, Ask.of("hamid ko 500 diye", who)); assertEquals(null, Ask.of("petrol 60", who))
+        assertEquals(listOf("Paid", "Work", "Received"), Ask.kinds(Sides.STAFF))
+        assertEquals(listOf("Paid", "Received"), Ask.kinds(Sides.PEOPLE))
+        // Paid is money as said; Work counts things at the rate, per thousand, and is a business cost for staff.
+        val paid = Ask.entry("Paid", "Hamid Akram", 10_000.0, true, now)
+        assertEquals(Type.DIYA, paid.type); assertEquals(10_000.0, paid.amount, 0.0)
+        val work = Ask.entry("Work", "Hamid Akram", 10_000.0, true, now, "Stitching", 400.0, true)
+        assertEquals(Type.PURCHASE, work.type); assertEquals(4_000.0, work.amount, 0.0); assertEquals(Cat.PRODUCTION, work.category)
+        assertEquals(10_000.0, work.qty, 0.0); assertEquals("1000", work.unit)
+        // The person's last work is offered with its rate.
+        assertEquals(listOf("Stitching"), Ask.usual("Work", "hamid akram", listOf(work, paid)).map { it.item })
+    }
+
+    @Test
     fun anAmountTypedAgainIsSavedAgain() {
         val loan = JSONObject("""{"entries": [{"type": "lent", "amount": 30, "person": "Hamid Akram"}]}""")
         val first = AiAgent.Notes(said = listOf(30.0))

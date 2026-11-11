@@ -30,14 +30,16 @@ object AiAgent {
      */
     class Answer(val text: String, val added: List<String>, val card: String = "", val listIds: List<String> = emptyList(), val filter: String = "",
         /** What the app may remember from this answer (see [lesson]); "" when it is not something to learn. */
-        val lesson: String = "", val shape: String = "", val words: Map<String, String> = emptyMap())
+        val lesson: String = "", val shape: String = "", val words: Map<String, String> = emptyMap(),
+        /** "person|number" when the AI could not tell what happened: the chat shows the option card (see [Ask]). */
+        val ask: String = "")
 
     /** What the tools of one message leave for the chat: saved entries and the card to show. */
     class Notes(val added: MutableList<String> = mutableListOf(), var card: String = "", var listIds: List<String> = emptyList(),
         /** How the last look-up picked its entries, so "detail do" or "aur food?" can go on from it. */
         var filter: String = "", var found: Int = 0,
         /** The amounts written in the message itself: saving one of them is meant, even when the same entry was saved minutes ago. */
-        var said: List<Double> = emptyList(), var skipped: Int = 0)
+        var said: List<Double> = emptyList(), var skipped: Int = 0, var ask: String = "")
 
     /** A long list in the chat shows this many rows, then "+N more" and the total of all. */
     private const val LIST_ROWS = 30
@@ -101,6 +103,8 @@ object AiAgent {
                 "person" to text("New person"), "note" to text("New note"), "date" to text("New day, YYYY-MM-DD"),
                 "type" to JSONObject().put("type", "string").put("enum", JSONArray(TYPES.keys.toList()))),
             required = listOf("ids", "set"))),
+        Ai.Tool("choose_kind", "Shows the person buttons to say what happened with a person and a number, when the message does not say.", shape(
+            "person" to JSONObject().put("type", "string"), "number" to number("The amount or count said"), required = listOf("person", "number"))),
         Ai.Tool("accounts", "Lists the accounts: the Party accounts (Customers, Suppliers, Staff, People or the owner's own) with the people in each, and the Expense and Income accounts.", shape()),
         Ai.Tool("put_in_account", "Puts people into a Party account, making the account and the people if new (no entry is needed). A person sits in one account only.", shape(
             "account" to text("Customers, Suppliers, Staff, People, or the owner's own account name"),
@@ -152,6 +156,8 @@ object AiAgent {
           Use a saved name only when it is the same person (the same name, or a misspelling or short form of it). A
           saved name that joins two people ("A & B", "A and B") is its own account: a message naming only one of them
           means a separate, single person. A new name keeps the spelling that reads most like a real name.
+        - A person and a number with no way to tell what happened (paid, received, work, goods): call choose_kind, the
+          app shows buttons to tap. Do not ask that in words.
         - A voice message may be misheard: read it with its other hearings and take the words that make sense for a
           ledger. A person's name is kept as heard: change it to a saved name only when the two sound almost the same
           (Hamid / Hameed); a different name (Ahmed is not Ashraf) is a new person. Amounts must agree between the
@@ -216,6 +222,8 @@ object AiAgent {
             val done = step.calls.map { c ->
                 c to onMain { runCatching { use(c.name, c.input, host, now, notes) }.getOrElse { JSONObject().put("error", it.message ?: "failed").toString() } }
             }
+            // The app asks with its option card; nothing more for the AI to say.
+            if (notes.ask.isNotBlank()) return@runCatching Answer("", notes.added, ask = notes.ask)
             // Only asked to show a card, and it is shown: the chat shows the card, not the AI's closing sentence, so that step is not paid for.
             if (step.calls.all { it.name == "show" } && notes.card.isNotBlank() && notes.found > 0 && done.none { it.second.contains("\"error\"") })
                 return@runCatching Answer(step.text, notes.added, notes.card, notes.listIds, notes.filter)
@@ -389,6 +397,13 @@ object AiAgent {
                 .put("people", JSONArray(people.sortedByDescending { kotlin.math.abs(it.second) }.take(60).map { (n, b) ->
                     JSONObject().put("name", n).put("amount", kotlin.math.abs(b)).put("means", if (b > 0) "owes the owner" else "the owner owes them")
                 })).toString()
+        }
+        "choose_kind" -> {
+            val n = input.optDouble("number", 0.0)
+            val person = input.optString("person").trim()
+            if (person.isBlank() || n.isNaN() || n <= 0) error("person and number are needed")
+            notes.ask = person.replace("|", " ").take(40) + "|" + n
+            JSONObject().put("shown_to_the_person", true).toString()
         }
         "add_entries" -> {
             val list = input.optJSONArray("entries") ?: JSONArray()

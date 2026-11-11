@@ -1300,6 +1300,13 @@ fun App(
                 // Reading the message runs off the main thread, so the chat keeps scrolling smoothly with many entries.
                 val scoped = scopeKhataEntries(entries)
                 val names0 = contactNames()
+                // A saved person and a number, nothing else: the chat asks what happened with a small card, in any language.
+                Ask.of(roman, AiAgent.who(names0, store.aiLearned))?.let { (p, n) ->
+                    val book = Sides.bookOf(p, entries, sides)
+                    lastSpeech = "Choose"
+                    postChat("", isUser = false, meta = "ask=$p|$n|" + Ask.kinds(book).joinToString(",") + (if (book == Sides.STAFF) "|staff" else ""))
+                    return@launch
+                }
                 // Test feature: with an AI key saved, the AI does the whole job itself through tools (see AiAgent).
                 if (Ai.handles(groqKey)) {
                     val started = System.currentTimeMillis()
@@ -1333,6 +1340,13 @@ fun App(
                         AiAgent.run(text, recent, host, roman = roman, previous = aiPicked, justSaved = aiSaved, heardAlso = heardAlso, spoken = spoken, known = store.aiLearned) { tool -> kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.Main) { tool() } }
                     }
                     val usage = Ai.takeUsage(System.currentTimeMillis() - started).orEmpty()
+                    // The AI could not tell what happened with a person and a number: the option card asks.
+                    answer?.ask?.takeIf { it.isNotBlank() }?.let { ask ->
+                        val book = Sides.bookOf(ask.substringBefore("|"), entries, sides)
+                        lastSpeech = "Choose"
+                        postChat("", isUser = false, meta = "ask=$ask|" + Ask.kinds(book).joinToString(",") + (if (book == Sides.STAFF) "|staff" else ""))
+                        return@launch
+                    }
                     lastSpeech = answer?.text?.ifBlank { "Saved" } ?: ("The AI did not answer (" + Ai.lastError.ifBlank { "no reply" } + "). Try again.")
                     // A list or breakdown the AI asked for is the app's own card; its other replies are plain text, never read as a report.
                     // Only the very next message goes on from a look-up or a save; older ones would mislead.
@@ -2569,6 +2583,12 @@ fun App(
                             }
                             chatRatings = chatRatings + (id to good)
                             sendChatLog(force = logToken.isNotBlank())
+                        },
+                        onAsked = { id, e ->
+                            if (e != null) save(listOf(e) + entries)
+                            val updated = chatMessages.map { m -> if (m.id != id) m else if (e == null) m.copy(text = "Nothing saved", meta = "") else m.copy(entryIds = listOf(e.id)) }
+                            chatMessages = updated
+                            store.saveChatMessages(updated)
                         },
                         onUndo = { ids ->
                             // Undoing what was just saved also un-teaches it: the app asks the AI again next time.
