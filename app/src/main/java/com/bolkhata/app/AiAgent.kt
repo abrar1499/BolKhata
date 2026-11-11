@@ -30,12 +30,14 @@ object AiAgent {
      */
     class Answer(val text: String, val added: List<String>, val card: String = "", val listIds: List<String> = emptyList(), val filter: String = "",
         /** What the app may remember from this answer (see [lesson]); "" when it is not something to learn. */
-        val lesson: String = "")
+        val lesson: String = "", val shape: String = "", val words: Map<String, String> = emptyMap())
 
     /** What the tools of one message leave for the chat: saved entries and the card to show. */
     class Notes(val added: MutableList<String> = mutableListOf(), var card: String = "", var listIds: List<String> = emptyList(),
         /** How the last look-up picked its entries, so "detail do" or "aur food?" can go on from it. */
-        var filter: String = "", var found: Int = 0)
+        var filter: String = "", var found: Int = 0,
+        /** The amounts written in the message itself: saving one of them is meant, even when the same entry was saved minutes ago. */
+        var said: List<Double> = emptyList(), var skipped: Int = 0)
 
     /** A long list in the chat shows this many rows, then "+N more" and the total of all. */
     private const val LIST_ROWS = 30
@@ -173,9 +175,10 @@ object AiAgent {
     fun run(
         said: String, recent: String, host: Host, now: Long = System.currentTimeMillis(), roman: String = said, previous: String = "",
         justSaved: List<String> = emptyList(), heardAlso: List<String> = emptyList(), spoken: Boolean = heardAlso.isNotEmpty(),
+        known: Map<String, String> = emptyMap(),
         onMain: (() -> String) -> String = { it() }
     ): Answer? = runCatching {
-        val notes = Notes()
+        val notes = Notes(said = numbers(roman))
         val calls = mutableListOf<Pair<String, JSONObject>>()
         val names = host.names().take(80)
         val messages = Ai.opening(
@@ -193,8 +196,13 @@ object AiAgent {
         val system = system(host.currency, names)
         for (round in 1..8) {
             val step = Ai.step(system, tools, messages) ?: return@runCatching null
-            if (step.calls.isEmpty()) return@runCatching Answer(step.text.ifBlank { "Done." }, notes.added, notes.card, notes.listIds, notes.filter,
-                lesson(calls, roman).takeIf { notes.added.isNotEmpty() }.orEmpty())
+            if (step.calls.isEmpty()) {
+                val learnt = if (notes.added.isEmpty()) Learnt() else learn(calls, roman, host.names(), known)
+                // Only saved, all of it and nothing to ask: the Saved card says it, no sentence over it.
+                val onlySaved = notes.added.isNotEmpty() && notes.skipped == 0 && calls.all { it.first == "add_entries" } && '?' !in step.text
+                return@runCatching Answer(if (onlySaved) "" else step.text.ifBlank { "Done." }, notes.added, notes.card, notes.listIds, notes.filter,
+                    learnt.lesson, learnt.shape, learnt.words)
+            }
             calls += step.calls.map { it.name to it.input }
             val done = step.calls.map { c ->
                 c to onMain { runCatching { use(c.name, c.input, host, now, notes) }.getOrElse { JSONObject().put("error", it.message ?: "failed").toString() } }
@@ -212,8 +220,36 @@ object AiAgent {
 
     private val NUMBER = Regex("""(\d[\d,]*(?:\.\d+)?)(k)?(?![\p{L}\p{N}])""")
 
-    /** A message's shape: lower case with every number a "#", so "chai 50" and "chai 60" are one shape. */
-    fun shape(said: String): String = NUMBER.replace(said.lowercase(Locale.ROOT), "#").replace(Regex("""[^\p{L}\p{N}#]+"""), " ").trim()
+    private fun plain(said: String) = NUMBER.replace(said.lowercase(Locale.ROOT), "#").replace(Regex("""[^\p{L}\p{N}#]+"""), " ").trim()
+
+    /**
+     * Who a typed word is: a spelling learnt from the AI ("=ahmd" in [learned]), else the one saved name with that word,
+     * else the one saved name it is short for ("hmd" for Hamid). Null when it is no name, or could be two people.
+     */
+    fun who(names: List<String>, learned: Map<String, String>): (String) -> String? = { w ->
+        if (w.length < 3) null else learned["=$w"]
+            ?: names.filter { n -> n.lowercase(Locale.ROOT).split(' ').any { it == w } }.distinct().singleOrNull()
+            ?: names.filter { Understand.shortFor(w, it.lowercase(Locale.ROOT).substringBefore(' ')) }.distinct().singleOrNull()
+    }
+
+    /** The words of a message, each with the person it names (null for other words); a name of two words counts once. */
+    private fun read(said: String, who: (String) -> String?): List<Pair<String, String?>> {
+        val out = mutableListOf<Pair<String, String?>>()
+        for (w in plain(said).split(' ')) {
+            val p = if (w == "#") null else who(w)
+            if (p == null) out += w to null else if (out.lastOrNull()?.second != p) out += "@" to p
+        }
+        return out
+    }
+
+    /**
+     * A message's shape: lower case, every number a "#" and every person's name an "@", so "hamid ko 50 diye" and
+     * "nargis ko 60 diye" are one shape: a sentence learnt once works for every person and amount.
+     */
+    fun shape(said: String, who: (String) -> String? = { null }): String = read(said, who).joinToString(" ") { it.first }
+
+    /** The people named in a message, in the order said. */
+    fun people(said: String, who: (String) -> String?): List<String> = read(said, who).mapNotNull { it.second }
 
     /** The numbers of a message in the order said ("150k" is 150000). */
     fun numbers(said: String): List<Double> = NUMBER.findAll(said.lowercase(Locale.ROOT))
@@ -221,12 +257,15 @@ object AiAgent {
 
     /**
      * What to remember from the AI's work on [said]: its new entries with each number swapped for its place in the
-     * message ("#0", "#1"), as JSON text. Null unless the AI did exactly one thing, saving entries, with every amount
-     * said in the message and no day worked out (a day like "kal" must be worked out afresh each time).
+     * message ("#0", "#1") and each person for theirs ("@0"), as JSON text. Null unless the AI did exactly one thing,
+     * saving entries, with every amount and every named person of the message used and no day worked out (a day like
+     * "kal" must be worked out afresh each time).
      */
-    fun lesson(calls: List<Pair<String, JSONObject>>, said: String): String? {
+    fun lesson(calls: List<Pair<String, JSONObject>>, said: String, who: (String) -> String? = { null }): String? {
         val (name, input) = calls.singleOrNull() ?: return null
         val list = input.optJSONArray("entries") ?: return null
+        val people = people(said, who)
+        val used = mutableSetOf<Int>()
         val said = numbers(said)
         if (name != "add_entries" || said.isEmpty() || list.length() == 0) return null
         val out = JSONArray()
@@ -238,17 +277,45 @@ object AiAgent {
                 if (at < 0) return null
                 e.put(field, "#$at")
             }
+            val at = people.indexOfFirst { it.equals(e.optString("person").trim(), true) }
+            if (at >= 0) { e.put("person", "@$at"); used += at }
             out.put(e)
         }
-        return out.toString()
+        // A name in the message that the AI put nowhere: the sentence means something else, nothing to learn.
+        return if (used.size == people.size) out.toString() else null
     }
 
-    /** A remembered [lesson] filled with the numbers of a new message of the same shape, ready for add_entries; null when it does not fit. */
-    fun recall(lesson: String, said: String): JSONObject? = runCatching {
+    /** The one word of [said] that was typed for [person] ("mdsr" for Mudassar), when the app could not tell by itself. */
+    fun word(said: String, person: String, who: (String) -> String?): String? {
+        val first = person.trim().lowercase(Locale.ROOT).substringBefore(' ')
+        return plain(said).split(' ').filter { w -> w.length >= 3 && w != "#" && who(w) == null && (w == first || Understand.shortFor(w, first) || Understand.closeName(w, first)) }
+            .distinct().singleOrNull()
+    }
+
+    /** What one answer of the AI teaches: new spellings of names ("=mdsr" to the person) and the sentence's shape with its lesson. */
+    class Learnt(val shape: String = "", val lesson: String = "", val words: Map<String, String> = emptyMap())
+
+    /** Each new thing is learnt by itself: a new spelling of a name is one word learnt, the sentence around it stays known. */
+    fun learn(calls: List<Pair<String, JSONObject>>, said: String, names: List<String>, known: Map<String, String>): Learnt {
+        val list = calls.singleOrNull()?.takeIf { it.first == "add_entries" }?.second?.optJSONArray("entries") ?: return Learnt()
+        val before = who(names, known)
+        val named = people(said, before)
+        val words = (0 until list.length()).map { list.getJSONObject(it).optString("person").trim() }
+            .filter { p -> p.isNotBlank() && named.none { it.equals(p, true) } }
+            .mapNotNull { p -> word(said, p, before)?.let { "=$it" to p } }.toMap()
+        val after = who(names, known + words)
+        val lesson = lesson(calls, said, after) ?: return Learnt(words = words)
+        return Learnt(shape(said, after), lesson, words)
+    }
+
+    /** A remembered [lesson] filled with the numbers and people of a new message of the same shape, ready for add_entries; null when it does not fit. */
+    fun recall(lesson: String, said: String, who: (String) -> String? = { null }): JSONObject? = runCatching {
         val now = numbers(said)
+        val people = people(said, who)
         val list = JSONArray(lesson)
         for (i in 0 until list.length()) list.getJSONObject(i).let { e ->
             for (field in listOf("amount", "qty", "rate")) if (e.has(field)) e.put(field, now[e.getString(field).removePrefix("#").toInt()])
+            if (e.optString("person").startsWith("@")) e.put("person", people[e.getString("person").removePrefix("@").toInt()])
         }
         JSONObject().put("entries", list)
     }.getOrNull()
@@ -314,14 +381,16 @@ object AiAgent {
         }
         "add_entries" -> {
             val list = input.optJSONArray("entries") ?: JSONArray()
-            val made = (0 until list.length()).map { make(list.getJSONObject(it), now, it, host) to list.getJSONObject(it).optBoolean("again", false) }
-            // The same entry typed in minutes ago (same kind, amount, person and day) is not saved twice unless asked for.
+            val made = (0 until list.length()).map { make(list.getJSONObject(it), now, it, host).let { e -> e to (list.getJSONObject(it).optBoolean("again", false) || e.amount in notes.said) } }
+            // The same entry saved minutes ago (same kind, amount, person and day) is not saved twice, unless asked for or
+            // its amount is written in this very message: typing it again means one more.
             val recent = host.entries().filter { now - it.createdAt in 0..15 * 60_000L }
             fun twin(e: Entry) = recent.firstOrNull { o -> o.type == e.type && o.amount == e.amount && o.person.trim().equals(e.person.trim(), true) &&
                 o.item.equals(e.item, true) && dayFmt.format(Date(o.date)) == dayFmt.format(Date(e.date)) }
             val fresh = made.filter { (e, again) -> again || twin(e) == null }.map { it.first }
             val twins = made.filter { (e, again) -> !again && twin(e) != null }.map { twin(it.first)!! }
             host.add(fresh)
+            notes.skipped += twins.size
             notes.added += fresh.map { it.id }
             JSONObject().put("saved", fresh.size).put("entries", JSONArray(fresh.map { show(it) })).apply {
                 if (twins.isNotEmpty()) put("already_saved_minutes_ago_not_added_again", JSONArray(twins.map { show(it) }))

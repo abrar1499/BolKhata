@@ -146,6 +146,47 @@ class AiAgentTest {
     }
 
     @Test
+    fun anAmountTypedAgainIsSavedAgain() {
+        val loan = JSONObject("""{"entries": [{"type": "lent", "amount": 30, "person": "Hamid Akram"}]}""")
+        val first = AiAgent.Notes(said = listOf(30.0))
+        AiAgent.use("add_entries", loan, host, now, first)
+        // The person typed "hamid ko 30 diye" once more: the amount is in the message, so it is one more entry.
+        val second = AiAgent.Notes(said = listOf(30.0))
+        AiAgent.use("add_entries", loan, host, now, second)
+        assertEquals(1, second.added.size)
+        assertEquals(0, second.skipped)
+    }
+
+    @Test
+    fun aNameIsLearntAsOneWordAndTheSentenceStaysKnown() {
+        val names = listOf("Hamid Akram", "Nargis Salim Rashid")
+        // "hamid ko 50 diye" was read by the AI once: the name and the number are open places in what is kept.
+        val gave = listOf("add_entries" to JSONObject("""{"entries": [{"type": "lent", "amount": 50, "person": "Hamid Akram"}]}"""))
+        val first = AiAgent.learn(gave, "hamid ko 50 diye", names, emptyMap())
+        assertEquals("@ ko # diye", first.shape)
+        var known = first.words + (first.shape to first.lesson)
+        // Another saved person, typed short, in the same sentence: done by the app alone.
+        var who = AiAgent.who(names, known)
+        assertEquals(first.shape, AiAgent.shape("nrgs ko 70 diye", who))
+        val entry = AiAgent.recall(first.lesson, "nrgs ko 70 diye", who)!!.getJSONArray("entries").getJSONObject(0)
+        assertEquals("Nargis Salim Rashid", entry.getString("person"))
+        assertEquals(70.0, entry.getDouble("amount"), 0.0)
+        // A spelling the app cannot tell goes to the AI once; only that word is new, and is kept by itself.
+        assertEquals(false, AiAgent.shape("zbr ko 20 diye", who) == first.shape)
+        val zubair = listOf("add_entries" to JSONObject("""{"entries": [{"type": "lent", "amount": 20, "person": "Zubair"}]}"""))
+        val second = AiAgent.learn(zubair, "zbr ko 20 diye", names, known)
+        assertEquals(mapOf("=zbr" to "Zubair"), second.words)
+        assertEquals(first.shape, second.shape)
+        known = known + second.words
+        // The new word now works in every sentence the app already knows.
+        who = AiAgent.who(names, known)
+        assertEquals("Zubair", AiAgent.recall(first.lesson, "zbr ko 5 diye", who)!!.getJSONArray("entries").getJSONObject(0).getString("person"))
+        // A name the AI used for nothing means the sentence is something else: not learnt.
+        val other = listOf("add_entries" to JSONObject("""{"entries": [{"type": "expense", "amount": 50, "item": "Chai"}]}"""))
+        assertEquals("", AiAgent.learn(other, "hamid ke sath chai 50", names, known).lesson)
+    }
+
+    @Test
     fun theAppLearnsASentenceFromTheAi() {
         // The AI read "hamid ne 50 diye aur chai pr 20 lagay" as two entries: the app keeps them, each number by its place.
         val said = "Hamid ne 50 diye aur chai pr 20 lagay"
