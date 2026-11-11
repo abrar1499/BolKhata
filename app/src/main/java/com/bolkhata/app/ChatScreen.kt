@@ -595,7 +595,7 @@ private fun SavedCard(
 /** The one word under a saved entry: what happened with a person (Given, Received), else its category. */
 private fun savedWord(e: Entry): String = if (e.person.isBlank()) e.category.label else when (e.type) {
     Type.DIYA -> "Given"; Type.LIYA -> "Taken"; Type.WAPIS_MILA, Type.AAMDANI -> "Received"; Type.WAPIS_DIYA, Type.KHARCHA -> "Paid"
-    Type.SALE -> "Sold"; Type.PURCHASE -> "Bought"; Type.TRANSFER_IN, Type.TRANSFER_OUT -> "Transfer"
+    Type.SALE -> "Sold"; Type.PURCHASE -> if (e.category == Cat.PRODUCTION) "Work" else "Bought"; Type.TRANSFER_IN, Type.TRANSFER_OUT -> "Transfer"
 }
 
 /** A list to tick and add: bank payments, or transactions read from a statement. */
