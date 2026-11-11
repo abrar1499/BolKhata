@@ -127,6 +127,8 @@ object AiAgent {
         People write Roman Urdu, Urdu or Hindi script, or English, often misspelled or heard from voice.
         - Do what is asked with the tools, then answer in one or two short sentences, in the language and script of the
           latest message (English gets English, Roman Urdu gets Roman Urdu). Plain text only: no tables, no markdown.
+          A voice message's script is the recogniser's choice, not the person's: answer every voice message in Roman
+          letters (Roman Urdu, or English when the words are English), never in Urdu or Hindi script.
         - Every amount, total, count or balance you state must come from a tool result of this turn. Never add up or
           guess money yourself: ask the totals tool.
         - When the person wants to see entries, a detail, a list or where the money went, call show: the app draws
