@@ -1242,6 +1242,8 @@ fun App(
 
     // The PDF maker is written further down; the AI's PDF tool reaches it through this.
     val aiPdf = remember { arrayOfNulls<(PdfDoc) -> Unit>(1) }
+    // The recording of a voice message just heard: the chat shows it as a voice note in place of its words.
+    val voiceNote = remember { arrayOfNulls<String>(1) }
     // How the AI's last look-up picked its entries, so a follow-up ("detail do") goes on from it.
     var aiPicked by remember { mutableStateOf("") }
     // The entries the AI's last answer saved, so a correction ("nahi 40 tha") can change them.
@@ -1274,7 +1276,8 @@ fun App(
         val roman = runCatching { Translit.toRoman(text) }.getOrDefault(text)
         // A long window, so a follow-up still knows the search or list from many turns back.
         val history = chatMessages.takeLast(60)
-        postChat(text, isUser = true)
+        postChat(text, isUser = true, attachment = voiceNote[0].orEmpty())
+        voiceNote[0] = null
 
         if (!Ai.handles(groqKey)) NativeMemory.handle(text, store.memory)?.let { memory ->
             store.memory = memory.facts
@@ -1670,15 +1673,24 @@ fun App(
         val missed = recordMissed
         if (file.length() < 2_000) { missed(); return }
         chatLoading = true
-        loadingLabel = "Listening with Groq…"
+        loadingLabel = "Listening…"
         if (voiceOn) voiceStatus = "Thinking…"
         scope.launch {
             val said = Groq.transcribe(Ai.voiceKeyFor(groqKey), file, contactNames() + entries.filter { it.type == Type.AAMDANI }.map { source(it) })
+            // In the chat (not the call) the recording is kept, named with its length, and shown as a voice note.
+            voiceNote[0] = if (voiceOn || said.isFailure) null else runCatching {
+                val ms = android.media.MediaMetadataRetriever().run {
+                    setDataSource(file.absolutePath)
+                    (extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L).also { release() }
+                }
+                File(context.filesDir, "voice").apply { mkdirs() }.let { dir -> File(dir, "voice-" + System.currentTimeMillis() + "-" + ms + ".m4a") }
+                    .also { file.copyTo(it, overwrite = true) }.absolutePath
+            }.getOrNull()
             runCatching { file.delete() }
             chatLoading = false
             loadingLabel = "Thinking…"
             said.fold(
-                onSuccess = { text -> if (Groq.isNoise(text)) missed() else heard(text.trim()) },
+                onSuccess = { text -> if (Groq.isNoise(text)) { voiceNote[0]?.let { runCatching { File(it).delete() } }; voiceNote[0] = null; missed() } else heard(text.trim()) },
                 onFailure = { toast((it.message ?: "Groq voice failed") + ". You can turn off Groq voice in Settings."); missed() }
             )
         }
@@ -2353,7 +2365,7 @@ fun App(
                     InputBar(
                         onSend = { chatInput(it) }, onMic = { startVoice(forChat = true) }, placeholder = "Speak, type or ask…",
                         busy = chatLoading,
-                        voice = if (recorder != null) VoiceState(true, "Listening…", "sends when you stop", level = voiceLevel) { finishRecording() } else null,
+                        voice = if (recorder != null) VoiceState(true, "Recording", "tap to send", level = voiceLevel) { finishRecording() } else null,
                         navPad = false
                     )
                     KhataNav(tab) { tab = it; profitOpen = false; bizPage = false; bizNew = false }
