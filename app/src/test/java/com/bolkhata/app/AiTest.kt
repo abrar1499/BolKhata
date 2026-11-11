@@ -23,6 +23,6 @@ class AiTest {
         // A model whose price is not known here shows tokens only.
         assertEquals("340 in · 120 out", Ai.usageText(340, 120, "some-other-model"))
         // Tokens read back from the cache cost far less: 1,000,000 in, 900,000 of them cached at $0.20.
-        assertEquals("1,000,000 in (900,000 cached) · 0 out · $0.5800", Ai.usageText(1_000_000, 0, "claude-opus-5-5", cached = 900_000))
+        assertEquals("1,000,000 in (900,000 cached, 0 stored) · 0 out · $0.5800", Ai.usageText(1_000_000, 0, "claude-opus-5-5", cached = 900_000))
     }
 }

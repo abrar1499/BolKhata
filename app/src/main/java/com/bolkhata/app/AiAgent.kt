@@ -104,7 +104,7 @@ object AiAgent {
             "side" to JSONObject().put("type", "string").put("enum", JSONArray(listOf("expense", "income"))), "name" to text("Account name"),
             required = listOf("side", "name"))),
         Ai.Tool("show", "Shows the person the matching entries as a proper card drawn by the app: a list of entries, a breakdown by category with totals, a total, a count, or the highest expenses. Use it whenever they want to see a list, detail or breakdown.",
-            shape(*picking, "view" to JSONObject().put("type", "string").put("enum", JSONArray(listOf("list", "breakdown", "total", "count", "highest"))), required = listOf("view"))),
+            shape(*picking, "view" to JSONObject().put("type", "string").put("enum", JSONArray(listOf("list", "breakdown", "total", "count", "highest", "by_month", "by_person", "by_item"))), required = listOf("view"))),
         Ai.Tool("make_pdf", "Makes a PDF of every matching entry (date, item, detail, amount, with totals) and opens the share sheet. Use it when a PDF, record, statement or report to share is asked for.",
             shape(*picking, "title" to text("Heading of the PDF, e.g. Expenses"),
                 "group_by" to JSONObject().put("type", "string").put("enum", JSONArray(listOf("category", "person", "month"))).put("description", "A table per group, with a summary first"),
@@ -123,7 +123,9 @@ object AiAgent {
         - When the person wants to see entries, a detail, a list or where the money went, call show: the app draws
           it as a card. Never write lists, rows or tables yourself; after show, say one short sentence at most and do
           not repeat the rows or amounts. "detail", "details", "tafseel" or "kahan kahan laga" after a total is the
-          breakdown view; "list" or "entries" is the list view; "category" or "main category" is the breakdown.
+          breakdown view; "list" or "entries" is the list view; "category" or "main category" is the breakdown;
+          "monthly", "per month", "mahana", "har mahine" is by_month (it also gives the average a month); person-wise
+          is by_person; item-wise is by_item.
         - A follow-up ("detail do", "aur food?", "list me batao", "main category bola tha") keeps what the previous
           look-up picked (types, dates, people, categories) and changes only what the new message changes.
         - A word in Urdu, Arabic or Hindi script is read by its sound and may be an English word written that way
@@ -187,9 +189,11 @@ object AiAgent {
         "show" -> {
             val f = filterOf(input, now)
             val list = Query.select(host.entries(), f).sortedByDescending { it.date }
-            val what = when (input.optString("view")) { "breakdown" -> "report"; "total" -> "sum"; "count" -> "count"; "highest" -> "highest"; else -> "list" }
-            // The app's own answer, the same text and card as without the AI.
-            notes.card = Query.answer(list, what, f, host.currency, LIST_ROWS)
+            val view = input.optString("view")
+            val what = when (view) { "breakdown" -> "report"; "total" -> "sum"; "count" -> "count"; "highest" -> "highest"; else -> "list" }
+            // The app's own answer, the same text and card as without the AI; month by month (or by person or item) is a card of its own.
+            notes.card = if (view.startsWith("by_") && list.isNotEmpty()) grouped(list, view.removePrefix("by_"), Query.label(f), host.currency)
+                else Query.answer(list, what, f, host.currency, LIST_ROWS)
             notes.listIds = if (what == "list") list.take(LIST_ROWS).map { it.id } else emptyList()
             notes.filter = picked(input)
             JSONObject().put("shown_to_the_person", true).put("count", list.size).put("total", list.sumOf { it.amount }).toString()
@@ -212,6 +216,7 @@ object AiAgent {
                 "item" -> { e -> e.item.ifBlank { e.category.label } }
                 else -> null
             }
+            if (by != null && list.isNotEmpty()) out.put("average_per_group", Math.round(list.sumOf { it.amount } / list.groupBy(by).size * 100) / 100.0)
             if (by != null) out.put("groups", JSONArray(list.groupBy(by).map { (k, l) -> JSONObject().put("name", k).put("total", l.sumOf { it.amount }).put("count", l.size) }
                 .sortedByDescending { it.getDouble("total") }.take(40)))
             out.toString()
@@ -319,6 +324,24 @@ object AiAgent {
             JSONObject().put("moved_to_trash", ids.size).toString()
         }
         else -> JSONObject().put("error", "no such tool").toString()
+    }
+
+    /**
+     * A card of totals per month (newest first, with the average a month), person or item (biggest first), in the text
+     * the chat draws as rows: "Nov 2026 · 3 entries · 201.09 SAR" and a Total line. The app does every sum.
+     */
+    fun grouped(list: List<Entry>, by: String, label: String, currency: String): String {
+        fun money(v: Double) = (if (v == Math.floor(v)) String.format(Locale.US, "%,d", v.toLong()) else String.format(Locale.US, "%,.2f", v)) + " " + currency
+        val month = SimpleDateFormat("yyyy-MM", Locale.US)
+        val groups = when (by) {
+            "month" -> list.groupBy { month.format(Date(it.date)) }.toSortedMap(compareByDescending { it }).map { (k, l) -> SimpleDateFormat("MMM yyyy", Locale.US).format(month.parse(k)!!) to l }
+            "person" -> list.groupBy { it.person.trim().ifBlank { "No person" } }.toList().sortedByDescending { g -> g.second.sumOf { it.amount } }
+            else -> list.groupBy { it.item.trim().ifBlank { it.category.label } }.toList().sortedByDescending { g -> g.second.sumOf { it.amount } }
+        }
+        val total = list.sumOf { it.amount }
+        return "By $by ($label):\n" + groups.take(40).joinToString("\n") { (k, l) -> k + " · " + (if (l.size == 1) "1 entry" else "${l.size} entries") + " · " + money(l.sumOf { it.amount }) } +
+            (if (groups.size > 40) "\n+${groups.size - 40} more" else "") + "\nTotal: " + money(total) +
+            if (by == "month" && groups.size > 1) " · Average a month " + money(Math.round(total / groups.size * 100) / 100.0) else ""
     }
 
     /** Only the picking fields of a tool call, as JSON text. */
