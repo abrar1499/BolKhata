@@ -567,7 +567,7 @@ private fun SavedCard(
         if (message.text.isNotBlank() && !message.text.startsWith("✓")) Text(message.text, fontSize = 12.sp, lineHeight = 16.sp,
             color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.fillMaxWidth(0.85f).shadow(1.dp, BotShape).clip(BotShape)
                 .background(MaterialTheme.colorScheme.surface).padding(horizontal = 10.dp, vertical = 7.dp))
-        // One small row per entry, like an account row: icon, name over one word, amount, Undo. Tap to change.
+        // One small row per entry, like an account row: icon, name over one word, amount, Undo. A tap opens the person's account.
         live.forEach { e ->
             val shape = RoundedCornerShape(12.dp)
             Row(
