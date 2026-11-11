@@ -264,8 +264,11 @@ fun App(
     var bizNew by remember { mutableStateOf(false) }
     // A person to open on Expense / Income (from the report's To get / To pay).
     var sideJump by remember { mutableStateOf<Pair<String, String>?>(null) }
+    // The open person was reached from a chat row: back returns to the chat.
+    var backToChat by remember { mutableStateOf(false) }
     /** "Hamid ka khata kholo": the person's khata on the Party tab (the same screen as tapping the person). */
-    fun openParty(name: String) {
+    fun openParty(name: String, fromChat: Boolean = false) {
+        backToChat = fromChat
         val saved = personAccounts(entries).firstOrNull { it.name.equals(name, true) }?.name ?: name
         results = null; people = null; account = null; ledger = null; ledgerPerson = null
         sideJump = Sides.bookOf(saved, entries, sides) to saved
@@ -2407,7 +2410,7 @@ fun App(
                         voice = if (recorder != null) VoiceState(true, "Recording", "tap to send", level = voiceLevel) { finishRecording() } else null,
                         navPad = false
                     )
-                    KhataNav(tab) { tab = it; profitOpen = false; bizPage = false; bizNew = false }
+                    KhataNav(tab) { tab = it; backToChat = false; profitOpen = false; bizPage = false; bizNew = false }
                 }
             } else {
                 // The khata tabs sit under the chat bar on the main screens.
@@ -2415,7 +2418,7 @@ fun App(
                 // The chat bar lives on Chat only; other screens keep just the tabs (entries go in from inside an account).
                 Column {
                     FlashStrip(flash) { flash = null }
-                    if (nav) KhataNav(tab) { tab = it; profitOpen = false; bizPage = false; bizNew = false } else Spacer(Modifier.navigationBarsPadding())
+                    if (nav) KhataNav(tab) { tab = it; backToChat = false; profitOpen = false; bizPage = false; bizNew = false } else Spacer(Modifier.navigationBarsPadding())
                 }
             }
         },
@@ -2460,7 +2463,7 @@ fun App(
                     onInfo = { store.saveBizInfo(it) }, onBack = { bizPage = false }
                 )
                 profitOpen -> ProfitScreen(entries, currency, sides, onBack = { profitOpen = false }, onEdit = { editing = it }) { b, k ->
-                    profitOpen = false; sideJump = b to k; tab = Tab.PARTIES
+                    profitOpen = false; backToChat = false; sideJump = b to k; tab = Tab.PARTIES
                 }
                 tab == Tab.CASHBOOK -> CashBookScreen(
                     entries, currency, onMenu = { openMenu() }, business = businessName,
@@ -2475,6 +2478,7 @@ fun App(
                         onSave = { e -> save(listOf(e) + entries); lastAdded = listOf(e.id) },
                         onReport = { profitOpen = true },
                         jump = sideJump, onJumped = { sideJump = null },
+                        leave = if (backToChat && tab == Tab.PARTIES) ({ backToChat = false; tab = Tab.CHAT }) else null,
                         onUpdate = { changed -> val m = changed.associateBy { it.id }; save(entries.map { m[it.id] ?: it }) },
                         onMoveEntries = { n, ids -> if (ids.isEmpty()) toast("Nothing to move") else movingAll = n to ids },
                         onDeleteEntries = { n, ids, after ->
@@ -2574,7 +2578,7 @@ fun App(
                             moveToTrash(ids.toSet())
                         },
                         // A saved row opens its person's account; one without a person opens to change.
-                        onEditEntry = { if (it.person.isNotBlank()) openParty(it.person) else editing = it },
+                        onEditEntry = { if (it.person.isNotBlank()) openParty(it.person, fromChat = true) else editing = it },
                         onAddSuggestions = { list ->
                             val added = list.mapIndexed { i, e -> e.copy(id = "e" + System.nanoTime() + i) }
                             save(added + entries)

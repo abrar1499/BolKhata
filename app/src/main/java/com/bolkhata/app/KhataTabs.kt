@@ -1031,6 +1031,8 @@ fun SideScreen(
     onMenu: () -> Unit, business: String, onEdit: (Entry) -> Unit, onSave: (Entry) -> Unit, onReport: () -> Unit,
     /** Opens this account and person straight away (from the report's To get / To pay). */
     jump: Pair<String, String>? = null, onJumped: () -> Unit = {},
+    /** Set when the open person was reached from elsewhere (a chat row): back goes there, not to the list. */
+    leave: (() -> Unit)? = null,
     /** Saves changed entries (same ids). */
     onUpdate: (List<Entry>) -> Unit = {},
     /** Opens the Move list for these entries ([title] names them). */
@@ -1060,7 +1062,8 @@ fun SideScreen(
     val newest = remember(entries) { entries.sortedByDescending { it.date } }
     val per = remember(period, newest) { Period.decode(period) ?: Period.newestMonth(newest) }
     val inPer = { ms: Long -> per.has(ms) }
-    BackHandler(enabled = bookName != null) { if (personName != null) personName = null else if (kidName != null) kidName = null else bookName = null }
+    val upKid = { kidName = null; if (leave != null) { bookName = null; leave() } }
+    BackHandler(enabled = bookName != null) { if (personName != null) personName = null else if (kidName != null) upKid() else bookName = null }
     LaunchedEffect(kidName) { personName = null }
     val ink = if (income) GreenIn else RedSpend
     val crumb = when (side) { Side.PARTY -> "Party"; Side.INC -> "Income"; Side.EXP -> "Expense" }
@@ -1092,7 +1095,7 @@ fun SideScreen(
                             )))
                         }
                         stickyHeader { TabHead {
-                            BackHead(group.name, "$crumb › ${book.name} ›", { kidName = null }, toPdf) { SumCard(Triple(fmt(inside.sumOf { it.amount }), w, ink), null, "", {}) }
+                            BackHead(group.name, "$crumb › ${book.name} ›", upKid, toPdf) { SumCard(Triple(fmt(inside.sumOf { it.amount }), w, ink), null, "", {}) }
                             PeriodChips(newest, per) { period = it.encode() }
                         } }
                         if (qs.isNotEmpty()) {
@@ -1135,7 +1138,7 @@ fun SideScreen(
                     val kid = (Sides.kids(book, entries, setup).firstOrNull { it.name.equals(kidName, true) } ?: Kid(kidName!!, emptyList()))
                         .let { if (book.people) it else Kid(it.name, it.entries.filter { e -> inPer(e.date) }) }
                     item(key = "kh") {
-                        BackHead(kid.name, "$crumb › ${book.name} ›", { kidName = null }, {
+                        BackHead(kid.name, "$crumb › ${book.name} ›", upKid, {
                             if (book.people) {
                                 // A statement: how many of each thing, the money each way, every line with the balance after it.
                                 val (plus, minus) = Sides.columns(book)
