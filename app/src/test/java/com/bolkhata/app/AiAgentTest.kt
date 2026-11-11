@@ -104,6 +104,26 @@ class AiAgentTest {
     }
 
     @Test
+    fun monthByMonthIsACardWithTheAverage() {
+        val month = { t: Long -> java.text.SimpleDateFormat("MMM yyyy", java.util.Locale.US).format(java.util.Date(t)) }
+        val list = listOf(
+            entry("a", Type.KHARCHA, 100.0, Cat.MOBILE, "Recharge", "", now, now),
+            entry("b", Type.KHARCHA, 50.0, Cat.MOBILE, "Recharge", "", now - 1000, now),
+            entry("c", Type.KHARCHA, 60.0, Cat.MOBILE, "Recharge", "", now - 40 * 86_400_000L, now)
+        )
+        // Newest month first, each with its entries and total; then the total and the average a month (210 / 2).
+        assertEquals(
+            "By month (recharge):\n" + month(now) + " · 2 entries · 150 PKR\n" + month(now - 40 * 86_400_000L) + " · 1 entry · 60 PKR\n" +
+                "Total: 210 PKR · Average a month 105 PKR",
+            AiAgent.grouped(list, "month", "recharge", "PKR")
+        )
+        // The chat reads it as a card: a row per month, the total and the average under it.
+        val card = Report.parse(AiAgent.grouped(list, "month", "recharge", "PKR"), "PKR")!!
+        assertEquals(2, card.rows.size)
+        assertEquals(listOf("Total", "Average a month"), card.total.map { it.label })
+    }
+
+    @Test
     fun theAppDoesTheSums() {
         val t = use("totals", """{"types": ["expense"], "group_by": "category"}""")
         assertEquals(440.0, t.getDouble("total"), 0.001)

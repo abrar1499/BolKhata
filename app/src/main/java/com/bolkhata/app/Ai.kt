@@ -67,14 +67,17 @@ object Ai {
     }
 
     /** "7,687 in (6,100 cached) · 551 out · $0.0004" (no price part when it is not known). */
-    fun usageText(input: Long, output: Long, model: String = modelNow(), cached: Long = 0, dollars: Double? = cost(model, input, output, cached)): String =
-        "%,d in".format(Locale.US, input) + (if (cached > 0) " (%,d cached)".format(Locale.US, cached) else "") + " · %,d out".format(Locale.US, output) +
+    fun usageText(input: Long, output: Long, model: String = modelNow(), cached: Long = 0, dollars: Double? = cost(model, input, output, cached), stored: Long = 0): String =
+        // "stored" are tokens put into the cache (a quarter dearer); a big number on every message means the cache is not being reused.
+        "%,d in".format(Locale.US, input) + (if (cached > 0 || stored > 0) " (%,d cached, %,d stored)".format(Locale.US, cached, stored) else "") +
+            " · %,d out".format(Locale.US, output) +
             (dollars?.let { " · $" + String.format(Locale.US, "%.4f", it) } ?: "")
 
     private val usedIn = java.util.concurrent.atomic.AtomicInteger()
     private val usedOut = java.util.concurrent.atomic.AtomicInteger()
     private val usedCached = java.util.concurrent.atomic.AtomicInteger()
     private val usedMicro = java.util.concurrent.atomic.AtomicLong()
+    private val usedStored = java.util.concurrent.atomic.AtomicInteger()
 
     /** What the calls since the last ask used, as "Claude · 1.2s · 340 in · 120 out · $0.0038"; null when this key made none. */
     fun takeUsage(ms: Long): String? {
@@ -82,9 +85,10 @@ object Ai {
         val o = usedOut.getAndSet(0)
         val cached = usedCached.getAndSet(0)
         val micro = usedMicro.getAndSet(0)
+        val stored = usedStored.getAndSet(0)
         if (i == 0 && o == 0) return null
         return (provider(key)?.name ?: "AI") + " · " + String.format(Locale.US, "%.1fs", ms / 1000.0) + " · " +
-            usageText(i.toLong(), o.toLong(), cached = cached.toLong(), dollars = if (price(modelNow()) == null) null else micro / 1_000_000.0)
+            usageText(i.toLong(), o.toLong(), cached = cached.toLong(), dollars = if (price(modelNow()) == null) null else micro / 1_000_000.0, stored = stored.toLong())
     }
 
     /**
@@ -193,6 +197,7 @@ object Ai {
         usedIn.addAndGet(input)
         usedOut.addAndGet(output)
         usedCached.addAndGet(cached)
+        usedStored.addAndGet(written)
         usedMicro.addAndGet(micro)
         sink?.invoke(input, output, micro)
     }
