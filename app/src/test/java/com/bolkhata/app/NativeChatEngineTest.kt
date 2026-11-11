@@ -225,6 +225,57 @@ class NativeChatEngineTest {
         assertEquals(now - 2 * 3_600_000L, read("pichle 2 ghante ki entries dikhao").filter.createdFrom)
     }
 
+    @Test fun aDateWithAShortYearTillNowIsOneRange() {
+        // "026" and "26" are the year 2026; "ab tak" after a start day ends today; "khrcha" is spending; a period asks for the total.
+        for (q in listOf("17 aug 026 se ab tak ka kharch btao", "10 aug 26 se aj tak ka khrcha btao")) {
+            val r = read(q)
+            assertEquals("ask", r.kind); assertEquals("sum", r.what)
+            assertEquals(setOf(Type.KHARCHA), r.filter.types)
+            assertEquals(emptyList<String>(), r.filter.items)
+            assertEquals(Query.day(if (q.startsWith("17")) "2026-08-17" else "2026-08-10"), r.filter.from)
+            assertTrue(r.filter.to!! >= now)
+        }
+        // A number after the month that is not a year near this one stays an amount.
+        assertEquals("entry", read("5 oct 60 chai").kind)
+    }
+
+    @Test fun theLastDaysAndAWeekdayAreUnderstood() {
+        val days = read("pichlay 10 din ka hisab do")
+        assertEquals("ask", days.kind)
+        assertEquals(now - 10 * 86_400_000L, days.filter.from)
+        // The whole account of those days: every kind of money, not only spending.
+        assertEquals(emptySet<Type>(), days.filter.types)
+        // now is Friday 30 Oct 2026: "pichli jumerat" is Thursday 29 Oct, "pichle juma" the Friday before today.
+        val thu = read("pichli jumrat ko kitna laga tha")
+        assertEquals("sum", thu.what); assertEquals(setOf(Type.KHARCHA), thu.filter.types)
+        assertEquals(Query.day("2026-10-29"), thu.filter.from)
+        assertEquals(Query.day("2026-10-23"), read("pichle juma ko kitna kharcha hua").filter.from)
+        assertEquals(emptyList<String>(), thu.filter.items)
+    }
+
+    @Test fun followUpsAskForTheBreakdownOrTheMonths() {
+        val history = listOf(ChatMessage("u1", true, "17 aug 2026 se ab tak ka kharch btao"), ChatMessage("a1", false, "Spent 100 SAR (3 entries, 17 Aug – 30 Oct)"))
+        for (q in listOf("main category bola tha", "kidhr kidhr", "kahan kahan laga")) assertEquals(q, "report", read(q, history).what)
+        for (q in listOf("per month btao", "ye monthly kitna bnta ha")) {
+            val r = read(q, history)
+            assertEquals(q, "months", r.what)
+            // The same days and kind as the question before.
+            assertEquals(Query.day("2026-08-17"), r.filter.from); assertEquals(setOf(Type.KHARCHA), r.filter.types)
+        }
+        // Asked on its own, it is the spending month by month.
+        assertEquals("months", read("monthly kharcha batao").what)
+    }
+
+    @Test fun moneyThatWentOnAThingIsAnExpense() {
+        fun first(q: String) = Parser.parse(q).entries.single()
+        // A thing no rule knows, named before "par / pr": saved with that name.
+        first("aj 100 rpy bleach pr lgy").let { assertEquals(Type.KHARCHA, it.type); assertEquals("Bleach", it.item); assertEquals(100.0, it.amount, 0.001) }
+        // Paid to a seller named by what they sell: an expense, not a person's account.
+        first("100 mene laundry waly ko diya").let { assertEquals(Type.KHARCHA, it.type); assertEquals("Laundry", it.item); assertEquals("", it.person) }
+        // A day of the week is when, not who.
+        assertTrue(Parser.parse("pichly juma ko 300 liya tha").entries.none { it.person.equals("Juma", true) })
+    }
+
     @Test fun newExpenseIsReturnedAsAnEntryIntent() {
         val result = read("chai 12")
         assertEquals("entry", result.kind)

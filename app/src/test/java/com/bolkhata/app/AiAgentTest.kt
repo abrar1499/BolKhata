@@ -115,10 +115,10 @@ class AiAgentTest {
         assertEquals(
             "By month (recharge):\n" + month(now) + " · 2 entries · 150 PKR\n" + month(now - 40 * 86_400_000L) + " · 1 entry · 60 PKR\n" +
                 "Total: 210 PKR · Average a month 105 PKR",
-            AiAgent.grouped(list, "month", "recharge", "PKR")
+            Query.grouped(list, "month", "recharge", "PKR")
         )
         // The chat reads it as a card: a row per month, the total and the average under it.
-        val card = Report.parse(AiAgent.grouped(list, "month", "recharge", "PKR"), "PKR")!!
+        val card = Report.parse(Query.grouped(list, "month", "recharge", "PKR"), "PKR")!!
         assertEquals(2, card.rows.size)
         assertEquals(listOf("Total", "Average a month"), card.total.map { it.label })
     }
