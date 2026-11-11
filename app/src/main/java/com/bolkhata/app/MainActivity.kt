@@ -152,7 +152,7 @@ fun App(
     // Groq is switched off for now (Groq.ENABLED): the app reads and answers every message by itself.
     // Test feature (APK build only): an AI key of any provider, saved in the side menu, runs the chat instead; see Ai.
     remember {
-        if (!BuildConfig.PLAY) { Ai.key = store.llmKey; Ai.model = store.llmModel; Ai.sink = { i, o -> store.llmIn += i; store.llmOut += o } }
+        if (!BuildConfig.PLAY) { Ai.key = store.llmKey; Ai.model = store.llmModel; Ai.sink = { i, o, micro -> store.llmIn += i; store.llmOut += o; store.llmMicro += micro } }
     }
     fun groqKeyNow() = Ai.key.ifBlank { if (!Groq.ENABLED) "" else store.groqKey.ifBlank { if (Groq.sharedReady && !store.groqOff) Groq.SHARED else "" } }
     var groqKey by remember { mutableStateOf(groqKeyNow()) }
@@ -2270,13 +2270,14 @@ fun App(
                 },
                 ai = if (BuildConfig.PLAY) null else remember(aiTick, groqKey) {
                     AiInfo(Ai.provider(Ai.key)?.name.orEmpty(), store.llmModel, Ai.modelNow(),
-                        if (store.llmIn + store.llmOut == 0L) "" else Ai.usageText(store.llmIn, store.llmOut))
+                        if (store.llmIn + store.llmOut == 0L) "" else Ai.usageText(store.llmIn, store.llmOut,
+                            dollars = if (Ai.price(Ai.modelNow()) == null) null else store.llmMicro / 1_000_000.0))
                 },
                 onAiOpen = { aiTick++ },
                 onAiSave = save@{ key, model ->
                     if (key.isNotBlank() && Ai.provider(key) == null) { driveToast("This key is not recognised"); return@save }
                     // A new key or model starts the token count again.
-                    if ((key.isNotBlank() && key != Ai.key) || model != store.llmModel) { store.llmIn = 0; store.llmOut = 0 }
+                    if ((key.isNotBlank() && key != Ai.key) || model != store.llmModel) { store.llmIn = 0; store.llmOut = 0; store.llmMicro = 0 }
                     if (key.isNotBlank()) store.llmKey = key
                     store.llmModel = model
                     Ai.key = store.llmKey; Ai.model = store.llmModel
