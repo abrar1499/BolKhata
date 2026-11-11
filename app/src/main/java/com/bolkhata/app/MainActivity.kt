@@ -1311,9 +1311,11 @@ fun App(
                         setup = { sides }, saveSetup = { s -> sides = s; store.saveSides(s) }, pdf = { doc -> aiPdf[0]?.invoke(doc) }
                     )
                     // Learnt from the AI before: a message of the same shape (only its numbers differ) is done by the app alone, for nothing.
-                    val shape = AiAgent.shape(roman)
-                    store.aiLearned[shape]?.let { AiAgent.recall(it, roman) }?.let { input ->
-                        val notes = AiAgent.Notes()
+                    // People and numbers are open places in it, so a known sentence with another name needs no AI either.
+                    val who = AiAgent.who(names0, store.aiLearned)
+                    val shape = AiAgent.shape(roman, who)
+                    store.aiLearned[shape]?.let { AiAgent.recall(it, roman, who) }?.let { input ->
+                        val notes = AiAgent.Notes(said = AiAgent.numbers(roman))
                         runCatching { AiAgent.use("add_entries", input, host, System.currentTimeMillis(), notes) }
                         if (notes.added.isNotEmpty()) {
                             aiPicked = ""
@@ -1325,22 +1327,24 @@ fun App(
                     }
                     // The AI is asked off the main thread; each tool then runs on it, where the entries live.
                     val answer = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                        AiAgent.run(text, recent, host, roman = roman, previous = aiPicked, justSaved = aiSaved, heardAlso = heardAlso, spoken = spoken) { tool -> kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.Main) { tool() } }
+                        AiAgent.run(text, recent, host, roman = roman, previous = aiPicked, justSaved = aiSaved, heardAlso = heardAlso, spoken = spoken, known = store.aiLearned) { tool -> kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.Main) { tool() } }
                     }
                     val usage = Ai.takeUsage(System.currentTimeMillis() - started).orEmpty()
-                    lastSpeech = answer?.text ?: ("The AI did not answer (" + Ai.lastError.ifBlank { "no reply" } + "). Try again.")
+                    lastSpeech = answer?.text?.ifBlank { "Saved" } ?: ("The AI did not answer (" + Ai.lastError.ifBlank { "no reply" } + "). Try again.")
                     // A list or breakdown the AI asked for is the app's own card; its other replies are plain text, never read as a report.
                     // Only the very next message goes on from a look-up or a save; older ones would mislead.
                     aiPicked = answer?.filter.orEmpty()
                     aiSaved = answer?.added.orEmpty()
                     val card = answer?.card.orEmpty()
                     // The app remembers how the AI read this shape of sentence; nobody has to mark it right or wrong.
+                    // A new spelling of a name is learnt as one word; the sentence around it as its shape.
                     val lesson = answer?.lesson.orEmpty()
-                    if (lesson.isNotBlank()) store.aiLearned = store.aiLearned + (shape to lesson)
+                    val words = answer?.words.orEmpty()
+                    if (words.isNotEmpty() || lesson.isNotBlank()) store.aiLearned = store.aiLearned + words + (if (lesson.isBlank()) emptyMap() else mapOf(answer!!.shape to lesson))
                     // What the app's own engine made of it goes in the log, so its rules can be taught where it differs from the AI.
                     val own = runCatching { offMain { NativeChatEngine.interpret(roman, scoped, names0, wordFixes, history, currency = currency) } }.getOrNull()
-                    postChat(card.ifBlank { lastSpeech }, isUser = false, entryIds = answer?.added.orEmpty(), listIds = answer?.listIds.orEmpty(),
-                        meta = "engine=AI; intent=agent" + (if (card.isBlank()) "; plain" else "") + (if (lesson.isBlank()) "" else "; shape=$shape") +
+                    postChat(card.ifBlank { answer?.text ?: lastSpeech }, isUser = false, entryIds = answer?.added.orEmpty(), listIds = answer?.listIds.orEmpty(),
+                        meta = "engine=AI; intent=agent" + (if (card.isBlank()) "; plain" else "") + (if (lesson.isBlank()) "" else "; shape=" + answer!!.shape) + (if (words.isEmpty()) "" else "; words=" + words.keys.joinToString(",")) +
                             "; own=" + (own?.let { it.kind + (if (it.what.isBlank()) "" else "/" + it.what) + (if (it.unsure) "/unsure" else "") } ?: "error") +
                             (if (usage.isBlank()) "" else "; usage=" + usage))
                     return@launch
@@ -2555,7 +2559,8 @@ fun App(
                             if (!good) chatMessages.indexOfFirst { it.id == id }.takeIf { it > 0 }?.let { i ->
                                 chatMessages.take(i).lastOrNull { it.isUser }?.let { q ->
                                     store.learned = store.learned - Groq.learnKey(runCatching { Translit.toRoman(q.text) }.getOrDefault(q.text))
-                                    store.aiLearned = store.aiLearned - AiAgent.shape(runCatching { Translit.toRoman(q.text) }.getOrDefault(q.text))
+                                    val said = runCatching { Translit.toRoman(q.text) }.getOrDefault(q.text)
+                                    store.aiLearned = store.aiLearned - AiAgent.shape(said) - AiAgent.shape(said, AiAgent.who(contactNames(), store.aiLearned))
                                 }
                             }
                             chatRatings = chatRatings + (id to good)
@@ -2564,7 +2569,8 @@ fun App(
                         onUndo = { ids ->
                             // Undoing what was just saved also un-teaches it: the app asks the AI again next time.
                             chatMessages.lastOrNull { m -> !m.isUser && m.entryIds.any { it in ids } }?.meta
-                                ?.let { Regex("""shape=([^;]+)""").find(it)?.groupValues?.get(1)?.trim() }?.let { store.aiLearned = store.aiLearned - it }
+                                ?.let { m -> listOf("shape", "words").flatMap { k -> Regex("""$k=([^;]+)""").find(m)?.groupValues?.get(1)?.trim()?.split(",").orEmpty() } }
+                                ?.let { store.aiLearned = store.aiLearned - it.toSet() }
                             moveToTrash(ids.toSet())
                         },
                         onEditEntry = { editing = it },
