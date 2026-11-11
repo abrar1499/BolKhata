@@ -28,14 +28,19 @@ object AiAgent {
      * The AI's reply and the entries it saved (shown as the Saved card). When it asked the app to show a list or a
      * breakdown, [card] is the app's own answer text (drawn as the usual card) and [listIds] the rows in it.
      */
-    class Answer(val text: String, val added: List<String>, val card: String = "", val listIds: List<String> = emptyList())
+    class Answer(val text: String, val added: List<String>, val card: String = "", val listIds: List<String> = emptyList(), val filter: String = "")
 
     /** What the tools of one message leave for the chat: saved entries and the card to show. */
-    class Notes(val added: MutableList<String> = mutableListOf(), var card: String = "", var listIds: List<String> = emptyList())
+    class Notes(val added: MutableList<String> = mutableListOf(), var card: String = "", var listIds: List<String> = emptyList(),
+        /** How the last look-up picked its entries, so "detail do" or "aur food?" can go on from it. */
+        var filter: String = "")
+
+    /** A long list in the chat shows this many rows, then "+N more" and the total of all. */
+    private const val LIST_ROWS = 30
 
     private val TYPES = mapOf(
         "expense" to Type.KHARCHA, "income" to Type.AAMDANI, "lent" to Type.DIYA, "borrowed" to Type.LIYA,
-        "received_back" to Type.WAPIS_MILA, "paid_back" to Type.WAPIS_DIYA, "sale" to Type.SALE, "purchase" to Type.PURCHASE
+        "received_back" to Type.WAPIS_MILA, "paid_back" to Type.WAPIS_DIYA, "sale" to Type.SALE, "work" to Type.PURCHASE, "purchase" to Type.PURCHASE
     )
     private val EXPENSE_CATS: List<Cat> = Cat.entries.filter { it !in setOf(Cat.TANKHWAH, Cat.UDHAAR, Cat.SALES, Cat.STOCK) }
     private val dayFmt get() = SimpleDateFormat("yyyy-MM-dd", Locale.US)
@@ -66,17 +71,24 @@ object AiAgent {
         Ai.Tool("find_entries", "Lists saved entries that match (newest first, at most 40 shown) with their ids, the count and the total.", shape(*picking)),
         Ai.Tool("totals", "Adds up the matching entries: the total and count, and the same per group when group_by is given. Use it for every sum.",
             shape(*picking, "group_by" to JSONObject().put("type", "string").put("enum", JSONArray(listOf("category", "person", "type", "month", "item"))))),
+        Ai.Tool("report", "The business report worked out by the app: sales, other income, business costs, expenses and profit for a period (all time when no dates), and the net worth today (cash in hand, to get, stock, assets, to pay).",
+            shape("from" to text("First day, YYYY-MM-DD"), "to" to text("Last day, YYYY-MM-DD"))),
         Ai.Tool("balances", "What each person owes or is owed (all time) and the cash in hand.", shape()),
         Ai.Tool("add_entries", "Saves new entries.", shape(
             "entries" to JSONObject().put("type", "array").put("items", shape(
-                "type" to JSONObject().put("type", "string").put("enum", JSONArray(listOf("expense", "income", "lent", "borrowed", "received_back", "paid_back"))),
-                "amount" to number("Exactly as said"),
+                "type" to JSONObject().put("type", "string").put("enum", JSONArray(listOf("expense", "income", "lent", "borrowed", "received_back", "paid_back", "sale", "work"))),
+                "amount" to number("Exactly as said; leave out for a sale or work with qty and rate (the app multiplies)"),
+                "qty" to number("How many, when said"),
+                "rate" to number("Price for one (or for 1000 when per_1000), for a sale or work"),
+                "per_1000" to JSONObject().put("type", "boolean").put("description", "True when the rate is per thousand"),
+                "unit" to text("kg, piece, bag... when said"),
+                "paid_now" to JSONObject().put("type", "boolean").put("description", "A sale or work settled in cash on the spot (not on credit)"),
                 "category" to JSONObject().put("type", "string").put("enum", JSONArray(EXPENSE_CATS.map { it.label })).put("description", "For an expense"),
                 "item" to text("1-3 words, e.g. Petrol"),
                 "person" to text("The other person, saved spelling if it matches; needed for lent, borrowed, received_back, paid_back"),
                 "note" to text("Any extra detail"),
                 "date" to text("YYYY-MM-DD when a day was said, else leave out (today)"),
-                required = listOf("type", "amount")
+                required = listOf("type")
             )), required = listOf("entries"))),
         Ai.Tool("update_entries", "Changes saved entries (ids from find_entries); only the fields given change.", shape(
             "ids" to words("Entry ids"),
@@ -110,11 +122,19 @@ object AiAgent {
           guess money yourself: ask the totals tool.
         - When the person wants to see entries, a detail, a list or where the money went, call show: the app draws
           it as a card. Never write lists, rows or tables yourself; after show, say one short sentence at most and do
-          not repeat the rows or amounts.
+          not repeat the rows or amounts. "detail", "details", "tafseel" or "kahan kahan laga" after a total is the
+          breakdown view; "list" or "entries" is the list view; "category" or "main category" is the breakdown.
+        - A follow-up ("detail do", "aur food?", "list me batao", "main category bola tha") keeps what the previous
+          look-up picked (types, dates, people, categories) and changes only what the new message changes.
         - A word in Urdu, Arabic or Hindi script is read by its sound and may be an English word written that way
           (the sound "blij" is bleach, not bill). Keep the thing that was said as the item; never swap it for another word.
         - New money ("chai 50", "Ali ko 500 diye", "kal salary 3000 aayi") is add_entries, amounts exactly as said.
           lent = gave a loan or paid someone on credit; borrowed = took one; received_back / paid_back = a loan returning.
+        - Business: goods given to a customer on credit ("Nargis ko 200 shirts 350 ke hisaab se di") is type sale with
+          person, item, qty and rate. Work done or goods supplied by a worker or supplier, to be paid for ("Hamid ne 500
+          shirts silai ki 40 ke hisaab se"), is type work. The app multiplies qty by rate; per_1000 when the rate is per
+          thousand; paid_now when settled in cash on the spot. Money a customer pays later is received_back; money paid
+          to a worker or supplier is lent. Profit, loss, sales, costs, net worth: the report tool.
           Use the saved name that sounds closest; a new name keeps the spelling that reads most like a real name.
         - To change or delete, first find_entries for the ids. When it is clear which entries are meant, do it without
           asking again; when it is not, ask one short question instead of guessing. Deleted entries go to Trash.
@@ -133,7 +153,7 @@ object AiAgent {
      * [onMain] runs a tool where the app's data may be changed.
      */
     fun run(
-        said: String, recent: String, host: Host, now: Long = System.currentTimeMillis(), roman: String = said,
+        said: String, recent: String, host: Host, now: Long = System.currentTimeMillis(), roman: String = said, previous: String = "",
         onMain: (() -> String) -> String = { it() }
     ): Answer? = runCatching {
         val notes = Notes()
@@ -141,6 +161,7 @@ object AiAgent {
         val messages = Ai.opening(
             "Now: " + timeFmt.format(Date(now)) + " (" + SimpleDateFormat("EEEE", Locale.US).format(Date(now)) + ")\n" +
                 (if (recent.isBlank()) "" else "Conversation so far:\n" + recent.takeLast(1200) + "\n") +
+                (if (previous.isBlank()) "" else "Previous look-up picked: " + previous.take(400) + "\n") +
                 "Message: " + said.take(600) +
                 // Urdu or Hindi script also goes in Roman letters by its sound, so a word is not swapped for another.
                 (if (roman.trim().equals(said.trim(), true)) "" else "\nThe same message by sound, in Roman letters: " + roman.take(600))
@@ -148,7 +169,7 @@ object AiAgent {
         val system = system(host.currency, names)
         for (round in 1..8) {
             val step = Ai.step(system, tools, messages) ?: return@runCatching null
-            if (step.calls.isEmpty()) return@runCatching Answer(step.text.ifBlank { "Done." }, notes.added, notes.card, notes.listIds)
+            if (step.calls.isEmpty()) return@runCatching Answer(step.text.ifBlank { "Done." }, notes.added, notes.card, notes.listIds, notes.filter)
             Ai.results(messages, step.calls.map { c ->
                 c to onMain { runCatching { use(c.name, c.input, host, now, notes) }.getOrElse { JSONObject().put("error", it.message ?: "failed").toString() } }
             })
@@ -164,17 +185,20 @@ object AiAgent {
             val list = Query.select(host.entries(), f).sortedByDescending { it.date }
             val what = when (input.optString("view")) { "breakdown" -> "report"; "total" -> "sum"; "count" -> "count"; "highest" -> "highest"; else -> "list" }
             // The app's own answer, the same text and card as without the AI.
-            notes.card = Query.answer(list, what, f, host.currency)
-            notes.listIds = if (what == "list") Query.shown(list).map { it.id } else emptyList()
+            notes.card = Query.answer(list, what, f, host.currency, LIST_ROWS)
+            notes.listIds = if (what == "list") list.take(LIST_ROWS).map { it.id } else emptyList()
+            notes.filter = picked(input)
             JSONObject().put("shown_to_the_person", true).put("count", list.size).put("total", list.sumOf { it.amount }).toString()
         }
         "find_entries" -> {
             val list = pick(input, host, now)
+            notes.filter = picked(input)
             JSONObject().put("count", list.size).put("total", list.sumOf { it.amount })
                 .put("entries", JSONArray(list.take(40).map { show(it, input.has("added_in_last_minutes")) })).put("not_shown", (list.size - 40).coerceAtLeast(0)).toString()
         }
         "totals" -> {
             val list = pick(input, host, now)
+            notes.filter = picked(input)
             val out = JSONObject().put("count", list.size).put("total", list.sumOf { it.amount })
             val by: ((Entry) -> String)? = when (input.optString("group_by")) {
                 "category" -> { e -> e.category.label }
@@ -188,6 +212,16 @@ object AiAgent {
                 .sortedByDescending { it.getDouble("total") }.take(40)))
             out.toString()
         }
+        "report" -> {
+            val all = host.entries()
+            val f = filterOf(input, now)
+            val p = Sides.profit(all.filter { (f.from == null || it.date >= f.from) && (f.to == null || it.date <= f.to) })
+            val w = Sides.worth(all, host.setup())
+            JSONObject().put("period", JSONObject().put("sales", p.sale).put("other_income", p.income).put("business_costs", p.work)
+                .put("expenses", p.spent).put(if (p.profit < 0) "loss" else "profit", kotlin.math.abs(p.profit)))
+                .put("today", JSONObject().put("cash_in_hand", w.cash).put("to_get", w.toGet).put("stock_at_cost", w.stock).put("assets", w.assets)
+                    .put("to_pay", w.toPay).put("net_worth", w.net)).toString()
+        }
         "balances" -> {
             val all = host.entries()
             val people = all.filter { it.person.isNotBlank() }.groupBy { it.person.trim().lowercase() }
@@ -199,7 +233,7 @@ object AiAgent {
         }
         "add_entries" -> {
             val list = input.optJSONArray("entries") ?: JSONArray()
-            val fresh = (0 until list.length()).map { make(list.getJSONObject(it), now, it) }
+            val fresh = (0 until list.length()).map { make(list.getJSONObject(it), now, it, host) }
             host.add(fresh)
             notes.added += fresh.map { it.id }
             JSONObject().put("saved", fresh.size).put("entries", JSONArray(fresh.map { show(it) })).toString()
@@ -283,6 +317,9 @@ object AiAgent {
         else -> JSONObject().put("error", "no such tool").toString()
     }
 
+    /** Only the picking fields of a tool call, as JSON text. */
+    private fun picked(o: JSONObject): String = JSONObject().apply { picking.forEach { (k, _) -> if (o.has(k)) put(k, o.get(k)) } }.toString()
+
     private fun strings(o: JSONObject, key: String) = o.optJSONArray(key)?.let { a -> (0 until a.length()).map { a.optString(it).trim() } }.orEmpty().filter { it.isNotBlank() }
 
     private fun typeName(t: Type) = TYPES.entries.firstOrNull { it.value == t }?.key ?: t.label
@@ -311,25 +348,35 @@ object AiAgent {
         )
     }
 
-    /** A new entry from the AI's fields; a bad one throws, and the AI is told. */
-    private fun make(o: JSONObject, now: Long, i: Int): Entry {
-        val type = TYPES[o.optString("type").trim().lowercase()]?.takeIf { it != Type.SALE && it != Type.PURCHASE } ?: error("unknown type")
-        val amount = o.optDouble("amount", 0.0)
-        if (amount.isNaN() || amount <= 0.0) error("amount must be above 0")
+    /** A new entry from the AI's fields; a bad one throws, and the AI is told. Goods and work get their amount from qty × rate, worked out here. */
+    private fun make(o: JSONObject, now: Long, i: Int, host: Host): Entry {
+        val type = TYPES[o.optString("type").trim().lowercase()] ?: error("unknown type")
+        val goods = type == Type.SALE || type == Type.PURCHASE
+        val qty = o.optDouble("qty", 0.0).takeIf { !it.isNaN() && it > 0 } ?: 0.0
+        val rate = o.optDouble("rate", 0.0).takeIf { !it.isNaN() && it > 0 } ?: 0.0
+        val per1000 = goods && o.optBoolean("per_1000", false)
+        val amount = if (goods && qty > 0 && rate > 0) (if (per1000) qty / 1000 * rate else qty * rate) else o.optDouble("amount", 0.0)
+        if (amount.isNaN() || amount <= 0.0) error("amount (or qty and rate) is needed")
         val person = o.optString("person").trim()
-        if (type != Type.KHARCHA && type != Type.AAMDANI && person.isBlank()) error("person is needed for $type")
+        if (type != Type.KHARCHA && type != Type.AAMDANI && person.isBlank() && !(goods && o.optBoolean("paid_now", false))) error("person is needed for " + o.optString("type"))
         val category = when (type) {
             Type.KHARCHA -> Cat.entries.firstOrNull { it.label.equals(o.optString("category").trim(), true) } ?: Cat.OTHER
             Type.AAMDANI -> Cat.TANKHWAH
+            Type.SALE -> Cat.SALES
+            // Work by staff is a business cost; goods from anyone else go to stock.
+            Type.PURCHASE -> if (person.isNotBlank() && Sides.bookOf(person, host.entries(), host.setup()) == Sides.STAFF) Cat.PRODUCTION else Cat.STOCK
             else -> Cat.UDHAAR
         }
         // A said day keeps the current time of day, so the entries of one message stay in order.
         val day = runCatching { dayFmt.parse(o.optString("date").trim())!!.time }.getOrNull()
         val date = if (day == null) now else day + (now - dayFmt.parse(dayFmt.format(Date(now)))!!.time)
+        val item = o.optString("item").trim().take(40).replaceFirstChar { it.uppercase() }
         return Entry(
             id = "e" + System.nanoTime() + i, type = type, amount = amount, category = category,
-            item = o.optString("item").trim().take(40).replaceFirstChar { it.uppercase() }.ifBlank { category.label },
-            person = person.take(40), note = o.optString("note").trim().take(120), date = date + i, createdAt = now + i
+            item = if (goods) item else item.ifBlank { category.label },
+            person = person.take(40), note = o.optString("note").trim().take(120), date = date + i, createdAt = now + i,
+            qty = if (goods || o.has("qty")) qty else 0.0, unit = if (per1000) "1000" else o.optString("unit").trim().take(10),
+            rate = if (goods) rate else 0.0, paid = goods && o.optBoolean("paid_now", false)
         )
     }
 }

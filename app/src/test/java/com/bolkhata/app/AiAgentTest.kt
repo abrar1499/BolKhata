@@ -78,6 +78,29 @@ class AiAgentTest {
         assertEquals(Query.answer(saved.filter { it.type == Type.KHARCHA }.sortedByDescending { it.date }, "list",
             Query.Filter(types = setOf(Type.KHARCHA)), "PKR"), notes.card)
         assertEquals(listOf("new1", "old1", "new2"), notes.listIds)
+        // What it picked is kept, so a follow-up ("detail do") stays on the same entries.
+        assertEquals("""{"types":["expense"]}""", notes.filter)
+    }
+
+    @Test
+    fun goodsAndWorkAreMultipliedByTheAppAndShowInTheReport() {
+        setup = SideSetup(people = mapOf("Hamid Akram" to Sides.STAFF))
+        val notes = AiAgent.Notes()
+        AiAgent.use("add_entries", JSONObject("""{"entries": [
+            {"type": "sale", "person": "Nargis Salim Rashid", "item": "shirts", "qty": 200, "rate": 350},
+            {"type": "work", "person": "Hamid Akram", "item": "stitching", "qty": 5000, "rate": 400, "per_1000": true}]}"""), host, now, notes)
+        val sale = saved.first { it.id == notes.added[0] }
+        assertEquals(Type.SALE, sale.type); assertEquals(70_000.0, sale.amount, 0.001); assertEquals(Cat.SALES, sale.category)
+        assertEquals(200.0, sale.qty, 0.001); assertEquals(350.0, sale.rate, 0.001)
+        val work = saved.first { it.id == notes.added[1] }
+        // 5000 at 400 per thousand is 2000; work by someone in Staff is a business cost.
+        assertEquals(Type.PURCHASE, work.type); assertEquals(2_000.0, work.amount, 0.001)
+        assertEquals(Cat.PRODUCTION, work.category); assertEquals("1000", work.unit)
+        val period = use("report", "{}").getJSONObject("period")
+        assertEquals(70_000.0, period.getDouble("sales"), 0.001)
+        assertEquals(2_000.0, period.getDouble("business_costs"), 0.001)
+        assertEquals(440.0, period.getDouble("expenses"), 0.001)
+        assertEquals(67_560.0, period.getDouble("profit"), 0.001)
     }
 
     @Test

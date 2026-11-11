@@ -146,18 +146,18 @@ object Query {
     fun shown(list: List<Entry>): List<Entry> = list.take(SHOWN)
 
     /** The answer, worked out by the app: a total, a count or a short list. */
-    fun answer(list: List<Entry>, what: String, f: Filter, currency: String): String {
+    fun answer(list: List<Entry>, what: String, f: Filter, currency: String, rows: Int = SHOWN): String {
         val head = label(f)
         if (list.isEmpty()) return "Nothing found ($head)."
         return when (what) {
             "count" -> "${list.size} " + (if (list.size == 1) "entry" else "entries") + " ($head)."
             "list" -> {
                 val dateFmt = java.text.SimpleDateFormat("d MMM", java.util.Locale.US)
-                val rows = shown(list).joinToString("\n") { e ->
+                val lines = list.take(rows).joinToString("\n") { e ->
                     dateFmt.format(java.util.Date(e.date)) + " · " + (e.item.ifBlank { e.category.label }) +
                         (if (e.person.isNotBlank()) " · " + e.person else "") + " · " + fmt(e.amount) + " " + currency
-                } + if (list.size > SHOWN) "\n+${list.size - SHOWN} more" else ""
-                rows + "\nTotal: " + totals(list, head, currency)
+                } + if (list.size > rows) "\n+${list.size - rows} more" else ""
+                lines + "\nTotal: " + totals(list, head, currency)
             }
             // "Where did it go": the totals with every category.
             "report" -> totals(list, head, currency) + details(list, f, currency, 20)

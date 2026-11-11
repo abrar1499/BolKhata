@@ -1242,6 +1242,8 @@ fun App(
 
     // The PDF maker is written further down; the AI's PDF tool reaches it through this.
     val aiPdf = remember { arrayOfNulls<(PdfDoc) -> Unit>(1) }
+    // How the AI's last look-up picked its entries, so a follow-up ("detail do") goes on from it.
+    var aiPicked by remember { mutableStateOf("") }
     /** Without AI (no key, or no internet): save clear entries, answer simple questions, never stay silent. */
     fun chatInput(raw: String) {
         if (chatMessages.isEmpty()) lastGroqQuery = ""
@@ -1264,15 +1266,17 @@ fun App(
         val history = chatMessages.takeLast(60)
         postChat(text, isUser = true)
 
-        NativeMemory.handle(text, store.memory)?.let { memory ->
+        if (!Ai.handles(groqKey)) NativeMemory.handle(text, store.memory)?.let { memory ->
             store.memory = memory.facts
             lastSpeech = memory.reply
             postChat(memory.reply, isUser = false)
             return
         }
 
-        handleCurrentKhataMoveCommand(text)?.let { lastSpeech = it; postChat(it, isUser = false); return }
-        handleCurrentKhataBulkCommand(text)?.let { lastSpeech = it; postChat(it, isUser = false); return }
+        if (!Ai.handles(groqKey)) {
+            handleCurrentKhataMoveCommand(text)?.let { lastSpeech = it; postChat(it, isUser = false); return }
+            handleCurrentKhataBulkCommand(text)?.let { lastSpeech = it; postChat(it, isUser = false); return }
+        }
 
         chatLoading = true
         scope.launch {
@@ -1292,11 +1296,12 @@ fun App(
                     )
                     // The AI is asked off the main thread; each tool then runs on it, where the entries live.
                     val answer = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                        AiAgent.run(text, recent, host, roman = roman) { tool -> kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.Main) { tool() } }
+                        AiAgent.run(text, recent, host, roman = roman, previous = aiPicked) { tool -> kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.Main) { tool() } }
                     }
                     val usage = Ai.takeUsage(System.currentTimeMillis() - started).orEmpty()
                     lastSpeech = answer?.text ?: ("The AI did not answer (" + Ai.lastError.ifBlank { "no reply" } + "). Try again.")
                     // A list or breakdown the AI asked for is the app's own card; its other replies are plain text, never read as a report.
+                    answer?.filter?.takeIf { it.isNotBlank() }?.let { aiPicked = it }
                     val card = answer?.card.orEmpty()
                     postChat(card.ifBlank { lastSpeech }, isUser = false, entryIds = answer?.added.orEmpty(), listIds = answer?.listIds.orEmpty(),
                         meta = "engine=AI; intent=agent" + (if (card.isBlank()) "; plain" else "") + (if (usage.isBlank()) "" else "; usage=" + usage))
@@ -1410,7 +1415,9 @@ fun App(
                     postChat(reply, isUser = false, meta = trace, listIds = listedRows[0])
                 }
             } catch (e: Exception) {
-                val safe = "Sorry, I didn't get that. Try 'tea 5' or 'food this month'."
+                // With an AI key the reason is shown, so a failure can be understood and fixed.
+                val safe = if (Ai.handles(groqKey)) "The AI could not finish (" + e.javaClass.simpleName + (e.message?.let { ": " + it.take(80) } ?: "") + "). Try again."
+                    else "Sorry, I didn't get that. Try 'tea 5' or 'food this month'."
                 lastSpeech = safe
                 postChat(safe, isUser = false, meta = "engine=NativeChatEngine; stage=interpret; failure=" + e.javaClass.simpleName)
             } finally {
