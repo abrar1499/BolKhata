@@ -1,0 +1,223 @@
+package com.bolkhata.app
+
+import org.json.JSONArray
+import org.json.JSONObject
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+/**
+ * TEST FEATURE (APK build only, with [Ai]): with an AI key saved, the AI does every chat job itself through tools:
+ * it finds, adds, changes and deletes entries and asks the app for totals and balances, then answers. The app still
+ * does all the arithmetic (the AI is told to state only numbers a tool gave it), and deleted entries go to Trash.
+ *
+ * To remove it: delete this file and the "AiAgent" block in MainActivity's chatInput.
+ */
+object AiAgent {
+    /** What the AI may do to the app. */
+    class Host(
+        val entries: () -> List<Entry>, val add: (List<Entry>) -> Unit, val update: (List<Entry>) -> Unit,
+        val trash: (Set<String>) -> Unit, val names: () -> List<String>, val currency: String
+    )
+
+    /** The AI's reply and the entries it saved (shown as the Saved card). */
+    class Answer(val text: String, val added: List<String>)
+
+    private val TYPES = mapOf(
+        "expense" to Type.KHARCHA, "income" to Type.AAMDANI, "lent" to Type.DIYA, "borrowed" to Type.LIYA,
+        "received_back" to Type.WAPIS_MILA, "paid_back" to Type.WAPIS_DIYA, "sale" to Type.SALE, "purchase" to Type.PURCHASE
+    )
+    private val EXPENSE_CATS: List<Cat> = Cat.entries.filter { it !in setOf(Cat.TANKHWAH, Cat.UDHAAR, Cat.SALES, Cat.STOCK) }
+    private val dayFmt get() = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    private val timeFmt get() = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US)
+
+    private fun text(about: String) = JSONObject().put("type", "string").put("description", about)
+    private fun number(about: String) = JSONObject().put("type", "number").put("description", about)
+    private fun words(about: String, of: List<String>? = null) = JSONObject().put("type", "array").put("description", about)
+        .put("items", JSONObject().put("type", "string").apply { if (of != null) put("enum", JSONArray(of)) })
+    private fun shape(vararg fields: Pair<String, JSONObject>, required: List<String> = emptyList()) = JSONObject().put("type", "object")
+        .put("properties", JSONObject().apply { fields.forEach { put(it.first, it.second) } }).put("required", JSONArray(required))
+
+    /** How entries are picked; every part is optional and they narrow each other. */
+    private val picking: Array<Pair<String, JSONObject>> = arrayOf(
+        "types" to words("Kinds of entry", TYPES.keys.toList()),
+        "categories" to words("Expense categories", EXPENSE_CATS.map { it.label }),
+        "persons" to words("Saved names of people or shops"),
+        "words" to words("Words to look for in the item or note, e.g. petrol"),
+        "from" to text("First day, YYYY-MM-DD"),
+        "to" to text("Last day, YYYY-MM-DD"),
+        "added_in_last_minutes" to number("Only entries typed into the app within this many minutes (not their date)"),
+        "min_amount" to number("Smallest amount"),
+        "max_amount" to number("Largest amount"),
+        "last" to number("Only the latest N entries")
+    )
+
+    val tools: List<Ai.Tool> = listOf(
+        Ai.Tool("find_entries", "Lists saved entries that match (newest first, at most 40 shown) with their ids, the count and the total.", shape(*picking)),
+        Ai.Tool("totals", "Adds up the matching entries: the total and count, and the same per group when group_by is given. Use it for every sum.",
+            shape(*picking, "group_by" to JSONObject().put("type", "string").put("enum", JSONArray(listOf("category", "person", "type", "month", "item"))))),
+        Ai.Tool("balances", "What each person owes or is owed (all time) and the cash in hand.", shape()),
+        Ai.Tool("add_entries", "Saves new entries.", shape(
+            "entries" to JSONObject().put("type", "array").put("items", shape(
+                "type" to JSONObject().put("type", "string").put("enum", JSONArray(listOf("expense", "income", "lent", "borrowed", "received_back", "paid_back"))),
+                "amount" to number("Exactly as said"),
+                "category" to JSONObject().put("type", "string").put("enum", JSONArray(EXPENSE_CATS.map { it.label })).put("description", "For an expense"),
+                "item" to text("1-3 words, e.g. Petrol"),
+                "person" to text("The other person, saved spelling if it matches; needed for lent, borrowed, received_back, paid_back"),
+                "note" to text("Any extra detail"),
+                "date" to text("YYYY-MM-DD when a day was said, else leave out (today)"),
+                required = listOf("type", "amount")
+            )), required = listOf("entries"))),
+        Ai.Tool("update_entries", "Changes saved entries (ids from find_entries); only the fields given change.", shape(
+            "ids" to words("Entry ids"),
+            "set" to shape("amount" to number("New amount"), "item" to text("New item"), "category" to text("New expense category"),
+                "person" to text("New person"), "note" to text("New note"), "date" to text("New day, YYYY-MM-DD"),
+                "type" to JSONObject().put("type", "string").put("enum", JSONArray(TYPES.keys.toList()))),
+            required = listOf("ids", "set"))),
+        Ai.Tool("delete_entries", "Moves saved entries to Trash (ids from find_entries); the person can restore them.", shape("ids" to words("Entry ids"), required = listOf("ids")))
+    )
+
+    /** The same for every message, so the provider can cache it; today's date and the saved names go with the message. */
+    fun system(currency: String) = """
+        You run a ledger and expense app for its owner through the tools. Currency: ${currency.ifBlank { "none shown" }}.
+        People write Roman Urdu, Urdu or Hindi script, or English, often misspelled or heard from voice.
+        - Do what is asked with the tools, then answer in one or two short sentences, in the person's language and style
+          (English gets English, Roman Urdu gets Roman Urdu). Plain text only: no tables, no markdown.
+        - Every amount, total, count or balance you state must come from a tool result of this turn. Never add up or
+          guess money yourself: ask the totals tool. You may list at most 10 entries, one short line each.
+        - New money ("chai 50", "Ali ko 500 diye", "kal salary 3000 aayi") is add_entries, amounts exactly as said.
+          lent = gave a loan or paid someone on credit; borrowed = took one; received_back / paid_back = a loan returning.
+          Use the saved name that sounds closest; a new name keeps the spelling that reads most like a real name.
+        - To change or delete, first find_entries for the ids. When it is clear which entries are meant, do it without
+          asking again; when it is not, ask one short question instead of guessing. Deleted entries go to Trash.
+        - "is mahine" is the 1st of this month to today, "kal" yesterday, "aaj tak" / "ab tak" all time (no dates).
+        - A greeting or small talk: answer briefly, no tools. You only know this app; for anything else say so shortly.
+    """.trimIndent()
+
+    /**
+     * Lets the AI work until it answers (at most 8 rounds); null when the provider failed (see [Ai.lastError]).
+     * [onMain] runs a tool where the app's data may be changed.
+     */
+    fun run(said: String, recent: String, host: Host, now: Long = System.currentTimeMillis(), onMain: (() -> String) -> String = { it() }): Answer? = runCatching {
+        val added = mutableListOf<String>()
+        val names = host.names().take(80)
+        val messages = Ai.opening(
+            "Now: " + timeFmt.format(Date(now)) + " (" + SimpleDateFormat("EEEE", Locale.US).format(Date(now)) + ")\n" +
+                (if (names.isEmpty()) "" else "Saved names: " + names.joinToString(", ") + "\n") +
+                (if (recent.isBlank()) "" else "Conversation so far:\n" + recent.takeLast(1200) + "\n") +
+                "Message: " + said.take(600)
+        )
+        val system = system(host.currency)
+        for (round in 1..8) {
+            val step = Ai.step(system, tools, messages) ?: return@runCatching null
+            if (step.calls.isEmpty()) return@runCatching Answer(step.text.ifBlank { "Done." }, added)
+            Ai.results(messages, step.calls.map { c ->
+                c to onMain { runCatching { use(c.name, c.input, host, now, added) }.getOrElse { JSONObject().put("error", it.message ?: "failed").toString() } }
+            })
+        }
+        Ai.lastError = "too many steps"
+        null
+    }.getOrElse { Ai.lastError = it.message ?: "no internet"; null }
+
+    /** Runs one tool on the app's data and gives its result as JSON text; ids of entries it saved are noted in [added]. */
+    fun use(name: String, input: JSONObject, host: Host, now: Long, added: MutableList<String> = mutableListOf()): String = when (name) {
+        "find_entries" -> {
+            val list = pick(input, host, now)
+            JSONObject().put("count", list.size).put("total", list.sumOf { it.amount })
+                .put("entries", JSONArray(list.take(40).map(::show))).put("not_shown", (list.size - 40).coerceAtLeast(0)).toString()
+        }
+        "totals" -> {
+            val list = pick(input, host, now)
+            val out = JSONObject().put("count", list.size).put("total", list.sumOf { it.amount })
+            val by: ((Entry) -> String)? = when (input.optString("group_by")) {
+                "category" -> { e -> e.category.label }
+                "person" -> { e -> e.person.ifBlank { "(no person)" } }
+                "type" -> { e -> typeName(e.type) }
+                "month" -> { e -> SimpleDateFormat("yyyy-MM", Locale.US).format(Date(e.date)) }
+                "item" -> { e -> e.item.ifBlank { e.category.label } }
+                else -> null
+            }
+            if (by != null) out.put("groups", JSONArray(list.groupBy(by).map { (k, l) -> JSONObject().put("name", k).put("total", l.sumOf { it.amount }).put("count", l.size) }
+                .sortedByDescending { it.getDouble("total") }.take(40)))
+            out.toString()
+        }
+        "balances" -> {
+            val all = host.entries()
+            val people = all.filter { it.person.isNotBlank() }.groupBy { it.person.trim().lowercase() }
+                .map { (_, l) -> l.first().person.trim() to l.sumOf { personEffect(it) } }.filter { kotlin.math.abs(it.second) > 0.5 }
+            JSONObject().put("cash_in_hand", all.filter(::cashIn).sumOf { it.amount } - all.filter(::cashOut).sumOf { it.amount })
+                .put("people", JSONArray(people.sortedByDescending { kotlin.math.abs(it.second) }.take(60).map { (n, b) ->
+                    JSONObject().put("name", n).put("amount", kotlin.math.abs(b)).put("means", if (b > 0) "owes the owner" else "the owner owes them")
+                })).toString()
+        }
+        "add_entries" -> {
+            val list = input.optJSONArray("entries") ?: JSONArray()
+            val fresh = (0 until list.length()).map { make(list.getJSONObject(it), now, it) }
+            host.add(fresh)
+            added += fresh.map { it.id }
+            JSONObject().put("saved", fresh.size).put("entries", JSONArray(fresh.map(::show))).toString()
+        }
+        "update_entries" -> {
+            val ids = strings(input, "ids").toSet()
+            val set = input.optJSONObject("set") ?: JSONObject()
+            val changed = host.entries().filter { it.id in ids }.map { e ->
+                var x = Query.change(e, listOf("amount", "date", "person", "item", "note").filter { set.has(it) }.associateWith { set.get(it).toString() })
+                TYPES[set.optString("type").lowercase()]?.let { t -> x = x.copy(type = t) }
+                Cat.entries.firstOrNull { it.label.equals(set.optString("category").trim(), true) }?.let { c -> x = x.copy(category = c) }
+                x
+            }
+            host.update(changed)
+            JSONObject().put("changed", changed.size).put("entries", JSONArray(changed.take(40).map(::show))).toString()
+        }
+        "delete_entries" -> {
+            val ids = strings(input, "ids").toSet().intersect(host.entries().map { it.id }.toSet())
+            host.trash(ids)
+            JSONObject().put("moved_to_trash", ids.size).toString()
+        }
+        else -> JSONObject().put("error", "no such tool").toString()
+    }
+
+    private fun strings(o: JSONObject, key: String) = o.optJSONArray(key)?.let { a -> (0 until a.length()).map { a.optString(it).trim() } }.orEmpty().filter { it.isNotBlank() }
+
+    private fun typeName(t: Type) = TYPES.entries.firstOrNull { it.value == t }?.key ?: t.label
+
+    /** An entry as the AI sees it. */
+    private fun show(e: Entry) = JSONObject().put("id", e.id).put("type", typeName(e.type)).put("amount", e.amount).put("category", e.category.label)
+        .put("item", e.item).put("person", e.person).put("note", e.note.take(80)).put("date", dayFmt.format(Date(e.date))).put("added", timeFmt.format(Date(e.createdAt)))
+
+    /** The saved entries a tool's filter picks, newest first. */
+    private fun pick(o: JSONObject, host: Host, now: Long): List<Entry> {
+        fun day(key: String, end: Boolean) = runCatching { dayFmt.parse(o.optString(key).trim())!!.time + if (end) 86_400_000L - 1 else 0 }.getOrNull()
+        fun amount(key: String) = if (o.has(key)) o.optDouble(key).takeIf { !it.isNaN() } else null
+        val f = Query.Filter(
+            from = day("from", false), to = day("to", true), types = strings(o, "types").mapNotNull { TYPES[it.lowercase()] }.toSet(),
+            persons = strings(o, "persons"), cats = strings(o, "categories").mapNotNull { n -> Cat.entries.firstOrNull { it.label.equals(n, true) } }.toSet(),
+            items = strings(o, "words").map { it.lowercase() }, min = amount("min_amount"), max = amount("max_amount"),
+            last = o.optInt("last", 0).coerceIn(0, 500),
+            createdFrom = amount("added_in_last_minutes")?.takeIf { it > 0 }?.let { now - (it * 60_000).toLong() }
+        )
+        return Query.select(host.entries(), f).sortedByDescending { it.date }
+    }
+
+    /** A new entry from the AI's fields; a bad one throws, and the AI is told. */
+    private fun make(o: JSONObject, now: Long, i: Int): Entry {
+        val type = TYPES[o.optString("type").trim().lowercase()]?.takeIf { it != Type.SALE && it != Type.PURCHASE } ?: error("unknown type")
+        val amount = o.optDouble("amount", 0.0)
+        if (amount.isNaN() || amount <= 0.0) error("amount must be above 0")
+        val person = o.optString("person").trim()
+        if (type != Type.KHARCHA && type != Type.AAMDANI && person.isBlank()) error("person is needed for $type")
+        val category = when (type) {
+            Type.KHARCHA -> Cat.entries.firstOrNull { it.label.equals(o.optString("category").trim(), true) } ?: Cat.OTHER
+            Type.AAMDANI -> Cat.TANKHWAH
+            else -> Cat.UDHAAR
+        }
+        // A said day keeps the current time of day, so the entries of one message stay in order.
+        val day = runCatching { dayFmt.parse(o.optString("date").trim())!!.time }.getOrNull()
+        val date = if (day == null) now else day + (now - dayFmt.parse(dayFmt.format(Date(now)))!!.time)
+        return Entry(
+            id = "e" + System.nanoTime() + i, type = type, amount = amount, category = category,
+            item = o.optString("item").trim().take(40).replaceFirstChar { it.uppercase() }.ifBlank { category.label },
+            person = person.take(40), note = o.optString("note").trim().take(120), date = date + i, createdAt = now + i
+        )
+    }
+}

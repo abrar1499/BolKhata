@@ -53,7 +53,9 @@ object Groq {
           "kahan kahan laga" is "is mahine ka expense report" and "detail batao" is "is mahine ki expense entries".
           "aaj tak" / "ab tak" means all time ("all time expense"), not only today. Use simple Roman Urdu/English like: "chai 50", "Ali ko 500
           diye", "is mahine food kitna", "19 aug se aaj tak expense", "Ali ka khata", "cashbook", "expense report",
-          "last 5 entries", "2800 wali entry", "petrol 50 nahi 40 tha", "other me kitni entries". Keep every number
+          "last 5 entries", "2800 wali entry", "petrol 50 nahi 40 tha", "other me kitni entries",
+          "last 20 minutes me add ki entries delete karo" (entries by when they were entered: keep the
+          minutes or hours in the command and leave "query" null). Keep every number
           exactly and use the matching saved name. Leave "reply" empty: the app answers from its own records.
         - Always add "standalone": true when the message means the same without the conversation ("pichle mahine
           kitna kharcha", "chai 50"), false when it leans on it ("income kya thi", "detail do", "aur food?").

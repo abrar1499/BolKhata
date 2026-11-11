@@ -314,6 +314,10 @@ object NativeChatEngine {
             return if (f.isEmpty) chat("Which entries should I delete? Say a name, item or date.")
             else Fixed("", "delete", "", filter = f)
         }
+        // "last 20 mint me add ki", "pichle 2 ghante ki entries dikhao": what was entered lately is a list, not a new entry of 20.
+        if (Regex("""\b\d+\s*(minute|minutes|mint|mints|min|mins|hour|hours|hr|hrs|ghante|ghanta|ghantay|ghanty)\b""").containsMatchIn(lower) &&
+            has(words, setOf("add", "added", "dali", "daali", "dala", "entry", "entries", "entery", "enteries")))
+            return Fixed("", "ask", "", "list", buildFilter(text, contacts, now, false))
 
         if (lower.contains("how are you") || lower.contains("what can you do") ||
             has(words, setOf("hello", "hi", "hey", "salam", "assalam", "thanks", "thank", "bye", "goodbye"))) {
@@ -665,7 +669,12 @@ object NativeChatEngine {
             .filter { it !in setOf(Cat.TANKHWAH, Cat.UDHAAR, Cat.SALES, Cat.STOCK) || types.isEmpty() }.toSet()
         val people = contacts.filter { it.isNotBlank() && lower.contains(it.lowercase()) }.distinctBy { it.lowercase() }
             .ifEmpty { Understand.matchContact(w, contacts).first?.let { listOf(it) }.orEmpty() }
-        val last = Regex("""\b(?:last|latest|recent)\s+(\d+)\b""").find(lower)?.groupValues?.get(1)?.toIntOrNull()
+        // "last 20 minute me add ki", "abhi 1 ghante me jitni entries dali": by when they were entered, not their date.
+        val ago = Regex("""\b(\d+)\s*(minute|minutes|mint|mints|min|mins|hour|hours|hr|hrs|ghante|ghanta|ghantay|ghanty)\b""").find(lower)
+        val createdFrom = ago?.let { now - it.groupValues[1].toLong() * (if (it.groupValues[2].startsWith("m")) 60_000L else 3_600_000L) }
+        val agoWords = setOf("minute", "minutes", "mint", "mints", "min", "mins", "hour", "hours", "hr", "hrs", "ghante", "ghanta", "ghantay", "ghanty",
+            "add", "added", "dal", "dali", "daali", "dala", "dalin", "jitni", "jitne", "abi", "abhi", "entery", "enteries", "entries", "sirf", "only", "jo", "pichle", "pichlay")
+        val last = if (ago != null) 0 else Regex("""\b(?:last|latest|recent)\s+(\d+)\b""").find(lower)?.groupValues?.get(1)?.toIntOrNull()
             ?: if (Regex("""\b(last|latest|recent)\s+(entry|record|transaction)\b""").containsMatchIn(lower)) 1 else 0
         val range = Regex("""\bbetween\s+(\d[\d,]*(?:\.\d{1,2})?)\s+and\s+(\d[\d,]*(?:\.\d{1,2})?)\b""").find(lower)
         // "2800 wali entry", "2800 riyal wali": that amount (a day before a month name is a date, not an amount).
@@ -683,12 +692,12 @@ object NativeChatEngine {
         val knownTypes = expense + income + lent + borrowed
         val itemAliases = setOf("petrol", "diesel", "taxi", "uber", "careem", "chai", "tea", "coffee", "milk", "doodh", "lunch", "breakfast", "dinner", "roti", "biryani", "bread", "water", "pani", "recharge")
         val itemWords = w.filter { it.length >= 2 && it !in stop && (it !in knownCats || it in itemAliases) && it !in knownTypes &&
-            it !in personWords && it !in exclude && it.none(Char::isDigit) }.distinct().take(6)
+            it !in personWords && it !in exclude && it.none(Char::isDigit) && (ago == null || it !in agoWords) }.distinct().take(6)
         val noPeople = lower.contains("people ke ilawa") || lower.contains("people kay ilawa") ||
             lower.contains("without transfers") || lower.contains("excluding people")
         return Query.Filter(
             from = bounds?.from, to = bounds?.to, types = types, persons = people, cats = cats, items = itemWords,
-            min = min, max = max, last = last, noPeople = noPeople, notItems = exclude
+            min = min, max = max, last = last, noPeople = noPeople, notItems = exclude, createdFrom = createdFrom
         )
     }
 
