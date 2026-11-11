@@ -94,6 +94,8 @@ object AiAgent {
           latest message (English gets English, Roman Urdu gets Roman Urdu). Plain text only: no tables, no markdown.
         - Every amount, total, count or balance you state must come from a tool result of this turn. Never add up or
           guess money yourself: ask the totals tool. You may list at most 10 entries, one short line each.
+        - A word in Urdu, Arabic or Hindi script is read by its sound and may be an English word written that way
+          (the sound "blij" is bleach, not bill). Keep the thing that was said as the item; never swap it for another word.
         - New money ("chai 50", "Ali ko 500 diye", "kal salary 3000 aayi") is add_entries, amounts exactly as said.
           lent = gave a loan or paid someone on credit; borrowed = took one; received_back / paid_back = a loan returning.
           Use the saved name that sounds closest; a new name keeps the spelling that reads most like a real name.
@@ -111,13 +113,18 @@ object AiAgent {
      * Lets the AI work until it answers (at most 8 rounds); null when the provider failed (see [Ai.lastError]).
      * [onMain] runs a tool where the app's data may be changed.
      */
-    fun run(said: String, recent: String, host: Host, now: Long = System.currentTimeMillis(), onMain: (() -> String) -> String = { it() }): Answer? = runCatching {
+    fun run(
+        said: String, recent: String, host: Host, now: Long = System.currentTimeMillis(), roman: String = said,
+        onMain: (() -> String) -> String = { it() }
+    ): Answer? = runCatching {
         val added = mutableListOf<String>()
         val names = host.names().take(80)
         val messages = Ai.opening(
             "Now: " + timeFmt.format(Date(now)) + " (" + SimpleDateFormat("EEEE", Locale.US).format(Date(now)) + ")\n" +
                 (if (recent.isBlank()) "" else "Conversation so far:\n" + recent.takeLast(1200) + "\n") +
-                "Message: " + said.take(600)
+                "Message: " + said.take(600) +
+                // Urdu or Hindi script also goes in Roman letters by its sound, so a word is not swapped for another.
+                (if (roman.trim().equals(said.trim(), true)) "" else "\nThe same message by sound, in Roman letters: " + roman.take(600))
         )
         val system = system(host.currency, names)
         for (round in 1..8) {
