@@ -1062,6 +1062,8 @@ fun SideScreen(
     val newest = remember(entries) { entries.sortedByDescending { it.date } }
     val per = remember(period, newest) { Period.decode(period) ?: Period.newestMonth(newest) }
     val inPer = { ms: Long -> per.has(ms) }
+    // A saved entry opens in the same sheet it was added with; other kinds keep the full form.
+    val edit: (Entry) -> Unit = { e -> editReq(e, listOfNotNull(bookName, kidName).joinToString(" › "))?.let { sheet = it } ?: onEdit(e) }
     val upKid = { kidName = null; if (leave != null) { bookName = null; leave() } }
     BackHandler(enabled = bookName != null) { if (personName != null) personName = null else if (kidName != null) upKid() else bookName = null }
     LaunchedEffect(kidName) { personName = null }
@@ -1130,7 +1132,7 @@ fun SideScreen(
                         }
                         val rows = pk.entries.map { e -> e to (if (income) listOf(0.0, e.amount) else listOf(e.amount, 0.0)) }
                         simpleLedger(if (income) listOf("" to ink, label to ink) else listOf(label to ink, "" to ink),
-                            listOf(if (income) 0.0 else pk.total, if (income) pk.total else 0.0), rows, ::personLine, onEdit)
+                            listOf(if (income) 0.0 else pk.total, if (income) pk.total else 0.0), rows, ::personLine, edit)
                     }
                 }
                 book != null && kidName != null -> {
@@ -1161,13 +1163,13 @@ fun SideScreen(
                     if (book.people) {
                         val (plus, minus) = Sides.columns(book)
                         val rows = kid.entries.map { e -> e to (if (personEffect(e) > 0) listOf(e.amount, 0.0) else listOf(0.0, e.amount)) }
-                        simpleLedger(listOf(plus to RedSpend, minus to GreenIn), listOf(rows.sumOf { it.second[0] }, rows.sumOf { it.second[1] }), rows, ::personLine, onEdit)
+                        simpleLedger(listOf(plus to RedSpend, minus to GreenIn), listOf(rows.sumOf { it.second[0] }, rows.sumOf { it.second[1] }), rows, ::personLine, edit)
                     } else {
                         val rows = kid.entries.map { e -> e to (if (income) listOf(0.0, e.amount) else listOf(e.amount, 0.0)) }
                         val label = if (income) "In" else "Out"
                         val cols = if (income) listOf("" to ink, label to ink) else listOf(label to ink, "" to ink)
                         simpleLedger(cols, listOf(if (income) 0.0 else kid.total, if (income) kid.total else 0.0), rows,
-                            { e -> e.note.ifBlank { label } }, onEdit, per.label())
+                            { e -> e.note.ifBlank { label } }, edit, per.label())
                         if (rows.isEmpty()) emptyNote("Nothing in this period.")
                     }
                 }
@@ -1323,7 +1325,12 @@ fun SideScreen(
             NamePopup("Add in ${book?.name}", if (book?.people == true) "Name" else "Name (e.g. Groceries)", onDismiss = { adding = null }, picks = picks, onSave = done)
         }
     }
-    sheet?.let { r -> AddSheet(r, entries, onDismiss = { sheet = null }) { e -> onSave(e); sheet = null } }
+    sheet?.let { r ->
+        AddSheet(r, entries, onDismiss = { sheet = null }, onDelete = { onDeleteEntries(r.template.note.ifBlank { r.label }, setOf(r.template.id)) {}; sheet = null }) { e ->
+            if (r.edit) onUpdate(listOf(e)) else onSave(e)
+            sheet = null
+        }
+    }
     /** The owner's saved account that is [b] (none for Food, Staff… read from the entries). */
     fun sameBook(it: Book, b: Book) = it.name.equals(b.name, true) && it.people == b.people && (b.people || it.side == side)
     val ready = listOf(Sides.CUSTOMERS, Sides.SUPPLIERS, Sides.STAFF, Sides.PEOPLE)
@@ -1534,7 +1541,25 @@ internal fun NamePopup(title: String, hint: String, onDismiss: () -> Unit, picks
 
 /** What an add button opens: the blank entry, its word (Out, Paid, Work…), colour, where it goes, and whether it takes goods. */
 /** What the add sheet saves: [template] (goods when [goods]); with [money], a Goods | Money switch saves that cash entry instead. */
-private class AddReq(val template: Entry, val label: String, val color: Color, val crumb: String, val goods: Boolean, val money: Entry? = null)
+private class AddReq(val template: Entry, val label: String, val color: Color, val crumb: String, val goods: Boolean, val money: Entry? = null,
+    /** [template] is a saved entry being changed: the sheet opens filled, and Save keeps its id. */
+    val edit: Boolean = false)
+
+/** The add sheet opened on a saved entry, so changing looks the same as adding; null for kinds the sheet does not make. */
+private fun editReq(e: Entry, crumb: String): AddReq? {
+    val (label, color) = when (e.type) {
+        Type.PURCHASE -> "Work" to OweButton
+        Type.SALE -> "Given" to OweButton
+        Type.DIYA -> "Paid" to RedSpend
+        Type.WAPIS_MILA -> "Received" to GreenIn
+        Type.KHARCHA -> "Out" to RedSpend
+        Type.AAMDANI -> "In" to GreenIn
+        else -> return null
+    }
+    // Qty and rate show only when they make the saved amount; else the amount itself is changed.
+    val made = if (e.unit == "1000") e.qty / 1000 * e.rate else e.qty * e.rate
+    return AddReq(e, label, color, crumb, goods = isTrade(e.type) && e.qty > 0 && kotlin.math.abs(made - e.amount) < 0.01, edit = true)
+}
 
 private val sheetDay = SimpleDateFormat("dd/MM/yyyy", Locale.US)
 private val sheetTime = SimpleDateFormat("h:mm a", Locale.US)
@@ -1544,15 +1569,16 @@ private val sheetTime = SimpleDateFormat("h:mm a", Locale.US)
  * note, date and time, and Save in the kind's colour. A rate "per 1000" (bricks) counts thousands.
  */
 @Composable
-private fun AddSheet(r: AddReq, all: List<Entry>, onDismiss: () -> Unit, onSave: (Entry) -> Unit) {
+private fun AddSheet(r: AddReq, all: List<Entry>, onDismiss: () -> Unit, onDelete: () -> Unit = {}, onSave: (Entry) -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    var amount by remember { mutableStateOf("") }
-    var note by remember { mutableStateOf("") }
-    var item by remember { mutableStateOf("") }
-    var qty by remember { mutableStateOf("") }
-    var rate by remember { mutableStateOf("") }
-    var per1000 by remember { mutableStateOf(false) }
-    var date by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    val old = r.template.takeIf { r.edit }
+    var amount by remember { mutableStateOf(old?.let { plain(it.amount) }.orEmpty()) }
+    var note by remember { mutableStateOf(old?.note.orEmpty()) }
+    var item by remember { mutableStateOf(old?.item.orEmpty()) }
+    var qty by remember { mutableStateOf(old?.takeIf { r.goods }?.let { plain(it.qty) }.orEmpty()) }
+    var rate by remember { mutableStateOf(old?.takeIf { r.goods }?.let { plain(it.rate) }.orEmpty()) }
+    var per1000 by remember { mutableStateOf(old?.unit == "1000") }
+    var date by remember { mutableLongStateOf(old?.date ?: System.currentTimeMillis()) }
     var cash by remember { mutableStateOf(false) }
     val goods = r.goods && !cash
     val out = isOut(r.template.type)
@@ -1569,7 +1595,7 @@ private fun AddSheet(r: AddReq, all: List<Entry>, onDismiss: () -> Unit, onSave:
         Column(Modifier.padding(16.dp).navigationBarsPadding().imePadding()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("+ ${r.label}", fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
+                    Text((if (r.edit) "" else "+ ") + r.label, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
                     Text(r.crumb, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Box(Modifier.size(28.dp).shadow(1.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.surface).clickable { onDismiss() }, contentAlignment = Alignment.Center) { Text("✕", fontSize = 12.sp) }
@@ -1617,19 +1643,24 @@ private fun AddSheet(r: AddReq, all: List<Entry>, onDismiss: () -> Unit, onSave:
                 },
                 fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 10.dp)
             )
-            Box(
-                Modifier.padding(top = 12.dp).fillMaxWidth().height(42.dp).clip(RoundedCornerShape(12.dp)).background(r.color).clickable {
-                    if (total <= 0.0 || (goods && item.isBlank())) return@clickable
-                    val now = System.currentTimeMillis()
-                    val t = if (cash) r.money ?: r.template else r.template
-                    onSave(t.copy(
-                        id = "e" + System.nanoTime(), amount = total, note = note.trim(), date = date, createdAt = now,
-                        item = if (goods) Goods.canonical(item, known) else t.item,
-                        qty = if (goods) q else 0.0, rate = if (goods) rt else 0.0, unit = if (goods && per1000) "1000" else ""
-                    ))
-                },
-                contentAlignment = Alignment.Center
-            ) { Text("Save", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
+            Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (r.edit) Box(Modifier.width(96.dp).height(42.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surface).clickable { onDelete() },
+                    contentAlignment = Alignment.Center) { Text("Delete", color = RedSpend, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
+                Box(
+                    Modifier.weight(1f).height(42.dp).clip(RoundedCornerShape(12.dp)).background(r.color).clickable {
+                        if (total <= 0.0 || (goods && item.isBlank())) return@clickable
+                        val now = System.currentTimeMillis()
+                        val t = if (cash) r.money ?: r.template else r.template
+                        onSave(t.copy(
+                            id = old?.id ?: ("e" + System.nanoTime()), amount = total, note = note.trim(), date = date, createdAt = old?.createdAt ?: now,
+                            item = if (goods) Goods.canonical(item, known) else t.item,
+                            qty = if (goods) q else t.qty, rate = if (goods) rt else t.rate,
+                            unit = if (!goods) t.unit else if (per1000) "1000" else t.unit.takeIf { it != "1000" }.orEmpty()
+                        ))
+                    },
+                    contentAlignment = Alignment.Center
+                ) { Text("Save", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
+            }
         }
     }
 }
