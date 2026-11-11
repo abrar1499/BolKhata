@@ -283,6 +283,24 @@ object Normalizer {
         return Normalized(words.joinToString(" ").replace(Regex(" ([,;?!])"), "$1"), fixes)
     }
 
+    /**
+     * The language the phone should listen in: the one [picked] in the menu, else guessed from how the person writes
+     * ([typed], their latest messages): Urdu script is ur-PK, Hindi script and Roman Urdu are hi-IN (its hearing is then
+     * written in Roman letters), English or nothing typed yet is "" (the phone's own language).
+     */
+    fun voiceLanguage(picked: String, typed: List<String>): String {
+        if (picked.isNotBlank()) return picked
+        val styles = typed.takeLast(12).filter { it.isNotBlank() }.map { t ->
+            when {
+                t.any { it in '\u0600'..'\u06FF' } -> "ur-PK"
+                t.any { it in '\u0900'..'\u097F' } -> "hi-IN"
+                NativeChatEngine.isEnglish(t) -> ""
+                else -> "hi-IN"
+            }
+        }
+        return styles.groupingBy { it }.eachCount().maxByOrNull { it.value }?.key.orEmpty()
+    }
+
     /** Words the phone's voice often writes wrongly, as the person meant them ("cal" for kal, "int" for eint). */
     private val voiceWords = mapOf(
         "cal" to "kal", "int" to "eint", "ent" to "eint", "eent" to "eint", "aint" to "eint",

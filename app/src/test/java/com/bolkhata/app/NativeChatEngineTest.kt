@@ -845,6 +845,17 @@ class ParserShampooSpellingTest {
 
 /** What the phone's voice writes wrongly is fixed before the chat reads it; typed text is left alone. */
 class VoiceFixTest {
+    @Test fun thePhoneListensInTheLanguageThePersonWrites() {
+        // Picked in the menu: that one, whatever was typed.
+        assertEquals("ur-PK", Normalizer.voiceLanguage("ur-PK", listOf("what did I spend this month")))
+        // Auto: Roman Urdu is heard as Hindi (written back in Roman letters), Urdu script as Urdu.
+        assertEquals("hi-IN", Normalizer.voiceLanguage("", listOf("chai 50", "hamid ko 500 diye", "is mahine kitna kharcha hua")))
+        assertEquals("ur-PK", Normalizer.voiceLanguage("", listOf("چائے 50", "حامد کو 500 دیے")))
+        // English, or nothing typed yet: the phone's own language.
+        assertEquals("", Normalizer.voiceLanguage("", listOf("how much did I spend this month", "show my last 5 entries")))
+        assertEquals("", Normalizer.voiceLanguage("", emptyList()))
+    }
+
     @Test fun usualMishearingsAreFixed() {
         assertEquals("kal Subah nashta Kiya 10 Riyal ka", Normalizer.voiceFix("cal Subah nashta Kiya 10 Riyal ka"))
         assertEquals("Adnan ko 50000 awal eint bechi", Normalizer.voiceFix("Adnan ko 50000 aval int bechi"))

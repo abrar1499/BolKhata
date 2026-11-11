@@ -1631,6 +1631,8 @@ fun App(
     var voiceMisses by remember { mutableIntStateOf(0) }
     // Set when the phone has no recognizer for the chosen language; voice chat then uses the phone's default.
     var voiceDefaultLanguage by remember { mutableStateOf(false) }
+    /** The language to listen in: the one picked, else guessed from how the person writes (see Normalizer.voiceLanguage). */
+    fun voiceLang() = Normalizer.voiceLanguage(lang, chatMessages.filter { it.isUser }.map { it.text })
     val ttsReady = remember { mutableStateOf(false) }
     val tts = remember {
         android.speech.tts.TextToSpeech(context) { status -> ttsReady.value = status == android.speech.tts.TextToSpeech.SUCCESS }
@@ -1812,7 +1814,7 @@ fun App(
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             // No "prefer offline": when the offline model for this language is missing that made every attempt fail
             // silently and voice chat sat on "Listening…". Android now uses whichever recognizer it has.
-            if (!voiceDefaultLanguage && lang.isNotBlank()) putExtra(RecognizerIntent.EXTRA_LANGUAGE, lang)
+            if (!voiceDefaultLanguage && voiceLang().isNotBlank()) putExtra(RecognizerIntent.EXTRA_LANGUAGE, voiceLang())
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
             // Give the person time to finish a long story before it stops listening.
@@ -2174,10 +2176,16 @@ fun App(
 
         val i = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            if (lang.isNotBlank()) {
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, lang)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, lang)
+            val listenIn = voiceLang()
+            if (listenIn.isNotBlank()) {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, listenIn)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, listenIn)
+                // People mix languages in one sentence: Google's recognizer may also listen in these (it ignores this where it can't).
+                putExtra("android.speech.extra.EXTRA_ADDITIONAL_LANGUAGES", listOf("hi-IN", "ur-PK", "en-IN").filter { it != listenIn }.toTypedArray())
             }
+            // Time to finish a long sentence with several amounts before it stops listening.
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2500L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2000L)
             putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak now…")
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 10)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && hints.isNotEmpty()) {
