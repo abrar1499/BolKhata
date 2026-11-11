@@ -170,9 +170,13 @@ object AiAgent {
         for (round in 1..8) {
             val step = Ai.step(system, tools, messages) ?: return@runCatching null
             if (step.calls.isEmpty()) return@runCatching Answer(step.text.ifBlank { "Done." }, notes.added, notes.card, notes.listIds, notes.filter)
-            Ai.results(messages, step.calls.map { c ->
+            val done = step.calls.map { c ->
                 c to onMain { runCatching { use(c.name, c.input, host, now, notes) }.getOrElse { JSONObject().put("error", it.message ?: "failed").toString() } }
-            })
+            }
+            // Only asked to show a card, and it is shown: the chat shows the card, not the AI's closing sentence, so that step is not paid for.
+            if (step.calls.all { it.name == "show" } && notes.card.isNotBlank() && done.none { it.second.contains("\"error\"") })
+                return@runCatching Answer(step.text, notes.added, notes.card, notes.listIds, notes.filter)
+            Ai.results(messages, done)
         }
         Ai.lastError = "too many steps"
         null

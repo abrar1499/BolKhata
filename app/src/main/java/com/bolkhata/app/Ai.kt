@@ -124,9 +124,12 @@ object Ai {
         val p = provider(key) ?: return null
         val m = modelNow()
         if (p === CLAUDE) {
-            val req = JSONObject().put("model", m).put("max_tokens", 4000).put("system", system).put("messages", messages)
+            // A cache mark at the end of the instructions: the tools and instructions, the same for every message,
+            // are read back from the cache (a tenth of the price) by the next message too, not only by this one's later steps.
+            val req = JSONObject().put("model", m).put("max_tokens", 4000).put("messages", messages)
+                .put("system", JSONArray().put(JSONObject().put("type", "text").put("text", system).put("cache_control", JSONObject().put("type", "ephemeral"))))
                 .put("tools", JSONArray().apply { tools.forEach { put(JSONObject().put("name", it.name).put("description", it.description).put("input_schema", it.schema)) } })
-                // The instructions and tools are the same every time: cached, they cost a fraction on the next call.
+                // And one at the end of the conversation so far, for the later steps of the same message.
                 .put("cache_control", JSONObject().put("type", "ephemeral"))
             if (!m.contains("haiku-4") && !m.contains("sonnet-4-5")) req.put("output_config", JSONObject().put("effort", "low"))
             val fallback = listOf("claude-fable-5", "claude-opus-5", "claude-sonnet-5-5").any { m.startsWith(it) }
