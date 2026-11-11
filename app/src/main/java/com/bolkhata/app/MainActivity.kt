@@ -1,7 +1,6 @@
 package com.bolkhata.app
 
 import android.app.Activity
-import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
@@ -219,7 +218,6 @@ fun App(
     // The entries before a chat message was handled; what changes after that is reported in the chat.
     var chatWatch by remember { mutableStateOf<List<Entry>?>(null) }
     var chatSkippedDuplicates by remember { mutableIntStateOf(0) }
-    var voiceForChat by remember { mutableStateOf(false) }
     // The assistant's last reply as it should be spoken (voice conversation).
     var lastSpeech by remember { mutableStateOf("") }
     // Transactions read from an attached statement, receipt or bill, waiting to be ticked and added.
@@ -2208,20 +2206,13 @@ fun App(
         if (granted) beginCall() else micPermission.launch(android.Manifest.permission.RECORD_AUDIO)
     }
 
-    val voice = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
-        if (res.resultCode == Activity.RESULT_OK) {
-            val guesses = res.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS).orEmpty()
-            val said = bestVoiceGuess(guesses, res.data?.getFloatArrayExtra(RecognizerIntent.EXTRA_CONFIDENCE_SCORES))
-            if (said.isNotBlank()) {
-                keepHearings(guesses, said)
-                val fixed = Normalizer.voiceFix(said, voiceKnown())
-                if (voiceForChat) chatInput(fixed) else homeInput(fixed)
-            } else toast("Couldn't catch that. Tap the mic again and speak a little slower.")
-        }
-    }
+    // The phone's recogniser, heard inside the app: the words show in the chat bar while they are spoken (see Listener).
+    val listener = remember { Listener(context) }
+    var hearing by remember { mutableStateOf(false) }
+    var heardSoFar by remember { mutableStateOf("") }
+    DisposableEffect(Unit) { onDispose { listener.release() } }
 
     fun startVoice(forChat: Boolean = false) {
-        voiceForChat = forChat
         if (whisperOn()) {
             startRecording(
                 // With the AI reading it, the words go as heard: the AI does the fixing, with the saved names in view.
@@ -2230,41 +2221,24 @@ fun App(
             )
             return
         }
-        // Words the phone should expect: the person's people and goods first, then the words people say most.
-        val hints = buildList {
-            addAll(voiceKnown())
-            addAll(entries.take(30).flatMap { listOf(it.item, it.person) })
-            addAll(listOf(
-                "kal", "aaj", "parson", "subah", "shaam", "raat", "tarikh", "becha", "bechi", "diye", "liye", "mile", "wapis", "riyal", "rupay",
-                "kharcha", "aamdani", "pese", "paise", "payment", "receive", "received", "nahi mili",
-                "nahi hui", "stock", "sale", "purchase", "udhaar", "cash", "bank", "salary", "petrol",
-                "kiraya", "grocery", "entry", "last entry", "pichli entry", "change entry", "badal do"
-            ))
-        }.map { it.trim() }.filter { it.length in 2..60 }.distinctBy { it.lowercase() }.take(100)
-
-        val i = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            val listenIn = voiceLang()
-            if (listenIn.isNotBlank()) {
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, listenIn)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, listenIn)
-                // People mix languages in one sentence: Google's recognizer may also listen in these (it ignores this where it can't).
-                putExtra("android.speech.extra.EXTRA_ADDITIONAL_LANGUAGES", listOf("hi-IN", "ur-PK", "en-IN").filter { it != listenIn }.toTypedArray())
-            }
-            // Time to finish a long sentence with several amounts before it stops listening.
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2500L)
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2000L)
-            putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak now…")
-            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 10)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && hints.isNotEmpty()) {
-                putExtra(RecognizerIntent.EXTRA_BIASING_STRINGS, ArrayList(hints))
-            }
+        if (!android.speech.SpeechRecognizer.isRecognitionAvailable(context)) { toast("Google voice not found. Update the Google app from Play Store."); return }
+        val granted = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (!granted) { recordPermission.launch(android.Manifest.permission.RECORD_AUDIO); return }
+        heardSoFar = ""
+        listener.onListening = { hearing = it }
+        listener.onPartial = { heardSoFar = runCatching { Translit.toRoman(it) }.getOrDefault(it) }
+        listener.onLevel = { voiceLevel = it }
+        listener.onError = { toast(it) }
+        listener.onFinal = { said ->
+            keepHearings(listOf(said), said)
+            // With the AI reading it, the words go as heard; else the app's own voice fixes come first.
+            val fixed = if (Ai.handles(groqKey)) said else Normalizer.voiceFix(said, voiceKnown())
+            if (forChat) chatInput(fixed) else homeInput(fixed)
         }
-        try {
-            voice.launch(i)
-        } catch (e: ActivityNotFoundException) {
-            toast("Google voice not found. Update the Google app from Play Store.")
-        }
+        // Outside the chat no bar shows the words: say that it listens.
+        if (!forChat) toast("Listening… speak now")
+        listener.start(voiceLang())
     }
 
     var updateMsg by remember { mutableStateOf<String?>(null) }
@@ -2421,7 +2395,8 @@ fun App(
                     InputBar(
                         onSend = { chatInput(it) }, onMic = { startVoice(forChat = true) }, placeholder = "Speak, type or ask…",
                         busy = chatLoading,
-                        voice = if (recorder != null) VoiceState(true, "Recording", "tap to send", level = voiceLevel) { finishRecording() } else null,
+                        voice = if (recorder != null) VoiceState(true, "Recording", "tap to send", level = voiceLevel) { finishRecording() }
+                            else if (hearing) VoiceState(true, "Listening", heardSoFar.ifBlank { "tap to send" }, level = voiceLevel) { listener.stop() } else null,
                         navPad = false
                     )
                     KhataNav(tab) { tab = it; backToChat = false; profitOpen = false; bizPage = false; bizNew = false }
