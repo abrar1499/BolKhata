@@ -83,7 +83,7 @@ object AiAgent {
                 "type" to JSONObject().put("type", "string").put("enum", JSONArray(listOf("expense", "income", "lent", "borrowed", "received_back", "paid_back", "sale", "work"))),
                 "amount" to number("Exactly as said; leave out for a sale or work with qty and rate (the app multiplies)"),
                 "qty" to number("How many, when said"),
-                "rate" to number("Price for one (or for 1000 when per_1000), for a sale or work"),
+                "rate" to number("Price for one (or for 1000 when per_1000), for a sale or work; leave out when not said (the app uses this person's last rate)"),
                 "per_1000" to JSONObject().put("type", "boolean").put("description", "True when the rate is per thousand"),
                 "unit" to text("kg, piece, bag... when said"),
                 "paid_now" to JSONObject().put("type", "boolean").put("description", "A sale or work settled in cash on the spot (not on credit)"),
@@ -144,7 +144,8 @@ object AiAgent {
         - Business: goods given to a customer on credit ("Nargis ko 200 shirts 350 ke hisaab se di") is type sale with
           person, item, qty and rate. Work done or goods supplied by a worker or supplier, to be paid for ("Hamid ne 500
           shirts silai ki 40 ke hisaab se"), is type work. The app multiplies qty by rate; per_1000 when the rate is per
-          thousand; paid_now when settled in cash on the spot. Money a customer pays later is received_back; money paid
+          thousand; paid_now when settled in cash on the spot. When no rate is said, save with qty and no rate: the
+          app uses the person's last rate. Never ask for a rate unless the tool says none is known. Money a customer pays later is received_back; money paid
           to a worker or supplier is lent. Profit, loss, sales, costs, net worth: the report tool.
           Use a saved name only when it is the same person (the same name, or a misspelling or short form of it). A
           saved name that joins two people ("A & B", "A and B") is its own account: a message naming only one of them
@@ -511,11 +512,16 @@ object AiAgent {
         val type = TYPES[o.optString("type").trim().lowercase()] ?: error("unknown type")
         val goods = type == Type.SALE || type == Type.PURCHASE
         val qty = o.optDouble("qty", 0.0).takeIf { !it.isNaN() && it > 0 } ?: 0.0
-        val rate = o.optDouble("rate", 0.0).takeIf { !it.isNaN() && it > 0 } ?: 0.0
-        val per1000 = goods && o.optBoolean("per_1000", false)
-        val amount = if (goods && qty > 0 && rate > 0) (if (per1000) qty / 1000 * rate else qty * rate) else o.optDouble("amount", 0.0)
-        if (amount.isNaN() || amount <= 0.0) error("amount (or qty and rate) is needed")
         val person = o.optString("person").trim()
+        val said = o.optDouble("rate", 0.0).takeIf { !it.isNaN() && it > 0 } ?: 0.0
+        // No rate said: the last one for this item and person, else the person's last of this kind ("same as before").
+        val before = if (!goods || qty <= 0 || said > 0 || o.optDouble("amount", 0.0) > 0) null
+            else Goods.lastRate(o.optString("item"), person, type == Type.PURCHASE, host.entries())
+                ?: host.entries().filter { it.type == type && it.rate > 0 && person.isNotBlank() && it.person.equals(person, true) }.maxByOrNull { it.date }
+        val rate = before?.rate ?: said
+        val per1000 = goods && (before?.let { it.unit == "1000" } ?: o.optBoolean("per_1000", false))
+        val amount = if (goods && qty > 0 && rate > 0) (if (per1000) qty / 1000 * rate else qty * rate) else o.optDouble("amount", 0.0)
+        if (amount.isNaN() || amount <= 0.0) error(if (goods && qty > 0) "no rate is known for this yet: ask the person for the rate" else "amount (or qty and rate) is needed")
         if (type != Type.KHARCHA && type != Type.AAMDANI && person.isBlank() && !(goods && o.optBoolean("paid_now", false))) error("person is needed for " + o.optString("type"))
         val category = when (type) {
             Type.KHARCHA -> Cat.entries.firstOrNull { it.label.equals(o.optString("category").trim(), true) } ?: Cat.OTHER

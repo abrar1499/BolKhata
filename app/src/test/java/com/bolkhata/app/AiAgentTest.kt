@@ -3,6 +3,7 @@ package com.bolkhata.app
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** The tools the AI works the app with: they act on the saved entries, and the app does the sums. */
@@ -143,6 +144,21 @@ class AiAgentTest {
         val out = JSONObject(AiAgent.use("show", JSONObject("""{"view": "list", "persons": ["Nobody Here"]}"""), host, now, notes))
         assertEquals(false, out.getBoolean("shown_to_the_person"))
         assertEquals("", notes.card)
+    }
+
+    @Test
+    fun workWithNoRateSaidTakesThePersonsLastRate() {
+        setup = SideSetup(people = mapOf("Hamid Akram" to Sides.STAFF))
+        // Nothing done before: the AI is told to ask for the rate.
+        assertTrue(runCatching { AiAgent.use("add_entries", JSONObject("""{"entries": [{"type": "work", "person": "Hamid Akram", "item": "stitching", "qty": 3000}]}"""), host, now) }.isFailure)
+        use("add_entries", """{"entries": [{"type": "work", "person": "Hamid Akram", "item": "stitching", "qty": 5000, "rate": 400, "per_1000": true}]}""")
+        // The same work again, and other work by the same person, with only a quantity: the last rate, per thousand.
+        val notes = AiAgent.Notes()
+        AiAgent.use("add_entries", JSONObject("""{"entries": [{"type": "work", "person": "Hamid Akram", "item": "stitching", "qty": 3000},
+            {"type": "work", "person": "Hamid Akram", "item": "cutting", "qty": 2000}]}"""), host, now, notes)
+        val made = saved.filter { it.id in notes.added }.sortedByDescending { it.amount }
+        assertEquals(listOf(1_200.0, 800.0), made.map { it.amount })
+        assertEquals(listOf("1000", "1000"), made.map { it.unit })
     }
 
     @Test
