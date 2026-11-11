@@ -2573,7 +2573,8 @@ fun App(
                                 ?.let { store.aiLearned = store.aiLearned - it.toSet() }
                             moveToTrash(ids.toSet())
                         },
-                        onEditEntry = { editing = it },
+                        // A saved row opens its person's account; one without a person opens to change.
+                        onEditEntry = { if (it.person.isNotBlank()) openParty(it.person) else editing = it },
                         onAddSuggestions = { list ->
                             val added = list.mapIndexed { i, e -> e.copy(id = "e" + System.nanoTime() + i) }
                             save(added + entries)
