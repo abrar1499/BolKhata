@@ -2232,7 +2232,8 @@ fun App(
     LaunchedEffect(chatLoading) { if (!chatLoading) listener.resume() }
 
     fun startVoice(forChat: Boolean = false) {
-        if (whisperOn()) {
+        // The chat's mic is always live voice; a Groq key in the Voice key field is then only the AI's stand-in.
+        if (whisperOn() && !forChat) {
             startRecording(
                 // With the AI reading it, the words go as heard: the AI does the fixing, with the saved names in view.
                 heard = { text -> (if (Ai.handles(groqKey)) text else Normalizer.voiceFix(text, voiceKnown())).let { if (forChat) chatInput(it) else homeInput(it) } },
