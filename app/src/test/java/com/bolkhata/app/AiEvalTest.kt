@@ -61,7 +61,9 @@ class AiEvalTest {
     private class Turn(val said: String, val spoken: Boolean = false)
 
     /** What a case did: the books after it, each turn's answer, and the tools the AI used. */
-    private inner class Outcome(val world: World, val answers: List<AiAgent.Answer?>, val trace: List<String>, val errors: List<String>) {
+    private inner class Outcome(val world: World, val answers: List<AiAgent.Answer?>, val trace: List<String>, val errors: List<String>,
+        /** How long the AI took over each message, in seconds (messages the app did alone are not in it). */
+        val seconds: List<Double> = emptyList()) {
         val last get() = answers.last()
         val added get() = world.added
         fun has(type: Type? = null, person: String = "", amount: Double? = null, item: String = "", cat: Cat? = null, qty: Double? = null, list: List<Entry> = added) =
@@ -234,6 +236,7 @@ class AiEvalTest {
         var justSaved = emptyList<String>()
         // What the app learnt from the AI in this chat: a sentence of a known shape is then done by the app alone.
         var known = mapOf<String, String>()
+        val seconds = mutableListOf<Double>()
         val answers = c.turns.map { turn ->
             val roman = runCatching { Translit.toRoman(turn.said) }.getOrDefault(turn.said)
             val who = AiAgent.who(world.host.names(), known)
@@ -256,7 +259,8 @@ class AiEvalTest {
             fun ask() = AiAgent.run(turn.said, recent, world.host, roman = roman, previous = picked, justSaved = justSaved, spoken = turn.spoken, lastShown = lastShown, known = known,
                 onTool = { name, input, result -> trace += "$name $input -> " + result.take(260) })
             // An overloaded or rate-limited moment is tried once more.
-            val a = ask() ?: run { Thread.sleep(4000); ask() }
+            val began = System.nanoTime()
+            val a = ask()?.also { seconds += (System.nanoTime() - began) / 1e9 } ?: run { Thread.sleep(4000); ask() }
             if (a == null) errors += Ai.lastError
             history += true to turn.said
             history += false to (a?.card?.ifBlank { a.text } ?: "")
@@ -266,8 +270,14 @@ class AiEvalTest {
             trace += "reply: " + (a?.text ?: "(no answer)") + (if (a?.card.isNullOrBlank()) "" else " | card: " + a!!.card.take(160).replace("\n", " / ")) + (if (a?.ask.isNullOrBlank()) "" else " | option card: " + a!!.ask)
             a
         }
-        return Outcome(world, answers, trace, errors)
+        return Outcome(world, answers, trace, errors, seconds)
     }
+
+    /** A way of running the assistant, to compare on the same messages in the same run. */
+    private class Variant(val name: String, val quick: Boolean, val thinking: Boolean)
+
+    private val variants = mapOf("now" to Variant("now", quick = false, thinking = true), "quick" to Variant("quick", quick = true, thinking = true),
+        "nothink" to Variant("nothink", quick = true, thinking = false))
 
     @Test
     fun everydayMessages() {
@@ -282,35 +292,59 @@ class AiEvalTest {
         Ai.sink = { i, o, micro -> tokensIn.addAndGet(i.toLong()); tokensOut.addAndGet(o.toLong()); spent.addAndGet(micro) }
         val only = System.getenv("AI_EVAL_ONLY").orEmpty().split(",").map { it.trim() }.filter { it.isNotBlank() }
         val chosen = cases.filter { c -> only.isEmpty() || only.any { c.name.contains(it, true) } }
+        // The app as it ships, unless ways to compare are named ("now,quick,nothink"): those take turns, a few cases at a time, so each meets the same hour.
+        val ways = System.getenv("AI_EVAL_VARIANTS").orEmpty().split(",").mapNotNull { variants[it.trim()] }
+            .ifEmpty { listOf(Variant("as shipped", AiAgent.quickSave, Ai.thinking)) }
         val pool = Executors.newFixedThreadPool(4)
-        val results = chosen.map { c -> c to pool.submit<Pair<Outcome?, String>> { runCatching { run(c) }.fold({ it to "" }, { null to (it.message ?: it.toString()) }) } }
-        pool.shutdown()
-        pool.awaitTermination(30, TimeUnit.MINUTES)
-        val out = StringBuilder()
-        val long = mutableListOf<String>()
-        var passed = 0
-        results.forEach { (c, future) ->
-            val (o, crash) = future.get()
-            val failed = when {
-                o == null -> listOf("crashed: $crash")
-                o.errors.isNotEmpty() -> listOf("the AI did not answer: " + o.errors.joinToString("; "))
-                else -> runCatching { c.check(o).filter { !it.second }.map { it.first } }.getOrElse { listOf("check crashed: " + it.message) }
-            }
-            if (failed.isEmpty()) passed++
-            // The rule is one short sentence: longer answers are listed, they do not fail the case.
-            o?.answers?.mapNotNull { it?.text }?.filter { it.split(Regex("""\s+""")).size > 25 }?.forEach { long += c.name + ": " + it.replace("\n", " ") }
-            out.append(if (failed.isEmpty()) "PASS  " else "FAIL  ").append(c.name).append("  <- ").append(c.turns.joinToString(" | ") { it.said }).append('\n')
-            if (failed.isNotEmpty()) {
-                out.append("      wanted: ").append(failed.joinToString("; ")).append('\n')
-                o?.trace?.forEach { out.append("      ").append(it.replace("\n", " ")).append('\n') }
-                o?.added?.forEach { out.append("      new: ").append(brief(it)).append('\n') }
+        val results = ways.associate { it.name to mutableMapOf<Case, Pair<Outcome?, String>>() }
+        val used = ways.associate { it.name to LongArray(3) }
+        chosen.chunked(8).forEach { chunk ->
+            ways.forEach { way ->
+                AiAgent.quickSave = way.quick
+                Ai.thinking = way.thinking
+                val before = longArrayOf(tokensIn.get(), tokensOut.get(), spent.get())
+                chunk.map { c -> c to pool.submit<Pair<Outcome?, String>> { runCatching { run(c) }.fold({ it to "" }, { null to (it.message ?: it.toString()) }) } }
+                    .forEach { (c, future) -> results.getValue(way.name)[c] = future.get(10, TimeUnit.MINUTES) }
+                used.getValue(way.name).let { u -> u[0] += tokensIn.get() - before[0]; u[1] += tokensOut.get() - before[1]; u[2] += spent.get() - before[2] }
             }
         }
-        val head = "AI eval: $passed of ${chosen.size} passed · ${Ai.modelNow()} · effort ${Ai.effort} · " + tokensIn.get() + " in, " + tokensOut.get() + " out · $" +
-            String.format(java.util.Locale.US, "%.4f", spent.get() / 1_000_000.0) + "\n\n"
-        if (long.isNotEmpty()) out.append("\nLONG ANSWERS (over 25 words)\n").append(long.joinToString("\n") { "      $it" }).append('\n')
+        pool.shutdown()
+        val out = StringBuilder()
+        ways.forEach { way ->
+            val body = StringBuilder()
+            val long = mutableListOf<String>()
+            var passed = 0
+            val times = mutableListOf<Double>()
+            chosen.forEach { c ->
+                val (o, crash) = results.getValue(way.name).getValue(c)
+                val failed = when {
+                    o == null -> listOf("crashed: $crash")
+                    o.errors.isNotEmpty() -> listOf("the AI did not answer: " + o.errors.joinToString("; "))
+                    else -> runCatching { c.check(o).filter { !it.second }.map { it.first } }.getOrElse { listOf("check crashed: " + it.message) }
+                }
+                if (failed.isEmpty()) passed++
+                times += o?.seconds.orEmpty()
+                // The rule is one short sentence: longer answers are listed, they do not fail the case.
+                o?.answers?.mapNotNull { it?.text }?.filter { it.split(Regex("""\s+""")).size > 25 }?.forEach { long += c.name + ": " + it.replace("\n", " ") }
+                body.append(if (failed.isEmpty()) "PASS  " else "FAIL  ").append(c.name).append("  <- ").append(c.turns.joinToString(" | ") { it.said }).append('\n')
+                if (failed.isNotEmpty()) {
+                    body.append("      wanted: ").append(failed.joinToString("; ")).append('\n')
+                    o?.trace?.forEach { body.append("      ").append(it.replace("\n", " ")).append('\n') }
+                    o?.added?.forEach { body.append("      new: ").append(brief(it)).append('\n') }
+                }
+            }
+            val sorted = times.sorted()
+            fun at(share: Double) = if (sorted.isEmpty()) 0.0 else sorted[((sorted.size - 1) * share).toInt()]
+            val u = used.getValue(way.name)
+            out.append("AI eval [${way.name}]: $passed of ${chosen.size} passed · ${Ai.modelNow()} · effort ${Ai.effort} · " +
+                String.format(java.util.Locale.US, "a message takes %.1fs (half are under), %.1fs (9 in 10 are under) · ", at(0.5), at(0.9)) +
+                u[0] + " in, " + u[1] + " out · $" + String.format(java.util.Locale.US, "%.4f", u[2] / 1_000_000.0) + "\n\n")
+            out.append(body)
+            if (long.isNotEmpty()) out.append("\nLONG ANSWERS (over 25 words)\n").append(long.joinToString("\n") { "      $it" }).append('\n')
+            out.append('\n')
+        }
         File("build").mkdirs()
-        File("build/ai-eval.txt").writeText(head + out)
-        println(head + out)
+        File("build/ai-eval.txt").writeText(out.toString())
+        println(out)
     }
 }

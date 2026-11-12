@@ -158,9 +158,10 @@ fun ChatScreen(
                     }
                 }
             }
-            items(messages, key = { it.id }) { message ->
+            items(messages, key = { it.id }) { message -> MockSize {
                 if (message.isUser) {
-                    UserBubble(message.text, message.attachment)
+                    // What was said in live voice is not shown: only its answer is.
+                    if (message.meta != "live") UserBubble(message.text, message.attachment)
                 } else {
                     // Each answer starts with the app's small logo, like a chat assistant's picture.
                     Row(Modifier.fillMaxWidth()) {
@@ -196,7 +197,7 @@ fun ChatScreen(
                     }
                     }
                 }
-            }
+            } }
             if (loading) {
                 item(key = "chat-loading") {
                     Row(
@@ -366,8 +367,8 @@ private fun VoiceBubble(path: String) {
     }
 }
 
-private val MeShape = RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp, bottomStart = 14.dp, bottomEnd = 4.dp)
-private val BotShape = RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp, bottomStart = 4.dp, bottomEnd = 14.dp)
+private val MeShape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 6.dp)
+private val BotShape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 6.dp, bottomEnd = 16.dp)
 
 @Composable
 private fun UserBubble(text: String, attachment: String = "") {
@@ -400,20 +401,20 @@ private fun UserBubble(text: String, attachment: String = "") {
 /** 👍 and 👎 under each answer, like ChatGPT's. One tap saves the rating; tapping the other one changes it. */
 @Composable
 private fun AnswerActions(rating: Boolean?, onRate: (good: Boolean) -> Unit) {
-    val tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
-    Row(Modifier.padding(start = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = { onRate(true) }, enabled = rating != true, modifier = Modifier.size(34.dp)) {
+    val tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+    Row(Modifier.padding(start = 6.dp, top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+        IconButton(onClick = { onRate(true) }, enabled = rating != true, modifier = Modifier.size(24.dp)) {
             Icon(
                 if (rating == true) Icons.Filled.ThumbUpFilled else Icons.Outlined.ThumbUp,
                 contentDescription = if (rating == true) "Marked good" else "Good answer",
-                tint = if (rating == true) GreenDeep else tint, modifier = Modifier.size(17.dp)
+                tint = if (rating == true) GreenDeep else tint, modifier = Modifier.size(12.dp)
             )
         }
-        IconButton(onClick = { onRate(false) }, enabled = rating != false, modifier = Modifier.size(34.dp)) {
+        IconButton(onClick = { onRate(false) }, enabled = rating != false, modifier = Modifier.size(24.dp)) {
             Icon(
                 if (rating == false) Icons.Filled.ThumbDownFilled else Icons.Outlined.ThumbDown,
                 contentDescription = if (rating == false) "Marked wrong" else "Wrong answer",
-                tint = if (rating == false) MaterialTheme.colorScheme.error else tint, modifier = Modifier.size(17.dp)
+                tint = if (rating == false) MaterialTheme.colorScheme.error else tint, modifier = Modifier.size(12.dp)
             )
         }
     }
@@ -571,26 +572,28 @@ private fun SavedCard(
         if (message.text.isNotBlank() && !message.text.startsWith("✓")) Text(message.text, fontSize = 12.sp, lineHeight = 16.sp,
             color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.fillMaxWidth(0.85f).shadow(1.dp, BotShape).clip(BotShape)
                 .background(MaterialTheme.colorScheme.surface).padding(horizontal = 10.dp, vertical = 7.dp))
-        // One small row per entry, like an account row: icon, name over one word, amount, Undo. A tap opens the person's account.
+        // One small row per entry, like an account row: icon, the name, and under it one word, the amount and Undo. A tap opens the person's account.
         live.forEach { e ->
-            val shape = RoundedCornerShape(12.dp)
+            val shape = RoundedCornerShape(10.dp)
             Row(
-                Modifier.widthIn(max = 300.dp).shadow(1.dp, shape).clip(shape).background(MaterialTheme.colorScheme.surface)
-                    .clickable { onEditEntry(e) }.padding(start = 5.dp, end = 4.dp, top = 5.dp, bottom = 5.dp),
-                verticalAlignment = Alignment.CenterVertically
+                Modifier.widthIn(max = 200.dp).shadow(1.dp, shape).clip(shape).background(MaterialTheme.colorScheme.surface)
+                    .clickable { onEditEntry(e) }.padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Box(Modifier.size(26.dp).clip(RoundedCornerShape(8.dp)).background(signColor(e.type).copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
-                    Text(if (e.person.isNotBlank()) "👥" else if (signColor(e.type) == GreenIn) "💵" else "🧾", fontSize = 13.sp)
+                Box(Modifier.size(22.dp).clip(RoundedCornerShape(7.dp)).background(signColor(e.type).copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+                    Text(if (e.person.isNotBlank()) "👥" else if (signColor(e.type) == GreenIn) "💵" else "🧾", fontSize = 11.sp)
                 }
-                Column(Modifier.padding(start = 8.dp).weight(1f, fill = false)) {
-                    Text(e.person.trim().ifBlank { entryTitle(e) }, fontSize = 12.sp, lineHeight = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(savedWord(e), fontSize = 9.5.sp, lineHeight = 11.sp, color = sub, maxLines = 1)
+                Column(Modifier.weight(1f, fill = false)) {
+                    Text(e.person.trim().ifBlank { entryTitle(e) }, fontSize = 11.sp, lineHeight = 13.sp, fontWeight = FontWeight.Bold)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(savedWord(e), fontSize = 7.5.sp, lineHeight = 10.sp, color = sub, maxLines = 1)
+                        Text(moneyA(currency, e.amount), color = signColor(e.type), fontWeight = FontWeight.Bold, fontSize = 11.sp, lineHeight = 13.sp, maxLines = 1,
+                            modifier = Modifier.padding(start = 8.dp, end = 6.dp))
+                        Box(Modifier.width(1.dp).height(11.dp).background(sub.copy(alpha = 0.25f)))
+                        Text("Undo", fontSize = 10.sp, lineHeight = 12.sp, fontWeight = FontWeight.Bold, color = GreenIn,
+                            modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { onUndo(listOf(e.id)) }.padding(start = 6.dp, end = 4.dp, top = 2.dp, bottom = 2.dp))
+                    }
                 }
-                Text(moneyA(currency, e.amount), color = signColor(e.type), fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1,
-                    modifier = Modifier.padding(start = 18.dp, end = 8.dp))
-                Box(Modifier.width(1.dp).height(14.dp).background(sub.copy(alpha = 0.25f)))
-                Text("Undo", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = GreenIn,
-                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { onUndo(listOf(e.id)) }.padding(horizontal = 8.dp, vertical = 4.dp))
             }
         }
     }
@@ -683,6 +686,13 @@ private fun SmallField(value: String, onChange: (String) -> Unit, hint: String, 
             }
         }
     )
+}
+
+/** The chat's messages keep the size of the mock-up: a bigger font size set on the phone does not blow them up. */
+@Composable
+private fun MockSize(content: @Composable () -> Unit) {
+    val d = androidx.compose.ui.platform.LocalDensity.current
+    CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(d.density, minOf(d.fontScale, 1f)), content = content)
 }
 
 /** The one word under a saved entry: what happened with a person (Given, Received), else its category. */

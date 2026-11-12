@@ -28,6 +28,11 @@ class Listener(context: Context) {
     private var said = ""
     private var stopping = false
     private var quiet = 0
+    /** Live voice: each sentence goes out at its pause and listening goes on, until the mic is tapped. */
+    var live = false
+        private set
+    /** A sentence is out and its answer is being made: listening starts again on [resume]. */
+    private var waiting = false
 
     var onPartial: (String) -> Unit = {}
     var onFinal: (String) -> Unit = {}
@@ -51,6 +56,16 @@ class Listener(context: Context) {
         }
         override fun onResults(results: Bundle?) {
             if (!wanted) return
+            if (live) {
+                val part = best(results).ifBlank { soFar }
+                soFar = ""; quiet = 0
+                when {
+                    stopping -> finish()
+                    part.isBlank() -> again(120)
+                    else -> { waiting = true; onFinal(part) }
+                }
+                return
+            }
             said = (said + " " + best(results).ifBlank { soFar }).trim()
             soFar = ""; quiet = 0
             // A pause only ends a part: it listens on, unless the mic was tapped.
@@ -63,7 +78,9 @@ class Listener(context: Context) {
                 SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> if (busyTries < 3) { busyTries++; reset(); again(400) } else fail("Voice is busy. Try again.")
                 // Silence: after something was said that sends it; before, it waits one more round.
                 SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT ->
-                    if (stopping || whole().isNotBlank() || ++quiet >= 2) done(whole()) else again(120)
+                    // Live: silence just waits; a minute of it ends the session.
+                    if (live) { if (stopping || ++quiet >= 12) finish() else again(120) }
+                    else if (stopping || whole().isNotBlank() || ++quiet >= 2) done(whole()) else again(120)
                 SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> fail("No internet for voice. Try again when online.")
                 SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> fail("Allow the microphone for Smart Expense to talk.")
                 // 12 / 13: no recogniser for this language on the phone; its default language is used instead.
@@ -73,9 +90,11 @@ class Listener(context: Context) {
         }
     }
 
-    /** Starts listening in [language] (a tag like "ur-PK"; blank for the phone's own). */
-    fun start(language: String) {
+    /** Starts listening in [language] (a tag like "ur-PK"; blank for the phone's own); [live] keeps it on, sentence after sentence. */
+    fun start(language: String, live: Boolean = false) {
         this.language = language
+        this.live = live
+        waiting = false
         wanted = true; busyTries = 0; soFar = ""; said = ""; stopping = false; quiet = 0; run++
         onListening(true)
         begin()
@@ -105,10 +124,16 @@ class Listener(context: Context) {
     /** The mic was tapped again: ends the sentence; what was heard comes as the result, or after a short wait as it stands. */
     fun stop() {
         if (!wanted) return
+        if (live) { recognizer?.cancel(); finish(); return }
         stopping = true
         recognizer?.stopListening()
         val mine = run
         main.postDelayed({ if (wanted && run == mine) { recognizer?.cancel(); done(whole()) } }, 2500)
+    }
+
+    /** Live voice: the answer to the last sentence is there, listen for the next one. */
+    fun resume() {
+        if (wanted && waiting) { waiting = false; begin() }
     }
 
     /** Stops without a result. */
