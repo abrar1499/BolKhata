@@ -1310,6 +1310,7 @@ fun App(
                     return@launch
                 }
                 // Test feature: with an AI key saved, the AI does the whole job itself through tools (see AiAgent).
+                var aiDown = false
                 if (Ai.handles(groqKey)) {
                     val started = System.currentTimeMillis()
                     val spoken = aiHeard[0] != null
@@ -1352,6 +1353,8 @@ fun App(
                         answer = try { ask() } finally { Ai.key = own.first; Ai.model = own.second }
                         if (answer == null) Ai.lastError = why
                     }
+                    // Neither key answered (no credit, a limit reached, no internet): the app's own engine answers below.
+                    if (answer == null) aiDown = true else {
                     val usage = Ai.takeUsage(System.currentTimeMillis() - started).orEmpty()
                     // The AI could not tell what happened with a person and a number: the option card asks.
                     answer?.ask?.takeIf { it.isNotBlank() }?.let { ask ->
@@ -1378,6 +1381,7 @@ fun App(
                             "; own=" + (own?.let { it.kind + (if (it.what.isBlank()) "" else "/" + it.what) + (if (it.unsure) "/unsure" else "") } ?: "error") +
                             (if (usage.isBlank()) "" else "; usage=" + usage))
                     return@launch
+                    }
                 }
                 // With Groq on, Groq reads every message first: money and app requests become a clear command that the
                 // local engine runs against the saved records (totals, reports, cashbook); anything else Groq answers.
@@ -1398,7 +1402,7 @@ fun App(
                 if (knownCommand != null) {
                     groqTrace = "; learned=" + knownCommand.take(120)
                     read = runCatching { Translit.toRoman(knownCommand) }.getOrDefault(knownCommand)
-                } else if (groqKey.isNotBlank() && !NativeChatEngine.isSmallTalk(roman)) {
+                } else if (groqKey.isNotBlank() && !aiDown && !NativeChatEngine.isSmallTalk(roman)) {
                     // Names that look like words in the message first, then the khata's people, so a misheard
                     // voice name ("dalib") can be matched to the saved one by sound.
                     val all = contactNames()
