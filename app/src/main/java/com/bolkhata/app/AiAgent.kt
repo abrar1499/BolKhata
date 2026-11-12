@@ -278,9 +278,10 @@ object AiAgent {
 
     /**
      * A plain save ends the turn at once: the Saved card is the answer, so the AI is not asked for a closing sentence
-     * nobody sees. The AI says "more" when the message asks for something else too.
+     * nobody sees. The AI says "more" when the message asks for something else too. Measured on the eval: as many
+     * right answers, a shorter wait and a third less cost; false only for that comparison.
      */
-    @Volatile var quickSave = false
+    @Volatile var quickSave = true
 
     private val NUMBER = Regex("""(\d[\d,]*(?:\.\d+)?)(k)?(?![\p{L}\p{N}])""")
 

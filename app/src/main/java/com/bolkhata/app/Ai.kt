@@ -276,12 +276,15 @@ object Ai {
         conn.doOutput = true
         conn.setRequestProperty("Content-Type", "application/json")
         headers.forEach { (k, v) -> conn.setRequestProperty(k, v) }
+        // The reply is read to its end and its stream closed, which leaves the connection open for the next call:
+        // a message is often two calls, and each new connection costs a handshake on a phone network.
         try {
             conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
             val code = conn.responseCode
             return code to ((if (code < 400) conn.inputStream else conn.errorStream)?.bufferedReader()?.use { it.readText() } ?: "")
-        } finally {
+        } catch (e: Exception) {
             conn.disconnect()
+            throw e
         }
     }
 }
