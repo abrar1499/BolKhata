@@ -1795,8 +1795,10 @@ fun App(
             r.setAudioSource(android.media.MediaRecorder.AudioSource.VOICE_RECOGNITION)
             r.setOutputFormat(android.media.MediaRecorder.OutputFormat.MPEG_4)
             r.setAudioEncoder(android.media.MediaRecorder.AudioEncoder.AAC)
+            // One channel at a low bit rate: speech stays clear for the recogniser and the file is half the size to send.
+            r.setAudioChannels(1)
             r.setAudioSamplingRate(16_000)
-            r.setAudioEncodingBitRate(64_000)
+            r.setAudioEncodingBitRate(32_000)
             r.setMaxDuration(30_000)
             r.setOutputFile(file.absolutePath)
             r.setOnInfoListener { _, what, _ -> if (what == android.media.MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED) finishRecording() }
