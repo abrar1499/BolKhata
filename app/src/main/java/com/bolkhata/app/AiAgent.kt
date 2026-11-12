@@ -84,7 +84,7 @@ object AiAgent {
         Ai.Tool("report", "The business report worked out by the app: sales, other income, business costs, expenses and profit for a period (all time when no dates), and the net worth today (cash in hand, to get, stock, assets, to pay).",
             shape("from" to text("First day, YYYY-MM-DD"), "to" to text("Last day, YYYY-MM-DD"))),
         Ai.Tool("balances", "What each person owes or is owed (all time) and the cash in hand.", shape()),
-        Ai.Tool("add_entries", "Saves new entries.", shape(
+        Ai.Tool("add_entries", "Saves new entries. The app shows them as a card, and the turn ends there unless more is true.", shape(
             "entries" to JSONObject().put("type", "array").put("items", shape(
                 "type" to JSONObject().put("type", "string").put("enum", JSONArray(listOf("expense", "income", "lent", "borrowed", "received_back", "paid_back", "sale", "work"))),
                 "amount" to number("Money, exactly as said. Never for a sale or work said by count: that number is qty (the app multiplies by the rate)"),
@@ -100,7 +100,8 @@ object AiAgent {
                 "note" to text("Any extra detail"),
                 "date" to text("YYYY-MM-DD when a day was said, else leave out (today)"),
                 required = listOf("type")
-            )), required = listOf("entries"))),
+            )), "more" to JSONObject().put("type", "boolean").put("description", "True when the message asks for something else after this save (a question, a change, an account)"),
+            required = listOf("entries"))),
         Ai.Tool("update_entries", "Changes saved entries (ids from find_entries); only the fields given change.", shape(
             "ids" to words("Entry ids"),
             "set" to shape("amount" to number("New amount"), "qty" to number("New count of a sale or work (the app works out the amount)"),
@@ -257,6 +258,11 @@ object AiAgent {
                 c to onMain { runCatching { use(c.name, c.input, host, now, notes) }.getOrElse { JSONObject().put("error", it.message ?: "failed").toString() } }
                     .also { onTool(c.name, c.input, it) }
             }
+            if (quickSave && step.calls.all { it.name == "add_entries" && !it.input.optBoolean("more", false) } && notes.added.isNotEmpty() && notes.skipped == 0 &&
+                done.none { it.second.contains("\"error\"") }) {
+                val learnt = learn(calls, digits, host.names(), known)
+                return@runCatching Answer("", notes.added, lesson = learnt.lesson, shape = learnt.shape, words = learnt.words)
+            }
             // The app asks with its option card; nothing more for the AI to say.
             if (notes.ask.isNotBlank()) return@runCatching Answer("", notes.added, ask = notes.ask)
             // Only asked to show a card, and it is shown: the chat shows the card, not the AI's closing sentence, so that step is not paid for.
@@ -269,6 +275,12 @@ object AiAgent {
     }.getOrElse { Ai.lastError = it.message ?: "no internet"; null }
 
     // ---------- The app learns from the AI: a sentence it has read once is done by the app alone the next time ----------
+
+    /**
+     * A plain save ends the turn at once: the Saved card is the answer, so the AI is not asked for a closing sentence
+     * nobody sees. The AI says "more" when the message asks for something else too.
+     */
+    @Volatile var quickSave = false
 
     private val NUMBER = Regex("""(\d[\d,]*(?:\.\d+)?)(k)?(?![\p{L}\p{N}])""")
 

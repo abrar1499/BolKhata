@@ -40,6 +40,8 @@ object Ai {
     @Volatile var model = ""
     /** How hard Claude thinks before it acts ("low", "medium", "high"): more is more careful and costs more. */
     @Volatile var effort = "low"
+    /** Whether Claude thinks before it answers; off is quicker and less careful. */
+    @Volatile var thinking = true
     /** Told the tokens of every call, to keep the running total. */
     @Volatile var sink: ((input: Int, output: Int, microDollars: Long) -> Unit)? = null
 
@@ -141,6 +143,7 @@ object Ai {
                 // And one at the end of the conversation so far, for the later steps of the same message.
                 .put("cache_control", JSONObject().put("type", "ephemeral"))
             if (!m.contains("haiku-4") && !m.contains("sonnet-4-5")) req.put("output_config", JSONObject().put("effort", effort))
+            if (!thinking) req.put("thinking", JSONObject().put("type", "disabled"))
             val fallback = listOf("claude-fable-5", "claude-opus-5", "claude-sonnet-5-5").any { m.startsWith(it) }
             if (fallback) req.put("fallbacks", "default")
             val headers = mutableMapOf("x-api-key" to key, "anthropic-version" to "2026-10-21")
