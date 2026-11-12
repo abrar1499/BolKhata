@@ -79,7 +79,7 @@ object AiAgent {
 
     val tools: List<Ai.Tool> = listOf(
         Ai.Tool("find_entries", "Lists saved entries that match (newest first, at most 40 shown) with their ids, the count and the total.", shape(*picking)),
-        Ai.Tool("totals", "Adds up the matching entries: the total and count, and the same per group when group_by is given. Use it for every sum.",
+        Ai.Tool("totals", "Adds up the matching entries: the total money, the count of entries, qty_total (how many things were made or sold) and the same per group when group_by is given. Use it for every sum.",
             shape(*picking, "group_by" to JSONObject().put("type", "string").put("enum", JSONArray(listOf("category", "person", "type", "month", "item"))))),
         Ai.Tool("report", "The business report worked out by the app: sales, other income, business costs, expenses and profit for a period (all time when no dates), and the net worth today (cash in hand, to get, stock, assets, to pay).",
             shape("from" to text("First day, YYYY-MM-DD"), "to" to text("Last day, YYYY-MM-DD"))),
@@ -87,7 +87,7 @@ object AiAgent {
         Ai.Tool("add_entries", "Saves new entries.", shape(
             "entries" to JSONObject().put("type", "array").put("items", shape(
                 "type" to JSONObject().put("type", "string").put("enum", JSONArray(listOf("expense", "income", "lent", "borrowed", "received_back", "paid_back", "sale", "work"))),
-                "amount" to number("Exactly as said; leave out for a sale or work with qty and rate (the app multiplies)"),
+                "amount" to number("Money, exactly as said. Never for a sale or work said by count: that number is qty (the app multiplies by the rate)"),
                 "qty" to number("How many, when said"),
                 "rate" to number("Price for one (or for 1000 when per_1000), for a sale or work; leave out when not said (the app uses this person's last rate)"),
                 "per_1000" to JSONObject().put("type", "boolean").put("description", "True when the rate is per thousand"),
@@ -123,7 +123,8 @@ object AiAgent {
             shape(*picking, "title" to text("Heading of the PDF, e.g. Expenses"),
                 "group_by" to JSONObject().put("type", "string").put("enum", JSONArray(listOf("category", "person", "month"))).put("description", "A table per group, with a summary first"),
                 required = listOf("title"))),
-        Ai.Tool("delete_entries", "Moves saved entries to Trash (ids from find_entries); the person can restore them.", shape("ids" to words("Entry ids"), required = listOf("ids"))),
+        Ai.Tool("delete_entries", "Moves saved entries to Trash (ids from find_entries); the person can restore them.", shape("ids" to words("Entry ids"),
+            "confirmed" to JSONObject().put("type", "boolean").put("description", "True only after the person said yes to deleting this many"), required = listOf("ids"))),
         Ai.Tool("restore_entries", "Brings entries back from Trash: the last so many deleted, or by id. With nothing given it lists what is in Trash.", shape(
             "last" to number("How many of the most recently deleted to bring back"), "ids" to words("Ids from the Trash list")))
     )
@@ -164,7 +165,9 @@ object AiAgent {
           a name from "Work and goods names in use" exactly whenever it is the same work or thing; add no words to it
           (not "molding", "work", "making"). A new name is only for a really different work or thing.
           Two names for one work ("X ko Y mein kar do", "ye dono ek hain"): find_entries with items X, then
-          update_entries on those ids with set item Y. Do it without asking. A worker or
+          update_entries on those ids with set item Y. Do it without asking; when the person does not say which
+          name stays, keep the shorter, plainer one. In a sale or work, the number said with the thing is its count
+          ("4000 pakki eent di": qty 4000), also when the same message has money too ("aur us ne 10000 diye"). A worker or
           supplier with a count of things they made, did or brought and no money word ("Hamid ne 10000 kachi eent
           dali", "Hamid 300 shirts") is work with that qty: save it, do not ask whether it is money. Money a customer pays later is received_back; money paid
           to a worker or supplier is lent. Profit, loss, sales, costs, net worth: the report tool.
@@ -396,6 +399,8 @@ object AiAgent {
             val list = pick(input, host, now)
             notes.filter = picked(input)
             val out = JSONObject().put("count", list.size).put("total", list.sumOf { it.amount })
+            // How many things were made or sold, apart from what they came to ("kitni eent bani").
+            if (list.any { it.qty > 0 }) out.put("qty_total", list.sumOf { it.qty })
             val by: ((Entry) -> String)? = when (input.optString("group_by")) {
                 "category" -> { e -> e.category.label }
                 "person" -> { e -> e.person.ifBlank { "(no person)" } }
@@ -405,7 +410,7 @@ object AiAgent {
                 else -> null
             }
             if (by != null && list.isNotEmpty()) out.put("average_per_group", Math.round(list.sumOf { it.amount } / list.groupBy(by).size * 100) / 100.0)
-            if (by != null) out.put("groups", JSONArray(list.groupBy(by).map { (k, l) -> JSONObject().put("name", k).put("total", l.sumOf { it.amount }).put("count", l.size) }
+            if (by != null) out.put("groups", JSONArray(list.groupBy(by).map { (k, l) -> JSONObject().put("name", k).put("total", l.sumOf { it.amount }).put("count", l.size).apply { if (l.any { it.qty > 0 }) put("qty_total", l.sumOf { it.qty }) } }
                 .sortedByDescending { it.getDouble("total") }.take(40)))
             out.toString()
         }
@@ -455,6 +460,10 @@ object AiAgent {
         "update_entries" -> {
             val ids = strings(input, "ids").toSet()
             val set = input.optJSONObject("set") ?: JSONObject()
+            // A counted entry's amount is its count × rate: the count or the rate is what changes, never the amount alone.
+            host.entries().firstOrNull { it.id in ids && it.qty > 0 && it.rate > 0 }?.takeIf { set.has("amount") && !set.has("qty") && !set.has("rate") }?.let { e ->
+                error("this entry is counted: qty " + plainNumber(e.qty) + " at rate " + plainNumber(e.rate) + (if (e.unit == "1000") " per 1000" else "") + ". Set qty for a new count, or rate for a new rate; the app works out the amount")
+            }
             val changed = host.entries().filter { it.id in ids }.map { e ->
                 var x = Query.change(e, listOf("amount", "date", "person", "item", "note").filter { set.has(it) }.associateWith { set.get(it).toString() })
                 TYPES[set.optString("type").lowercase()]?.let { t -> x = x.copy(type = t) }
@@ -531,6 +540,8 @@ object AiAgent {
         }
         "delete_entries" -> {
             val ids = strings(input, "ids").toSet().intersect(host.entries().map { it.id }.toSet())
+            // A slip of the tongue must not empty the books: a big delete is asked about first.
+            if (ids.size > 25 && !input.optBoolean("confirmed", false)) error("that is " + ids.size + " entries: ask the person to confirm first, then call again with confirmed true")
             host.trash(ids)
             JSONObject().put("moved_to_trash", ids.size).toString()
         }

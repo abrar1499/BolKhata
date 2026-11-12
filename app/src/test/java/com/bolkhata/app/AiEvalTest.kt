@@ -36,7 +36,8 @@ class AiEvalTest {
             Entry("i2", Type.AAMDANI, 4_000.0, Cat.TANKHWAH, "Salary", "", "", now - 2 * day, now - 2 * day),
             Entry("i3", Type.AAMDANI, 700.0, Cat.TANKHWAH, "Commission", "", "", now - 1 * day, now - 1 * day)
         )
-        val baseIds = entries.map { it.id }.toSet()
+        /** What was there before the first message (a case may add its own entries first). */
+        var baseIds = entries.map { it.id }.toSet()
         val trashed = mutableSetOf<String>()
         var bin = listOf<Entry>()
         var setup = SideSetup(people = mapOf("Hamid Akram" to Sides.STAFF, "Zubair Latif" to Sides.STAFF, "Nargis Salim Rashid" to Sides.CUSTOMERS))
@@ -145,7 +146,14 @@ class AiEvalTest {
         case("rent", "dukan ka kiraya 1500 diya") { listOf("1500 in Rent" to has(Type.KHARCHA, amount = 1_500.0, cat = Cat.RENT)) },
         case("school fees", "bachon ki school fees 2000") { listOf("2000 in Education" to has(Type.KHARCHA, amount = 2_000.0, cat = Cat.EDU)) },
         case("sent home", "ghar 3000 bheje") { listOf("3000 in Sent home" to has(Type.KHARCHA, amount = 3_000.0, cat = Cat.GHAR)) },
+        case("a worker gives money back", "hamid ne 500 wapis diye") { listOf("received 500 from Hamid" to has(Type.WAPIS_MILA, "Hamid Akram", 500.0), "one entry" to (added.size == 1)) },
+        case("the same to two people", "hamid aur zubair ko 500 500 diye") { listOf("two entries" to (added.size == 2), "Hamid 500" to has(Type.DIYA, "Hamid Akram", 500.0), "Zubair 500" to has(Type.DIYA, "Zubair Latif", 500.0)) },
+        case("three works of one worker", "hamid ne aaj 6000 kachi eent dali, 2000 bharai ki aur 1000 nikasi ki 250 per 1000") {
+            listOf("three entries" to (added.size == 3), "kachi eent 6000 = 6000" to has(Type.PURCHASE, "Hamid Akram", 6_000.0, "Kachi eent", qty = 6_000.0),
+                "bharai 2000 at 300 = 600" to has(Type.PURCHASE, "Hamid Akram", 600.0, "Bharai", qty = 2_000.0), "nikasi 1000 at 250 = 250" to has(Type.PURCHASE, "Hamid Akram", 250.0, "Nikasi", qty = 1_000.0))
+        },
         // ---- questions
+        case("how many were made", "zubair ne ab tak kitni bharai ki") { listOf("nothing saved" to added.isEmpty(), "says 10,000" to told.contains("10000")) },
         case("a worker's balance", "hamid ka baqi kitna hai") { listOf("nothing saved" to added.isEmpty(), "says 30,000" to told.contains("30000")) },
         case("what a worker is owed", "zubair ko kitne dene hain") { listOf("nothing saved" to added.isEmpty(), "says 3,000" to told.contains("3000")) },
         case("a worker's total work", "hamid ne total kitna kaam kiya") { listOf("nothing saved" to added.isEmpty(), "says 20,000" to told.contains("20000")) },
@@ -171,7 +179,7 @@ class AiEvalTest {
         case("delete the last minutes", "pichle 10 minute ki sari entries delete kar do", prepare = {
             entries = listOf(Entry("n1", Type.KHARCHA, 25.0, Cat.KHANA, "Tea", "", "", now - 3 * 60_000L, now - 3 * 60_000L),
                 Entry("n2", Type.DIYA, 700.0, Cat.UDHAAR, "Loans", "Hamid Akram", "", now - 5 * 60_000L, now - 5 * 60_000L)) + entries
-        }) { listOf("the two new ones are in Trash" to (world.trashed == setOf("n1", "n2")), "the rest stay" to world.baseIds.all { world.byId(it) != null }) },
+        }) { listOf("the two new ones are in Trash" to (world.trashed == setOf("n1", "n2")), "the rest stay" to (world.entries.size == world.baseIds.size - 2)) },
         case("change an old entry", "kal wali chai 5 ki jagah 8 kar do") { listOf("tea is 8 now" to (world.byId("x3")?.amount == 8.0), "nothing new" to added.isEmpty()) },
         case("same thing typed twice", "hamid ko 250 diye", "hamid ko 250 diye") { listOf("two entries" to (added.size == 2)) },
         case("delete the newest entry", "akhri entry hata do", prepare = {
@@ -182,6 +190,7 @@ class AiEvalTest {
         case("it was another, new person", "tariq ko 5000 udhaar diya", "ye naya tariq hai", prepare = {
             entries = listOf(Entry("q1", Type.DIYA, 300.0, Cat.UDHAAR, "Loans", "Bilal Tariq Mehmood", "", now - 12 * day, now - 12 * day)) + entries
         }) { listOf("one entry" to (added.size == 1), "it is under the new person Tariq" to added.all { it.person.equals("Tariq", true) }) },
+        case("delete everything is asked about first", "sari entries delete kar do") { listOf("nothing is deleted" to world.trashed.isEmpty(), "asks" to asked) },
         // ---- accounts
         case("two accounts for one work, said plainly", "kachi eent ke do khate ban gaye hain, kachi eent aur kachi eent molding. mujhe ek hi chahiye", prepare = {
             entries = listOf(work("w9", "Hamid Akram", "Kachi eent molding", 4_000.0, 1_000.0, 1)) + entries
@@ -213,7 +222,7 @@ class AiEvalTest {
 
     /** Runs one case the way the chat does: each turn sees the last ones, what was just saved and the card on the screen. */
     private fun run(c: Case): Outcome {
-        val world = World().apply(c.prepare)
+        val world = World().apply(c.prepare).apply { baseIds = entries.map { it.id }.toSet() }
         val trace = mutableListOf<String>()
         val errors = mutableListOf<String>()
         val history = mutableListOf<Pair<Boolean, String>>()
