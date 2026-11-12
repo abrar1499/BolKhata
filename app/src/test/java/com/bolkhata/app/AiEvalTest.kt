@@ -237,8 +237,9 @@ class AiEvalTest {
         val answers = c.turns.map { turn ->
             val roman = runCatching { Translit.toRoman(turn.said) }.getOrDefault(turn.said)
             val who = AiAgent.who(world.host.names(), known)
-            val learnt = known[AiAgent.shape(roman, who)]?.let { AiAgent.recall(it, roman, who) }?.let { input ->
-                val notes = AiAgent.Notes(said = AiAgent.numbers(roman))
+            val counted = AiAgent.counted(roman)
+            val learnt = known[AiAgent.shape(counted, who)]?.let { AiAgent.recall(it, counted, who) }?.let { input ->
+                val notes = AiAgent.Notes(said = AiAgent.numbers(counted))
                 runCatching { AiAgent.use("add_entries", input, world.host, System.currentTimeMillis(), notes) }
                 notes.added.toList().takeIf { it.isNotEmpty() }
             }

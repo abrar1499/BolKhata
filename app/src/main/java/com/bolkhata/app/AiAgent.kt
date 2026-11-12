@@ -216,7 +216,7 @@ object AiAgent {
         onMain: (() -> String) -> String = { it() }
     ): Answer? = runCatching {
         // Numbers said in words are worked out by the app ("dhai lakh" is 250000), never left to the AI.
-        val digits = runCatching { NumberWords.convert(roman) }.getOrDefault(roman)
+        val digits = counted(roman)
         val notes = Notes(said = (numbers(roman) + numbers(digits)).distinct(), lastShown = lastShown)
         val calls = mutableListOf<Pair<String, JSONObject>>()
         val names = host.names().take(80)
@@ -245,7 +245,8 @@ object AiAgent {
         for (round in 1..8) {
             val step = Ai.step(system, tools, messages) ?: return@runCatching null
             if (step.calls.isEmpty()) {
-                val learnt = if (notes.added.isEmpty()) Learnt() else learn(calls, roman, host.names(), known)
+                // Learnt from the message with its numbers in digits, so "teen sau" and "300" are one shape.
+                val learnt = if (notes.added.isEmpty()) Learnt() else learn(calls, digits, host.names(), known)
                 // Only saved, all of it and nothing to ask: the Saved card says it, no sentence over it.
                 val onlySaved = notes.added.isNotEmpty() && notes.skipped == 0 && calls.all { it.first == "add_entries" } && '?' !in step.text
                 return@runCatching Answer(if (onlySaved) "" else step.text.ifBlank { "Done." }, notes.added, notes.card, notes.listIds, notes.filter,
@@ -270,6 +271,9 @@ object AiAgent {
     // ---------- The app learns from the AI: a sentence it has read once is done by the app alone the next time ----------
 
     private val NUMBER = Regex("""(\d[\d,]*(?:\.\d+)?)(k)?(?![\p{L}\p{N}])""")
+
+    /** A message as it is learnt and recalled: its number words in digits ("teen sau diye": "300 diye"). */
+    fun counted(said: String): String = runCatching { NumberWords.convert(said) }.getOrDefault(said)
 
     private fun plainNumber(n: Double) = if (n == Math.floor(n)) n.toLong().toString() else n.toString()
 
