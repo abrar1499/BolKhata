@@ -43,6 +43,10 @@ Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Packa
 - Names: `Understand.matchContact` / `mostWordsMatched` / `closeName` (spelling + sound key in `Names.key`).
 - Urdu/Hindi script → Roman: `Translit.toRoman`.
 - Every fix to a chat mistake gets a unit test in `app/src/test/java/com/bolkhata/app/NativeChatEngineTest.kt`.
+- The AI assistant (`AiAgent.kt`: instructions and tools) is tested on the real model, never by guessing: `AiEvalTest.kt`
+  runs everyday messages against a made-up ledger and checks what was saved. A commit on the work branch with `[ai-eval]`
+  in its message runs it on GitHub (`.github/workflows/ai-eval.yml`, secret `ANTHROPIC_API_KEY`); read the job log, fix,
+  run again. Every AI mistake the owner reports becomes a case there first.
 
 ## Style
 - Things to tap look like the chat mic button: plain white, round, a soft shadow, no border, no heavy 3D edge. Simple first.
