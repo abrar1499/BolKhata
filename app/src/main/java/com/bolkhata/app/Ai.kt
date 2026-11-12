@@ -38,6 +38,8 @@ object Ai {
     /** The saved key and model (blank model: the provider's usual one); set by the app when it opens and on Save. */
     @Volatile var key = ""
     @Volatile var model = ""
+    /** How hard Claude thinks before it acts ("low", "medium", "high"): more is more careful and costs more. */
+    @Volatile var effort = "low"
     /** Told the tokens of every call, to keep the running total. */
     @Volatile var sink: ((input: Int, output: Int, microDollars: Long) -> Unit)? = null
 
@@ -138,7 +140,7 @@ object Ai {
                 .put("tools", JSONArray().apply { tools.forEach { put(JSONObject().put("name", it.name).put("description", it.description).put("input_schema", it.schema)) } })
                 // And one at the end of the conversation so far, for the later steps of the same message.
                 .put("cache_control", JSONObject().put("type", "ephemeral"))
-            if (!m.contains("haiku-4") && !m.contains("sonnet-4-5")) req.put("output_config", JSONObject().put("effort", "low"))
+            if (!m.contains("haiku-4") && !m.contains("sonnet-4-5")) req.put("output_config", JSONObject().put("effort", effort))
             val fallback = listOf("claude-fable-5", "claude-opus-5", "claude-sonnet-5-5").any { m.startsWith(it) }
             if (fallback) req.put("fallbacks", "default")
             val headers = mutableMapOf("x-api-key" to key, "anthropic-version" to "2026-10-21")

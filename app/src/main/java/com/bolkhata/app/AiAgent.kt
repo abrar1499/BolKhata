@@ -195,6 +195,8 @@ object AiAgent {
         said: String, recent: String, host: Host, now: Long = System.currentTimeMillis(), roman: String = said, previous: String = "",
         justSaved: List<String> = emptyList(), heardAlso: List<String> = emptyList(), spoken: Boolean = heardAlso.isNotEmpty(),
         known: Map<String, String> = emptyMap(), lastShown: String = "",
+        /** Told every tool the AI used, with what it sent and got back (for the AI eval's report). */
+        onTool: (name: String, input: JSONObject, result: String) -> Unit = { _, _, _ -> },
         onMain: (() -> String) -> String = { it() }
     ): Answer? = runCatching {
         val notes = Notes(said = numbers(roman), lastShown = lastShown)
@@ -233,6 +235,7 @@ object AiAgent {
             calls += step.calls.map { it.name to it.input }
             val done = step.calls.map { c ->
                 c to onMain { runCatching { use(c.name, c.input, host, now, notes) }.getOrElse { JSONObject().put("error", it.message ?: "failed").toString() } }
+                    .also { onTool(c.name, c.input, it) }
             }
             // The app asks with its option card; nothing more for the AI to say.
             if (notes.ask.isNotBlank()) return@runCatching Answer("", notes.added, ask = notes.ask)
