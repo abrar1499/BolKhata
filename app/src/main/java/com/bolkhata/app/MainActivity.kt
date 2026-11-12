@@ -1299,7 +1299,7 @@ fun App(
                 val scoped = scopeKhataEntries(entries)
                 val names0 = contactNames()
                 // A saved person and a number, nothing else: the chat asks what happened with a small card, in any language.
-                Ask.of(roman, AiAgent.who(names0, store.aiLearned))?.let { (p, n) ->
+                Ask.of(AiAgent.counted(roman), AiAgent.who(names0, store.aiLearned))?.let { (p, n) ->
                     val book = Sides.bookOf(p, entries, sides)
                     lastSpeech = "Choose"
                     postChat("", isUser = false, meta = "ask=$p|$n|" + Ask.kinds(book).joinToString(",") + (if (book == Sides.STAFF) "|staff" else ""))
@@ -1322,9 +1322,10 @@ fun App(
                     // Learnt from the AI before: a message of the same shape (only its numbers differ) is done by the app alone, for nothing.
                     // People and numbers are open places in it, so a known sentence with another name needs no AI either.
                     val who = AiAgent.who(names0, store.aiLearned)
-                    val shape = AiAgent.shape(roman, who)
-                    store.aiLearned[shape]?.let { AiAgent.recall(it, roman, who) }?.let { input ->
-                        val notes = AiAgent.Notes(said = AiAgent.numbers(roman))
+                    val counted = AiAgent.counted(roman)
+                    val shape = AiAgent.shape(counted, who)
+                    store.aiLearned[shape]?.let { AiAgent.recall(it, counted, who) }?.let { input ->
+                        val notes = AiAgent.Notes(said = AiAgent.numbers(counted))
                         runCatching { AiAgent.use("add_entries", input, host, System.currentTimeMillis(), notes) }
                         if (notes.added.isNotEmpty()) {
                             aiPicked = ""
@@ -2561,7 +2562,7 @@ fun App(
                             if (!good) chatMessages.indexOfFirst { it.id == id }.takeIf { it > 0 }?.let { i ->
                                 chatMessages.take(i).lastOrNull { it.isUser }?.let { q ->
                                     store.learned = store.learned - Groq.learnKey(runCatching { Translit.toRoman(q.text) }.getOrDefault(q.text))
-                                    val said = runCatching { Translit.toRoman(q.text) }.getOrDefault(q.text)
+                                    val said = AiAgent.counted(runCatching { Translit.toRoman(q.text) }.getOrDefault(q.text))
                                     store.aiLearned = store.aiLearned - AiAgent.shape(said) - AiAgent.shape(said, AiAgent.who(contactNames(), store.aiLearned))
                                 }
                             }
