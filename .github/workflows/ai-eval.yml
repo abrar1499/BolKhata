@@ -33,4 +33,5 @@ jobs:
           export AI_EVAL_EFFORT="$(printf '%s' "$MESSAGE" | grep -oE '\[ai-eval (low|medium|high)' | awk '{print $2}' | head -1)"
           export AI_EVAL_ONLY="$(printf '%s' "$MESSAGE" | grep -oE 'only=[a-z, ]+' | head -1 | cut -d= -f2)"
           gradle testReleaseUnitTest --tests "com.bolkhata.app.AiEvalTest" --no-daemon -q > gradle.log 2>&1 || tail -40 gradle.log
-          cat app/build/ai-eval.txt
+          # The summary line and what failed; the passed cases are only counted.
+          grep -v '^PASS' app/build/ai-eval.txt

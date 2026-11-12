@@ -123,8 +123,8 @@ object AiAgent {
             shape(*picking, "title" to text("Heading of the PDF, e.g. Expenses"),
                 "group_by" to JSONObject().put("type", "string").put("enum", JSONArray(listOf("category", "person", "month"))).put("description", "A table per group, with a summary first"),
                 required = listOf("title"))),
-        Ai.Tool("delete_entries", "Moves saved entries to Trash (ids from find_entries); the person can restore them.", shape("ids" to words("Entry ids"),
-            "confirmed" to JSONObject().put("type", "boolean").put("description", "True only after the person said yes to deleting this many"), required = listOf("ids"))),
+        Ai.Tool("delete_entries", "Moves saved entries to Trash (ids from find_entries); the person can restore them. Up to 25 entries the person named are deleted at once, with no question first; only more than 25 need their yes.", shape("ids" to words("Entry ids"),
+            "confirmed" to JSONObject().put("type", "boolean").put("description", "Only for more than 25 entries: true after the person said yes"), required = listOf("ids"))),
         Ai.Tool("rename_person", "Gives a person a new name everywhere: all their entries and their place in an account. Also puts two spellings of one person together (to: the name that stays).",
             shape("from" to text("The saved name now"), "to" to text("The new name"), required = listOf("from", "to"))),
         Ai.Tool("restore_entries", "Brings entries back from Trash: the last so many deleted, or by id. With nothing given it lists what is in Trash.", shape(
