@@ -123,8 +123,8 @@ object AiAgent {
             shape(*picking, "title" to text("Heading of the PDF, e.g. Expenses"),
                 "group_by" to JSONObject().put("type", "string").put("enum", JSONArray(listOf("category", "person", "month"))).put("description", "A table per group, with a summary first"),
                 required = listOf("title"))),
-        Ai.Tool("delete_entries", "Moves saved entries to Trash (ids from find_entries); the person can restore them. Up to 25 entries the person named are deleted at once, with no question first; only more than 25 need their yes.", shape("ids" to words("Entry ids"),
-            "confirmed" to JSONObject().put("type", "boolean").put("description", "Only for more than 25 entries: true after the person said yes"), required = listOf("ids"))),
+        Ai.Tool("delete_entries", "Moves saved entries to Trash (ids from find_entries); the person can restore them. Up to 25 entries the person named are deleted at once, with no question first; only more than 25, or nearly the whole book, need their yes.", shape("ids" to words("Entry ids"),
+            "confirmed" to JSONObject().put("type", "boolean").put("description", "Only for more than 25 entries or nearly all of them: true after the person said yes"), required = listOf("ids"))),
         Ai.Tool("rename_person", "Gives a person a new name everywhere: all their entries and their place in an account. Also puts two spellings of one person together (to: the name that stays).",
             shape("from" to text("The saved name now"), "to" to text("The new name"), required = listOf("from", "to"))),
         Ai.Tool("restore_entries", "Brings entries back from Trash: the last so many deleted, or by id. With nothing given it lists what is in Trash.", shape(
@@ -215,7 +215,9 @@ object AiAgent {
         onTool: (name: String, input: JSONObject, result: String) -> Unit = { _, _, _ -> },
         onMain: (() -> String) -> String = { it() }
     ): Answer? = runCatching {
-        val notes = Notes(said = numbers(roman), lastShown = lastShown)
+        // Numbers said in words are worked out by the app ("dhai lakh" is 250000), never left to the AI.
+        val digits = runCatching { NumberWords.convert(roman) }.getOrDefault(roman)
+        val notes = Notes(said = (numbers(roman) + numbers(digits)).distinct(), lastShown = lastShown)
         val calls = mutableListOf<Pair<String, JSONObject>>()
         val names = host.names().take(80)
         val messages = Ai.opening(
@@ -236,7 +238,8 @@ object AiAgent {
                     (if (heardAlso.isEmpty()) "" else " It was also heard as: " + heardAlso.joinToString(" | ") { it.take(200) }) + "\n") +
                 "Message: " + said.take(600) +
                 // Urdu or Hindi script also goes in Roman letters by its sound, so a word is not swapped for another.
-                (if (roman.trim().equals(said.trim(), true)) "" else "\nThe same message by sound, in Roman letters: " + roman.take(600))
+                (if (roman.trim().equals(said.trim(), true)) "" else "\nThe same message by sound, in Roman letters: " + roman.take(600)) +
+                (if (digits.trim().equals(roman.trim(), true)) "" else "\nIts numbers worked out by the app (use exactly these): " + digits.take(600))
         )
         val system = system(host.currency, names)
         for (round in 1..8) {
@@ -543,8 +546,10 @@ object AiAgent {
         }
         "delete_entries" -> {
             val ids = strings(input, "ids").toSet().intersect(host.entries().map { it.id }.toSet())
-            // A slip of the tongue must not empty the books: a big delete is asked about first.
-            if (ids.size > 25 && !input.optBoolean("confirmed", false)) error("that is " + ids.size + " entries: ask the person to confirm first, then call again with confirmed true")
+            // A slip of the tongue must not empty the books: a big delete, or nearly everything, is asked about first.
+            val all = host.entries().size
+            if ((ids.size > 25 || (all > 5 && ids.size * 10 >= all * 8)) && !input.optBoolean("confirmed", false))
+                error("that is " + ids.size + " of the " + all + " entries: ask the person to confirm first, then call again with confirmed true")
             host.trash(ids)
             JSONObject().put("moved_to_trash", ids.size).toString()
         }

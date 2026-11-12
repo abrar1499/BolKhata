@@ -207,6 +207,17 @@ class AiAgentTest {
     }
 
     @Test
+    fun numbersSaidInWordsAreWorkedOutByTheApp() {
+        assertEquals("nargis se 250000 mile", NumberWords.convert("nargis se dhai lakh mile"))
+        assertEquals("1500 diye", NumberWords.convert("derh hazar diye"))
+        // A quarter more, a quarter less, and a half more than the number that follows.
+        assertEquals("225000 mile", NumberWords.convert("sawa do lakh mile"))
+        assertEquals("175000 diye", NumberWords.convert("paune do lakh diye"))
+        assertEquals("3500 diye", NumberWords.convert("sadhe teen hazar diye"))
+        assertEquals("125000 ka generator", NumberWords.convert("sawa lakh ka generator"))
+    }
+
+    @Test
     fun anAmountTypedAgainIsSavedAgain() {
         val loan = JSONObject("""{"entries": [{"type": "lent", "amount": 30, "person": "Hamid Akram"}]}""")
         val first = AiAgent.Notes(said = listOf(30.0))

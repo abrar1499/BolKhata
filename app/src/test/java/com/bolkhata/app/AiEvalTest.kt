@@ -102,6 +102,8 @@ class AiEvalTest {
         case("two in one message", "hamid ko 500 diye aur zubair ko 300") { listOf("two entries" to (added.size == 2), "Hamid 500" to has(Type.DIYA, "Hamid Akram", 500.0), "Zubair 300" to has(Type.DIYA, "Zubair Latif", 300.0)) },
         case("got money back", "salim raza ne 400 wapis kar diye") { listOf("received back 400 from Salim Raza" to has(Type.WAPIS_MILA, "Salim Raza", 400.0), "one entry" to (added.size == 1)) },
         case("number in words", "hamid ko das hazar diye") { listOf("lent Hamid 10000" to has(Type.DIYA, "Hamid Akram", 10_000.0)) },
+        case("one and a half thousand", "hamid ko derh hazar diye") { listOf("lent Hamid 1500" to has(Type.DIYA, "Hamid Akram", 1_500.0), "one entry" to (added.size == 1)) },
+        case("a quarter less than two lakh", "nargis se paune do lakh mile") { listOf("received 175000 from Nargis" to has(Type.WAPIS_MILA, "Nargis Salim Rashid", 175_000.0), "one entry" to (added.size == 1)) },
         case("lakh", "nargis se dhai lakh mile") { listOf("received 250000 from Nargis" to has(Type.WAPIS_MILA, "Nargis Salim Rashid", 250_000.0)) },
         // ---- expenses and income
         case("expense", "petrol 80") { listOf("one entry" to (added.size == 1), "petrol 80 in Transport" to has(Type.KHARCHA, amount = 80.0, cat = Cat.TRANSPORT)) },
@@ -182,6 +184,7 @@ class AiEvalTest {
         }) { listOf("the two new ones are in Trash" to (world.trashed == setOf("n1", "n2")), "the rest stay" to (world.entries.size == world.baseIds.size - 2)) },
         case("change an old entry", "kal wali chai 5 ki jagah 8 kar do") { listOf("tea is 8 now" to (world.byId("x3")?.amount == 8.0), "nothing new" to added.isEmpty()) },
         case("same thing typed twice", "hamid ko 250 diye", "hamid ko 250 diye") { listOf("two entries" to (added.size == 2)) },
+        case("same thing said twice in words", "zubair ko teen sau diye", "zubair ko teen sau diye") { listOf("two entries" to (added.size == 2), "both 300" to added.all { it.amount == 300.0 }) },
         case("delete the newest entry", "akhri entry hata do", prepare = {
             entries = listOf(Entry("n9", Type.KHARCHA, 45.0, Cat.KHANA, "Lunch", "", "", now - 2 * 60_000L, now - 2 * 60_000L)) + entries
         }) { listOf("only the newest is in Trash" to (world.trashed == setOf("n9"))) },
@@ -191,6 +194,7 @@ class AiEvalTest {
             entries = listOf(Entry("q1", Type.DIYA, 300.0, Cat.UDHAAR, "Loans", "Bilal Tariq Mehmood", "", now - 12 * day, now - 12 * day)) + entries
         }) { listOf("one entry" to (added.size == 1), "it is under the new person Tariq" to added.all { it.person.equals("Tariq", true) }) },
         case("delete everything is asked about first", "sari entries delete kar do") { listOf("nothing is deleted" to world.trashed.isEmpty(), "asks" to asked) },
+        case("delete everything after a yes", "sari entries delete kar do", "haan kar do") { listOf("everything is in Trash" to world.entries.isEmpty()) },
         // ---- accounts
         case("two accounts for one work, said plainly", "kachi eent ke do khate ban gaye hain, kachi eent aur kachi eent molding. mujhe ek hi chahiye", prepare = {
             entries = listOf(work("w9", "Hamid Akram", "Kachi eent molding", 4_000.0, 1_000.0, 1)) + entries
@@ -228,11 +232,27 @@ class AiEvalTest {
         val history = mutableListOf<Pair<Boolean, String>>()
         var picked = ""
         var justSaved = emptyList<String>()
+        // What the app learnt from the AI in this chat: a sentence of a known shape is then done by the app alone.
+        var known = mapOf<String, String>()
         val answers = c.turns.map { turn ->
             val roman = runCatching { Translit.toRoman(turn.said) }.getOrDefault(turn.said)
+            val who = AiAgent.who(world.host.names(), known)
+            val learnt = known[AiAgent.shape(roman, who)]?.let { AiAgent.recall(it, roman, who) }?.let { input ->
+                val notes = AiAgent.Notes(said = AiAgent.numbers(roman))
+                runCatching { AiAgent.use("add_entries", input, world.host, System.currentTimeMillis(), notes) }
+                notes.added.toList().takeIf { it.isNotEmpty() }
+            }
+            if (learnt != null) {
+                history += true to turn.said
+                history += false to ""
+                picked = ""
+                justSaved = learnt
+                trace += "learned: done by the app alone"
+                return@map AiAgent.Answer("", learnt)
+            }
             val recent = history.takeLast(6).joinToString("\n") { (if (it.first) "Person: " else "App: ") + it.second.take(200) }
             val lastShown = history.lastOrNull { !it.first }?.second.orEmpty()
-            fun ask() = AiAgent.run(turn.said, recent, world.host, roman = roman, previous = picked, justSaved = justSaved, spoken = turn.spoken, lastShown = lastShown,
+            fun ask() = AiAgent.run(turn.said, recent, world.host, roman = roman, previous = picked, justSaved = justSaved, spoken = turn.spoken, lastShown = lastShown, known = known,
                 onTool = { name, input, result -> trace += "$name $input -> " + result.take(260) })
             // An overloaded or rate-limited moment is tried once more.
             val a = ask() ?: run { Thread.sleep(4000); ask() }
@@ -241,6 +261,7 @@ class AiEvalTest {
             history += false to (a?.card?.ifBlank { a.text } ?: "")
             picked = a?.filter.orEmpty()
             justSaved = a?.added.orEmpty()
+            if (a != null) known = known + a.words + (if (a.lesson.isBlank()) emptyMap() else mapOf(a.shape to a.lesson))
             trace += "reply: " + (a?.text ?: "(no answer)") + (if (a?.card.isNullOrBlank()) "" else " | card: " + a!!.card.take(160).replace("\n", " / ")) + (if (a?.ask.isNullOrBlank()) "" else " | option card: " + a!!.ask)
             a
         }

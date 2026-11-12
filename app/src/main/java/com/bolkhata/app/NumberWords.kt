@@ -29,7 +29,7 @@ object NumberWords {
         "satrah" to 17.0, "atharah" to 18.0, "unees" to 19.0, "bees" to 20.0, "pachees" to 25.0,
         "tees" to 30.0, "chalees" to 40.0, "chalis" to 40.0, "pachas" to 50.0, "pachaas" to 50.0,
         "sattar" to 70.0, "assi" to 80.0,
-        "dedh" to 1.5, "dhai" to 2.5, "dhaai" to 2.5, "adha" to 0.5, "aadha" to 0.5,
+        "dedh" to 1.5, "derh" to 1.5, "deirh" to 1.5, "dairh" to 1.5, "dhai" to 2.5, "dhaai" to 2.5, "adha" to 0.5, "aadha" to 0.5,
         "ایک" to 1.0, "دو" to 2.0, "تین" to 3.0, "چار" to 4.0, "پانچ" to 5.0, "چھ" to 6.0,
         "سات" to 7.0, "آٹھ" to 8.0, "نو" to 9.0, "دس" to 10.0, "بیس" to 20.0, "پچاس" to 50.0,
         "ڈیڑھ" to 1.5, "ڈھائی" to 2.5
@@ -83,6 +83,10 @@ object NumberWords {
         return out.joinToString(" ")
     }
 
+    /** "sawa do" is 2.25, "paune do" 1.75, "sadhe teen" 3.5; alone before lakh or hazar they are 1.25, 0.75 and 0.5. */
+    private val parts = mapOf("sawa" to 0.25, "sava" to 0.25, "paune" to -0.25, "pone" to -0.25, "pauny" to -0.25,
+        "sadhe" to 0.5, "saadhe" to 0.5, "sarhe" to 0.5, "saarhe" to 0.5, "sarhay" to 0.5, "sadhay" to 0.5)
+
     private data class Run(val end: Int, val value: Double, val allEnglish: Boolean, val hasMultiplier: Boolean)
 
     /** Reads a run of number words starting at [start]; null if the word there is not a number word. */
@@ -98,7 +102,13 @@ object NumberWords {
             if (w.isEmpty()) break
             val unit = english[w] ?: urdu[w]
             val mult = multipliers[w]
+            val part = parts[w]
             when {
+                part != null -> {
+                    allEnglish = false
+                    val before = tokens.getOrNull(j + 1)?.let { core(it).lowercase() }?.let { english[it] ?: urdu[it] } != null
+                    current += if (before || part == 0.5) part else 1.0 + part
+                }
                 unit != null -> {
                     if (urdu.containsKey(w) && !english.containsKey(w)) allEnglish = false
                     current += unit
