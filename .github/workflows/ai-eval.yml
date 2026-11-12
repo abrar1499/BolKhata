@@ -1,0 +1,37 @@
+name: AI eval
+
+# Runs the real AI on everyday messages against a made-up ledger (app/src/test/.../AiEvalTest.kt) and prints what it
+# got right and wrong. Started by a commit on a work branch whose message has "[ai-eval]" ("[ai-eval medium]" picks the
+# effort, "only=work,detail" a few cases). Needs the repository secret ANTHROPIC_API_KEY; it never runs on main.
+on:
+  push:
+    branches-ignore: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  eval:
+    if: contains(github.event.head_commit.message, '[ai-eval')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+      - name: Run the AI on the test messages
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          test -n "$ANTHROPIC_API_KEY" || { echo "::error::Add the repository secret ANTHROPIC_API_KEY (Settings > Secrets and variables > Actions)"; exit 1; }
+          export AI_EVAL_EFFORT="$(printf '%s' "$MESSAGE" | grep -oE '\[ai-eval (low|medium|high)' | awk '{print $2}' | head -1)"
+          export AI_EVAL_ONLY="$(printf '%s' "$MESSAGE" | grep -oE 'only=[a-z, ]+' | head -1 | cut -d= -f2)"
+          gradle testReleaseUnitTest --tests "com.bolkhata.app.AiEvalTest" --no-daemon -q > gradle.log 2>&1 || tail -40 gradle.log
+          # The summary line and what failed; the passed cases are only counted.
+          grep -v '^PASS' app/build/ai-eval.txt

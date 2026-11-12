@@ -181,6 +181,43 @@ class AiAgentTest {
     }
 
     @Test
+    fun theSameCardAskedAgainShowsTheEntries() {
+        use("add_entries", """{"entries": [{"type": "income", "amount": 500}, {"type": "income", "amount": 700}]}""")
+        val first = AiAgent.Notes()
+        AiAgent.use("show", JSONObject("""{"view": "total", "types": ["income"]}"""), host, now, first)
+        // "Detail" brings the same total again: the list of entries is shown instead.
+        val second = AiAgent.Notes(lastShown = first.card)
+        AiAgent.use("show", JSONObject("""{"view": "total", "types": ["income"]}"""), host, now, second)
+        assertTrue(second.card != first.card)
+        assertEquals(2, second.listIds.size)
+    }
+
+    @Test
+    fun oneWorkKeepsOneName() {
+        setup = SideSetup(people = mapOf("Hamid Akram" to Sides.STAFF))
+        use("add_entries", """{"entries": [{"type": "work", "person": "Hamid Akram", "item": "Raw shirts", "qty": 5000, "rate": 400, "per_1000": true},
+            {"type": "work", "person": "Hamid Akram", "item": "Loading", "qty": 5000, "rate": 100, "per_1000": true}]}""")
+        // The AI words the same work longer, or spells it a little differently: it stays under the first name.
+        val notes = AiAgent.Notes()
+        AiAgent.use("add_entries", JSONObject("""{"entries": [{"type": "work", "person": "Hamid Akram", "item": "raw shirts stitching", "qty": 1000},
+            {"type": "work", "person": "Hamid Akram", "item": "raw shirt", "qty": 1000},
+            {"type": "work", "person": "Hamid Akram", "item": "Unloading", "qty": 1000, "rate": 100, "per_1000": true}]}"""), host, now, notes)
+        assertEquals(listOf("Raw shirts", "Raw shirts", "Unloading"), notes.added.map { id -> saved.first { it.id == id }.item })
+        assertEquals("Loading", Goods.sameAs("loading", listOf("Raw shirts", "Loading")))
+    }
+
+    @Test
+    fun numbersSaidInWordsAreWorkedOutByTheApp() {
+        assertEquals("nargis se 250000 mile", NumberWords.convert("nargis se dhai lakh mile"))
+        assertEquals("1500 diye", NumberWords.convert("derh hazar diye"))
+        // A quarter more, a quarter less, and a half more than the number that follows.
+        assertEquals("225000 mile", NumberWords.convert("sawa do lakh mile"))
+        assertEquals("175000 diye", NumberWords.convert("paune do lakh diye"))
+        assertEquals("3500 diye", NumberWords.convert("sadhe teen hazar diye"))
+        assertEquals("125000 ka generator", NumberWords.convert("sawa lakh ka generator"))
+    }
+
+    @Test
     fun anAmountTypedAgainIsSavedAgain() {
         val loan = JSONObject("""{"entries": [{"type": "lent", "amount": 30, "person": "Hamid Akram"}]}""")
         val first = AiAgent.Notes(said = listOf(30.0))

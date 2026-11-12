@@ -26,6 +26,23 @@ object Goods {
         } ?: n
     }
 
+    /**
+     * [name] as the saved name it is only a longer or shorter way of saying ("Kachi eent molding" for "Kachi eent"), so
+     * one work or thing keeps one name. At least two words must agree; a one-word name ("Loading") stays its own.
+     */
+    fun sameAs(name: String, known: List<String>): String {
+        val c = canonical(name, known)
+        if (known.any { it == c }) return c
+        fun words(s: String) = s.lowercase().split(Regex("""[^\p{L}\p{N}]+""")).filter { it.isNotBlank() }
+        fun alike(a: String, b: String) = a == b || (Names.key(a).length >= 2 && Names.key(a) == Names.key(b)) || (a.length >= 4 && distance(a, b) <= 1)
+        val mine = words(name)
+        return known.firstOrNull { k ->
+            val theirs = words(k)
+            val (small, big) = if (theirs.size <= mine.size) theirs to mine else mine to theirs
+            small.size >= 2 && small.all { s -> big.any { alike(s, it) } }
+        } ?: c
+    }
+
     /** Saved names that start with (or contain) what is typed, for the suggestions under the Goods field. */
     fun suggest(typed: String, known: List<String>): List<String> {
         val t = typed.trim()

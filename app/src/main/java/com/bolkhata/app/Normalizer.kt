@@ -13,6 +13,9 @@ object Normalizer {
     class Normalized(val text: String, val fixes: List<Pair<String, String>>)
 
     /** Spelling variants -> the standard word. */
+    /** The word a spelling or its English stands for ("chae", "tea": "chai"), so a search for one finds the other. */
+    fun root(word: String): String = word.lowercase().let { variants[it] ?: it }
+
     private val variants: Map<String, String> = buildMap {
         fun v(std: String, vararg forms: String) = forms.forEach { put(it, std) }
         // Days and times
