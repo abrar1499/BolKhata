@@ -1340,8 +1340,17 @@ fun App(
                         }
                     }
                     // The AI is asked off the main thread; each tool then runs on it, where the entries live.
-                    val answer = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    suspend fun ask() = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                         AiAgent.run(text, recent, host, roman = roman, previous = aiPicked, justSaved = aiSaved, heardAlso = heardAlso, spoken = spoken, known = store.aiLearned, lastShown = history.lastOrNull { !it.isUser }?.text.orEmpty()) { tool -> kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.Main) { tool() } }
+                    }
+                    var answer = ask()
+                    // The AI key did not answer (no credit, no service): the Groq key, when one is saved, does the same work.
+                    if (answer == null && Ai.provider(Ai.voiceKey) === Ai.GROQ && Ai.provider(Ai.key) !== Ai.GROQ) {
+                        val own = Ai.key to Ai.model
+                        val why = Ai.lastError
+                        Ai.key = Ai.voiceKey; Ai.model = ""
+                        answer = try { ask() } finally { Ai.key = own.first; Ai.model = own.second }
+                        if (answer == null) Ai.lastError = why
                     }
                     val usage = Ai.takeUsage(System.currentTimeMillis() - started).orEmpty()
                     // The AI could not tell what happened with a person and a number: the option card asks.
