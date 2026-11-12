@@ -21,7 +21,9 @@ object AiAgent {
         /** The owner's accounts and who sits in which people account. */
         val setup: () -> SideSetup = { SideSetup() }, val saveSetup: (SideSetup) -> Unit = {},
         /** Builds the PDF and opens the share sheet. */
-        val pdf: (PdfDoc) -> Unit = {}
+        val pdf: (PdfDoc) -> Unit = {},
+        /** What is in Trash, newest first, and putting some of it back. */
+        val trashed: () -> List<Entry> = { emptyList() }, val restore: (Set<String>) -> Unit = {}
     )
 
     /**
@@ -101,7 +103,8 @@ object AiAgent {
             )), required = listOf("entries"))),
         Ai.Tool("update_entries", "Changes saved entries (ids from find_entries); only the fields given change.", shape(
             "ids" to words("Entry ids"),
-            "set" to shape("amount" to number("New amount"), "item" to text("New item"), "category" to text("New expense category"),
+            "set" to shape("amount" to number("New amount"), "qty" to number("New count of a sale or work (the app works out the amount)"),
+                "rate" to number("New rate of a sale or work"), "item" to text("New item"), "category" to text("New expense category"),
                 "person" to text("New person"), "note" to text("New note"), "date" to text("New day, YYYY-MM-DD"),
                 "type" to JSONObject().put("type", "string").put("enum", JSONArray(TYPES.keys.toList()))),
             required = listOf("ids", "set"))),
@@ -120,7 +123,9 @@ object AiAgent {
             shape(*picking, "title" to text("Heading of the PDF, e.g. Expenses"),
                 "group_by" to JSONObject().put("type", "string").put("enum", JSONArray(listOf("category", "person", "month"))).put("description", "A table per group, with a summary first"),
                 required = listOf("title"))),
-        Ai.Tool("delete_entries", "Moves saved entries to Trash (ids from find_entries); the person can restore them.", shape("ids" to words("Entry ids"), required = listOf("ids")))
+        Ai.Tool("delete_entries", "Moves saved entries to Trash (ids from find_entries); the person can restore them.", shape("ids" to words("Entry ids"), required = listOf("ids"))),
+        Ai.Tool("restore_entries", "Brings entries back from Trash: the last so many deleted, or by id. With nothing given it lists what is in Trash.", shape(
+            "last" to number("How many of the most recently deleted to bring back"), "ids" to words("Ids from the Trash list")))
     )
 
     /** The same from message to message (until a new name is saved), so the provider can cache it; the time goes with the message. */
@@ -170,10 +175,15 @@ object AiAgent {
           app shows buttons to tap. Do not ask that in words.
         - A voice message may be misheard: read it with its other hearings and take the words that make sense for a
           ledger. A person's name is kept as heard: change it to a saved name only when the two sound almost the same
-          (Hamid / Hameed); a different name (Ahmed is not Ashraf) is a new person. Amounts must agree between the
+          (Hamid / Hameed); a different name (Ahmed is not Ashraf) is a new person. But an ordinary word that is no
+          one's name, standing where a name must be ("motion ko 2000 diye"), is a saved name misheard: take the saved
+          name closest in sound (motion: Mohsin), and ask who when none is close. Amounts must agree between the
           hearings, else ask.
         - A correction of what was just saved ("sirf Hamid se", "nahi 40 tha", "ye kal ka tha") changes those entries
-          with update_entries (their ids are under "Just saved"); never add the same entry a second time.
+          with update_entries (their ids are under "Just saved"); never add the same entry a second time. But the
+          very same message sent again means it happened again: save it again with again true, do not say it is saved.
+          A wrong count or rate of a sale or work is set with qty or rate, not amount.
+        - "wapas lao", "restore", "undo the delete": restore_entries (last: how many were just deleted).
         - A khata or account for a person, with no kind said, is put_in_account People; do not ask which kind.
         - To change or delete, first find_entries for the ids. When it is clear which entries are meant, do it without
           asking again; when it is not, ask one short question instead of guessing. Deleted entries go to Trash.
@@ -449,6 +459,12 @@ object AiAgent {
                 var x = Query.change(e, listOf("amount", "date", "person", "item", "note").filter { set.has(it) }.associateWith { set.get(it).toString() })
                 TYPES[set.optString("type").lowercase()]?.let { t -> x = x.copy(type = t) }
                 Cat.entries.firstOrNull { it.label.equals(set.optString("category").trim(), true) }?.let { c -> x = x.copy(category = c) }
+                // A new count or rate of a sale or work: the amount is worked out again, here.
+                if (set.has("qty") || set.has("rate")) {
+                    val qty = set.optDouble("qty", x.qty).takeIf { !it.isNaN() && it > 0 } ?: x.qty
+                    val rate = set.optDouble("rate", x.rate).takeIf { !it.isNaN() && it > 0 } ?: x.rate
+                    x = x.copy(qty = qty, rate = rate, amount = if (qty > 0 && rate > 0) (if (x.unit == "1000") qty / 1000 * rate else qty * rate) else x.amount)
+                }
                 x
             }
             host.update(changed)
@@ -517,6 +533,15 @@ object AiAgent {
             val ids = strings(input, "ids").toSet().intersect(host.entries().map { it.id }.toSet())
             host.trash(ids)
             JSONObject().put("moved_to_trash", ids.size).toString()
+        }
+        "restore_entries" -> {
+            val bin = host.trashed()
+            val back = (bin.filter { it.id in strings(input, "ids") } + bin.take(input.optInt("last", 0).coerceIn(0, 200))).distinctBy { it.id }
+            if (back.isEmpty()) JSONObject().put("restored", 0).put("in_trash", JSONArray(bin.take(20).map { show(it) })).toString()
+            else {
+                host.restore(back.map { it.id }.toSet())
+                JSONObject().put("restored", back.size).put("entries", JSONArray(back.take(40).map { show(it) })).toString()
+            }
         }
         else -> JSONObject().put("error", "no such tool").toString()
     }

@@ -38,14 +38,16 @@ class AiEvalTest {
         )
         val baseIds = entries.map { it.id }.toSet()
         val trashed = mutableSetOf<String>()
+        var bin = listOf<Entry>()
         var setup = SideSetup(people = mapOf("Hamid Akram" to Sides.STAFF, "Zubair Latif" to Sides.STAFF, "Nargis Salim Rashid" to Sides.CUSTOMERS))
         var pdf: PdfDoc? = null
         val host = AiAgent.Host(
             entries = { entries }, add = { entries = it + entries },
             update = { changed -> entries = entries.map { e -> changed.firstOrNull { it.id == e.id } ?: e } },
-            trash = { ids -> trashed += ids; entries = entries.filter { it.id !in ids } },
+            trash = { ids -> trashed += ids; bin = entries.filter { it.id in ids } + bin; entries = entries.filter { it.id !in ids } },
             names = { (entries.map { it.person } + setup.people.keys).map { it.trim() }.filter { it.isNotBlank() }.distinct() },
-            currency = "PKR", setup = { setup }, saveSetup = { setup = it }, pdf = { pdf = it }
+            currency = "PKR", setup = { setup }, saveSetup = { setup = it }, pdf = { pdf = it },
+            trashed = { bin }, restore = { ids -> entries = bin.filter { it.id in ids } + entries; bin = bin.filter { it.id !in ids }; trashed -= ids }
         )
         val added get() = entries.filter { it.id !in baseIds }
         fun byId(id: String) = entries.firstOrNull { it.id == id }
@@ -68,6 +70,9 @@ class AiEvalTest {
             }
         val text get() = last?.text.orEmpty()
         val shown get() = last?.card.orEmpty()
+        /** The answer, sentence or card, without thousands commas. */
+        val told get() = (text + " " + shown).replace(",", "")
+        fun onDay(e: Entry, daysAgo: Int) = dayOf(e.date) == dayOf(now - daysAgo * day)
         /** A question to the person, or the option card. */
         val asked get() = '?' in text || last?.ask.orEmpty().isNotBlank()
         fun yesterday(e: Entry) = dayOf(e.date) == dayOf(now - day)
@@ -124,8 +129,30 @@ class AiEvalTest {
         case("goods with a new rate", "nargis ko 2000 pakki eent 13000 ke hisaab se di") { listOf("sale 2000 at 13000 = 26000" to has(Type.SALE, "Nargis Salim Rashid", 26_000.0, qty = 2_000.0), "one entry" to (added.size == 1)) },
         case("work with nothing to count", "hamid ne aaj kaam kiya") { listOf("nothing saved" to added.isEmpty(), "asks" to asked) },
         case("advance to a worker", "hamid ko 20000 advance diya") { listOf("lent Hamid 20000" to has(Type.DIYA, "Hamid Akram", 20_000.0), "one entry" to (added.size == 1)) },
+        case("goods and a payment together", "nargis ko 4000 pakki eent di aur us ne 10000 diye") {
+            listOf("two entries" to (added.size == 2), "sale 4000 = 48000" to has(Type.SALE, "Nargis Salim Rashid", 48_000.0, qty = 4_000.0), "received 10000" to has(Type.WAPIS_MILA, "Nargis Salim Rashid", 10_000.0))
+        },
+        case("a new worker's first work", "naya staff rashid hai, usne 5000 kachi eent dali 1100 ke hisab se") {
+            listOf("work 5000 at 1100 = 5500" to has(Type.PURCHASE, "Rashid", 5_500.0, qty = 5_000.0), "kept the name Kachi eent" to added.all { it.item == "Kachi eent" },
+                "Rashid is in Staff" to (Sides.bookOf(added.firstOrNull()?.person.orEmpty(), world.entries, world.setup) == Sides.STAFF))
+        },
+        case("work said in English", "Hamid made 7000 raw bricks today") { listOf("work 7000 = 7000" to has(Type.PURCHASE, "Hamid Akram", 7_000.0, qty = 7_000.0), "one entry" to (added.size == 1)) },
+        case("pay a worker for the work", "zubair ko uske kaam ke 3000 de diye") { listOf("paid Zubair 3000" to has(Type.DIYA, "Zubair Latif", 3_000.0), "one entry" to (added.size == 1)) },
+        case("wrong count of work", "hamid ne 3000 kachi eent dali", "nahi 3500 thi") { listOf("still one entry" to (added.size == 1), "3500 = 3500 now" to has(Type.PURCHASE, "Hamid Akram", 3_500.0, qty = 3_500.0)) },
+        case("a day by its date", "3 november ko petrol 90") { listOf("90 in Transport" to has(Type.KHARCHA, amount = 90.0, cat = Cat.TRANSPORT), "dated the 3rd of November" to added.any { dayOf(it.date).endsWith("-11-03") }) },
+        case("the day before yesterday", "parso hamid ko 800 diye") { listOf("lent Hamid 800" to has(Type.DIYA, "Hamid Akram", 800.0), "dated two days ago" to added.any { onDay(it, 2) }) },
+        case("medicine", "dawai 120") { listOf("120 in Health" to has(Type.KHARCHA, amount = 120.0, cat = Cat.SEHAT)) },
+        case("rent", "dukan ka kiraya 1500 diya") { listOf("1500 in Rent" to has(Type.KHARCHA, amount = 1_500.0, cat = Cat.RENT)) },
+        case("school fees", "bachon ki school fees 2000") { listOf("2000 in Education" to has(Type.KHARCHA, amount = 2_000.0, cat = Cat.EDU)) },
+        case("sent home", "ghar 3000 bheje") { listOf("3000 in Sent home" to has(Type.KHARCHA, amount = 3_000.0, cat = Cat.GHAR)) },
         // ---- questions
-        case("this month's spending", "is mahine ka kharcha") { listOf("nothing saved" to added.isEmpty(), "shows a card" to shown.isNotBlank()) },
+        case("a worker's balance", "hamid ka baqi kitna hai") { listOf("nothing saved" to added.isEmpty(), "says 30,000" to told.contains("30000")) },
+        case("what a worker is owed", "zubair ko kitne dene hain") { listOf("nothing saved" to added.isEmpty(), "says 3,000" to told.contains("3000")) },
+        case("a worker's total work", "hamid ne total kitna kaam kiya") { listOf("nothing saved" to added.isEmpty(), "says 20,000" to told.contains("20000")) },
+        case("who is in an account", "staff mein kaun kaun hai") { listOf("names Hamid and Zubair" to (told.contains("Hamid", true) && told.contains("Zubair", true)), "nothing saved" to added.isEmpty()) },
+        case("where it went, after a total", "is mahine ka kharcha kitna hai", "kahan kahan laga") { listOf("nothing saved" to added.isEmpty(), "a card that is not the first answer" to (shown.isNotBlank() && shown != answers[0]?.card)) },
+        case("today's account", "aaj ka hisab batao") { listOf("nothing saved" to added.isEmpty(), "answers" to (shown.isNotBlank() || text.isNotBlank()), "no question back" to !asked) },
+        case("this month's spending", "is mahine ka kharcha") { listOf("nothing saved" to added.isEmpty(), "says 365" to told.contains("365")) },
         case("detail after a total", "is mahine ka kharcha kitna hai", "detail batao") { listOf("nothing saved" to added.isEmpty(), "second card is not the first" to (shown.isNotBlank() && shown != answers[0]?.card)) },
         case("income, then detail", "income kitni hai", "detail") { listOf("shows the entries" to (last?.listIds.orEmpty().isNotEmpty() || (shown.isNotBlank() && shown != answers[0]?.card))) },
         case("a person's account", "hamid ka hisab batao") { listOf("nothing saved" to added.isEmpty(), "answers" to (shown.isNotBlank() || text.isNotBlank()), "no question back" to !asked) },
@@ -147,7 +174,18 @@ class AiEvalTest {
         }) { listOf("the two new ones are in Trash" to (world.trashed == setOf("n1", "n2")), "the rest stay" to world.baseIds.all { world.byId(it) != null }) },
         case("change an old entry", "kal wali chai 5 ki jagah 8 kar do") { listOf("tea is 8 now" to (world.byId("x3")?.amount == 8.0), "nothing new" to added.isEmpty()) },
         case("same thing typed twice", "hamid ko 250 diye", "hamid ko 250 diye") { listOf("two entries" to (added.size == 2)) },
+        case("delete the newest entry", "akhri entry hata do", prepare = {
+            entries = listOf(Entry("n9", Type.KHARCHA, 45.0, Cat.KHANA, "Lunch", "", "", now - 2 * 60_000L, now - 2 * 60_000L)) + entries
+        }) { listOf("only the newest is in Trash" to (world.trashed == setOf("n9"))) },
+        case("delete one named entry", "hamid ko jo 50000 advance diya tha wo delete kar do") { listOf("the advance is in Trash" to (world.trashed == setOf("a1"))) },
+        case("bring back what was deleted", "chai 15", "ye delete kar do", "wapas le aao") { listOf("it is back" to (added.size == 1 && world.trashed.isEmpty())) },
+        case("it was another, new person", "tariq ko 5000 udhaar diya", "ye naya tariq hai", prepare = {
+            entries = listOf(Entry("q1", Type.DIYA, 300.0, Cat.UDHAAR, "Loans", "Bilal Tariq Mehmood", "", now - 12 * day, now - 12 * day)) + entries
+        }) { listOf("one entry" to (added.size == 1), "it is under the new person Tariq" to added.all { it.person.equals("Tariq", true) }) },
         // ---- accounts
+        case("two accounts for one work, said plainly", "kachi eent ke do khate ban gaye hain, kachi eent aur kachi eent molding. mujhe ek hi chahiye", prepare = {
+            entries = listOf(work("w9", "Hamid Akram", "Kachi eent molding", 4_000.0, 1_000.0, 1)) + entries
+        }) { listOf("no entry is left under the second name" to world.entries.none { it.item.equals("Kachi eent molding", true) }, "it is under Kachi eent" to (world.byId("w9")?.item == "Kachi eent")) },
         case("put a person in Staff", "akbar ko staff mein daal do") { listOf("Akbar is in Staff" to (Sides.bookOf("Akbar", world.entries, world.setup) == Sides.STAFF), "nothing saved" to added.isEmpty()) },
         case("new expense account", "diesel ka naya expense account banao") { listOf("Diesel account is there" to world.setup.books.any { it.name.equals("Diesel", true) && it.side == Side.EXP }, "nothing saved" to added.isEmpty()) },
         case("move a person", "zubair ko suppliers mein kar do") { listOf("Zubair is in Suppliers" to (Sides.bookOf("Zubair Latif", world.entries, world.setup) == Sides.SUPPLIERS)) },
@@ -161,7 +199,10 @@ class AiEvalTest {
         voice("hindi script", "नरगिस ने दो हज़ार दिए") { listOf("received 2000 from Nargis" to has(Type.WAPIS_MILA, "Nargis Salim Rashid", 2_000.0), "answer is not in Hindi script" to !urduOrHindi.containsMatchIn(text)) },
         voice("a name misheard", "motion ko 2000 udhaar diye") { listOf("lent Mohsin 2000" to has(Type.DIYA, "Mohsin Javed", 2_000.0), "one entry" to (added.size == 1)) },
         voice("work misheard", "hameed ne 6000 kacchi int daali") { listOf("work by Hamid 6000 = 6000" to has(Type.PURCHASE, "Hamid Akram", 6_000.0, qty = 6_000.0), "kept the name Kachi eent" to added.all { it.item == "Kachi eent" }) },
-        voice("question in urdu script", "اس مہینے کا خرچہ کتنا ہے") { listOf("shows a card" to shown.isNotBlank(), "nothing saved" to added.isEmpty()) },
+        voice("question in urdu script", "اس مہینے کا خرچہ کتنا ہے") { listOf("says 365" to told.contains("365"), "nothing saved" to added.isEmpty(), "answer is not in Urdu script" to !urduOrHindi.containsMatchIn(text)) },
+        voice("two works in one breath", "hamid ne aaj das hazar kachi eent dali aur zubair ne paanch hazar bharai ki") {
+            listOf("two entries" to (added.size == 2), "Hamid 10000 = 10000" to has(Type.PURCHASE, "Hamid Akram", 10_000.0, qty = 10_000.0), "Zubair 5000 at 300 = 1500" to has(Type.PURCHASE, "Zubair Latif", 1_500.0, qty = 5_000.0))
+        },
         // ---- talk
         case("greeting", "assalam o alaikum") { listOf("nothing saved" to added.isEmpty(), "a short answer" to (text.isNotBlank() && text.split(' ').size <= 25)) },
         case("thanks", "shukriya") { listOf("nothing saved" to added.isEmpty(), "a short answer" to (text.isNotBlank() && text.split(' ').size <= 25)) }
@@ -215,6 +256,7 @@ class AiEvalTest {
         pool.shutdown()
         pool.awaitTermination(30, TimeUnit.MINUTES)
         val out = StringBuilder()
+        val long = mutableListOf<String>()
         var passed = 0
         results.forEach { (c, future) ->
             val (o, crash) = future.get()
@@ -224,6 +266,8 @@ class AiEvalTest {
                 else -> runCatching { c.check(o).filter { !it.second }.map { it.first } }.getOrElse { listOf("check crashed: " + it.message) }
             }
             if (failed.isEmpty()) passed++
+            // The rule is one short sentence: longer answers are listed, they do not fail the case.
+            o?.answers?.mapNotNull { it?.text }?.filter { it.split(Regex("""\s+""")).size > 25 }?.forEach { long += c.name + ": " + it.replace("\n", " ") }
             out.append(if (failed.isEmpty()) "PASS  " else "FAIL  ").append(c.name).append("  <- ").append(c.turns.joinToString(" | ") { it.said }).append('\n')
             if (failed.isNotEmpty()) {
                 out.append("      wanted: ").append(failed.joinToString("; ")).append('\n')
@@ -233,6 +277,7 @@ class AiEvalTest {
         }
         val head = "AI eval: $passed of ${chosen.size} passed · ${Ai.modelNow()} · effort ${Ai.effort} · " + tokensIn.get() + " in, " + tokensOut.get() + " out · $" +
             String.format(java.util.Locale.US, "%.4f", spent.get() / 1_000_000.0) + "\n\n"
+        if (long.isNotEmpty()) out.append("\nLONG ANSWERS (over 25 words)\n").append(long.joinToString("\n") { "      $it" }).append('\n')
         File("build").mkdirs()
         File("build/ai-eval.txt").writeText(head + out)
         println(head + out)

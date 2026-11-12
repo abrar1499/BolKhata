@@ -1316,7 +1316,8 @@ fun App(
                         entries = { entries }, add = { save(it + entries) },
                         update = { changed -> save(entries.map { e -> changed.firstOrNull { it.id == e.id } ?: e }) },
                         trash = { ids -> moveToTrash(ids) }, names = { names0 }, currency = currency,
-                        setup = { sides }, saveSetup = { s -> sides = s; store.saveSides(s) }, pdf = { doc -> aiPdf[0]?.invoke(doc) }
+                        setup = { sides }, saveSetup = { s -> sides = s; store.saveSides(s) }, pdf = { doc -> aiPdf[0]?.invoke(doc) },
+                        trashed = { trash }, restore = { ids -> val back = trash.filter { it.id in ids }; save(back + entries); saveTrash(trash.filter { it.id !in ids }) }
                     )
                     // Learnt from the AI before: a message of the same shape (only its numbers differ) is done by the app alone, for nothing.
                     // People and numbers are open places in it, so a known sentence with another name needs no AI either.

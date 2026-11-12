@@ -72,7 +72,12 @@ object Query {
                 (f.persons.isEmpty() || f.persons.any { samePerson(e.person, it) || e.note.contains(it.trim(), true) }) &&
                 (f.cats.isEmpty() || e.category in f.cats) && e.category !in f.notCats &&
                 // Spaces don't matter: "easypaisa" finds "Easy Paisa".
-                (f.items.isEmpty() || f.items.any { w -> val q = w.lowercase().replace(" ", ""); (e.item + e.note).lowercase().replace(" ", "").contains(q) }) &&
+                // Another spelling or the English word finds it too: "chai" finds an entry saved as Tea.
+                (f.items.isEmpty() || f.items.any { w ->
+                    val q = w.lowercase().replace(" ", "")
+                    (e.item + e.note).lowercase().replace(" ", "").contains(q) ||
+                        (e.item + " " + e.note).split(Regex("""[^\p{L}\p{N}]+""")).any { it.isNotBlank() && Normalizer.root(it) == Normalizer.root(q) }
+                }) &&
                 (f.min == null || e.amount >= f.min) && (f.max == null || e.amount <= f.max) &&
                 (!f.noPeople || (e.person.isBlank() && !Recat.isTransfer(e) && !e.note.startsWith("To ") && !e.note.startsWith("From "))) &&
                 (f.notItems.isEmpty() || f.notItems.none { w -> val q = w.lowercase(); e.item.lowercase().contains(q) || e.note.lowercase().contains(q) })
