@@ -125,6 +125,8 @@ object AiAgent {
                 required = listOf("title"))),
         Ai.Tool("delete_entries", "Moves saved entries to Trash (ids from find_entries); the person can restore them.", shape("ids" to words("Entry ids"),
             "confirmed" to JSONObject().put("type", "boolean").put("description", "True only after the person said yes to deleting this many"), required = listOf("ids"))),
+        Ai.Tool("rename_person", "Gives a person a new name everywhere: all their entries and their place in an account. Also puts two spellings of one person together (to: the name that stays).",
+            shape("from" to text("The saved name now"), "to" to text("The new name"), required = listOf("from", "to"))),
         Ai.Tool("restore_entries", "Brings entries back from Trash: the last so many deleted, or by id. With nothing given it lists what is in Trash.", shape(
             "last" to number("How many of the most recently deleted to bring back"), "ids" to words("Ids from the Trash list")))
     )
@@ -187,6 +189,7 @@ object AiAgent {
           very same message sent again means it happened again: save it again with again true, do not say it is saved.
           A wrong count or rate of a sale or work is set with qty or rate, not amount.
         - "wapas lao", "restore", "undo the delete": restore_entries (last: how many were just deleted).
+        - A person's name changed, or two spellings of one person: rename_person.
         - A khata or account for a person, with no kind said, is put_in_account People; do not ask which kind.
         - To change or delete, first find_entries for the ids. When it is clear which entries are meant, do it without
           asking again; when it is not, ask one short question instead of guessing. Deleted entries go to Trash.
@@ -544,6 +547,18 @@ object AiAgent {
             if (ids.size > 25 && !input.optBoolean("confirmed", false)) error("that is " + ids.size + " entries: ask the person to confirm first, then call again with confirmed true")
             host.trash(ids)
             JSONObject().put("moved_to_trash", ids.size).toString()
+        }
+        "rename_person" -> {
+            val from = input.optString("from").trim()
+            val to = input.optString("to").trim().take(40)
+            if (from.isBlank() || to.isBlank()) error("from and to are needed")
+            val theirs = host.entries().filter { it.person.trim().equals(from, true) }
+            val setup = host.setup()
+            val account = setup.people.entries.firstOrNull { it.key.equals(from, true) }?.value
+            if (theirs.isEmpty() && account == null) error("no saved person is called $from")
+            host.update(theirs.map { it.copy(person = to) })
+            if (account != null) host.saveSetup(setup.copy(people = setup.people.filterKeys { !it.equals(from, true) } + (to to account)))
+            JSONObject().put("renamed_entries", theirs.size).put("name", to).toString()
         }
         "restore_entries" -> {
             val bin = host.trashed()
