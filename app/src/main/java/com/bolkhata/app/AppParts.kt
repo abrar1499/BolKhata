@@ -34,6 +34,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
@@ -87,7 +88,8 @@ internal fun InputBar(
                 Row(Modifier.heightIn(min = 38.dp).padding(start = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     // Recording or listening: a red line with the time (or the words heard so far); the button sends.
                     if (talking) Text(
-                        "● " + if (voice!!.heard.isNotBlank() && voice.heard != "tap to send") voice.heard
+                        "● " + if (voice!!.live) voice.status + "…"
+                            else if (voice.heard.isNotBlank() && voice.heard != "tap to send") voice.heard
                             else voice.status + " " + seconds / 60 + ":" + (seconds % 60).toString().padStart(2, '0') + " · tap to send",
                         color = RedSpend, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f).padding(horizontal = 4.dp, vertical = 7.dp)
@@ -107,13 +109,17 @@ internal fun InputBar(
                             }
                         }
                     )
+                    if (talking && voice!!.live) {
+                        LiveWave(voice.level, voice.status == "Working")
+                        Spacer(Modifier.width(8.dp))
+                    }
                     // A plain line mic in a white circle with a soft shadow (no colour fill).
                     Box(
                         Modifier
                             .size(30.dp)
                             .shadow(1.dp, CircleShape)
                             .clip(CircleShape)
-                            .background(if (talking) RedSpend else MaterialTheme.colorScheme.surface)
+                            .background(if (talking && !voice!!.live) RedSpend else MaterialTheme.colorScheme.surface)
                             .clickable(enabled = talking || !busy) {
                                 when {
                                     talking -> voice!!.toggle()
@@ -124,6 +130,8 @@ internal fun InputBar(
                         contentAlignment = Alignment.Center
                     ) {
                         when {
+                            // Live voice: a square to stop; a recording: the arrow sends it.
+                            talking && voice!!.live -> Box(Modifier.size(11.dp).clip(RoundedCornerShape(3.dp)).background(ink))
                             talking -> Icon(Icons.Filled.ArrowUpward, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(18.dp))
                             busy -> CircularProgressIndicator(Modifier.size(18.dp), color = ink, strokeWidth = 2.dp)
                             text.isNotBlank() -> Icon(Icons.Filled.ArrowUpward, contentDescription = "Send", tint = ink, modifier = Modifier.size(20.dp))
@@ -131,6 +139,14 @@ internal fun InputBar(
                         }
                     }
                 }
+            }
+            // The ring round the button swells with the voice. It reaches over the field's edge, so it is drawn on top of it.
+            if (talking && voice!!.live) {
+                val swell by androidx.compose.animation.core.animateFloatAsState(voice.level.coerceIn(0f, 1f), androidx.compose.animation.core.tween(140), label = "ring")
+                val working = voice.status == "Working"
+                Box(Modifier.align(Alignment.CenterEnd).padding(end = 1.dp).size(36.dp)
+                    .graphicsLayer { val s = 1f + swell * 0.16f; scaleX = s; scaleY = s; alpha = if (working) 0.3f else 0.3f + swell * 0.6f }
+                    .border(2.dp, GreenIn, CircleShape))
             }
         }
     }
@@ -142,8 +158,25 @@ internal fun InputBar(
  */
 class VoiceState(
     val on: Boolean, val status: String, val heard: String,
-    val reply: String = "", val level: Float = 0f, val toggle: () -> Unit
+    val reply: String = "", val level: Float = 0f,
+    /** Live voice: the bar says Listening / Working, with a small wave and a ring round the button; a tap stops it. */
+    val live: Boolean = false, val toggle: () -> Unit
 )
+
+/** Five small green bars in the bar while live voice is on: they rise with the voice, and hop in turn while the answer is made. */
+@Composable
+private fun LiveWave(level: Float, working: Boolean) {
+    val turn by androidx.compose.animation.core.rememberInfiniteTransition(label = "live").animateFloat(
+        0f, 1f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(700, easing = androidx.compose.animation.core.LinearEasing)), label = "turn")
+    Row(Modifier.height(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.5.dp)) {
+        listOf(6f, 12f, 8f, 13f, 5f).forEachIndexed { i, most ->
+            val tall by androidx.compose.animation.core.animateDpAsState(
+                if (working) 3.dp else (3f + level.coerceIn(0f, 1f) * most).dp, androidx.compose.animation.core.tween(140), label = "bar")
+            val hop = if (working) kotlin.math.sin((turn - i * 0.14f) * 2 * Math.PI).toFloat().coerceAtLeast(0f) * 3f else 0f
+            Box(Modifier.offset(y = (-hop).dp).width(2.5.dp).height(tall).clip(RoundedCornerShape(2.dp)).background(GreenIn))
+        }
+    }
+}
 
 /** Header themes offered in the side menu (the app's glossy bands), in this order. */
 private val MENU_THEMES = listOf("Clean", "Red", "Green", "Navy")

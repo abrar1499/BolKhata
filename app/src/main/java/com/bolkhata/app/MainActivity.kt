@@ -1245,6 +1245,8 @@ fun App(
     val aiPdf = remember { arrayOfNulls<(PdfDoc) -> Unit>(1) }
     // The recording of a voice message just heard: the chat shows it as a voice note in place of its words.
     val voiceNote = remember { arrayOfNulls<String>(1) }
+    // True while a sentence of live voice is handed to the chat: its words are stored but not shown.
+    val liveSay = remember { booleanArrayOf(false) }
     // How the AI's last look-up picked its entries, so a follow-up ("detail do") goes on from it.
     var aiPicked by remember { mutableStateOf("") }
     // The entries the AI's last answer saved, so a correction ("nahi 40 tha") can change them.
@@ -1277,8 +1279,10 @@ fun App(
         val roman = runCatching { Translit.toRoman(text) }.getOrDefault(text)
         // A long window, so a follow-up still knows the search or list from many turns back.
         val history = chatMessages.takeLast(60)
-        postChat(text, isUser = true, attachment = voiceNote[0].orEmpty())
+        // What is said in live voice is kept for the AI's memory of the talk, but not shown.
+        postChat(text, isUser = true, attachment = voiceNote[0].orEmpty(), meta = if (liveSay[0]) "live" else "")
         voiceNote[0] = null
+        liveSay[0] = false
 
         if (!Ai.handles(groqKey)) NativeMemory.handle(text, store.memory)?.let { memory ->
             store.memory = memory.facts
@@ -2215,6 +2219,8 @@ fun App(
     var hearing by remember { mutableStateOf(false) }
     var heardSoFar by remember { mutableStateOf("") }
     DisposableEffect(Unit) { onDispose { listener.release() } }
+    // Live voice listens again as soon as the answer to the last sentence is there.
+    LaunchedEffect(chatLoading) { if (!chatLoading) listener.resume() }
 
     fun startVoice(forChat: Boolean = false) {
         if (whisperOn()) {
@@ -2238,11 +2244,18 @@ fun App(
             keepHearings(listOf(said), said)
             // With the AI reading it, the words go as heard; else the app's own voice fixes come first.
             val fixed = if (Ai.handles(groqKey)) said else Normalizer.voiceFix(said, voiceKnown())
-            if (forChat) chatInput(fixed) else homeInput(fixed)
+            if (forChat) {
+                liveSay[0] = true
+                chatInput(fixed)
+                liveSay[0] = false
+                // Answered on the spot (nothing is being worked on): listen for the next sentence at once.
+                if (!chatLoading) listener.resume()
+            } else homeInput(fixed)
         }
         // Outside the chat no bar shows the words: say that it listens.
         if (!forChat) toast("Listening… speak now")
-        listener.start(voiceLang())
+        // In the chat the mic is live voice: sentence after sentence, each answered in the chat, until it is tapped again.
+        listener.start(voiceLang(), live = forChat)
     }
 
     var updateMsg by remember { mutableStateOf<String?>(null) }
@@ -2408,7 +2421,8 @@ fun App(
                         onSend = { chatInput(it) }, onMic = { startVoice(forChat = true) }, placeholder = "Speak, type or ask…",
                         busy = chatLoading,
                         voice = if (recorder != null) VoiceState(true, "Recording", "tap to send", level = voiceLevel) { finishRecording() }
-                            else if (hearing) VoiceState(true, "Listening", heardSoFar.ifBlank { "tap to send" }, level = voiceLevel) { listener.stop() } else null,
+                            else if (hearing) VoiceState(true, if (listener.live && chatLoading) "Working" else "Listening", heardSoFar.ifBlank { "tap to send" },
+                                level = voiceLevel, live = listener.live) { listener.stop() } else null,
                         navPad = false
                     )
                     KhataNav(tab) { tab = it; backToChat = false; profitOpen = false; bizPage = false; bizNew = false }
