@@ -1330,6 +1330,8 @@ fun App(
         loadingLabel = "Typing…"
         scope.launch {
             try {
+                // The app's own answer is ready at once; a short beat lets "Typing…" show, so the chat feels like a reply.
+                if (!retry) kotlinx.coroutines.delay(450)
                 // Reading the message runs off the main thread, so the chat keeps scrolling smoothly with many entries.
                 val scoped = scopeKhataEntries(entries)
                 val names0 = contactNames()
