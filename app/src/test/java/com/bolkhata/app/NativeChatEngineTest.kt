@@ -521,6 +521,10 @@ class NativeChatEngineTest {
         assertTrue(result.reply.isNotBlank())
     }
 
+    @Test fun whichPersonQuestionOffersEveryName() =
+        assertEquals(listOf("Salim Khan", "Salim Raza", "Nargis Salim Rashid"),
+            NativeChatEngine.nameChoices("Which Salim do you mean: Salim Khan, Salim Raza or Nargis Salim Rashid?"))
+
     @Test fun howAreYouSpellingsAndNodsAreSmallTalk() {
         assertEquals("Good, you?", read("kese ho").reply)
         assertEquals("chat", read("kesy ho").kind)

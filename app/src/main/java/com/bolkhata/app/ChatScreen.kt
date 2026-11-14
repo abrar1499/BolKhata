@@ -178,7 +178,9 @@ fun ChatScreen(
                             // "Move to which khata: A or B?": the tap repeats the move with the full name.
                             val moving = message.text.startsWith("Move to which account") || message.text.startsWith("Move to which khata")
                             val asked = messages.lastOrNull { it.isUser }?.text.orEmpty()
-                            if (names.isNotEmpty()) NameChoices(names) { name -> onSend(if (moving) "$asked $name" else "$name account") }
+                            // "Which Imran do you mean: A or B?" (a message waiting for its person): the tap answers with the name.
+                            val picking = Regex("""^Which \S+ do you mean: """).containsMatchIn(message.text)
+                            if (names.isNotEmpty()) NameChoices(names) { name -> onSend(if (moving) "$asked $name" else if (picking) name else "$name account") }
                             // After a total, the likely next questions as chips.
                             val hero = remember(message.text, currency) { Report.parse(message.text, currency)?.hero?.label.orEmpty() }
                             val asks = when {

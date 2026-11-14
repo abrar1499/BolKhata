@@ -79,7 +79,12 @@ class LocalAddTest {
     @Test fun noMarker() = saves("hamid 500 diye") { has(Type.DIYA, "Hamid Akram", 500.0) }
     @Test fun customerPays() = saves("nargis ne 2000 diye") { has(Type.WAPIS_MILA, "Nargis Salim Rashid", 2_000.0) }
     @Test fun takenFromSomeone() = saves("salim khan se 300 liye") { has(Type.WAPIS_MILA, "Salim Khan", 300.0) }
-    @Test fun whatItWasForIsAShortNote() = listOf("hamid ko 500 diye for kafeel", "hamid ko 500 diye kafeel ke liye").forEach {
+    @Test fun forWordsAreNoOnesName() = Books().run {
+        entries = entries + Entry("k1", Type.DIYA, 100.0, Cat.UDHAAR, "Loans", "Kafeel Ahmed", "", now - day, now - day)
+        say("hamid ko 500 diye kafeel ke liye")
+        assertEquals(listOf("Hamid Akram"), added.filter { it.id != "k1" }.map { it.person })
+    }
+        @Test fun whatItWasForIsAShortNote() = listOf("hamid ko 500 diye for kafeel", "hamid ko 500 diye kafeel ke liye").forEach {
         saves(it) { added.any { e -> e.person == "Hamid Akram" && e.amount == 500.0 && e.note == "Kafeel" } }
     }
 

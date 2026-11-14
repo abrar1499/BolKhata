@@ -585,11 +585,12 @@ object NativeChatEngine {
 
     /** The saved names offered in "Which A or B do you mean?" / "Please choose one saved name: A or B." */
     fun nameChoices(text: String): List<String> {
-        val list = Regex("""^Which (.+) do you mean\?$""").find(text.trim())?.groupValues?.get(1)
+        val list = Regex("""^Which \S+ do you mean: (.+)\?$""").find(text.trim())?.groupValues?.get(1)
+            ?: Regex("""^Which (.+) do you mean\?$""").find(text.trim())?.groupValues?.get(1)
             ?: Regex("""^Please choose one saved name: (.+)\.$""").find(text.trim())?.groupValues?.get(1)
             ?: Regex("""^Move to which (?:account|khata): (.+)\?$""").find(text.trim())?.groupValues?.get(1)
             ?: return emptyList()
-        return list.split(" or ").map { it.trim() }.filter { it.isNotEmpty() }.takeIf { it.size >= 2 }.orEmpty()
+        return list.split(Regex(""",\s*|\s+or\s+""")).map { it.trim() }.filter { it.isNotEmpty() }.takeIf { it.size >= 2 }.orEmpty()
     }
 
     private fun chat(reply: String) = Fixed("", "chat", reply)

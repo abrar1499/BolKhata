@@ -105,8 +105,11 @@ object LocalAdd : LocalAgent.Reader {
         val isNew = w.any { it in newWords }
         val book = w.firstNotNullOfOrNull { bookWords[it] }
         val mentions = mutableListOf<Mention>()
+        // "for kafeel", "kafeel ke liye": what the money was for, never a person.
+        val forWords = forSpan(w)
         var i = 0
         while (i < w.size) {
+            if (i in forWords) { i++; continue }
             when (val found = person(w, i, c, isNew && book != null)) {
                 is Unsure -> return Got.Ask("Which " + found.word.replaceFirstChar { it.uppercase() } + " do you mean: " + listed(found.choices) + "?")
                 is Mention -> { mentions += found; c.last = found.name; i = found.to }
@@ -459,6 +462,16 @@ object LocalAdd : LocalAgent.Reader {
         "advance" in w || "adv" in w || "edvance" in w -> "Advance"
         w.any { it in incomeWords } -> content.firstOrNull { it in incomeWords }?.replaceFirstChar { it.uppercase() } ?: "Salary"
         else -> forWhat(w)
+    }
+
+    /** Where a clause says what the money was for ("for kafeel", "kafeel ke liye", "kafeel ko dena"): those words are no one's name. */
+    private fun forSpan(w: List<String>): Set<Int> {
+        val out = mutableSetOf<Int>()
+        val f = w.indexOf("for")
+        if (f >= 0) (f + 1 until w.size).takeWhile { num(w[it]) == null && w[it] !in setOf("aur", "and") }.forEach { out += it }
+        w.indices.filter { it >= 2 && w[it] == "liye" && w[it - 1] in setOf("ke", "k") }.forEach { out += it - 2 }
+        w.indices.filter { it >= 2 && w[it] in setOf("dena", "deni", "dene") && w[it - 1] == "ko" }.forEach { out += it - 2 }
+        return out
     }
 
     /** What the money was for, as said: "… for kafeel", "kafeel ke liye", "os ne kafeel ko dena tha": "Kafeel" (a few words). */
