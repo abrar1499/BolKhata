@@ -476,7 +476,9 @@ object Groq {
         val tokens = usedTokens.getAndSet(0)
         if (ms == 0L) return ""
         Ai.takeUsage(ms)?.let { return it }
-        return "Groq · " + String.format(java.util.Locale.US, "%.1fs", ms / 1000.0) + if (tokens > 0) " · $tokens tokens" else ""
+        // Groq was asked but gave nothing back: the answer is the app's own, so no Groq line.
+        if (tokens <= 0) return ""
+        return "Groq · " + String.format(java.util.Locale.US, "%.1fs", ms / 1000.0) + " · $tokens tokens"
     }
 
     private fun post(url: String, key: String, type: String, body: ByteArray): Pair<Int, String> {
