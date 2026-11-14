@@ -35,6 +35,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -2447,6 +2448,8 @@ fun App(
 
     ModalNavigationDrawer(
         drawerState = drawer,
+        // The side menu opens from the business pill only; a swipe moves between the tabs instead (it still closes it).
+        gesturesEnabled = drawer.isOpen,
         drawerContent = {
             fun close() = scope.launch { drawer.close() }
             SideMenu(
@@ -2561,7 +2564,16 @@ fun App(
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { pad ->
         // Like ChatGPT, screens run underneath the floating message bar; lists add LocalBarSpace at their end.
-        Box(Modifier.padding(top = pad.calculateTopPadding()).fillMaxSize()) {
+        // On the main tabs a swipe left or right moves to the next or previous tab.
+        val swipeTabs = results == null && people == null && account == null && ledger == null && partyOpen == null && !bizPage && !profitOpen && tab in KHATA_TABS
+        Box(Modifier.padding(top = pad.calculateTopPadding()).fillMaxSize().pointerInput(swipeTabs, tab) {
+            if (!swipeTabs) return@pointerInput
+            var dx = 0f
+            detectHorizontalDragGestures(onDragStart = { dx = 0f }, onDragEnd = {
+                val next = KHATA_TABS.indexOf(tab) + if (dx < 0) 1 else -1
+                if (kotlin.math.abs(dx) > 90.dp.toPx() && next in KHATA_TABS.indices) { tab = KHATA_TABS[next]; backToChat = false }
+            }) { _, d -> dx += d }
+        }) {
             val who = people
             val saveable = rememberSaveableStateHolder()
             val acct = account
