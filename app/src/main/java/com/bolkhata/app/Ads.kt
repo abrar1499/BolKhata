@@ -63,20 +63,20 @@ fun NativeAdCard(place: String, modifier: Modifier = Modifier) {
         onDispose { }
     }
     val shown = ad ?: return
-    AndroidView(modifier.fillMaxWidth(), factory = { adRow(it) }, update = { it.show(shown) })
+    AndroidView(factory = { ctx: Context -> adRow(ctx) }, modifier = modifier.fillMaxWidth(), update = { v: NativeAdView -> v.show(shown) })
 }
 
 /** The banner above the chat bar: the full width, the smallest Google size. */
 @Composable
 fun BannerAd(modifier: Modifier = Modifier) {
     val width = LocalConfiguration.current.screenWidthDp - 24
-    AndroidView(modifier.fillMaxWidth(), factory = { ctx ->
+    AndroidView(modifier = modifier.fillMaxWidth(), factory = { ctx: Context ->
         AdView(ctx).apply {
             setAdSize(AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(ctx, width))
             adUnitId = Ads.bannerUnit
             loadAd(AdRequest.Builder().build())
         }
-    }, onRelease = { it.destroy() })
+    }, onRelease = { v: AdView -> v.destroy() })
 }
 
 private fun Context.dp(v: Int) = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), resources.displayMetrics).toInt()
