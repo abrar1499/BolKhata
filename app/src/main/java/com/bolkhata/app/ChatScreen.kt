@@ -193,7 +193,7 @@ fun ChatScreen(
                         AnswerActions(ratings[message.id]) { good -> onRate(message.id, good) }
                         // "Groq · 1.2s · 340 tokens" under an answer Groq helped with.
                         Regex("""usage=([^;]+)""").find(message.meta)?.let {
-                            Text(it.groupValues[1], fontSize = 8.sp, lineHeight = 8.sp, color = Color(0xFFA39E98),
+                            Text(it.groupValues[1], fontSize = 7.sp, lineHeight = 7.sp, color = Color(0xFFA39E98),
                                 modifier = Modifier.padding(start = 4.dp, top = 3.dp))
                         }
                     }
@@ -393,19 +393,19 @@ private fun UserBubble(text: String, attachment: String = "") {
 private fun AnswerActions(rating: Boolean?, onRate: (good: Boolean) -> Unit) {
     val tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
     Row(Modifier.padding(start = 2.dp, top = 3.dp).shadow(1.dp, RoundedCornerShape(10.dp)).clip(RoundedCornerShape(10.dp))
-        .background(Color.White).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        .background(Color.White).padding(horizontal = 3.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(
             if (rating == true) Icons.Filled.ThumbUpFilled else Icons.Outlined.ThumbUp,
             contentDescription = if (rating == true) "Marked good" else "Good answer",
             tint = if (rating == true) GreenDeep else tint,
-            modifier = Modifier.clickable(enabled = rating != true) { onRate(true) }.padding(horizontal = 5.dp, vertical = 4.dp).size(12.dp)
+            modifier = Modifier.clickable(enabled = rating != true) { onRate(true) }.padding(horizontal = 4.dp, vertical = 3.dp).size(10.dp)
         )
-        Box(Modifier.width(1.dp).height(10.dp).background(Color(0xFFE3DFDA)))
+        Box(Modifier.width(1.dp).height(8.dp).background(Color(0xFFE3DFDA)))
         Icon(
             if (rating == false) Icons.Filled.ThumbDownFilled else Icons.Outlined.ThumbDown,
             contentDescription = if (rating == false) "Marked wrong" else "Wrong answer",
             tint = if (rating == false) MaterialTheme.colorScheme.error else tint,
-            modifier = Modifier.clickable(enabled = rating != false) { onRate(false) }.padding(horizontal = 5.dp, vertical = 4.dp).size(12.dp)
+            modifier = Modifier.clickable(enabled = rating != false) { onRate(false) }.padding(horizontal = 4.dp, vertical = 3.dp).size(10.dp)
         )
     }
 }

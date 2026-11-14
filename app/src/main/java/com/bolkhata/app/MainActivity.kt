@@ -328,11 +328,20 @@ fun App(
                 onFailure = { "Not sent: " + (it.message ?: "network error") }
             )
             if (force) toast(logStatus)
-            // What the app learnt from the AI goes along when it changed, to be checked for the shared brain.
-            val learned = org.json.JSONObject(store.aiLearned.filterKeys { !it.startsWith("=") }).toString(1)
-            if (learned != store.learnedSent && ChatLogUploader.uploadLearned(logRepo, logToken, learned).isSuccess) store.learnedSent = learned
         }
     }
+
+    /**
+     * What the app learnt from the AI (shapes and lessons only, no chat), sent to the private log repository when it
+     * changed, to be checked for the shared brain (see Brain). Works with the chat log itself turned off.
+     */
+    fun sendLearned() {
+        if (logToken.isBlank() || logRepo.isBlank()) return
+        val learned = org.json.JSONObject(store.aiLearned.filterKeys { !it.startsWith("=") }).toString(1)
+        if (learned == store.learnedSent) return
+        scope.launch { if (ChatLogUploader.uploadLearned(logRepo, logToken, learned).isSuccess) store.learnedSent = learned }
+    }
+    LaunchedEffect(Unit) { sendLearned() }
 
     LaunchedEffect(Unit) { sendChatLog() }
 
@@ -1467,7 +1476,7 @@ fun App(
                     // A new spelling of a name is learnt as one word; the sentence around it as its shape.
                     val lesson = answer?.lesson.orEmpty()
                     val words = answer?.words.orEmpty()
-                    if (words.isNotEmpty() || lesson.isNotBlank()) store.aiLearned = store.aiLearned + words + (if (lesson.isBlank()) emptyMap() else mapOf(answer!!.shape to lesson))
+                    if (words.isNotEmpty() || lesson.isNotBlank()) { store.aiLearned = store.aiLearned + words + (if (lesson.isBlank()) emptyMap() else mapOf(answer!!.shape to lesson)); sendLearned() }
                     // What the app's own engine made of it goes in the log, so its rules can be taught where it differs from the AI.
                     val own = runCatching { offMain { NativeChatEngine.interpret(roman, scoped, names0, wordFixes, history, currency = currency) } }.getOrNull()
                     postChat(card.ifBlank { answer?.text ?: lastSpeech }, isUser = false, entryIds = answer?.added.orEmpty(), listIds = answer?.listIds.orEmpty(),
