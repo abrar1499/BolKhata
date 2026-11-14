@@ -41,6 +41,8 @@ class LocalEditTest {
         )
         private val history = mutableListOf<String>()
         private var justSaved = emptyList<String>()
+        /** The look-up (or pending choice) the last answer left, as the chat passes it on. */
+        private var previous = ""
         /** The tools the last message used. */
         val tools = mutableListOf<String>()
 
@@ -59,17 +61,35 @@ class LocalEditTest {
             val lastShown = history.lastOrNull { it.startsWith("App: ") }?.removePrefix("App: ").orEmpty()
             val notes = AiAgent.Notes(said = (AiAgent.numbers(roman) + AiAgent.numbers(counted)).distinct(), lastShown = lastShown)
             tools.clear()
-            val s = LocalAgent.Said(text, roman, counted, host, now, "", justSaved, lastShown, history.takeLast(6).joinToString("\n"), notes) { name, _, _ -> tools += name }
+            val s = LocalAgent.Said(text, roman, counted, host, now, previous, justSaved, lastShown, history.takeLast(6).joinToString("\n"), notes) { name, _, _ -> tools += name }
             val reply = LocalEdit.read(s)
             history += "Person: $text"
             history += "App: " + reply?.text.orEmpty()
             justSaved = notes.added.toList()
+            previous = notes.filter
             return reply
         }
 
         fun byId(id: String) = entries.firstOrNull { it.id == id }
         fun bookOf(person: String) = Sides.bookOf(person, entries, setup)
     }
+
+    /** Two of one person's entries on one day: the delete lists them, numbered, and does only the one picked. */
+    private fun picksOneOfTwo(answer: String, left: List<String>) = Books().run {
+        entries = listOf(lent("t1", "Bilal Tariq", 500.0), lent("t2", "Bilal Tariq", 500.0).copy(date = now - 60_000, note = "Kafeel"),
+            lent("t3", "Bilal Tariq", 500.0).copy(date = now - 86_400_000L))
+        val today = java.text.SimpleDateFormat("d MMM", java.util.Locale.US).format(java.util.Date(now)).lowercase()
+        val asked = say("bilal tariq ki $today wali entry delete kar do")!!.text
+        assertTrue(asked, asked.startsWith("2 entries like that:") && asked.contains("1. ") && asked.contains("2. "))
+        say(answer)
+        assertEquals(answer, left, entries.map { it.id }.sorted())
+    }
+
+    @Test fun theSecondOfTwo() = picksOneOfTwo("dusri", listOf("t1", "t3"))
+    @Test fun theFirstByNumber() = picksOneOfTwo("1", listOf("t2", "t3"))
+    @Test fun theDayStillFitsBothSoItAsksAgain() = picksOneOfTwo("sirf ${java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_MONTH)} wali", listOf("t1", "t2", "t3"))
+    @Test fun bothWhenSaid() = picksOneOfTwo("dono", listOf("t3"))
+    @Test fun noneWhenNo() = picksOneOfTwo("nahi", listOf("t1", "t2", "t3"))
 
     private fun lent(id: String, person: String, amount: Double) = Entry(id, Type.DIYA, amount, Cat.UDHAAR, "Loans", person, "", now, now)
     private fun spent(id: String, item: String, amount: Double, cat: Cat) = Entry(id, Type.KHARCHA, amount, cat, item, "", "", now, now)
