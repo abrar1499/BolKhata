@@ -1276,15 +1276,18 @@ fun App(
         trashed = { trash }, restore = { ids -> val back = trash.filter { it.id in ids }; save(back + entries); saveTrash(trash.filter { it.id !in ids }) }
     )
 
-    /** Without AI (no key, or no internet): save clear entries, answer simple questions, never stay silent. */
-    fun chatInput(raw: String) {
+    /**
+     * The app's own assistant answers first; the AI only when it cannot. [retry]: the same message again after 👎 on
+     * the app's answer, straight to the AI (not shown twice), so the AI's right reading is learnt for next time.
+     */
+    fun chatInput(raw: String, retry: Boolean = false) {
         if (chatMessages.isEmpty()) lastGroqQuery = ""
         val text = raw.trim()
         if (text.isEmpty() || chatLoading) return
         val previousUser = chatMessages.lastOrNull { it.isUser }
         val latestAssistant = chatMessages.lastOrNull { !it.isUser }
         // With an AI key the AI reads every message; the app's own quick answers stand aside.
-        if (!Ai.handles(groqKey) && previousUser != null && latestAssistant != null &&
+        if (!retry && !Ai.handles(groqKey) && previousUser != null && latestAssistant != null &&
             Accounts.isRecentDuplicateMutationRequest(
                 previousUser.text, previousUser.timestamp, latestAssistant.text, latestAssistant.timestamp,
                 latestAssistant.entryIds.isNotEmpty(), text, System.currentTimeMillis()
@@ -1299,18 +1302,18 @@ fun App(
         val history = chatMessages.takeLast(60)
         // What is said in live voice is kept for the AI's memory of the talk, but not shown.
         val live = liveSay[0]
-        postChat(text, isUser = true, attachment = voiceNote[0].orEmpty(), meta = if (live) "live" else "")
+        if (!retry) postChat(text, isUser = true, attachment = voiceNote[0].orEmpty(), meta = if (live) "live" else "")
         voiceNote[0] = null
         liveSay[0] = false
 
-        if (!Ai.handles(groqKey)) NativeMemory.handle(text, store.memory)?.let { memory ->
+        if (!retry && !Ai.handles(groqKey)) NativeMemory.handle(text, store.memory)?.let { memory ->
             store.memory = memory.facts
             lastSpeech = memory.reply
             postChat(memory.reply, isUser = false)
             return
         }
 
-        if (!Ai.handles(groqKey)) {
+        if (!retry && !Ai.handles(groqKey)) {
             handleCurrentKhataMoveCommand(text)?.let { lastSpeech = it; postChat(it, isUser = false); return }
             handleCurrentKhataBulkCommand(text)?.let { lastSpeech = it; postChat(it, isUser = false); return }
         }
@@ -1322,24 +1325,16 @@ fun App(
                 val scoped = scopeKhataEntries(entries)
                 val names0 = contactNames()
                 // A saved person and a number, nothing else: the chat asks what happened with a small card, in any language.
-                Ask.of(AiAgent.counted(roman), AiAgent.who(names0, store.aiLearned))?.let { (p, n) ->
+                if (!retry) Ask.of(AiAgent.counted(roman), AiAgent.who(names0, store.aiLearned))?.let { (p, n) ->
                     val book = Sides.bookOf(p, entries, sides)
                     lastSpeech = "Choose"
                     postChat("", isUser = false, meta = "ask=$p|$n|" + Ask.kinds(book).joinToString(",") + (if (book == Sides.STAFF) "|staff" else ""))
                     return@launch
                 }
-                // Test feature: with an AI key saved, the AI does the whole job itself through tools (see AiAgent).
-                var aiDown = false
-                var aiWhy = ""
-                if (Ai.handles(groqKey)) {
-                    val started = System.currentTimeMillis()
-                    val spoken = aiHeard[0] != null
-                    val heardAlso = aiHeard[0].orEmpty()
-                    aiHeard[0] = null
-                    val recent = history.takeLast(6).joinToString("\n") { (if (it.isUser) "Person: " else "App: ") + it.text.take(200) }
+                // Learnt from the AI before: a message of the same shape (only its numbers differ) is done by the app alone, for nothing.
+                // People and numbers are open places in it, so a known sentence with another name needs no AI either.
+                if (!retry) {
                     val host = chatHost(names0)
-                    // Learnt from the AI before: a message of the same shape (only its numbers differ) is done by the app alone, for nothing.
-                    // People and numbers are open places in it, so a known sentence with another name needs no AI either.
                     val who = AiAgent.who(names0, store.aiLearned)
                     val counted = AiAgent.counted(roman)
                     val shape = AiAgent.shape(counted, who)
@@ -1354,6 +1349,43 @@ fun App(
                             return@launch
                         }
                     }
+                }
+                // The app's own assistant (LocalAgent) first, offline and free, with the AI's tools; the AI only when it cannot.
+                // Inside an open account the older rules stay, as they keep to that account.
+                if (!retry && scoped.size == entries.size) {
+                    chatWatch = null
+                    val mine = runCatching {
+                        LocalAgent.run(text, chatHost(names0), roman = roman, previous = aiPicked, justSaved = aiSaved,
+                            lastShown = history.lastOrNull { !it.isUser }?.text.orEmpty(),
+                            recent = history.takeLast(6).joinToString("\n") { (if (it.isUser) "Person: " else "App: ") + it.text.take(200) })
+                    }.getOrNull()
+                    if (mine != null) {
+                        aiHeard[0] = null
+                        if (mine.ask.isNotBlank()) {
+                            val book = Sides.bookOf(mine.ask.substringBefore("|"), entries, sides)
+                            lastSpeech = "Choose"
+                            postChat("", isUser = false, meta = "ask=${mine.ask}|" + Ask.kinds(book).joinToString(",") + (if (book == Sides.STAFF) "|staff" else ""))
+                            return@launch
+                        }
+                        aiPicked = mine.filter
+                        aiSaved = mine.added
+                        if (mine.added.isNotEmpty()) lastAdded = mine.added
+                        lastSpeech = mine.text.ifBlank { if (mine.added.isNotEmpty()) "Saved" else mine.card }
+                        postChat(mine.card.ifBlank { mine.text }, isUser = false, entryIds = mine.added, listIds = mine.listIds,
+                            meta = "engine=LocalAgent; intent=agent" + (if (mine.card.isBlank()) "; plain" else "") + "; usage=App engine")
+                        return@launch
+                    }
+                }
+                // Test feature: with an AI key saved, the AI does the whole job itself through tools (see AiAgent).
+                var aiDown = false
+                var aiWhy = ""
+                if (Ai.handles(groqKey)) {
+                    val started = System.currentTimeMillis()
+                    val spoken = aiHeard[0] != null
+                    val heardAlso = aiHeard[0].orEmpty()
+                    aiHeard[0] = null
+                    val recent = history.takeLast(6).joinToString("\n") { (if (it.isUser) "Person: " else "App: ") + it.text.take(200) }
+                    val host = chatHost(names0)
                     // The AI is asked off the main thread; each tool then runs on it, where the entries live.
                     suspend fun ask() = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                         AiAgent.run(text, recent, host, roman = roman, previous = aiPicked, justSaved = aiSaved, heardAlso = heardAlso, spoken = spoken, known = store.aiLearned, lastShown = history.lastOrNull { !it.isUser }?.text.orEmpty()) { tool -> kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.Main) { tool() } }
@@ -1418,31 +1450,11 @@ fun App(
                     return@launch
                     }
                 }
-                // No AI answered: the app's own assistant (LocalAgent) does the job with the same tools, offline and free.
-                // Inside an open account the older rules stay, as they keep to that account.
-                if ((!Ai.handles(groqKey) || aiDown) && scoped.size == entries.size) {
-                    aiHeard[0] = null
-                    chatWatch = null
-                    val mine = runCatching {
-                        LocalAgent.run(text, chatHost(names0), roman = roman, previous = aiPicked, justSaved = aiSaved,
-                            lastShown = history.lastOrNull { !it.isUser }?.text.orEmpty(),
-                            recent = history.takeLast(6).joinToString("\n") { (if (it.isUser) "Person: " else "App: ") + it.text.take(200) })
-                    }.getOrNull()
-                    if (mine != null) {
-                        if (mine.ask.isNotBlank()) {
-                            val book = Sides.bookOf(mine.ask.substringBefore("|"), entries, sides)
-                            lastSpeech = "Choose"
-                            postChat("", isUser = false, meta = "ask=${mine.ask}|" + Ask.kinds(book).joinToString(",") + (if (book == Sides.STAFF) "|staff" else ""))
-                            return@launch
-                        }
-                        aiPicked = mine.filter
-                        aiSaved = mine.added
-                        if (mine.added.isNotEmpty()) lastAdded = mine.added
-                        lastSpeech = mine.text.ifBlank { if (mine.added.isNotEmpty()) "Saved" else mine.card }
-                        postChat(mine.card.ifBlank { mine.text }, isUser = false, entryIds = mine.added, listIds = mine.listIds,
-                            meta = "engine=LocalAgent; intent=agent" + (if (mine.card.isBlank()) "; plain" else "") + (if (aiWhy.isBlank()) "" else "; ai=down") + "; usage=App engine")
-                        return@launch
-                    }
+                // Asked again after 👎 and no AI answered: said plainly, the app's own answer is not given a second time.
+                if (retry) {
+                    lastSpeech = "The AI could not answer now" + (if (aiWhy.isBlank()) "." else " ($aiWhy).")
+                    postChat(lastSpeech, isUser = false, meta = "plain")
+                    return@launch
                 }
                 // With Groq on, Groq reads every message first: money and app requests become a clear command that the
                 // local engine runs against the saved records (totals, reports, cashbook); anything else Groq answers.
@@ -2656,6 +2668,16 @@ fun App(
                             }
                             chatRatings = chatRatings + (id to good)
                             sendChatLog(force = logToken.isNotBlank())
+                            // 👎 on the app's own answer: what it saved goes to Trash and the AI reads the message; a save it makes
+                            // is learnt, so the next message of that shape is done right by the app alone.
+                            val rated = chatMessages.firstOrNull { it.id == id }
+                            if (!good && rated != null && "engine=LocalAgent" in rated.meta && Ai.handles(groqKey)) {
+                                chatMessages.take(chatMessages.indexOf(rated)).lastOrNull { it.isUser }?.let { q ->
+                                    if (rated.entryIds.isNotEmpty()) moveToTrash(rated.entryIds.toSet())
+                                    aiSaved = emptyList(); aiPicked = ""
+                                    chatInput(q.text, retry = true)
+                                }
+                            }
                         },
                         onAsked = { id, e ->
                             if (e != null) save(listOf(e) + entries)
