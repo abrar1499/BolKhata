@@ -499,7 +499,7 @@ internal fun LazyListScope.ledger(
     rows.forEachIndexed { i, r ->
         if (i == 0 || !sameDay(rows[i - 1].date, r.date)) {
             // A quiet ad between days, every sixth day.
-            if (days > 0 && days % 6 == 0) item(key = keyPrefix + "ad" + days) { NativeAdCard("ledger-$keyPrefix$title-$days", Modifier.padding(horizontal = 10.dp, vertical = 6.dp), video = true) }
+            if (days > 0 && days % 6 == 0) item(key = keyPrefix + "ad" + days) { NativeAdCard("ledger-$keyPrefix$title-$days", Modifier.padding(horizontal = 10.dp, vertical = 6.dp), video = true, round = false) }
             days++
             val day = byDay[dayNumber(r.date)].orEmpty()
             item(key = keyPrefix + "d" + r.key) { DayLine(r.date, cols, day, cards) }
@@ -509,7 +509,7 @@ internal fun LazyListScope.ledger(
         item(key = keyPrefix + r.key) { LedgerRow(r, cols, last, cards) }
     }
     // The banner at the end of the list, seen only by scrolling down.
-    if (rows.isNotEmpty()) item(key = keyPrefix + "banner") { BannerAd(Modifier.padding(horizontal = 10.dp, vertical = 10.dp)) }
+    if (rows.isNotEmpty()) item(key = keyPrefix + "banner") { BannerAd(Modifier.padding(horizontal = 10.dp, vertical = 10.dp), round = false) }
 }
 
 /** What an empty list shows instead of a blank page: the app logo and how to add the first entry. */

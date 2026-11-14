@@ -66,7 +66,7 @@ object Ads {
  * no ad came. [video]: a 120 × 120 picture or video (playing without sound) on the left instead of the small icon.
  */
 @Composable
-fun NativeAdCard(place: String, modifier: Modifier = Modifier, video: Boolean = false) {
+fun NativeAdCard(place: String, modifier: Modifier = Modifier, video: Boolean = false, round: Boolean = true) {
     val context = LocalContext.current
     var ad by remember(place) { mutableStateOf<NativeAd?>(null) }
     DisposableEffect(place) {
@@ -74,17 +74,17 @@ fun NativeAdCard(place: String, modifier: Modifier = Modifier, video: Boolean = 
         onDispose { }
     }
     val shown = ad ?: return
-    AndroidView(factory = { ctx: Context -> if (video) videoRow(ctx) else adRow(ctx) }, modifier = modifier.fillMaxWidth(), update = { v: NativeAdView -> v.show(shown) })
+    AndroidView(factory = { ctx: Context -> (if (video) videoRow(ctx) else adRow(ctx)).also { if (!round) (it.getChildAt(0).background as? GradientDrawable)?.cornerRadius = 0f } }, modifier = modifier.fillMaxWidth(), update = { v: NativeAdView -> v.show(shown) })
 }
 
 /**
- * The banner at the end of a list, as wide as the cards above it with their round corners: the slim one, or [big] a
- * taller one (up to 250) where there is room.
+ * The banner at the end of a list, as wide as the cards above it and shaped like them ([round] corners, or square
+ * under the square ledger sheets): the slim one, or [big] a taller one (up to 250) where there is room.
  */
 @Composable
-fun BannerAd(modifier: Modifier = Modifier, big: Boolean = false) {
+fun BannerAd(modifier: Modifier = Modifier, big: Boolean = false, round: Boolean = true) {
     val width = LocalConfiguration.current.screenWidthDp - 24
-    AndroidView(modifier = modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color.White), factory = { ctx: Context ->
+    AndroidView(modifier = modifier.fillMaxWidth().clip(RoundedCornerShape(if (round) 14.dp else 0.dp)).background(Color.White), factory = { ctx: Context ->
         AdView(ctx).apply {
             setAdSize(if (big) AdSize.getInlineAdaptiveBannerAdSize(width, 250) else AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(ctx, width))
             adUnitId = Ads.bannerUnit
