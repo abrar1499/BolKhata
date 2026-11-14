@@ -254,7 +254,7 @@ object AiAgent {
             val step = Ai.step(system, tools, messages) ?: return@runCatching null
             if (step.calls.isEmpty()) {
                 // Learnt from the message with its numbers in digits, so "teen sau" and "300" are one shape.
-                val learnt = if (notes.added.isEmpty()) Learnt() else learn(calls, digits, host.names(), known)
+                val learnt = learn(calls, digits, host.names(), known, step.text)
                 // Only saved, all of it and nothing to ask: the Saved card says it, no sentence over it.
                 val onlySaved = notes.added.isNotEmpty() && notes.skipped == 0 && calls.all { it.first == "add_entries" } && '?' !in step.text
                 return@runCatching Answer(if (onlySaved) "" else roman(step.text).ifBlank { "Done." }, notes.added, notes.card, notes.listIds, notes.filter,
@@ -372,18 +372,100 @@ object AiAgent {
     /** What one answer of the AI teaches: new spellings of names ("=mdsr" to the person) and the sentence's shape with its lesson. */
     class Learnt(val shape: String = "", val lesson: String = "", val words: Map<String, String> = emptyMap())
 
-    /** Each new thing is learnt by itself: a new spelling of a name is one word learnt, the sentence around it stays known. */
-    fun learn(calls: List<Pair<String, JSONObject>>, said: String, names: List<String>, known: Map<String, String>): Learnt {
-        val list = calls.singleOrNull()?.takeIf { it.first == "add_entries" }?.second?.optJSONArray("entries") ?: return Learnt()
+    /**
+     * Each new thing is learnt by itself: a new spelling of a name is one word learnt, the sentence around it stays known.
+     * A save is learnt as its entries ([lesson]); any other work the app can do again by itself, or a plain answer, as
+     * its tools and [reply] ([steps]).
+     */
+    fun learn(calls: List<Pair<String, JSONObject>>, said: String, names: List<String>, known: Map<String, String>, reply: String = ""): Learnt {
+        val list = calls.singleOrNull()?.takeIf { it.first == "add_entries" }?.second?.optJSONArray("entries")
         val before = who(names, known)
         val named = people(said, before)
-        val words = (0 until list.length()).map { list.getJSONObject(it).optString("person").trim() }
+        val words = if (list == null) emptyMap() else (0 until list.length()).map { list.getJSONObject(it).optString("person").trim() }
             .filter { p -> p.isNotBlank() && named.none { it.equals(p, true) } }
             .mapNotNull { p -> word(said, p, before)?.let { "=$it" to p } }.toMap()
         val after = who(names, known + words)
-        val lesson = lesson(calls, said, after) ?: return Learnt(words = words)
+        val lesson = (if (list != null) lesson(calls, said, after) else steps(calls, said, after, reply)) ?: return Learnt(words = words)
         return Learnt(shape(said, after), lesson, words)
     }
+
+    /** A tool the app can do again by itself for a message of the same shape; a look-up is redone as the card it would show. */
+    private fun again(name: String, input: JSONObject): Pair<String, JSONObject>? = when (name) {
+        "show", "make_pdf", "put_in_account", "add_account", "add_entries" -> name to input
+        "restore_entries" -> if (input.has("ids")) null else name to input
+        "totals" -> "show" to JSONObject(input.toString()).apply {
+            put("view", when (optString("group_by")) { "person" -> "by_person"; "month" -> "by_month"; "item" -> "by_item"; "category" -> "breakdown"; else -> "total" })
+            remove("group_by")
+        }
+        "find_entries" -> "show" to JSONObject(input.toString()).put("view", "list")
+        else -> null
+    }
+
+    /** Fields whose number must be one said in the message (else the lesson would not fit another message). */
+    private val saidNumbers = setOf("amount", "qty", "rate", "min_amount", "max_amount", "last", "added_in_last_minutes")
+
+    /** [v] with every number said in the message as "#i" and every person named as "@i"; null when it cannot be told apart from this message. */
+    private fun mark(v: Any?, key: String, nums: List<Double>, people: List<String>, usedP: MutableSet<Int>): Any? {
+        when (v) {
+            is JSONObject -> {
+                val o = JSONObject()
+                for (k in v.keys()) o.put(k, mark(v.get(k), k, nums, people, usedP) ?: return null)
+                return o
+            }
+            is JSONArray -> {
+                val a = JSONArray()
+                for (i in 0 until v.length()) a.put(mark(v.get(i), key, nums, people, usedP) ?: return null)
+                return a
+            }
+            is Number -> { val at = nums.indexOf(v.toDouble()); return if (at >= 0) "#$at" else if (key in saidNumbers) null else v }
+            is String -> { val at = people.indexOfFirst { it.equals(v.trim(), true) }; if (at < 0) return v; usedP += at; return "@$at" }
+            else -> return v
+        }
+    }
+
+    /**
+     * The tools the AI used on [said], to be done again by the app for the next message of its shape, with the AI's
+     * [reply] when it holds no figure of its own. Null when any tool works on chosen entries (a change or delete), a day
+     * was worked out (it must be worked out afresh), the AI asked something, or a person named was not used.
+     */
+    private fun steps(calls: List<Pair<String, JSONObject>>, said: String, who: (String) -> String?, reply: String): String? {
+        val people = people(said, who)
+        val nums = numbers(said)
+        val usedP = mutableSetOf<Int>()
+        val done = calls.map { (n, i) -> again(n, i) ?: return null }.let { l -> l.filter { it.first != "show" } + listOfNotNull(l.lastOrNull { it.first == "show" }) }
+        if (done.any { (_, i) -> i.toString().let { "\"date\"" in it || "\"from\"" in it || "\"to\"" in it } }) return null
+        val out = JSONArray()
+        for ((n, i) in done) out.put(JSONObject().put("name", n).put("input", mark(i, "", nums, people, usedP) ?: return null))
+        if (usedP.size != people.size || '?' in reply) return null
+        // A sentence with figures of its own was worked out for that day's books: only the card is done again.
+        var text = if (reply.any { it.isDigit() } || reply.split(Regex("""\s+""")).size > 15) "" else reply.trim()
+        people.forEachIndexed { at, p -> text = text.replace(p, "@$at", ignoreCase = true) }
+        if (done.isEmpty() && (text.isBlank() || nums.isNotEmpty())) return null
+        return JSONObject().put("calls", out).put("reply", text).toString()
+    }
+
+    /** A remembered lesson done again: its tools filled with this message's numbers and people, and the reply to give. */
+    class Replay(val calls: List<Pair<String, JSONObject>>, val reply: String)
+
+    /** [lesson] (a save, or tools and a reply) filled with the numbers and people of a new message of the same shape; null when it does not fit. */
+    fun replay(lesson: String, said: String, who: (String) -> String? = { null }): Replay? = runCatching {
+        if (lesson.trimStart().startsWith("[")) return@runCatching recall(lesson, said, who)?.let { Replay(listOf("add_entries" to it), "") }
+        val nums = numbers(said)
+        val people = people(said, who)
+        fun fill(v: Any?): Any? = when (v) {
+            is JSONObject -> JSONObject().also { o -> for (k in v.keys()) o.put(k, fill(v.get(k))) }
+            is JSONArray -> JSONArray().also { a -> for (i in 0 until v.length()) a.put(fill(v.get(i))) }
+            is String -> when {
+                Regex("""#\d+""").matches(v) -> nums[v.drop(1).toInt()]
+                Regex("""@\d+""").matches(v) -> people[v.drop(1).toInt()]
+                else -> v
+            }
+            else -> v
+        }
+        val o = JSONObject(lesson)
+        val calls = o.getJSONArray("calls").let { a -> (0 until a.length()).map { a.getJSONObject(it).let { c -> c.getString("name") to (fill(c.getJSONObject("input")) as JSONObject) } } }
+        Replay(calls, Regex("""@(\d+)""").replace(o.optString("reply")) { people[it.groupValues[1].toInt()] })
+    }.getOrNull()
 
     /** A remembered [lesson] filled with the numbers and people of a new message of the same shape, ready for add_entries; null when it does not fit. */
     fun recall(lesson: String, said: String, who: (String) -> String? = { null }): JSONObject? = runCatching {

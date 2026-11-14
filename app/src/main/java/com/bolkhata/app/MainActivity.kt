@@ -1339,14 +1339,17 @@ fun App(
                     val who = AiAgent.who(names0, store.aiLearned)
                     val counted = AiAgent.counted(roman)
                     val shape = AiAgent.shape(counted, who)
-                    store.aiLearned[shape]?.let { AiAgent.recall(it, counted, who) }?.let { input ->
-                        val notes = AiAgent.Notes(said = AiAgent.numbers(counted))
-                        runCatching { AiAgent.use("add_entries", input, host, System.currentTimeMillis(), notes) }
-                        if (notes.added.isNotEmpty()) {
-                            aiPicked = ""
+                    store.aiLearned[shape]?.let { AiAgent.replay(it, counted, who) }?.let { r ->
+                        val notes = AiAgent.Notes(said = AiAgent.numbers(counted), lastShown = history.lastOrNull { !it.isUser }?.text.orEmpty())
+                        r.calls.forEach { (n, input) -> runCatching { AiAgent.use(n, input, host, System.currentTimeMillis(), notes) } }
+                        // A save that saved nothing (the same entry a moment ago) is left to the rules below.
+                        if (notes.added.isNotEmpty() || r.calls.any { it.first != "add_entries" } || r.calls.isEmpty()) {
+                            aiPicked = notes.filter
                             aiSaved = notes.added.toList()
-                            lastSpeech = "Saved"
-                            postChat("", isUser = false, entryIds = notes.added.toList(), meta = "engine=Learned; intent=agent; shape=$shape; usage=Learned · no tokens")
+                            val say = if (notes.added.isNotEmpty() && r.calls.all { it.first == "add_entries" }) "" else r.reply.ifBlank { if (notes.card.isBlank()) "Done." else "" }
+                            lastSpeech = say.ifBlank { if (notes.added.isNotEmpty()) "Saved" else notes.card }
+                            postChat(notes.card.ifBlank { say }, isUser = false, entryIds = notes.added.toList(), listIds = notes.listIds,
+                                meta = "engine=Learned; intent=agent; shape=$shape" + (if (notes.card.isBlank()) "; plain" else "") + "; usage=Learned · no tokens")
                             return@launch
                         }
                     }

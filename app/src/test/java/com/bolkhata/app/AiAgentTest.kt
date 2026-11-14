@@ -322,4 +322,19 @@ class AiAgentTest {
         assertTrue(AiAgent.roman("میں ٹھیک ہوں").none { it in '\u0600'..'\u06FF' })
         assertEquals("Saved 500 for Hamid Akram.", AiAgent.roman("Saved 500 for Hamid Akram."))
     }
+
+    @Test
+    fun aLookUpAndAPlainAnswerAreLearntWithTheirPeopleOpen() {
+        val names = listOf("Hamid Akram", "Zubair Latif")
+        val calls = listOf("totals" to JSONObject().put("persons", JSONArray().put("Hamid Akram")).put("group_by", "month"))
+        val learnt = AiAgent.learn(calls, "hamid ka mahana hisab", names, emptyMap(), "Here it is.")
+        assertTrue(learnt.lesson, learnt.lesson.contains("by_month"))
+        val r = AiAgent.replay(learnt.lesson, "zubair ka mahana hisab", AiAgent.who(names, emptyMap()))!!
+        assertEquals("show", r.calls.single().first)
+        assertEquals("Zubair Latif", r.calls.single().second.getJSONArray("persons").getString(0))
+        // A change to chosen entries, or an answer with its own figures, is not learnt.
+        assertEquals("", AiAgent.learn(listOf("delete_entries" to JSONObject().put("ids", JSONArray().put("x1"))), "chai hata do", names, emptyMap(), "Done.").lesson)
+        assertEquals("", AiAgent.learn(emptyList(), "kitna bacha", names, emptyMap(), "You have 300 left.").lesson)
+        assertEquals("Great!", AiAgent.replay(AiAgent.learn(emptyList(), "zabardast", names, emptyMap(), "Great!").lesson, "zabardast")!!.reply)
+    }
 }
