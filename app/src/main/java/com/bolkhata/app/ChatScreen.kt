@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.SpanStyle
@@ -192,8 +193,8 @@ fun ChatScreen(
                         AnswerActions(ratings[message.id]) { good -> onRate(message.id, good) }
                         // "Groq · 1.2s · 340 tokens" under an answer Groq helped with.
                         Regex("""usage=([^;]+)""").find(message.meta)?.let {
-                            Text(it.groupValues[1], fontSize = 7.sp, lineHeight = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                modifier = Modifier.padding(start = 14.dp).offset(y = (-6).dp))
+                            Text(it.groupValues[1], fontSize = 8.sp, lineHeight = 8.sp, color = Color(0xFFA39E98),
+                                modifier = Modifier.padding(start = 4.dp, top = 3.dp))
                         }
                     }
                     }
@@ -387,25 +388,25 @@ private fun UserBubble(text: String, attachment: String = "") {
     }
 }
 
-/** 👍 and 👎 under each answer, like ChatGPT's. One tap saves the rating; tapping the other one changes it. */
+/** 👍 and 👎 under each answer in a small white card, grey line icons. One tap saves the rating; tapping the other changes it. */
 @Composable
 private fun AnswerActions(rating: Boolean?, onRate: (good: Boolean) -> Unit) {
-    val tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-    Row(Modifier.padding(start = 6.dp, top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = { onRate(true) }, enabled = rating != true, modifier = Modifier.size(24.dp)) {
-            Icon(
-                if (rating == true) Icons.Filled.ThumbUpFilled else Icons.Outlined.ThumbUp,
-                contentDescription = if (rating == true) "Marked good" else "Good answer",
-                tint = if (rating == true) GreenDeep else tint, modifier = Modifier.size(12.dp)
-            )
-        }
-        IconButton(onClick = { onRate(false) }, enabled = rating != false, modifier = Modifier.size(24.dp)) {
-            Icon(
-                if (rating == false) Icons.Filled.ThumbDownFilled else Icons.Outlined.ThumbDown,
-                contentDescription = if (rating == false) "Marked wrong" else "Wrong answer",
-                tint = if (rating == false) MaterialTheme.colorScheme.error else tint, modifier = Modifier.size(12.dp)
-            )
-        }
+    val tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+    Row(Modifier.padding(start = 2.dp, top = 3.dp).shadow(1.dp, RoundedCornerShape(10.dp)).clip(RoundedCornerShape(10.dp))
+        .background(Color.White).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            if (rating == true) Icons.Filled.ThumbUpFilled else Icons.Outlined.ThumbUp,
+            contentDescription = if (rating == true) "Marked good" else "Good answer",
+            tint = if (rating == true) GreenDeep else tint,
+            modifier = Modifier.clickable(enabled = rating != true) { onRate(true) }.padding(horizontal = 5.dp, vertical = 4.dp).size(12.dp)
+        )
+        Box(Modifier.width(1.dp).height(10.dp).background(Color(0xFFE3DFDA)))
+        Icon(
+            if (rating == false) Icons.Filled.ThumbDownFilled else Icons.Outlined.ThumbDown,
+            contentDescription = if (rating == false) "Marked wrong" else "Wrong answer",
+            tint = if (rating == false) MaterialTheme.colorScheme.error else tint,
+            modifier = Modifier.clickable(enabled = rating != false) { onRate(false) }.padding(horizontal = 5.dp, vertical = 4.dp).size(12.dp)
+        )
     }
 }
 
@@ -830,27 +831,25 @@ private fun AttachmentBubble(path: String, name: String) {
 }
 
 /**
- * While an answer is on its way: the app's logo with three white bars rising and falling, and a word beside it,
- * "Typing…" for the app's own engine, "✦ Thinking…" (an orange logo) while the AI is asked.
+ * While an answer is on its way: the app's own logo beats like a heart, with a word and three blinking dots beside it,
+ * "Typing" for the app's own engine, "✦ Thinking" while the AI is asked.
  */
 @Composable
 private fun Working(label: String) {
-    val ai = label.startsWith("✦")
     val beat = androidx.compose.animation.core.rememberInfiniteTransition(label = "working")
+    val size by beat.animateFloat(1f, 1f, androidx.compose.animation.core.infiniteRepeatable(
+        androidx.compose.animation.core.keyframes {
+            durationMillis = 1100
+            1.15f at 165; 1f at 330; 1.1f at 495; 1f at 1100
+        }), label = "beat")
     Row(Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Row(
-            Modifier.size(22.dp).shadow(2.dp, RoundedCornerShape(7.dp)).clip(RoundedCornerShape(7.dp))
-                .background(androidx.compose.ui.graphics.Brush.verticalGradient(
-                    if (ai) listOf(Color(0xFFF0A080), Color(0xFFD97757)) else listOf(Color(0xFFFF6B5E), Color(0xFFD6403A)))),
-            horizontalArrangement = Arrangement.spacedBy(1.5.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically
-        ) {
-            repeat(3) { i ->
-                val h by beat.animateFloat(3f, 12f, androidx.compose.animation.core.infiniteRepeatable(
-                    androidx.compose.animation.core.tween(500, delayMillis = 0), androidx.compose.animation.core.RepeatMode.Reverse,
-                    androidx.compose.animation.core.StartOffset(i * 150)), label = "bar$i")
-                Box(Modifier.width(2.dp).height(h.dp).clip(RoundedCornerShape(1.dp)).background(Color.White))
-            }
+        GlassLogo(24.dp, Modifier.graphicsLayer { scaleX = size; scaleY = size })
+        Text(label.trimEnd('…'), fontSize = 9.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 9.dp))
+        repeat(3) { i ->
+            val on by beat.animateFloat(0.2f, 1f, androidx.compose.animation.core.infiniteRepeatable(
+                androidx.compose.animation.core.tween(500), androidx.compose.animation.core.RepeatMode.Reverse,
+                androidx.compose.animation.core.StartOffset(i * 200)), label = "dot$i")
+            Box(Modifier.padding(start = 2.dp).size(3.dp).graphicsLayer { alpha = on }.clip(CircleShape).background(MaterialTheme.colorScheme.onSurfaceVariant))
         }
-        Text(label, fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 7.dp))
     }
 }

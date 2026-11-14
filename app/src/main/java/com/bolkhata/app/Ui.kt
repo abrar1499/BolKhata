@@ -261,7 +261,11 @@ fun BolTheme(dark: Boolean, clear: Boolean = false, page: Long = PAGE_COLORS[0],
         surfaceContainerHigh = bg, surfaceContainerHighest = Color(0xFFF1F1F2), surfaceTint = Color.Transparent
     )
     androidx.compose.runtime.CompositionLocalProvider(LocalLook provides look, LocalPage provides bg) {
-        MaterialTheme(colorScheme = if (clear) scheme.copy(background = Color.Transparent) else scheme, typography = AppTypography, content = content)
+        MaterialTheme(colorScheme = if (clear) scheme.copy(background = Color.Transparent) else scheme, typography = AppTypography) {
+            // A light tick on every tap, with the usual ripple (see HapticIndication).
+            androidx.compose.runtime.CompositionLocalProvider(
+                androidx.compose.foundation.LocalIndication provides HapticIndication(androidx.compose.material3.ripple()), content = content)
+        }
     }
 }
 
