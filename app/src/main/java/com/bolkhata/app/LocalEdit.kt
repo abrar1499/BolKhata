@@ -416,7 +416,8 @@ object LocalEdit : LocalAgent.Reader {
             val vague = d.persons.isEmpty() && d.amount == null && d.from == null && d.words.none { Parser.guessCategory(it) != null || it in m.thingWords }
             return inJust.ifEmpty { if (pointing && vague && m.just.isNotEmpty()) m.just else located(m, d) }
         }
-        if (m.just.isNotEmpty() && (pointing || !wantAll || w.size <= 3)) return m.just
+        // "dono delete kar do" after two were saved: those two, not the whole book.
+        if (m.just.isNotEmpty() && (pointing || !wantAll || w.size <= 3 || (m.just.size == 2 && m.has(bothWords)))) return m.just
         if ((pointing || wantAll) && m.s.previous.isNotBlank() && m.s.previous != "{}") return runCatching { found(m, JSONObject(m.s.previous)) }.getOrNull()
         if (wantAll) return found(m, JSONObject())
         return null
@@ -845,7 +846,8 @@ object LocalEdit : LocalAgent.Reader {
         "likho", "likh", "likhdo", "rakho", "rakh", "rakhdo", "set", "make", "change", "badal", "badlo", "badaldo", "update", "edit", "fix", "correct")
     private val yesWords = setOf("haan", "han", "haa", "ha", "hn", "haanji", "ji", "jee", "jii", "yes", "yeah", "yep", "yup", "ok", "okay", "okk", "theek", "thik",
         "sahi", "bilkul", "zaroor", "zarur", "done", "confirm", "sure", "go", "ahead", "do", "dein", "den", "de")
-    private val politeWords = setOf("please", "plz", "pls", "bhai", "yaar", "yar", "jaldi", "abhi", "them", "all", "everything", "sab", "hi")
+    private val politeWords = setOf("please", "plz", "pls", "bhai", "yaar", "yar", "jaldi", "abhi", "them", "all", "everything", "sab", "hi", "hai", "hain")
+    private val bothWords = setOf("dono", "donon", "donoo", "both")
     private val allWords = setOf("sab", "sari", "saari", "sare", "saare", "sara", "saara", "tamam", "tmam", "all", "every", "everything", "poori", "puri", "sabhi", "saray", "sarey", "dono", "both")
     private val entryWords = setOf("entry", "entries", "entri", "entrie", "entery", "antry", "intry", "entr", "entriyan", "entrian", "entris", "antrian", "antriyan", "intriyan", "record", "records", "transaction", "transactions")
     private val manyEntries = setOf("entries", "entriyan", "entrian", "antrian", "antriyan", "intriyan", "entris", "records", "transactions")

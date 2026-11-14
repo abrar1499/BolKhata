@@ -1267,6 +1267,15 @@ fun App(
         aiHeard[0] = guesses.map { g -> runCatching { Translit.toRoman(g) }.getOrDefault(g).trim() }
             .filter { it.isNotBlank() && !it.equals(said, true) }.distinctBy { it.lowercase() }.take(4)
     }
+    /** The books as the AI and the app's own assistant work them, through the same tools. */
+    fun chatHost(names: List<String>) = AiAgent.Host(
+        entries = { entries }, add = { save(it + entries) },
+        update = { changed -> save(entries.map { e -> changed.firstOrNull { it.id == e.id } ?: e }) },
+        trash = { ids -> moveToTrash(ids) }, names = { names }, currency = currency,
+        setup = { sides }, saveSetup = { s -> sides = s; store.saveSides(s) }, pdf = { doc -> aiPdf[0]?.invoke(doc) },
+        trashed = { trash }, restore = { ids -> val back = trash.filter { it.id in ids }; save(back + entries); saveTrash(trash.filter { it.id !in ids }) }
+    )
+
     /** Without AI (no key, or no internet): save clear entries, answer simple questions, never stay silent. */
     fun chatInput(raw: String) {
         if (chatMessages.isEmpty()) lastGroqQuery = ""
@@ -1328,13 +1337,7 @@ fun App(
                     val heardAlso = aiHeard[0].orEmpty()
                     aiHeard[0] = null
                     val recent = history.takeLast(6).joinToString("\n") { (if (it.isUser) "Person: " else "App: ") + it.text.take(200) }
-                    val host = AiAgent.Host(
-                        entries = { entries }, add = { save(it + entries) },
-                        update = { changed -> save(entries.map { e -> changed.firstOrNull { it.id == e.id } ?: e }) },
-                        trash = { ids -> moveToTrash(ids) }, names = { names0 }, currency = currency,
-                        setup = { sides }, saveSetup = { s -> sides = s; store.saveSides(s) }, pdf = { doc -> aiPdf[0]?.invoke(doc) },
-                        trashed = { trash }, restore = { ids -> val back = trash.filter { it.id in ids }; save(back + entries); saveTrash(trash.filter { it.id !in ids }) }
-                    )
+                    val host = chatHost(names0)
                     // Learnt from the AI before: a message of the same shape (only its numbers differ) is done by the app alone, for nothing.
                     // People and numbers are open places in it, so a known sentence with another name needs no AI either.
                     val who = AiAgent.who(names0, store.aiLearned)
@@ -1413,6 +1416,32 @@ fun App(
                             "; own=" + (own?.let { it.kind + (if (it.what.isBlank()) "" else "/" + it.what) + (if (it.unsure) "/unsure" else "") } ?: "error") +
                             (if (usage.isBlank()) "" else "; usage=" + usage))
                     return@launch
+                    }
+                }
+                // No AI answered: the app's own assistant (LocalAgent) does the job with the same tools, offline and free.
+                // Inside an open account the older rules stay, as they keep to that account.
+                if ((!Ai.handles(groqKey) || aiDown) && scoped.size == entries.size) {
+                    aiHeard[0] = null
+                    chatWatch = null
+                    val mine = runCatching {
+                        LocalAgent.run(text, chatHost(names0), roman = roman, previous = aiPicked, justSaved = aiSaved,
+                            lastShown = history.lastOrNull { !it.isUser }?.text.orEmpty(),
+                            recent = history.takeLast(6).joinToString("\n") { (if (it.isUser) "Person: " else "App: ") + it.text.take(200) })
+                    }.getOrNull()
+                    if (mine != null) {
+                        if (mine.ask.isNotBlank()) {
+                            val book = Sides.bookOf(mine.ask.substringBefore("|"), entries, sides)
+                            lastSpeech = "Choose"
+                            postChat("", isUser = false, meta = "ask=${mine.ask}|" + Ask.kinds(book).joinToString(",") + (if (book == Sides.STAFF) "|staff" else ""))
+                            return@launch
+                        }
+                        aiPicked = mine.filter
+                        aiSaved = mine.added
+                        if (mine.added.isNotEmpty()) lastAdded = mine.added
+                        lastSpeech = mine.text.ifBlank { if (mine.added.isNotEmpty()) "Saved" else mine.card }
+                        postChat(mine.card.ifBlank { mine.text }, isUser = false, entryIds = mine.added, listIds = mine.listIds,
+                            meta = "engine=LocalAgent; intent=agent" + (if (mine.card.isBlank()) "; plain" else "") + (if (aiWhy.isBlank()) "" else "; ai=down") + "; usage=App engine")
+                        return@launch
                     }
                 }
                 // With Groq on, Groq reads every message first: money and app requests become a clear command that the

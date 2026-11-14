@@ -59,8 +59,10 @@ object Query {
     private fun samePerson(a: String, b: String): Boolean {
         val x = a.trim().lowercase(); val y = b.trim().lowercase()
         if (x.isEmpty() || y.isEmpty()) return false
-        return x == y || x.split(' ').any { it == y } || y.split(' ').any { it == x } ||
-            (x.length >= 4 && y.length >= 4 && Normalizer.similarity(x, y) >= 0.88)
+        if (x == y || x.split(' ').any { it == y } || y.split(' ').any { it == x }) return true
+        // A spelling slip, word by word: "Saleem Khan" is Salim Khan, but Salim Raza is not.
+        val (few, more) = listOf(x.split(' '), y.split(' ')).sortedBy { it.size }
+        return x.length >= 4 && y.length >= 4 && few.all { a -> more.any { it == a || (a.length >= 3 && it.length >= 3 && (Normalizer.similarity(a, it) >= 0.88 || Understand.closeName(a, it))) } }
     }
 
     fun select(entries: List<Entry>, f: Filter): List<Entry> {
