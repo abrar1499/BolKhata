@@ -113,6 +113,9 @@ data class MoveChange(
 
 data class MoveBatch(val id: String, val timestamp: Long, val changes: List<MoveChange>)
 
+/** One AI provider's box in the side menu: its key, the model picked (blank: the usual one) and whether it is on. */
+data class AiBox(val key: String = "", val model: String = "", val on: Boolean = false)
+
 /** Refuse a stale restore rather than overwrite entries moved or edited afterwards. */
 fun restoreMoveBatch(entries: List<Entry>, batch: MoveBatch): List<Entry>? {
     val byId = entries.associateBy { it.id }
@@ -228,7 +231,7 @@ class Store(context: Context) {
 
     /** Keys left out of a backup: AI keys are private and stay on this phone, as do this phone's Drive sync notes. */
     private val notBackedUp = setOf("aiKey", "fastKey", "aiModel", "fileKey", "groqKey", "elevenKey", "logToken",
-        "driveEmail", "driveAt", "driveDirty", "deviceId", "llmKey", "llmModel", "llmIn", "llmOut", "llmMicro", "llmVoice", "llmOn", "aiShown")
+        "driveEmail", "driveAt", "driveDirty", "deviceId", "llmKey", "llmModel", "llmIn", "llmOut", "llmMicro", "llmVoice", "llmOn", "aiShown", "aiBoxes")
 
     /** Also kept off Google Drive: the chat history and the background photo (a file on this phone). */
     private val phoneOnly = setOf("chatMessages", "bgPhoto")
@@ -612,25 +615,33 @@ class Store(context: Context) {
         set(v) = prefs.edit().putString("logRepo", v.trim()).apply()
 
     /** The owner's own Groq API key. Blank means the app stays fully offline. Never backed up or uploaded. */
-    /** Test feature: one AI key of any provider that runs the chat (see Ai), its model and the tokens used so far. */
-    var llmKey: String
-        get() = prefs.getString("llmKey", "") ?: ""
-        set(v) = prefs.edit().putString("llmKey", v.trim()).apply()
+    /** Test feature: the AI keys by provider name (see Ai.ALL), kept on this phone only. The first time, the one key saved before moves in. */
+    var aiBoxes: Map<String, AiBox>
+        get() {
+            val s = prefs.getString("aiBoxes", null) ?: return oldAiBoxes()
+            return runCatching {
+                JSONObject(s).let { o -> o.keys().asSequence().associateWith { n -> o.getJSONObject(n).let { b -> AiBox(b.optString("key"), b.optString("model"), b.optBoolean("on")) } } }
+            }.getOrDefault(emptyMap())
+        }
+        set(v) = prefs.edit().putString("aiBoxes", JSONObject().apply { v.forEach { (n, b) -> put(n, JSONObject().put("key", b.key.trim()).put("model", b.model.trim()).put("on", b.on)) } }.toString())
+            .remove("llmKey").remove("llmVoice").remove("llmModel").remove("llmOn").apply()
+    /** The single AI key (and Groq voice key) of earlier versions, as boxes. */
+    private fun oldAiBoxes(): Map<String, AiBox> {
+        val boxes = mutableMapOf<String, AiBox>()
+        val key = prefs.getString("llmKey", "").orEmpty()
+        Ai.provider(key)?.let { boxes[it.name] = AiBox(key, prefs.getString("llmModel", "").orEmpty(), prefs.getBoolean("llmOn", true)) }
+        val voice = prefs.getString("llmVoice", "").orEmpty()
+        if (voice.isNotBlank() && Ai.GROQ.name !in boxes) boxes[Ai.GROQ.name] = AiBox(voice, "", true)
+        return boxes
+    }
+    /** The models a provider offered for its key, to pick from in its box. */
+    fun aiModels(name: String): List<String> = prefs.getString("aiModels.$name", "").orEmpty().split("\n").filter { it.isNotBlank() }
+    fun saveAiModels(name: String, models: List<String>) = prefs.edit().putString("aiModels.$name", models.joinToString("\n")).apply()
     /** Whether the AI row shows in the side menu (20 taps on the empty space below it turn it and the AI on or off). */
     var aiShown: Boolean
         get() = prefs.getBoolean("aiShown", false)
         set(v) = prefs.edit().putBoolean("aiShown", v).apply()
-    /** The AI key's switch: off keeps the key saved and lets the app answer by itself. */
-    var llmOn: Boolean
-        get() = prefs.getBoolean("llmOn", true)
-        set(v) = prefs.edit().putBoolean("llmOn", v).apply()
-    /** A Groq key used only to hear the mic's recording (Whisper). */
-    var llmVoice: String
-        get() = prefs.getString("llmVoice", "") ?: ""
-        set(v) = prefs.edit().putString("llmVoice", v.trim()).apply()
-    var llmModel: String
-        get() = prefs.getString("llmModel", "") ?: ""
-        set(v) = prefs.edit().putString("llmModel", v.trim()).apply()
+    /** The tokens the AI used so far. */
     var llmIn: Long
         get() = prefs.getLong("llmIn", 0L)
         set(v) = prefs.edit().putLong("llmIn", v).apply()

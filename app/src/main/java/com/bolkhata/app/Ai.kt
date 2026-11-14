@@ -7,31 +7,45 @@ import java.net.URL
 import java.util.Locale
 
 /**
- * TEST FEATURE (APK build only): one AI key of any provider runs the chat instead of the built-in Groq setup.
- * The key's shape tells the provider (Claude, Groq, OpenRouter, Gemini, ChatGPT). [Groq] keeps its prompts and checks
- * and hands its request here; this file only talks to the provider and counts tokens in and out.
+ * TEST FEATURE (APK build only): the AI keys saved in the side menu (one box per provider, best first) run the chat
+ * instead of the built-in Groq setup; when one does not answer, the next one turned on does. [Groq] keeps its prompts
+ * and checks and hands its request here; this file only talks to the providers and counts tokens in and out.
  *
- * To remove it: delete this file, the two "Ai." lines in Groq (post, takeUsage), the AI row in SideMenu,
- * Store.llm* and the "Ai." lines in MainActivity.
+ * To remove it: delete this file, the two "Ai." lines in Groq (post, takeUsage), the AI keys in SideMenu,
+ * Store.aiBoxes and the "Ai." lines in MainActivity.
  */
 object Ai {
     class Provider(val name: String, val url: String, val model: String)
 
-    val CLAUDE = Provider("Claude", "https://api.anthropic.com/v1/messages", "claude-opus-5-5")
+    val CLAUDE = Provider("Claude", "https://api.anthropic.com/v1/messages", "claude-haiku-5-5")
     val GROQ = Provider("Groq", "https://api.groq.com/openai/v1/chat/completions", "openai/gpt-oss-120b")
     /** Groq models tried in turn when the one in use has reached its per-minute limit. */
     val GROQ_SPARE = listOf("openai/gpt-oss-20b", "llama-3.3-70b-versatile")
     val OPENROUTER = Provider("OpenRouter", "https://openrouter.ai/api/v1/chat/completions", "openrouter/free")
-    val GEMINI = Provider("Gemini", "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", "gemini-2.5-flash")
+    val GEMINI = Provider("Gemini", "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", "gemini-flash-latest")
     val OPENAI = Provider("ChatGPT", "https://api.openai.com/v1/chat/completions", "gpt-5-mini")
+    val CEREBRAS = Provider("Cerebras", "https://api.cerebras.ai/v1/chat/completions", "gpt-oss-120b")
+    val MISTRAL = Provider("Mistral", "https://api.mistral.ai/v1/chat/completions", "mistral-small-latest")
+    /** Every provider with a box in the side menu, best first: the ones turned on answer in this order. */
+    val ALL = listOf(CLAUDE, OPENAI, GEMINI, GROQ, CEREBRAS, MISTRAL, OPENROUTER)
 
-    /** The provider a key belongs to, by how the key starts; null when it is not a known kind. */
+    /** The keys saved in the side menu and whose they are (a Mistral key does not show it by how it starts). */
+    @Volatile var saved: Map<String, Provider> = emptyMap()
+    /** The keys turned on, best first, each with its model (blank: the usual one): when one does not answer, the next one does. */
+    @Volatile var chain: List<Pair<String, String>> = emptyList()
+    /** Why each provider (by name) last failed to answer; taken out once it answers again. */
+    val failed = java.util.concurrent.ConcurrentHashMap<String, String>()
+    /** The provider that answered the last message. */
+    @Volatile var answered = ""
+
+    /** The provider a key belongs to: its side-menu box, else how the key starts; null when it is not a known kind. */
     fun provider(key: String): Provider? = key.trim().let { k ->
-        when {
+        saved[k] ?: when {
             k.startsWith("sk-ant-") -> CLAUDE
             k.startsWith("gsk_") -> GROQ
             k.startsWith("sk-or-") -> OPENROUTER
             k.startsWith("AIza") -> GEMINI
+            k.startsWith("csk-") -> CEREBRAS
             k.startsWith("sk-") -> OPENAI
             else -> null
         }
@@ -49,11 +63,35 @@ object Ai {
 
     fun handles(k: String) = key.isNotBlank() && k == key
     fun modelNow(): String = model.ifBlank { provider(key)?.model.orEmpty() }
-    /** A Groq key only for hearing (Whisper), when the AI key is another provider's; "" for none. */
-    @Volatile var voiceKey = ""
-
     /** The key the mic's recording is sent with, or "" when the phone's own hearing is used. [k] is the chat's key. */
-    fun voiceKeyFor(k: String): String = voiceKey.ifBlank { if (k.isNotBlank() && (!handles(k) || provider(k) === GROQ)) k else "" }
+    fun voiceKeyFor(k: String): String = if (k.isNotBlank() && (!handles(k) || provider(k) === GROQ)) k else ""
+
+    /** Whether [m] is free on this provider's free plan, as far as the app knows. */
+    fun free(p: Provider, m: String): Boolean = when (p) {
+        CLAUDE, OPENAI -> false
+        GEMINI -> "pro" !in m
+        OPENROUTER -> m == OPENROUTER.model || m.endsWith(":free")
+        else -> true
+    }
+
+    /** The model to use from [found] when the one picked is not offered: the usual one, else the first free one, else the first. */
+    fun pick(p: Provider, found: List<String>): String = found.firstOrNull { it == p.model } ?: found.firstOrNull { free(p, it) } ?: found.first()
+
+    private val notChat = listOf("whisper", "tts", "embed", "guard", "moderation", "image", "audio", "realtime", "transcri", "dall-e", "speech", "ocr", "imagen", "veo", "aqa")
+
+    /** The chat models a provider offers for [k], from its own list so the names are always right; empty when it could not be read. */
+    fun models(p: Provider, k: String): List<String> = runCatching {
+        val (code, text) = if (p === CLAUDE) get("https://api.anthropic.com/v1/models?limit=100", mapOf("x-api-key" to k, "anthropic-version" to "2026-10-21"))
+            else get(p.url.replace("/chat/completions", "/models"), mapOf("Authorization" to "Bearer $k"))
+        if (code !in 200..299) return@runCatching emptyList<String>()
+        val data = JSONObject(text).optJSONArray("data") ?: JSONArray()
+        val ids = (0 until data.length()).map { data.getJSONObject(it).optString("id").removePrefix("models/") }
+            .filter { id -> id.isNotBlank() && notChat.none { it in id.lowercase() } }
+        // OpenRouter lists hundreds: its free ones first, then the well-known paid ones.
+        if (p !== OPENROUTER) ids
+        else (listOf(OPENROUTER.model) + ids.filter { it.endsWith(":free") } +
+            ids.filter { m -> listOf("anthropic/", "openai/gpt", "google/gemini").any { m.startsWith(it) } && !m.endsWith(":free") }).distinct().take(40)
+    }.getOrDefault(emptyList())
 
     /** US dollars per million tokens (in, out, read back from the cache) for the Claude models; null when the price is not known here. */
     fun price(model: String): Triple<Double, Double, Double>? = when {
@@ -89,15 +127,15 @@ object Ai {
     private val usedStored = java.util.concurrent.atomic.AtomicInteger()
 
     /** What the calls since the last ask used, as "Claude · 1.2s · 340 in · 120 out · $0.0038"; null when this key made none. */
-    fun takeUsage(ms: Long): String? {
+    fun takeUsage(ms: Long, by: String = key, m: String = modelNow()): String? {
         val i = usedIn.getAndSet(0)
         val o = usedOut.getAndSet(0)
         val cached = usedCached.getAndSet(0)
         val micro = usedMicro.getAndSet(0)
         val stored = usedStored.getAndSet(0)
         if (i == 0 && o == 0) return null
-        return (provider(key)?.name ?: "AI") + " · " + String.format(Locale.US, "%.1fs", ms / 1000.0) + " · " +
-            usageText(i.toLong(), o.toLong(), cached = cached.toLong(), dollars = if (price(modelNow()) == null) null else micro / 1_000_000.0, stored = stored.toLong())
+        return (provider(by)?.name ?: "AI") + " · " + String.format(Locale.US, "%.1fs", ms / 1000.0) + " · " +
+            usageText(i.toLong(), o.toLong(), cached = cached.toLong(), dollars = if (price(m) == null) null else micro / 1_000_000.0, stored = stored.toLong())
     }
 
     /**
@@ -225,6 +263,13 @@ object Ai {
         if (code in 200..299) "" else "$code " + errorOf(text)
     }.getOrElse { it.message ?: "no internet" }
 
+    /** [test] for the key [k] of a side-menu box with model [m], leaving the chat's key as it is. */
+    fun test(k: String, m: String): String {
+        val own = key to model
+        key = k; model = m
+        return try { test() } finally { key = own.first; model = own.second }
+    }
+
     /** Claude's Messages API: the system text apart, thinking kept light for a quick chat answer. */
     private fun claude(o: JSONObject): Pair<Int, String> {
         val m = modelNow()
@@ -273,6 +318,15 @@ object Ai {
         val usage = r.optJSONObject("usage") ?: JSONObject()
         return code to JSONObject().put("content", r.getJSONArray("choices").getJSONObject(0).getJSONObject("message").optString("content"))
             .put("in", usage.optInt("prompt_tokens")).put("out", usage.optInt("completion_tokens")).toString()
+    }
+
+    private fun get(url: String, headers: Map<String, String>): Pair<Int, String> {
+        val conn = URL(url).openConnection() as HttpURLConnection
+        conn.connectTimeout = 8_000
+        conn.readTimeout = 20_000
+        headers.forEach { (k, v) -> conn.setRequestProperty(k, v) }
+        val code = conn.responseCode
+        return code to ((if (code < 400) conn.inputStream else conn.errorStream)?.bufferedReader()?.use { it.readText() } ?: "")
     }
 
     private fun send(url: String, headers: Map<String, String>, body: String): Pair<Int, String> {

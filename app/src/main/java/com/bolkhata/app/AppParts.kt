@@ -5,6 +5,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.background
 import androidx.compose.animation.core.animateFloat
@@ -205,7 +206,8 @@ internal fun SideMenu(
     /** Signing in and fetching the data: the Gmail once known; null when not. */
     driveBusy: String? = null,
     /** Test feature: the AI key row (null: not in this build). */
-    ai: AiInfo? = null, onAiOpen: () -> Unit = {}, onAiSave: (key: String, model: String, voice: String) -> Unit = { _, _, _ -> }, onAiOn: (Boolean) -> Unit = {}, onVoiceOff: () -> Unit = {},
+    ai: AiKeys? = null, onAiOpen: () -> Unit = {}, aiModels: (String) -> List<String> = { emptyList() },
+    onAiSave: (name: String, key: String, model: String) -> Unit = { _, _, _ -> }, onAiSwitch: (name: String, on: Boolean) -> Unit = { _, _ -> },
     onSignIn: () -> Unit = {}, onSyncNow: () -> Unit = {}, onSignOut: () -> Unit = {},
     /** 20 quick taps on the menu's empty space. */
     onSecret: () -> Unit = {}
@@ -214,33 +216,7 @@ internal fun SideMenu(
     val secret = remember { longArrayOf(0, 0) }
     var driveOpen by remember { mutableStateOf(false) }
     var aiOpen by remember { mutableStateOf(false) }
-    if (aiOpen && ai != null) {
-        var key by remember { mutableStateOf("") }
-        var model by remember { mutableStateOf(ai.model) }
-        var voice by remember { mutableStateOf("") }
-        // What a key being typed belongs to, before it is saved.
-        val typed = Ai.provider(key)
-        AppPopup("AI key", "Save", onDismiss = { aiOpen = false }, onAction = { aiOpen = false; onAiSave(key, model, voice) },
-            second = if (ai.name.isBlank()) "Cancel" else if (ai.on) "Turn off" else "Turn on", onSecond = { aiOpen = false; if (ai.name.isNotBlank()) onAiOn(!ai.on) }) {
-            WellField(key, { key = it.trim() }, if (ai.name.isBlank()) "Paste any AI key" else "${ai.name} key saved · paste to change")
-            WellField(model, { model = it.trim() }, "Model: " + (typed?.model ?: ai.modelNow.ifBlank { "the usual one" }))
-            // Optional: the mic's recording is sent to Groq's Whisper, which hears Urdu far better than the phone.
-            WellField(voice, { voice = it.trim() }, if (ai.voice) "Voice key saved · paste to change" else "Voice key (Groq, optional)")
-            // Takes only the voice key away: the mic goes back to the phone's own listening, the AI stays on.
-            if (ai.voice) Text("Remove voice key", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = RedSpend,
-                modifier = Modifier.padding(top = 6.dp).clip(RoundedCornerShape(8.dp)).clickable { aiOpen = false; onVoiceOff() }.padding(horizontal = 4.dp, vertical = 4.dp))
-            Text(
-                when {
-                    key.isNotBlank() -> typed?.let { "${it.name} key" } ?: "This key is not recognised"
-                    ai.name.isBlank() -> "Claude, Gemini, ChatGPT, Groq or OpenRouter. With a key, the AI reads every chat message. Your message and matching names are sent to it; totals still come from your entries."
-                    !ai.on -> "AI is off. The key is kept on this phone: Turn on to use it again."
-                    else -> "${ai.name} · ${ai.modelNow}" + (if (ai.used.isBlank()) "" else "\nUsed: ${ai.used}") +
-                        (Ai.price(ai.modelNow)?.let { (i, o) -> "\nPrice per 1M tokens: $" + i + " in · $" + o + " out" } ?: "")
-                },
-                fontSize = 11.sp, lineHeight = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 2.dp, end = 2.dp, top = 10.dp)
-            )
-        }
-    }
+    if (aiOpen && ai != null) AiKeysSheet(ai, aiModels, onAiSave, onAiSwitch) { aiOpen = false }
     if (driveOpen) {
         // The app's own popup: the Gmail in a white box, then Sign out and Sync now.
         AppPopup("Google Drive", "Sync now", onDismiss = { driveOpen = false }, onAction = { driveOpen = false; onSyncNow() },
@@ -363,7 +339,7 @@ internal fun SideMenu(
                         DropdownMenuItem(text = { Text("Import data") }, onClick = { open = false; onImport() })
                     }
                 }
-                if (ai != null) MenuRow(onClick = { onAiOpen(); aiOpen = true }) { MenuLabel("🤖", "AI key"); MenuValue(if (ai.name.isBlank() || !ai.on) "Off" else ai.name) }
+                if (ai != null) MenuRow(onClick = { onAiOpen(); aiOpen = true }) { MenuLabel("🤖", "AI keys"); MenuValue(ai.live().firstOrNull()?.name ?: "Off") }
                 MenuRow(onClick = onTrash) { MenuLabel("🗑", "Trash"); MenuValue("›") }
                 MenuRow(onClick = onVersion, last = true) { MenuLabel("⬆️", "Version"); MenuValue(version) }
             }
@@ -372,8 +348,120 @@ internal fun SideMenu(
     }
 }
 
-/** The saved AI key as the menu shows it: whose key ([name], blank for none), its model and use, and whether it is switched [on]. */
-class AiInfo(val name: String, val model: String, val modelNow: String, val used: String, val voice: Boolean = false, val on: Boolean = true)
+/** The AI keys as the side menu shows them: each provider's box, the one that answered last and why others did not. */
+class AiKeys(val boxes: Map<String, AiBox>, val answered: String, val failed: Map<String, String>) {
+    /** The providers turned on with a key, best first: the order they answer in. */
+    fun live() = Ai.ALL.filter { p -> boxes[p.name]?.let { it.on && it.key.isNotBlank() } == true }
+}
+
+/** Each provider's colour and a few words on what it costs. */
+private val aiLook = mapOf(
+    "Claude" to (Color(0xFFD97757) to "Paid · best"), "ChatGPT" to (Color(0xFF10A37F) to "Paid"),
+    "Gemini" to (Color(0xFF4285F4) to "Free with limits"), "Groq" to (Color(0xFFF55036) to "Free · fast"),
+    "Cerebras" to (Color(0xFF111111) to "Free with limits"), "Mistral" to (Color(0xFFFA520F) to "Free with limits"),
+    "OpenRouter" to (Color(0xFF6466F1) to "Free models + paid")
+)
+
+/** The AI keys page: one box per provider, best first; the ones turned on answer in that order, each handing over to the next. */
+@Composable
+private fun AiKeysSheet(ai: AiKeys, models: (String) -> List<String>, onSave: (String, String, String) -> Unit, onSwitch: (String, Boolean) -> Unit, onClose: () -> Unit) {
+    val sub = MaterialTheme.colorScheme.onSurfaceVariant
+    val live = ai.live()
+    val now = live.firstOrNull { it.name == ai.answered } ?: live.firstOrNull { it.name !in ai.failed }
+    Dialog(onDismissRequest = onClose) {
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(LocalPage.current).padding(vertical = 14.dp)) {
+            Row(Modifier.padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(34.dp).shadow(3.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.surface).clickable { onClose() },
+                    contentAlignment = Alignment.Center) { Text("‹", fontSize = 16.sp) }
+                Text("AI keys", fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 10.dp))
+            }
+            Text("Put a key in each box you have. Best first: the best one turned on answers. When it is busy or out of credit, the next best answers by itself.",
+                fontSize = 11.sp, lineHeight = 15.sp, color = sub, modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 10.dp))
+            // Who answers, in turn; the one answering now in green.
+            Row(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 10.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surface)
+                .horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (live.isEmpty()) Text("Turn on a key to use the AI", fontSize = 11.sp, color = sub)
+                live.forEachIndexed { i, p ->
+                    if (i > 0) Text("→", fontSize = 11.sp, modifier = Modifier.padding(horizontal = 5.dp))
+                    Text(p.name, fontSize = 11.sp, fontWeight = FontWeight.Medium, color = if (p == now) GreenIn else MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.clip(RoundedCornerShape(7.dp)).background(if (p == now) GreenIn.copy(alpha = 0.1f) else LocalPage.current).padding(horizontal = 7.dp, vertical = 2.dp))
+                }
+            }
+            Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Ai.ALL.forEachIndexed { i, p ->
+                    val box = ai.boxes[p.name] ?: AiBox()
+                    val why = ai.failed[p.name].orEmpty().lowercase()
+                    val status = when {
+                        box.key.isBlank() -> "No key yet" to sub
+                        !box.on -> "Off · key kept" to sub
+                        p == now -> "● Answering now" to GreenIn
+                        why.isBlank() -> "● Ready · answers if the ones above can't" to sub
+                        else -> (when {
+                            why.startsWith("429") || "rate" in why -> "● Busy for a minute"
+                            "credit" in why || why.startsWith("402") -> "● Out of credit"
+                            why.startsWith("401") || why.startsWith("403") -> "● Key not working"
+                            else -> "● Did not answer"
+                        } + " · next one answers") to OrangeOwe
+                    }
+                    AiBoxCard(i + 1, p, box, status, models(p.name), { k, m -> onSave(p.name, k, m) }) { onSwitch(p.name, it) }
+                }
+            }
+        }
+    }
+}
+
+/** One provider's box: number, colour square, name and cost, a switch; with a key, the key field, the model to pick, Save and how it is doing. */
+@Composable
+private fun AiBoxCard(n: Int, p: Ai.Provider, box: AiBox, status: Pair<String, Color>, models: List<String>, onSave: (String, String) -> Unit, onSwitch: (Boolean) -> Unit) {
+    val sub = MaterialTheme.colorScheme.onSurfaceVariant
+    var open by remember { mutableStateOf(false) }
+    var key by remember { mutableStateOf("") }
+    var model by remember(box.model) { mutableStateOf(box.model.ifBlank { p.model }) }
+    var pick by remember { mutableStateOf(false) }
+    val shown = open || box.key.isNotBlank()
+    val on = box.on && box.key.isNotBlank()
+    fun label(m: String) = m + if (Ai.free(p, m)) " · Free" else " · Paid"
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surface)
+        .clickable(enabled = !shown) { open = true }.padding(horizontal = 12.dp, vertical = 10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(18.dp).clip(CircleShape).background(LocalPage.current), contentAlignment = Alignment.Center) {
+                Text("$n", fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = sub)
+            }
+            Box(Modifier.padding(start = 8.dp).size(26.dp).clip(RoundedCornerShape(8.dp)).background(aiLook[p.name]?.first ?: EmberTop), contentAlignment = Alignment.Center) {
+                Text(p.name.take(1), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            }
+            Column(Modifier.padding(start = 8.dp).weight(1f)) {
+                Text(p.name, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text(aiLook[p.name]?.second.orEmpty(), fontSize = 10.sp, color = sub)
+            }
+            // The switch: without a key it opens the box for one.
+            Box(Modifier.size(34.dp, 20.dp).clip(RoundedCornerShape(10.dp)).background(if (on) GreenIn else Color(0xFFD6D2CC))
+                .clickable { if (box.key.isBlank()) open = !open else onSwitch(!box.on) }) {
+                Box(Modifier.align(if (on) Alignment.CenterEnd else Alignment.CenterStart).padding(2.dp).size(16.dp).shadow(1.dp, CircleShape).clip(CircleShape).background(Color.White))
+            }
+        }
+        if (shown) {
+            WellField(key, { key = it.trim() }, if (box.key.isBlank()) "Paste ${p.name} key" else box.key.take(6) + "••••••" + box.key.takeLast(3))
+            Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f)) {
+                    Row(Modifier.fillMaxWidth().fieldEdge(RoundedCornerShape(12.dp)).clickable { pick = true }.padding(horizontal = 12.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Text(label(model), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        Text("▾", fontSize = 11.sp, color = sub)
+                    }
+                    PickMenu(pick, { pick = false }) {
+                        (listOf(model) + models).distinct().forEach { m ->
+                            DropdownMenuItem(text = { Text(label(m), fontSize = 13.sp) }, onClick = { pick = false; model = m })
+                        }
+                    }
+                }
+                Text("Save", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 6.dp).shadow(3.dp, RoundedCornerShape(16.dp))
+                    .clip(RoundedCornerShape(16.dp)).background(Color.White).clickable { onSave(key, model); key = "" }.padding(horizontal = 14.dp, vertical = 8.dp))
+            }
+            Text(status.first, fontSize = 10.sp, color = status.second, modifier = Modifier.padding(top = 4.dp))
+        }
+    }
+}
 
 /** The Google sign-in line: the G and "Sign in with Google", or the Gmail's first letter, the Gmail and how syncing went ([busy]: fetching). */
 @Composable
