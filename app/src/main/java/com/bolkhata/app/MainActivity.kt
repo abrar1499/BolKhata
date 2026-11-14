@@ -1357,21 +1357,35 @@ fun App(
                     }
                     // The keys turned on take turns, best first: one that is busy or out of credit hands the message to the next,
                     // unless it already saved something (asking again would then save it twice).
-                    val head = Ai.key to Ai.model
                     val before = entries
                     var answer: AiAgent.Answer? = null
-                    var by = head
+                    var by = Ai.key to Ai.model
                     for ((k, m) in Ai.chain) {
-                        Ai.key = k; Ai.model = m
                         val name = Ai.provider(k)?.name.orEmpty()
+                        // Out of credit or at its limit a moment ago: not tried again until it has rested.
+                        if ((Ai.restUntil[name] ?: 0L) > System.currentTimeMillis()) continue
+                        Ai.key = k; Ai.model = m
                         answer = ask()
                         if (answer != null) { by = k to m; Ai.failed.remove(name); Ai.answered = name; break }
                         Ai.failed[name] = Ai.lastError
+                        Ai.restUntil[name] = System.currentTimeMillis() + Ai.restFor(Ai.lastError)
                         aiWhy = name + " " + Ai.lastError.take(90)
                         if (entries !== before) break
                     }
                     val usage = if (answer == null) "" else Ai.takeUsage(System.currentTimeMillis() - started, by.first, by.second).orEmpty()
-                    Ai.key = head.first; Ai.model = head.second
+                    // Back to the first key turned on (the list may have changed in the side menu meanwhile).
+                    Ai.key = Ai.chain.firstOrNull()?.first.orEmpty(); Ai.model = Ai.chain.firstOrNull()?.second.orEmpty()
+                    // The AI stopped part way after saving or changing entries: those stay, and the app's own engine
+                    // does not read the message again (it would save it twice).
+                    if (answer == null && entries !== before) {
+                        val old = before.map { it.id }.toHashSet()
+                        val added = entries.filter { it.id !in old }.map { it.id }
+                        aiPicked = ""; aiSaved = added
+                        lastSpeech = if (added.isEmpty()) "Done" else "Saved"
+                        postChat(if (added.isEmpty()) "Done. The AI stopped part way ($aiWhy)." else "", isUser = false, entryIds = added,
+                            meta = "engine=AI; intent=agent; partial; why=" + aiWhy.take(80))
+                        return@launch
+                    }
                     // No key answered (no credit, a limit reached, no internet): the app's own engine answers below.
                     if (answer == null) aiDown = true else {
                     // The AI could not tell what happened with a person and a number: the option card asks.
@@ -2404,7 +2418,7 @@ fun App(
                         val use = if (found.isEmpty() || model in found) model else Ai.pick(p, found)
                         if (use != model) keep(use)
                         val error = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Ai.test(k, use) }
-                        if (error.isBlank()) Ai.failed.remove(name) else Ai.failed[name] = error
+                        if (error.isBlank()) { Ai.failed.remove(name); Ai.restUntil.remove(name) } else Ai.failed[name] = error
                         aiTick++
                         driveToast(if (error.isBlank()) "✓ $name works · ${use.ifBlank { p.model }}" else "$name key did not work: $error")
                     }

@@ -35,6 +35,19 @@ object Ai {
     @Volatile var chain: List<Pair<String, String>> = emptyList()
     /** Why each provider (by name) last failed to answer; taken out once it answers again. */
     val failed = java.util.concurrent.ConcurrentHashMap<String, String>()
+    /** Until when (ms) each provider is skipped after a failure, so a full limit or no credit is not tried on every message. */
+    val restUntil = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+    /** How long to leave a provider alone after [why] went wrong: a minute when busy, half an hour with no credit, a day for a bad key. */
+    fun restFor(why: String): Long = why.lowercase().let { w ->
+        when {
+            "credit" in w || w.startsWith("402") || "quota" in w || "billing" in w -> 30 * 60_000L
+            w.startsWith("401") || w.startsWith("403") -> 24 * 3_600_000L
+            w.startsWith("429") || "rate" in w || "busy" in w -> 60_000L
+            else -> 20_000L
+        }
+    }
+
     /** The provider that answered the last message. */
     @Volatile var answered = ""
 
@@ -333,8 +346,8 @@ object Ai {
         val conn = URL(url).openConnection() as HttpURLConnection
         conn.requestMethod = "POST"
         conn.connectTimeout = 8_000
-        // Longer than this and the app answers by itself, so the chat never hangs.
-        conn.readTimeout = 30_000
+        // Longer than this and the next key (or the app itself) answers, so the chat never hangs.
+        conn.readTimeout = 12_000
         conn.doOutput = true
         conn.setRequestProperty("Content-Type", "application/json")
         headers.forEach { (k, v) -> conn.setRequestProperty(k, v) }

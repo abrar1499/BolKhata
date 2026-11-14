@@ -397,11 +397,11 @@ private fun AiKeysSheet(ai: AiKeys, models: (String) -> List<String>, onSave: (S
                         p == now -> "● Answering now" to GreenIn
                         why.isBlank() -> "● Ready · answers if the ones above can't" to sub
                         else -> (when {
-                            why.startsWith("429") || "rate" in why -> "● Busy for a minute"
+                            why.startsWith("429") || "rate" in why || "busy" in why -> "● Busy for a minute"
                             "credit" in why || why.startsWith("402") -> "● Out of credit"
                             why.startsWith("401") || why.startsWith("403") -> "● Key not working"
                             else -> "● Did not answer"
-                        } + " · next one answers") to OrangeOwe
+                        } + if (live.indexOf(p) < live.size - 1) " · next one answers" else "") to OrangeOwe
                     }
                     AiBoxCard(i + 1, p, box, status, models(p.name), { k, m -> onSave(p.name, k, m) }) { onSwitch(p.name, it) }
                 }
@@ -455,7 +455,7 @@ private fun AiBoxCard(n: Int, p: Ai.Provider, box: AiBox, status: Pair<String, C
                         }
                     }
                 }
-                Text("Save", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 6.dp).shadow(3.dp, RoundedCornerShape(16.dp))
+                Text("Save", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF1D1D1F), modifier = Modifier.padding(start = 6.dp).shadow(3.dp, RoundedCornerShape(16.dp))
                     .clip(RoundedCornerShape(16.dp)).background(Color.White).clickable { onSave(key, model); key = "" }.padding(horizontal = 14.dp, vertical = 8.dp))
             }
             Text(status.first, fontSize = 10.sp, color = status.second, modifier = Modifier.padding(top = 4.dp))
