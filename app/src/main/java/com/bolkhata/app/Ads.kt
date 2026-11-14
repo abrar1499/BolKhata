@@ -24,6 +24,8 @@ import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
 import com.google.android.gms.ads.MobileAds
+import com.google.android.gms.ads.VideoOptions
+import com.google.android.gms.ads.nativead.MediaView
 import com.google.android.gms.ads.nativead.NativeAd
 import com.google.android.gms.ads.nativead.NativeAdOptions
 import com.google.android.gms.ads.nativead.NativeAdView
@@ -48,14 +50,18 @@ object Ads {
         loaded[place]?.let { onReady(it); return }
         AdLoader.Builder(context, nativeUnit)
             .forNativeAd { ad -> loaded[place] = ad; onReady(ad) }
-            .withNativeAdOptions(NativeAdOptions.Builder().setAdChoicesPlacement(NativeAdOptions.ADCHOICES_TOP_RIGHT).build())
+            .withNativeAdOptions(NativeAdOptions.Builder().setAdChoicesPlacement(NativeAdOptions.ADCHOICES_TOP_RIGHT)
+                .setVideoOptions(VideoOptions.Builder().setStartMuted(true).build()).build())
             .build().loadAd(AdRequest.Builder().build())
     }
 }
 
-/** A native ad as one soft row: icon, headline with its "Ad" tag, a short line, and the green action word; nothing when no ad came. */
+/**
+ * A native ad as one soft row: icon, headline with its "Ad" tag, a short line, and the green action word; nothing when
+ * no ad came. [video]: a 120 × 120 picture or video (playing without sound) on the left instead of the small icon.
+ */
 @Composable
-fun NativeAdCard(place: String, modifier: Modifier = Modifier) {
+fun NativeAdCard(place: String, modifier: Modifier = Modifier, video: Boolean = false) {
     val context = LocalContext.current
     var ad by remember(place) { mutableStateOf<NativeAd?>(null) }
     DisposableEffect(place) {
@@ -63,7 +69,7 @@ fun NativeAdCard(place: String, modifier: Modifier = Modifier) {
         onDispose { }
     }
     val shown = ad ?: return
-    AndroidView(factory = { ctx: Context -> adRow(ctx) }, modifier = modifier.fillMaxWidth(), update = { v: NativeAdView -> v.show(shown) })
+    AndroidView(factory = { ctx: Context -> if (video) videoRow(ctx) else adRow(ctx) }, modifier = modifier.fillMaxWidth(), update = { v: NativeAdView -> v.show(shown) })
 }
 
 /** The banner above the chat bar: the full width, the smallest Google size. */
@@ -110,11 +116,43 @@ private fun adRow(ctx: Context): NativeAdView {
     return view
 }
 
+/** The video card: 120 × 120 media on the left, then the headline with its "Ad" tag, two lines and a green action button. */
+private fun videoRow(ctx: Context): NativeAdView {
+    val view = NativeAdView(ctx)
+    val row = LinearLayout(ctx).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(ctx.dp(8), ctx.dp(8), ctx.dp(8), ctx.dp(8))
+        background = GradientDrawable().apply { cornerRadius = ctx.dp(12).toFloat(); setColor(AColor.argb(153, 255, 255, 255)) }
+    }
+    val media = MediaView(ctx).apply { layoutParams = LinearLayout.LayoutParams(ctx.dp(120), ctx.dp(120)); clipToOutline = true
+        background = GradientDrawable().apply { cornerRadius = ctx.dp(10).toFloat(); setColor(AColor.rgb(238, 247, 241)) } }
+    val texts = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL
+        layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = ctx.dp(10) } }
+    val titleRow = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+    val headline = TextView(ctx).apply { textSize = 12f; setTextColor(AColor.rgb(29, 29, 31)); maxLines = 2; paint.isFakeBoldText = true
+        layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f) }
+    val tag = TextView(ctx).apply { text = "Ad"; textSize = 8f; setTextColor(AColor.rgb(155, 149, 142)); setPadding(ctx.dp(3), 0, ctx.dp(3), 0)
+        background = GradientDrawable().apply { cornerRadius = ctx.dp(4).toFloat(); setStroke(ctx.dp(1), AColor.rgb(214, 209, 202)) } }
+    val body = TextView(ctx).apply { textSize = 10.5f; setTextColor(AColor.rgb(138, 133, 128)); maxLines = 2; setPadding(0, ctx.dp(4), 0, 0) }
+    val action = TextView(ctx).apply { textSize = 11f; setTextColor(AColor.WHITE); paint.isFakeBoldText = true
+        setPadding(ctx.dp(11), ctx.dp(6), ctx.dp(11), ctx.dp(6))
+        background = GradientDrawable().apply { cornerRadius = ctx.dp(10).toFloat(); setColor(AColor.rgb(31, 154, 84)) }
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = ctx.dp(8) } }
+    titleRow.addView(headline); titleRow.addView(tag)
+    texts.addView(titleRow); texts.addView(body); texts.addView(action)
+    row.addView(media); row.addView(texts)
+    view.addView(row)
+    view.mediaView = media; view.headlineView = headline; view.bodyView = body; view.callToActionView = action
+    return view
+}
+
 /** Fills the row with [ad] and hands it to Google, which counts its showing and opens it on a tap. */
 private fun NativeAdView.show(ad: NativeAd) {
     (headlineView as TextView).text = ad.headline
     (bodyView as TextView).text = ad.body.orEmpty()
     (callToActionView as TextView).text = (ad.callToAction ?: "Open") + " ›"
-    (iconView as ImageView).setImageDrawable(ad.icon?.drawable)
+    (iconView as? ImageView)?.setImageDrawable(ad.icon?.drawable)
+    ad.mediaContent?.let { mediaView?.mediaContent = it }
     setNativeAd(ad)
 }
