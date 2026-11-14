@@ -1504,7 +1504,7 @@ fun App(
                     val recent = history.takeLast(6).joinToString("\n") { (if (it.isUser) "Person: " else "App: ") + it.text.take(200) }
                     Groq.answer(groqKey, read, recent)?.let { reply = it; executionStatus = "groq_answer" }
                 }
-                val usage = Groq.takeUsage().ifBlank { if (knownCommand != null) "Learned · no tokens" else "" }
+                val usage = Groq.takeUsage().ifBlank { if (knownCommand != null) "Learned · no tokens" else "App engine" }
                 if (reply == null && executionStatus == "returned") executionStatus = "awaiting_confirmation"
                 val matchCount = if (intent.kind in setOf("ask", "open", "delete", "change", "to_khata", "paid_by", "reread")) {
                     offMain { runCatching { Query.select(scoped, intent.filter).size }.getOrNull() }
