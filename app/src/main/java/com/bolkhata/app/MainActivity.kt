@@ -150,8 +150,16 @@ fun App(
     // Without a key of their own, people use the built-in key (when the build has one), unless they turned Groq off.
     // Groq is switched off for now (Groq.ENABLED): the app reads and answers every message by itself.
     // Test feature (APK build only): an AI key of any provider, saved in the side menu, runs the chat instead; see Ai.
+    /** Hands the AI the keys turned on in the side menu, best first; none while the AI is hidden (20 taps under the menu). */
+    fun aiChain() {
+        val boxes = store.aiBoxes
+        Ai.saved = Ai.ALL.mapNotNull { p -> boxes[p.name]?.key?.trim()?.takeIf { it.isNotBlank() }?.let { it to p } }.toMap()
+        Ai.chain = if (!store.aiShown) emptyList() else Ai.ALL.mapNotNull { p -> boxes[p.name]?.takeIf { it.on && it.key.isNotBlank() }?.let { it.key.trim() to it.model } }
+        Ai.key = Ai.chain.firstOrNull()?.first.orEmpty()
+        Ai.model = Ai.chain.firstOrNull()?.second.orEmpty()
+    }
     remember {
-        if (!BuildConfig.PLAY) { Ai.key = if (store.llmOn && store.aiShown) store.llmKey else ""; Ai.model = store.llmModel; Ai.voiceKey = if (store.aiShown) store.llmVoice else ""; Ai.sink = { i, o, micro -> store.llmIn += i; store.llmOut += o; store.llmMicro += micro } }
+        if (!BuildConfig.PLAY) { aiChain(); Ai.sink = { i, o, micro -> store.llmIn += i; store.llmOut += o; store.llmMicro += micro } }
     }
     fun groqKeyNow() = Ai.key.ifBlank { if (!Groq.ENABLED || !store.aiShown) "" else store.groqKey.ifBlank { if (Groq.sharedReady && !store.groqOff) Groq.SHARED else "" } }
     var groqKey by remember { mutableStateOf(groqKeyNow()) }
@@ -1347,20 +1355,25 @@ fun App(
                     suspend fun ask() = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                         AiAgent.run(text, recent, host, roman = roman, previous = aiPicked, justSaved = aiSaved, heardAlso = heardAlso, spoken = spoken, known = store.aiLearned, lastShown = history.lastOrNull { !it.isUser }?.text.orEmpty()) { tool -> kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.Main) { tool() } }
                     }
-                    var answer = ask()
-                    var byGroq = false
-                    // The AI key did not answer (no credit, no service): the Groq key, when one is saved, does the same work.
-                    if (answer == null && Ai.provider(Ai.voiceKey) === Ai.GROQ && Ai.provider(Ai.key) !== Ai.GROQ) {
-                        val own = Ai.key to Ai.model
-                        val why = Ai.lastError
-                        Ai.key = Ai.voiceKey; Ai.model = ""
-                        answer = try { ask() } finally { Ai.key = own.first; Ai.model = own.second }
-                        byGroq = answer != null
-                        if (answer == null) { aiWhy = "Groq " + Ai.lastError.take(90); Ai.lastError = why }
+                    // The keys turned on take turns, best first: one that is busy or out of credit hands the message to the next,
+                    // unless it already saved something (asking again would then save it twice).
+                    val head = Ai.key to Ai.model
+                    val before = entries
+                    var answer: AiAgent.Answer? = null
+                    var by = head
+                    for ((k, m) in Ai.chain) {
+                        Ai.key = k; Ai.model = m
+                        val name = Ai.provider(k)?.name.orEmpty()
+                        answer = ask()
+                        if (answer != null) { by = k to m; Ai.failed.remove(name); Ai.answered = name; break }
+                        Ai.failed[name] = Ai.lastError
+                        aiWhy = name + " " + Ai.lastError.take(90)
+                        if (entries !== before) break
                     }
-                    // Neither key answered (no credit, a limit reached, no internet): the app's own engine answers below.
+                    val usage = if (answer == null) "" else Ai.takeUsage(System.currentTimeMillis() - started, by.first, by.second).orEmpty()
+                    Ai.key = head.first; Ai.model = head.second
+                    // No key answered (no credit, a limit reached, no internet): the app's own engine answers below.
                     if (answer == null) aiDown = true else {
-                    val usage = Ai.takeUsage(System.currentTimeMillis() - started).orEmpty().let { if (byGroq) "Groq" + it.substring(it.indexOf(" ·").coerceAtLeast(0)) else it }
                     // The AI could not tell what happened with a person and a number: the option card asks.
                     answer?.ask?.takeIf { it.isNotBlank() }?.let { ask ->
                         val book = Sides.bookOf(ask.substringBefore("|"), entries, sides)
@@ -1706,7 +1719,7 @@ fun App(
      * True when the mic records and sends to Whisper. A voice key saved in the AI key box always does; the old Groq
      * setup also needs its own voice switch (which may have been turned off long ago) to be on.
      */
-    fun whisperOn() = Ai.voiceKey.isNotBlank() || (Ai.voiceKeyFor(groqKey).isNotBlank() && groqVoice)
+    fun whisperOn() = Ai.voiceKeyFor(groqKey).isNotBlank() && groqVoice
     /** The language to listen in: the one picked, else guessed from how the person writes (see Normalizer.voiceLanguage). */
     fun voiceLang() = Normalizer.voiceLanguage(lang, chatMessages.filter { it.isUser }.map { it.text })
     val ttsReady = remember { mutableStateOf(false) }
@@ -2374,44 +2387,38 @@ fun App(
                         else { tab = Tab.CHAT; drawer.close() }
                     }
                 },
-                ai = if (BuildConfig.PLAY || !aiShown) null else remember(aiTick, groqKey) {
-                    AiInfo(Ai.provider(store.llmKey)?.name.orEmpty(), store.llmModel, Ai.modelNow(), voice = store.llmVoice.isNotBlank(), on = store.llmOn, used =
-                        if (store.llmIn + store.llmOut == 0L) "" else Ai.usageText(store.llmIn, store.llmOut,
-                            dollars = if (Ai.price(Ai.modelNow()) == null) null else store.llmMicro / 1_000_000.0))
-                },
+                ai = if (BuildConfig.PLAY || !aiShown) null else remember(aiTick, groqKey) { AiKeys(store.aiBoxes, Ai.answered, Ai.failed.toMap()) },
                 onAiOpen = { aiTick++ },
-                onAiSave = save@{ key, model, voice ->
-                    // The voice key hears the mic's recording; it is Groq's (Whisper).
-                    if (voice.isNotBlank() && Ai.provider(voice) !== Ai.GROQ) { driveToast("The voice key must be a Groq key (gsk_…)"); return@save }
-                    if (voice.isNotBlank()) { store.llmVoice = voice; Ai.voiceKey = store.llmVoice; driveToast("✓ Voice key saved · the mic now records and sends") }
-                    if (key.isNotBlank() && Ai.provider(key) == null) { driveToast("This key is not recognised"); return@save }
-                    // A new key or model starts the token count again.
-                    if ((key.isNotBlank() && key != Ai.key) || model != store.llmModel) { store.llmIn = 0; store.llmOut = 0; store.llmMicro = 0 }
-                    // A newly pasted key is switched on.
-                    if (key.isNotBlank()) { store.llmKey = key; store.llmOn = true }
-                    store.llmModel = model
-                    Ai.key = if (store.llmOn) store.llmKey else ""; Ai.model = store.llmModel
-                    groqKey = groqKeyNow(); aiTick++
-                    if (Ai.key.isNotBlank()) scope.launch {
-                        val error = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Ai.test() }
+                aiModels = { store.aiModels(it) },
+                // Save in a box: keeps the key and model, turns it on, then reads the provider's model list and tries the key.
+                onAiSave = save@{ name, key, model ->
+                    val p = Ai.ALL.firstOrNull { it.name == name } ?: return@save
+                    val k = key.trim().ifBlank { store.aiBoxes[name]?.key.orEmpty() }
+                    if (k.isBlank()) { driveToast("Paste the $name key first"); return@save }
+                    fun keep(m: String) { store.aiBoxes = store.aiBoxes + (name to AiBox(k, m, true)); aiChain(); groqKey = groqKeyNow(); aiTick++ }
+                    keep(model)
+                    scope.launch {
+                        val found = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Ai.models(p, k) }
+                        if (found.isNotEmpty()) store.saveAiModels(name, found)
+                        // The model picked is not offered for this key: the usual one (or the first free one) takes its place.
+                        val use = if (found.isEmpty() || model in found) model else Ai.pick(p, found)
+                        if (use != model) keep(use)
+                        val error = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Ai.test(k, use) }
+                        if (error.isBlank()) Ai.failed.remove(name) else Ai.failed[name] = error
                         aiTick++
-                        driveToast(if (error.isBlank()) "✓ ${Ai.provider(Ai.key)?.name} is on · ${Ai.modelNow()}" else "AI key did not work: $error")
+                        driveToast(if (error.isBlank()) "✓ $name works · ${use.ifBlank { p.model }}" else "$name key did not work: $error")
                     }
                 },
-                // Hidden switch: shows the AI row and turns the AI on, or hides it and turns every AI off (keys are kept).
-                onSecret = {
-                    aiShown = !aiShown; store.aiShown = aiShown; store.llmOn = aiShown
-                    Ai.key = if (aiShown) store.llmKey else ""; Ai.voiceKey = if (aiShown) store.llmVoice else ""
-                    groqKey = groqKeyNow(); aiTick++
-                    driveToast(if (aiShown) "AI on" else "AI off")
+                // The switch in a box: off keeps the key on the phone, so on needs no key again.
+                onAiSwitch = { name, on ->
+                    store.aiBoxes[name]?.let { store.aiBoxes = store.aiBoxes + (name to it.copy(on = on)) }
+                    aiChain(); groqKey = groqKeyNow(); aiTick++
                 },
-                onVoiceOff = { store.llmVoice = ""; Ai.voiceKey = ""; aiTick++; driveToast("Voice key removed · the mic listens with the phone") },
-                // The switch: off keeps the key on the phone, so on needs no key again.
-                onAiOn = { on ->
-                    store.llmOn = on
-                    Ai.key = if (on) store.llmKey else ""
-                    groqKey = groqKeyNow(); aiTick++
-                    driveToast(if (on) "AI is on" else "AI is off · the key is kept. The app answers by itself.")
+                // Hidden switch: shows the AI keys and turns the ones switched on back on, or hides them and turns every AI off (keys are kept).
+                onSecret = {
+                    aiShown = !aiShown; store.aiShown = aiShown
+                    aiChain(); groqKey = groqKeyNow(); aiTick++
+                    driveToast(if (aiShown) "AI on" else "AI off")
                 },
                 driveEmail = driveEmail, driveStatus = if (driveEmail.isBlank()) driveError else Drive.status, driveBusy = Drive.busy,
                 onSignIn = { driveSignIn() },
