@@ -383,5 +383,5 @@ class AiEvalTest {
     }
 
     /** How many everyday messages the app's own assistant got right last time: it may only go up. */
-    private val localFloor = 0
+    private val localFloor = 92
 }

@@ -17,6 +17,9 @@ class GoodsTest {
     @Test fun differentGoodsStayDifferent() {
         assertEquals("steel", Goods.canonical("steel", known))
         assertEquals("cake", Goods.canonical("cake", known))
+        // A two-letter sound key alone is not enough: "bori" is not "Bharai".
+        assertEquals("Bori", Goods.canonical("Bori", listOf("Bharai")))
+        assertEquals("Bharai", Goods.canonical("bhrai", listOf("Bharai")))
     }
 
     private fun sold(t: Type, person: String, rate: Double, day: Long) =

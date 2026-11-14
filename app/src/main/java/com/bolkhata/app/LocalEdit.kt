@@ -91,6 +91,10 @@ object LocalEdit : LocalAgent.Reader {
         }.singleOrNull()
     }
 
+    /** The word at [i] is what it was not: "food nahi (hai)", "not food". */
+    private fun denied(w: List<String>, i: Int) = w.getOrNull(i - 1) == "not" ||
+        w.getOrNull(i + 1) in noWords || (w.getOrNull(i + 1) in isWords && w.getOrNull(i + 2) in noWords)
+
     /** An older entry as a "Which one?" option: "Petrol 60 (12 Nov)". */
     private fun option(e: Entry, now: Long) = said(e) + " (" + dayText(dayOf(e.date), now) + ")"
 
@@ -378,6 +382,7 @@ object LocalEdit : LocalAgent.Reader {
         if (!(w.any(::isDelete) || undo) || m.asking) return null
         if (m.has(khataWords) && m.people.isEmpty() && bookSaid(m) == null && !m.has(entryWords) && !m.has(allWords))
             return LocalAgent.Reply("To remove an account, long-press it in its list, then Delete.")
+        m.people.firstOrNull { it.choices.isNotEmpty() }?.let { return which(it) }
         val wantAll = sure || m.has(allWords) || m.has(manyEntries)
         val picked: List<Entry> = pickFor(m, wantAll) ?: return LocalAgent.Reply("Which entry should I delete?")
         if (picked.isEmpty()) return LocalAgent.Reply("I could not find that entry.")
@@ -477,7 +482,7 @@ object LocalEdit : LocalAgent.Reader {
         val person = newcomer ?: mentioned.lastOrNull { it !in inTargets }?.name ?: markedName(m)?.takeIf { n -> targets.none { it.person.trim().equals(n, true) } }
         val date = d.day
         val cat = item?.let { Parser.guessCategory(it)?.first?.label }?.takeIf { targets.all { e -> e.type == Type.KHARCHA } }
-            ?: w.firstNotNullOfOrNull { catWords[it] }?.takeIf { w.size <= 6 }
+            ?: w.indices.lastOrNull { i -> catWords[w[i]] != null && !denied(w, i) }?.let { catWords[w[it]] }?.takeIf { w.size <= 6 }
         // "ye food mein daal do" on a loan: it was spending.
         val type = typeSaid(m, targets) ?: "expense".takeIf { cat != null && targets.any { e -> e.type != Type.KHARCHA } }
         if (new == null && person == null && date == null && type == null && cat == null && item == null) {
