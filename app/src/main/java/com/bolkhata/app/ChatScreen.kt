@@ -388,19 +388,19 @@ private fun UserBubble(text: String, attachment: String = "") {
     }
 }
 
-/** 👍 and 👎 under each answer in a small white card, grey line icons. One tap saves the rating; tapping the other changes it. */
+/** 👍 and 👎 under each answer in a small muted grey card (quieter than the answer's white one), grey line icons. One tap saves the rating; tapping the other changes it. */
 @Composable
 private fun AnswerActions(rating: Boolean?, onRate: (good: Boolean) -> Unit) {
-    val tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
-    Row(Modifier.padding(start = 2.dp, top = 3.dp).shadow(1.dp, RoundedCornerShape(10.dp)).clip(RoundedCornerShape(10.dp))
-        .background(Color.White).padding(horizontal = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+    val tint = Color(0xFF8F8982)
+    Row(Modifier.padding(start = 2.dp, top = 3.dp).clip(RoundedCornerShape(10.dp))
+        .background(Color(0xFFDEDAD4)).padding(horizontal = 3.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(
             if (rating == true) Icons.Filled.ThumbUpFilled else Icons.Outlined.ThumbUp,
             contentDescription = if (rating == true) "Marked good" else "Good answer",
             tint = if (rating == true) GreenDeep else tint,
             modifier = Modifier.clickable(enabled = rating != true) { onRate(true) }.padding(horizontal = 4.dp, vertical = 3.dp).size(10.dp)
         )
-        Box(Modifier.width(1.dp).height(8.dp).background(Color(0xFFE3DFDA)))
+        Box(Modifier.width(1.dp).height(8.dp).background(Color(0xFFCBC6BF)))
         Icon(
             if (rating == false) Icons.Filled.ThumbDownFilled else Icons.Outlined.ThumbDown,
             contentDescription = if (rating == false) "Marked wrong" else "Wrong answer",
