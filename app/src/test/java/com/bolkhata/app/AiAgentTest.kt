@@ -314,4 +314,12 @@ class AiAgentTest {
         runCatching { AiAgent.use("add_entries", JSONObject("""{"entries": [{"type": "lent", "amount": 10}]}"""), host, now) }
         assertEquals(before, saved.size)
     }
+
+    @Test
+    fun answerInHindiOrUrduScriptIsShownInRoman() {
+        val hindi = AiAgent.roman("मैं ठीक हूँ, आप कैसे हैं?")
+        assertTrue(hindi, hindi.none { it in '\u0900'..'\u097F' })
+        assertTrue(AiAgent.roman("میں ٹھیک ہوں").none { it in '\u0600'..'\u06FF' })
+        assertEquals("Saved 500 for Hamid Akram.", AiAgent.roman("Saved 500 for Hamid Akram."))
+    }
 }
