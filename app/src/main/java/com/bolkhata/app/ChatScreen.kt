@@ -24,6 +24,7 @@ import androidx.compose.material.icons.outlined.ThumbUp
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -199,19 +200,7 @@ fun ChatScreen(
                 }
             } }
             if (loading) {
-                item(key = "chat-loading") {
-                    Row(
-                        Modifier
-                            .clip(RoundedCornerShape(18.dp))
-                            .background(MaterialTheme.colorScheme.surface)
-                            .padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                        Spacer(Modifier.width(10.dp))
-                        Text(loadingLabel, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
+                item(key = "chat-loading") { Working(loadingLabel) }
             }
             if (pendingChanges.isNotEmpty()) {
                 item(key = "chat-changes") {
@@ -837,5 +826,31 @@ private fun AttachmentBubble(path: String, name: String) {
                 )
             }
         }
+    }
+}
+
+/**
+ * While an answer is on its way: the app's logo with three white bars rising and falling, and a word beside it,
+ * "Typing…" for the app's own engine, "✦ Thinking…" (an orange logo) while the AI is asked.
+ */
+@Composable
+private fun Working(label: String) {
+    val ai = label.startsWith("✦")
+    val beat = androidx.compose.animation.core.rememberInfiniteTransition(label = "working")
+    Row(Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier.size(22.dp).shadow(2.dp, RoundedCornerShape(7.dp)).clip(RoundedCornerShape(7.dp))
+                .background(androidx.compose.ui.graphics.Brush.verticalGradient(
+                    if (ai) listOf(Color(0xFFF0A080), Color(0xFFD97757)) else listOf(Color(0xFFFF6B5E), Color(0xFFD6403A)))),
+            horizontalArrangement = Arrangement.spacedBy(1.5.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically
+        ) {
+            repeat(3) { i ->
+                val h by beat.animateFloat(3f, 12f, androidx.compose.animation.core.infiniteRepeatable(
+                    androidx.compose.animation.core.tween(500, delayMillis = 0), androidx.compose.animation.core.RepeatMode.Reverse,
+                    androidx.compose.animation.core.StartOffset(i * 150)), label = "bar$i")
+                Box(Modifier.width(2.dp).height(h.dp).clip(RoundedCornerShape(1.dp)).background(Color.White))
+            }
+        }
+        Text(label, fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 7.dp))
     }
 }
