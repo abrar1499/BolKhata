@@ -6,7 +6,7 @@ import java.net.URL
 
 /**
  * The shared brain: lessons (a message's shape and what to do for it, see AiAgent.learn) kept in brain.json on the
- * repository's "brain" branch. Every install reads it about once a day, so the app gets better without a new version.
+ * repository's "brain" branch. Every install reads it each time it opens, so the app gets better without a new version.
  * The file holds only shapes with open places for names and numbers, never anyone's names or chat.
  */
 object Brain {

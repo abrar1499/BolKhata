@@ -289,10 +289,9 @@ fun App(
     var checking by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { newVersion = Updater.check() }
-    // The shared brain, read about once a day: the app knows more without a new version.
+    // The shared brain, read each time the app opens: the app knows more without a new version.
     LaunchedEffect(Unit) {
-        if (System.currentTimeMillis() - store.brainAt > 20 * 3_600_000L)
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Brain.fetch() }?.let { store.brain = it; store.brainAt = System.currentTimeMillis() }
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Brain.fetch() }?.let { store.brain = it }
     }
 
     // While a chat message is being handled, short messages go into the chat instead of a pop-up.
@@ -329,6 +328,9 @@ fun App(
                 onFailure = { "Not sent: " + (it.message ?: "network error") }
             )
             if (force) toast(logStatus)
+            // What the app learnt from the AI goes along when it changed, to be checked for the shared brain.
+            val learned = org.json.JSONObject(store.aiLearned.filterKeys { !it.startsWith("=") }).toString(1)
+            if (learned != store.learnedSent && ChatLogUploader.uploadLearned(logRepo, logToken, learned).isSuccess) store.learnedSent = learned
         }
     }
 
