@@ -2244,15 +2244,7 @@ fun App(
     LaunchedEffect(chatLoading) { if (!chatLoading) listener.resume() }
 
     fun startVoice(forChat: Boolean = false) {
-        // The chat's mic is always live voice; a Groq key in the Voice key field is then only the AI's stand-in.
-        if (whisperOn() && !forChat) {
-            startRecording(
-                // With the AI reading it, the words go as heard: the AI does the fixing, with the saved names in view.
-                heard = { text -> (if (Ai.handles(groqKey)) text else Normalizer.voiceFix(text, voiceKnown())).let { if (forChat) chatInput(it) else homeInput(it) } },
-                missed = { toast("Couldn't catch that. Try again.") }
-            )
-            return
-        }
+        // Every mic listens live with the phone, also with a Groq key: the words go as soon as they are said.
         if (!android.speech.SpeechRecognizer.isRecognitionAvailable(context)) { toast("Google voice not found. Update the Google app from Play Store."); return }
         val granted = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) ==
             android.content.pm.PackageManager.PERMISSION_GRANTED
