@@ -9,8 +9,11 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.wrapContentWidth
-import androidx.compose.ui.Alignment
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -74,14 +77,16 @@ fun NativeAdCard(place: String, modifier: Modifier = Modifier, video: Boolean = 
     AndroidView(factory = { ctx: Context -> if (video) videoRow(ctx) else adRow(ctx) }, modifier = modifier.fillMaxWidth(), update = { v: NativeAdView -> v.show(shown) })
 }
 
-/** The banner at the end of a list: the full width at the smallest Google size, or [big] the 300 × 250 box where there is room. */
+/**
+ * The banner at the end of a list, as wide as the cards above it with their round corners: the slim one, or [big] a
+ * taller one (up to 250) where there is room.
+ */
 @Composable
 fun BannerAd(modifier: Modifier = Modifier, big: Boolean = false) {
     val width = LocalConfiguration.current.screenWidthDp - 24
-    // The big box sits in the middle of the line; the slim banner fills it.
-    AndroidView(modifier = modifier.fillMaxWidth().then(if (big) Modifier.wrapContentWidth(Alignment.CenterHorizontally) else Modifier), factory = { ctx: Context ->
+    AndroidView(modifier = modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color.White), factory = { ctx: Context ->
         AdView(ctx).apply {
-            setAdSize(if (big) AdSize.MEDIUM_RECTANGLE else AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(ctx, width))
+            setAdSize(if (big) AdSize.getInlineAdaptiveBannerAdSize(width, 250) else AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(ctx, width))
             adUnitId = Ads.bannerUnit
             loadAd(AdRequest.Builder().build())
         }
