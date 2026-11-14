@@ -43,6 +43,12 @@ object LocalAgent {
         /** The tools used so far for this message, in order. */
         val calls = mutableListOf<Pair<String, JSONObject>>()
 
+        /** This message read as [text] instead (the earlier message with the answer to the app's question in it); its tools count here. */
+        fun again(text: String): Said = Said(text, text, AiAgent.counted(text), host, now, previous, justSaved, "", recent, notes) { name, input, out ->
+            calls += name to input
+            onTool(name, input, out)
+        }
+
         /** Uses one tool on the books, as the AI would. Its result as JSON; an "error" key when the tool refused. */
         fun use(name: String, input: JSONObject): JSONObject {
             val out = runCatching { AiAgent.use(name, input, host, now, notes) }.getOrElse { JSONObject().put("error", it.message ?: "failed").toString() }
@@ -62,6 +68,40 @@ object LocalAgent {
 
     /** Asked in this order: small talk, changes to what is saved, questions, then new entries. */
     private val readers: List<Reader> get() = listOf(LocalTalk, LocalEdit, LocalAsk, LocalAdd)
+
+    /** How every reader asks when a name fits several people. */
+    private val WHICH = Regex("""^Which (\S+) do you mean: (.+)\?$""")
+    private val order = mapOf("pehla" to 0, "pehle" to 0, "pehli" to 0, "first" to 0, "1" to 0, "dusra" to 1, "doosra" to 1, "dusre" to 1, "dusri" to 1,
+        "doosri" to 1, "second" to 1, "2" to 1, "teesra" to 2, "tisra" to 2, "teesre" to 2, "teesri" to 2, "third" to 2, "3" to 2, "last" to -1, "akhri" to -1, "aakhri" to -1)
+    /** Words around a picked name that are not part of it ("khan wala", "jo raza hai"). */
+    private val around = setOf("wala", "wali", "wale", "walay", "waly", "walo", "jo", "ko", "ne", "se", "ka", "ki", "ke", "hai", "hain", "he", "the", "one",
+        "sahab", "sahib", "bhai", "ji", "jee", "mr", "wo", "woh", "vo", "voh", "number", "no", "name", "naam", "i", "mean", "meant", "yes", "haan", "han", "please")
+
+    /**
+     * The answer to "Which Salim do you mean: …?" ("khan wala", "salim raza", "dusra"): the message that was asked about,
+     * in Roman letters, with the name picked in place of the word. Null when the app did not ask that, or the answer picks
+     * none of the names (then it is a new message).
+     */
+    fun picked(s: Said): String? {
+        val shown = s.lastShown.trim()
+        val which = WHICH.find(shown) ?: return null
+        if (s.words.isEmpty() || s.words.size > 5 || s.words.any { w -> w.any(Char::isDigit) && w !in order }) return null
+        val lines = s.recent.lines()
+        val asked = lines.indexOfLast { it.startsWith("App: ") && it.removePrefix("App: ").trim().let { a -> a.isNotBlank() && shown.startsWith(a.take(60)) } }
+        val request = lines.take(if (asked >= 0) asked else lines.size).lastOrNull { it.startsWith("Person: ") }?.removePrefix("Person: ")?.trim() ?: return null
+        val word = which.groupValues[1].lowercase(Locale.ROOT)
+        val choices = which.groupValues[2].split(Regex(""",\s*|\s+or\s+""")).map { it.trim() }.filter { it.isNotBlank() }
+        val said = s.words.filter { it != word && it !in around }
+        val pick = said.firstNotNullOfOrNull { order[it] }?.let { if (it < 0) choices.lastOrNull() else choices.getOrNull(it) }
+            ?: choices.firstOrNull { it.equals(s.lower.trim(), true) }
+            ?: choices.filter { c -> val parts = c.lowercase(Locale.ROOT).split(' ').filter { it != word }; said.any { w -> parts.any { it == w || Understand.closeName(w, it) } } }.singleOrNull()
+            ?: return null
+        // The word as it was typed: "saleem" when the question spells it "Salim".
+        val roman = runCatching { Translit.toRoman(request) }.getOrDefault(request)
+        val typed = Regex("""[\p{L}\p{N}]+""").findAll(roman).firstOrNull { it.value.lowercase(Locale.ROOT) == word }
+            ?: Regex("""[\p{L}\p{N}]+""").findAll(roman).firstOrNull { Understand.closeName(it.value.lowercase(Locale.ROOT), word) } ?: return null
+        return roman.replaceRange(typed.range, pick)
+    }
 
     /**
      * Reads one message and does it. The same answer as [AiAgent.run] gives: no sentence over a plain save, the card of a
@@ -91,7 +131,16 @@ object LocalAgent {
 
 /** Greetings, "kaise ho", thanks, "acha": a short friendly answer, nothing saved. */
 object LocalTalk : LocalAgent.Reader {
-    override fun read(s: LocalAgent.Said): LocalAgent.Reply? =
-        if (!NativeChatEngine.isSmallTalk(s.roman, s.now)) null
-        else LocalAgent.Reply(NativeChatEngine.interpret(s.roman, emptyList(), now = s.now).reply)
+    /** Words of a nod: after the app's own question ("Move them all to Trash?") they answer it, so that reader reads them. */
+    private val nods = setOf("ok", "okay", "okk", "ji", "jee", "g", "haan", "han", "ha", "theek", "thik", "thek", "hai", "acha", "accha", "achha", "done", "sahi", "yes")
+    /** Words of a how-to question or a task: "delete kaise karte hain" is not "kaise ho". */
+    private val doing = setOf("kar", "karte", "karti", "karna", "karun", "karoon", "karen", "karein", "kare", "karu", "karoo", "delete", "add", "save",
+        "entry", "entries", "edit", "change", "likhna", "likhun", "hisab", "khata", "pdf", "report")
+
+    override fun read(s: LocalAgent.Said): LocalAgent.Reply? = when {
+        s.lastShown.trim().endsWith("?") && s.words.all { it in nods } -> null
+        s.words.any { it in doing } -> null
+        !NativeChatEngine.isSmallTalk(s.roman, s.now) -> null
+        else -> LocalAgent.Reply(NativeChatEngine.interpret(s.roman, emptyList(), now = s.now).reply)
+    }
 }
