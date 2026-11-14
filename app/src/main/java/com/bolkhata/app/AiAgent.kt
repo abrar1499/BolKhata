@@ -436,7 +436,8 @@ object AiAgent {
         if (done.any { (_, i) -> i.toString().let { "\"date\"" in it || "\"from\"" in it || "\"to\"" in it } }) return null
         val out = JSONArray()
         for ((n, i) in done) out.put(JSONObject().put("name", n).put("input", mark(i, "", nums, people, usedP) ?: return null))
-        if (usedP.size != people.size || '?' in reply) return null
+        // A question back after work was the AI unsure (which one? how much?); a question in plain chat ("kya chahiye?") is just talk.
+        if (usedP.size != people.size || ('?' in reply && (done.isNotEmpty() || people.isNotEmpty()))) return null
         // A sentence with figures of its own was worked out for that day's books: only the card is done again.
         var text = if (reply.any { it.isDigit() } || reply.split(Regex("""\s+""")).size > 15) "" else reply.trim()
         people.forEachIndexed { at, p -> text = text.replace(p, "@$at", ignoreCase = true) }
