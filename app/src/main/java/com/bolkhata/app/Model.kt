@@ -231,7 +231,7 @@ class Store(context: Context) {
 
     /** Keys left out of a backup: AI keys are private and stay on this phone, as do this phone's Drive sync notes. */
     private val notBackedUp = setOf("aiKey", "fastKey", "aiModel", "fileKey", "groqKey", "elevenKey", "logToken",
-        "driveEmail", "driveAt", "driveDirty", "deviceId", "llmKey", "llmModel", "llmIn", "llmOut", "llmMicro", "llmVoice", "llmOn", "aiShown", "aiBoxes")
+        "driveEmail", "driveAt", "driveDirty", "deviceId", "llmKey", "llmModel", "llmIn", "llmOut", "llmMicro", "llmVoice", "llmOn", "aiShown", "aiBoxes", "brainToken")
 
     /** Also kept off Google Drive: the chat history and the background photo (a file on this phone). */
     private val phoneOnly = setOf("chatMessages", "bgPhoto", "brain", "learnedSent")
@@ -692,7 +692,11 @@ class Store(context: Context) {
             o.keys().asSequence().associateWith { o.getString(it) }
         }.getOrDefault(emptyMap())
         set(v) = prefs.edit().putString("brain", org.json.JSONObject(v).toString()).apply()
-    /** The learnt lessons last sent to the private log repository, so they are sent again only when they change. */
+    /** The owner's GitHub token for the shared brain repository only (see Brain.publish); kept on this phone only. */
+    var brainToken: String
+        get() = prefs.getString("brainToken", "") ?: ""
+        set(v) = prefs.edit().putString("brainToken", v.trim()).apply()
+    /** The learnt lessons last sent to the shared brain, so they are sent again only when they change. */
     var learnedSent: String
         get() = prefs.getString("learnedSent", "") ?: ""
         set(v) = prefs.edit().putString("learnedSent", v).apply()
