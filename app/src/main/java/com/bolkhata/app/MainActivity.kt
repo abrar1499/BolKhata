@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlin.reflect.KProperty
 import androidx.core.view.WindowCompat
@@ -1386,41 +1387,52 @@ fun App(
                     aiHeard[0] = null
                     val recent = history.takeLast(6).joinToString("\n") { (if (it.isUser) "Person: " else "App: ") + it.text.take(200) }
                     val host = chatHost(names0)
-                    // The AI is asked off the main thread; each tool then runs on it, where the entries live.
-                    suspend fun ask() = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                        AiAgent.run(text, recent, host, roman = roman, previous = aiPicked, justSaved = aiSaved, heardAlso = heardAlso, spoken = spoken, known = store.aiLearned, lastShown = history.lastOrNull { !it.isUser }?.text.orEmpty()) { tool -> kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.Main) { tool() } }
+                    // Every key turned on gets the message at once, each working on its own copy of the books; the first
+                    // answer wins, the others stop, and only the winner's tools are then done on the real books.
+                    val books = entries; val bookSides = sides; val bookTrash = trash
+                    fun copy(): AiAgent.Host {
+                        var mine = books; var setup = bookSides; var bin = bookTrash
+                        return AiAgent.Host(entries = { mine }, add = { mine = it + mine }, update = { ch -> mine = mine.map { e -> ch.firstOrNull { it.id == e.id } ?: e } },
+                            trash = { ids -> bin = mine.filter { it.id in ids } + bin; mine = mine.filter { it.id !in ids } }, names = { names0 }, currency = currency,
+                            setup = { setup }, saveSetup = { setup = it }, trashed = { bin },
+                            restore = { ids -> mine = bin.filter { it.id in ids } + mine; bin = bin.filter { it.id !in ids } })
                     }
-                    // The keys turned on take turns, best first: one that is busy or out of credit hands the message to the next,
-                    // unless it already saved something (asking again would then save it twice).
-                    val before = entries
-                    var answer: AiAgent.Answer? = null
-                    var by = Ai.key to Ai.model
-                    for ((k, m) in Ai.chain) {
-                        val name = Ai.provider(k)?.name.orEmpty()
-                        // Out of credit or at its limit a moment ago: not tried again until it has rested.
-                        if ((Ai.restUntil[name] ?: 0L) > System.currentTimeMillis()) continue
-                        Ai.key = k; Ai.model = m
-                        answer = ask()
-                        if (answer != null) { by = k to m; Ai.failed.remove(name); Ai.answered = name; break }
-                        Ai.failed[name] = Ai.lastError
-                        Ai.restUntil[name] = System.currentTimeMillis() + Ai.restFor(Ai.lastError)
-                        aiWhy = name + " " + Ai.lastError.take(90)
-                        if (entries !== before) break
+                    class Won(val answer: AiAgent.Answer, val calls: List<Pair<String, org.json.JSONObject>>, val key: String, val model: String)
+                    val stop = java.util.concurrent.atomic.AtomicBoolean(false)
+                    val racers = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO)
+                    val known = store.aiLearned; val picked = aiPicked; val saved = aiSaved
+                    val lastShown = history.lastOrNull { !it.isUser }?.text.orEmpty()
+                    val jobs = Ai.chain.filter { (k, _) -> (Ai.restUntil[Ai.provider(k)?.name.orEmpty()] ?: 0L) <= System.currentTimeMillis() }.map { (k, m) ->
+                        racers.async {
+                            val name = Ai.provider(k)?.name.orEmpty()
+                            val calls = mutableListOf<Pair<String, org.json.JSONObject>>()
+                            val a = Ai.using(k, m) {
+                                AiAgent.run(text, recent, copy(), roman = roman, previous = picked, justSaved = saved, heardAlso = heardAlso, spoken = spoken,
+                                    known = known, lastShown = lastShown, onTool = { n, input, _ -> calls += n to input }, stop = { stop.get() }).also { a ->
+                                    // Out of credit or at its limit: left to rest before it is tried again.
+                                    if (a == null && !stop.get()) { Ai.failed[name] = Ai.lastError; Ai.restUntil[name] = System.currentTimeMillis() + Ai.restFor(Ai.lastError); aiWhy = name + " " + Ai.lastError.take(90) }
+                                }
+                            }
+                            a?.let { Won(it, calls, k, m) }
+                        }
                     }
-                    val usage = if (answer == null) "" else Ai.takeUsage(System.currentTimeMillis() - started, by.first, by.second).orEmpty()
-                    // Back to the first key turned on (the list may have changed in the side menu meanwhile).
-                    Ai.key = Ai.chain.firstOrNull()?.first.orEmpty(); Ai.model = Ai.chain.firstOrNull()?.second.orEmpty()
-                    // The AI stopped part way after saving or changing entries: those stay, and the app's own engine
-                    // does not read the message again (it would save it twice).
-                    if (answer == null && entries !== before) {
-                        val old = before.map { it.id }.toHashSet()
-                        val added = entries.filter { it.id !in old }.map { it.id }
-                        aiPicked = ""; aiSaved = added
-                        lastSpeech = if (added.isEmpty()) "Done" else "Saved"
-                        postChat(if (added.isEmpty()) "Done. The AI stopped part way ($aiWhy)." else "", isUser = false, entryIds = added,
-                            meta = "engine=AI; intent=agent; partial; why=" + aiWhy.take(80))
-                        return@launch
+                    var won: Won? = null
+                    val waiting = jobs.toMutableList()
+                    while (won == null && waiting.isNotEmpty()) {
+                        val (done, result) = kotlinx.coroutines.selects.select { waiting.forEach { j -> j.onAwait { j to it } } }
+                        waiting.remove(done)
+                        won = result
                     }
+                    stop.set(true)
+                    waiting.forEach { it.cancel() }
+                    // The winner's tools, in order, on the real books: what it saved, changed or showed.
+                    val notes = AiAgent.Notes(said = (AiAgent.numbers(roman) + AiAgent.numbers(AiAgent.counted(roman))).distinct(), lastShown = lastShown)
+                    won?.calls?.forEach { (n, input) -> runCatching { AiAgent.use(n, input, host, System.currentTimeMillis(), notes) } }
+                    val answer = won?.answer?.let { w ->
+                        AiAgent.Answer(w.text, notes.added.toList(), notes.card.ifBlank { w.card }, notes.listIds, w.filter, w.lesson, w.shape, w.words, notes.ask.ifBlank { w.ask })
+                    }
+                    won?.let { Ai.failed.remove(Ai.provider(it.key)?.name.orEmpty()); Ai.answered = Ai.provider(it.key)?.name.orEmpty() }
+                    val usage = won?.let { Ai.takeUsage(System.currentTimeMillis() - started, it.key, it.model) }.orEmpty()
                     // No key answered (no credit, a limit reached, no internet): the app's own engine answers below.
                     if (answer == null) aiDown = true else {
                     // The AI could not tell what happened with a person and a number: the option card asks.
@@ -1430,7 +1442,7 @@ fun App(
                         postChat("", isUser = false, meta = "ask=$ask|" + Ask.kinds(book).joinToString(",") + (if (book == Sides.STAFF) "|staff" else ""))
                         return@launch
                     }
-                    lastSpeech = answer?.text?.ifBlank { "Saved" } ?: ("The AI did not answer (" + Ai.lastError.ifBlank { "no reply" } + "). Try again.")
+                    lastSpeech = answer?.text?.ifBlank { "Saved" } ?: ("The AI did not answer (" + aiWhy.ifBlank { "no reply" } + "). Try again.")
                     // A list or breakdown the AI asked for is the app's own card; its other replies are plain text, never read as a report.
                     // Only the very next message goes on from a look-up or a save; older ones would mislead.
                     aiPicked = answer?.filter.orEmpty()

@@ -218,7 +218,9 @@ object AiAgent {
         known: Map<String, String> = emptyMap(), lastShown: String = "",
         /** Told every tool the AI used, with what it sent and got back (for the AI eval's report). */
         onTool: (name: String, input: JSONObject, result: String) -> Unit = { _, _, _ -> },
-        onMain: (() -> String) -> String = { it() }
+        onMain: (() -> String) -> String = { it() },
+        /** True once another key has answered the same message: this one stops before its next step. */
+        stop: () -> Boolean = { false }
     ): Answer? = runCatching {
         // Numbers said in words are worked out by the app ("dhai lakh" is 250000), never left to the AI.
         val digits = counted(roman)
@@ -248,6 +250,7 @@ object AiAgent {
         )
         val system = system(host.currency, names)
         for (round in 1..8) {
+            if (stop()) return@runCatching null
             val step = Ai.step(system, tools, messages) ?: return@runCatching null
             if (step.calls.isEmpty()) {
                 // Learnt from the message with its numbers in digits, so "teen sau" and "300" are one shape.

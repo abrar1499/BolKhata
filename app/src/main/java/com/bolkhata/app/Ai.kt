@@ -64,9 +64,23 @@ object Ai {
         }
     }
 
-    /** The saved key and model (blank model: the provider's usual one); set by the app when it opens and on Save. */
-    @Volatile var key = ""
-    @Volatile var model = ""
+    @Volatile private var chatKey = ""
+    @Volatile private var chatModel = ""
+    /** A key and model for this thread only (see [using]), so several keys can work at once. */
+    private val racing = ThreadLocal<Pair<String, String>?>()
+    /** The chat's key and model (blank model: the provider's usual one), or this thread's own inside [using]. */
+    var key: String
+        get() = racing.get()?.first ?: chatKey
+        set(v) { chatKey = v }
+    var model: String
+        get() = racing.get()?.second ?: chatModel
+        set(v) { chatModel = v }
+
+    /** Runs [block] on this thread with key [k] and model [m], leaving the chat's key as it is. */
+    fun <T> using(k: String, m: String, block: () -> T): T {
+        racing.set(k to m)
+        try { return block() } finally { racing.remove() }
+    }
     /** How hard Claude thinks before it acts ("low", "medium", "high"): more is more careful and costs more. */
     @Volatile var effort = "low"
     /** Whether Claude thinks before it answers; off is quicker and less careful. */
@@ -252,8 +266,11 @@ object Ai {
         else done.forEach { (c, out) -> messages.put(JSONObject().put("role", "tool").put("tool_call_id", c.id).put("content", out)) }
     }
 
-    /** Why the last call failed, for the chat's small line. */
-    @Volatile var lastError = ""
+    private val why = ThreadLocal.withInitial { "" }
+    /** Why the last call on this thread failed, for the chat's small line. */
+    var lastError: String
+        get() = why.get()
+        set(v) = why.set(v)
 
     private fun errorOf(text: String) = runCatching {
         JSONObject(text).optJSONObject("error")?.optString("message") ?: JSONArray(text).getJSONObject(0).getJSONObject("error").optString("message")
@@ -277,11 +294,7 @@ object Ai {
     }.getOrElse { it.message ?: "no internet" }
 
     /** [test] for the key [k] of a side-menu box with model [m], leaving the chat's key as it is. */
-    fun test(k: String, m: String): String {
-        val own = key to model
-        key = k; model = m
-        return try { test() } finally { key = own.first; model = own.second }
-    }
+    fun test(k: String, m: String): String = using(k, m) { test() }
 
     /** Claude's Messages API: the system text apart, thinking kept light for a quick chat answer. */
     private fun claude(o: JSONObject): Pair<Int, String> {
