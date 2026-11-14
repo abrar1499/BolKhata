@@ -15,7 +15,7 @@ object NativeChatEngine {
         val unsure: Boolean = false
     )
 
-    private val expense = setOf("expense", "expenses", "spent", "spend", "spending", "kharcha", "kharch", "kharche", "khrcha", "khrch", "khrche", "cashout")
+    private val expense = setOf("expense", "expenses", "exp", "exps", "spent", "spend", "spending", "kharcha", "kharch", "kharche", "khrcha", "khrch", "khrche", "cashout")
     /** "kitna laga", "kahan lagay": money that went on something. */
     private val went = setOf("laga", "lga", "lagay", "lage", "lagy", "lgy")
     private val income = setOf("income", "aamdani", "salary", "tankhwah", "earning", "earned", "cashin")
