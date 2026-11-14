@@ -1388,7 +1388,8 @@ fun App(
                     val spoken = aiHeard[0] != null
                     val heardAlso = aiHeard[0].orEmpty()
                     aiHeard[0] = null
-                    val recent = history.takeLast(6).joinToString("\n") { (if (it.isUser) "Person: " else "App: ") + it.text.take(200) }
+                    val recent = history.takeLast(6).joinToString("\n") { (if (it.isUser) "Person: " else "App: ") + it.text.take(200) } +
+                        (if (retry) "\nPerson: (marked that answer wrong; read the message again)" else "")
                     val host = chatHost(names0)
                     // Every key turned on gets the message at once, each working on its own copy of the books; the first
                     // answer wins, the others stop, and only the winner's tools are then done on the real books.
@@ -2683,10 +2684,10 @@ fun App(
                             }
                             chatRatings = chatRatings + (id to good)
                             sendChatLog(force = logToken.isNotBlank())
-                            // 👎 on the app's own answer: what it saved goes to Trash and the AI reads the message; a save it makes
-                            // is learnt, so the next message of that shape is done right by the app alone.
+                            // 👎 on any answer (the app's, a learnt one or the AI's): what it saved goes to Trash and the AI reads the
+                            // message again, told the last answer was wrong. A right answer needs no 👍: it is learnt by itself.
                             val rated = chatMessages.firstOrNull { it.id == id }
-                            if (!good && rated != null && !rated.isUser && "engine=AI" !in rated.meta) {
+                            if (!good && rated != null && !rated.isUser) {
                                 if (!Ai.handles(groqKey)) { driveToast("Turn on an AI key to ask the AI"); return@rate }
                                 chatMessages.take(chatMessages.indexOf(rated)).lastOrNull { it.isUser }?.let { q ->
                                     if (rated.entryIds.isNotEmpty()) moveToTrash(rated.entryIds.toSet())
