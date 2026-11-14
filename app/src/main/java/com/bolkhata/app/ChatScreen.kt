@@ -14,13 +14,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ThumbDown as ThumbDownFilled
-import androidx.compose.material.icons.filled.ThumbUp as ThumbUpFilled
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.ThumbDown
-import androidx.compose.material.icons.outlined.ThumbUp
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -194,8 +190,8 @@ fun ChatScreen(
                         AnswerActions(ratings[message.id]) { good -> onRate(message.id, good) }
                         // "Groq · 1.2s · 340 tokens" under an answer Groq helped with.
                         Regex("""usage=([^;]+)""").find(message.meta)?.let {
-                            Text(it.groupValues[1], fontSize = 7.sp, lineHeight = 7.sp, color = Color(0xFFA39E98),
-                                modifier = Modifier.padding(start = 4.dp, top = 3.dp))
+                            Text(it.groupValues[1], fontSize = 8.sp, lineHeight = 8.sp, color = Color(0xFFA39E98),
+                                modifier = Modifier.padding(start = 14.dp, top = 3.dp))
                         }
                         // Now and then (every sixth answer) a quiet ad under the answer.
                         if (message.id in adAfter) NativeAdCard("chat-" + message.id, Modifier.padding(top = 6.dp))
@@ -391,25 +387,30 @@ private fun UserBubble(text: String, attachment: String = "") {
     }
 }
 
-/** 👍 and 👎 under each answer in a small muted grey card (quieter than the answer's white one), grey line icons. One tap saves the rating; tapping the other changes it. */
+/** The mock's thin thumb: a line drawing on a 24 grid, stroke 2, rounded (filled in green or red once rated). */
+private val ThinThumb: androidx.compose.ui.graphics.vector.ImageVector by lazy {
+    androidx.compose.ui.graphics.vector.ImageVector.Builder("thumb", 24.dp, 24.dp, 24f, 24f).addPath(
+        androidx.compose.ui.graphics.vector.addPathNodes("M7 11v9H4v-9h3zm0 0 4-7a2 2 0 0 1 3 2l-1 4h5a2 2 0 0 1 2 2l-2 7a2 2 0 0 1-2 1H7"),
+        stroke = androidx.compose.ui.graphics.SolidColor(Color.Black), strokeLineWidth = 2f,
+        strokeLineCap = androidx.compose.ui.graphics.StrokeCap.Round, strokeLineJoin = androidx.compose.ui.graphics.StrokeJoin.Round
+    ).build()
+}
+
+/**
+ * 👍 and 👎 under each answer, as the mock: a muted grey pill (quieter than the answer's white card), padding 3 × 9,
+ * 12 thin line thumbs 7 apart with a hairline between. One tap saves the rating; tapping the other changes it.
+ */
 @Composable
 private fun AnswerActions(rating: Boolean?, onRate: (good: Boolean) -> Unit) {
     val tint = Color(0xFF8F8982)
-    Row(Modifier.padding(start = 2.dp, top = 3.dp).clip(RoundedCornerShape(10.dp))
-        .background(Color(0xFFDEDAD4)).padding(horizontal = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(
-            if (rating == true) Icons.Filled.ThumbUpFilled else Icons.Outlined.ThumbUp,
-            contentDescription = if (rating == true) "Marked good" else "Good answer",
-            tint = if (rating == true) GreenDeep else tint,
-            modifier = Modifier.clickable(enabled = rating != true) { onRate(true) }.padding(horizontal = 4.dp, vertical = 3.dp).size(10.dp)
-        )
-        Box(Modifier.width(1.dp).height(8.dp).background(Color(0xFFCBC6BF)))
-        Icon(
-            if (rating == false) Icons.Filled.ThumbDownFilled else Icons.Outlined.ThumbDown,
-            contentDescription = if (rating == false) "Marked wrong" else "Wrong answer",
+    Row(Modifier.padding(start = 10.dp, top = 3.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFFDEDAD4))
+        .padding(horizontal = 9.dp, vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(ThinThumb, contentDescription = if (rating == true) "Marked good" else "Good answer",
+            tint = if (rating == true) GreenDeep else tint, modifier = Modifier.size(12.dp).clickable(enabled = rating != true) { onRate(true) })
+        Box(Modifier.width(1.dp).height(10.dp).background(Color(0xFFCBC6BF)))
+        Icon(ThinThumb, contentDescription = if (rating == false) "Marked wrong" else "Wrong answer",
             tint = if (rating == false) MaterialTheme.colorScheme.error else tint,
-            modifier = Modifier.clickable(enabled = rating != false) { onRate(false) }.padding(horizontal = 4.dp, vertical = 3.dp).size(10.dp)
-        )
+            modifier = Modifier.size(12.dp).graphicsLayer { scaleY = -1f }.clickable(enabled = rating != false) { onRate(false) })
     }
 }
 
