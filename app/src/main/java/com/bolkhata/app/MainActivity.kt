@@ -334,14 +334,21 @@ fun App(
     }
 
     /**
-     * What the app learnt from the AI (shapes and lessons only, no chat), sent to the private log repository when it
-     * changed, to be checked for the shared brain (see Brain). Works with the chat log itself turned off.
+     * What the app learnt from the AI goes straight into the shared brain when it changed (only lessons safe to share,
+     * see Brain.safe), with the owner's brain token; every install then reads it. No one has to do anything.
      */
     fun sendLearned() {
-        if (logToken.isBlank() || logRepo.isBlank()) return
-        val learned = org.json.JSONObject(store.aiLearned.filterKeys { !it.startsWith("=") }).toString(1)
-        if (learned == store.learnedSent) return
-        scope.launch { if (ChatLogUploader.uploadLearned(logRepo, logToken, learned).isSuccess) store.learnedSent = learned }
+        val token = store.brainToken
+        if (token.isBlank()) return
+        val learned = store.aiLearned.filterKeys { !it.startsWith("=") }
+        val sent = org.json.JSONObject(learned).toString()
+        if (sent == store.learnedSent) return
+        // Every name the books know (people of entries and of the accounts), so none of them can go out.
+        val names = (entries.map { it.person } + sides.people.keys).map { it.trim() }.filter { it.isNotBlank() }.distinct()
+        scope.launch {
+            val added = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Brain.publish(token, learned, names) }
+            if (added != null) store.learnedSent = sent
+        }
     }
     LaunchedEffect(Unit) { sendLearned() }
 
@@ -2505,6 +2512,8 @@ fun App(
                     }
                 },
                 // The switch in a box: off keeps the key on the phone, so on needs no key again.
+                brainSet = store.brainToken.isNotBlank(),
+                onBrainToken = { t -> store.brainToken = t; store.learnedSent = ""; aiTick++; driveToast(if (t.isBlank()) "Brain token removed" else "✓ Brain token saved"); sendLearned() },
                 onAiSwitch = { name, on ->
                     store.aiBoxes[name]?.let { store.aiBoxes = store.aiBoxes + (name to it.copy(on = on)) }
                     aiChain(); groqKey = groqKeyNow(); aiTick++
