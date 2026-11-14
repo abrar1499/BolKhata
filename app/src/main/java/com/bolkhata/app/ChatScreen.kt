@@ -843,8 +843,8 @@ private fun Working(label: String) {
             1.15f at 165; 1f at 330; 1.1f at 495; 1f at 1100
         }), label = "beat")
     Row(Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        GlassLogo(22.dp, Modifier.graphicsLayer { scaleX = size; scaleY = size })
-        Text(label.trimEnd('…'), fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 7.dp))
+        GlassLogo(24.dp, Modifier.graphicsLayer { scaleX = size; scaleY = size })
+        Text(label.trimEnd('…'), fontSize = 9.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 9.dp))
         repeat(3) { i ->
             val on by beat.animateFloat(0.2f, 1f, androidx.compose.animation.core.infiniteRepeatable(
                 androidx.compose.animation.core.tween(500), androidx.compose.animation.core.RepeatMode.Reverse,
