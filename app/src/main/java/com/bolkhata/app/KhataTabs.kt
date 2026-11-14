@@ -499,7 +499,7 @@ internal fun LazyListScope.ledger(
     rows.forEachIndexed { i, r ->
         if (i == 0 || !sameDay(rows[i - 1].date, r.date)) {
             // A quiet ad between days, every fourth day.
-            if (days > 0 && days % 4 == 0) item(key = keyPrefix + "ad" + days) { NativeAdCard("ledger-$keyPrefix$title-$days", Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) }
+            if (days > 0 && days % 4 == 0) item(key = keyPrefix + "ad" + days) { NativeAdCard("ledger-$keyPrefix$title-$days", Modifier.padding(horizontal = 10.dp, vertical = 6.dp), video = true) }
             days++
             val day = byDay[dayNumber(r.date)].orEmpty()
             item(key = keyPrefix + "d" + r.key) { DayLine(r.date, cols, day, cards) }
