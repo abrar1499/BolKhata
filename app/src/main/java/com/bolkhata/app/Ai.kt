@@ -19,6 +19,8 @@ object Ai {
 
     val CLAUDE = Provider("Claude", "https://api.anthropic.com/v1/messages", "claude-opus-5-5")
     val GROQ = Provider("Groq", "https://api.groq.com/openai/v1/chat/completions", "openai/gpt-oss-120b")
+    /** Groq models tried in turn when the one in use has reached its per-minute limit. */
+    val GROQ_SPARE = listOf("openai/gpt-oss-20b", "llama-3.3-70b-versatile")
     val OPENROUTER = Provider("OpenRouter", "https://openrouter.ai/api/v1/chat/completions", "anthropic/claude-opus-5.5")
     val GEMINI = Provider("Gemini", "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", "gemini-2.5-flash")
     val OPENAI = Provider("ChatGPT", "https://api.openai.com/v1/chat/completions", "gpt-5-mini")
@@ -168,8 +170,14 @@ object Ai {
             .put("messages", JSONArray().put(JSONObject().put("role", "system").put("content", system)).apply { for (i in 0 until messages.length()) put(messages.get(i)) })
             .put("tools", JSONArray().apply { tools.forEach { put(JSONObject().put("type", "function").put("function", JSONObject().put("name", it.name).put("description", it.description).put("parameters", it.schema))) } })
             .put(if (p === OPENAI) "max_completion_tokens" else "max_tokens", 4000)
-        val (code, text) = send(p.url, mapOf("Authorization" to "Bearer $key"), req.toString())
-        if (code !in 200..299) { lastError = "$code " + errorOf(text); return null }
+        var (code, text) = send(p.url, mapOf("Authorization" to "Bearer $key"), req.toString())
+        // Groq's free plan limits each model per minute on its own: when one is full, the next model answers.
+        if (p === GROQ) for (next in GROQ_SPARE.filter { it != m }) {
+            if (code != 429) break
+            val r = send(p.url, mapOf("Authorization" to "Bearer $key"), req.put("model", next).toString())
+            code = r.first; text = r.second
+        }
+        if (code !in 200..299) { lastError = if (code == 429) "busy for a minute, try again shortly" else "$code " + errorOf(text); return null }
         val r = JSONObject(text)
         val usage = r.optJSONObject("usage") ?: JSONObject()
         count(usage.optInt("prompt_tokens"), usage.optInt("completion_tokens"))

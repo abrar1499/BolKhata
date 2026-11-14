@@ -30,6 +30,10 @@ object AiAgent {
      * The AI's reply and the entries it saved (shown as the Saved card). When it asked the app to show a list or a
      * breakdown, [card] is the app's own answer text (drawn as the usual card) and [listIds] the rows in it.
      */
+    /** The app talks in Roman letters: an answer the model wrote in Hindi or Urdu script is turned into Roman. */
+    fun roman(text: String): String =
+        if (text.any { it in '\u0600'..'\u06FF' || it in '\u0900'..'\u097F' }) runCatching { Translit.toRoman(text) }.getOrDefault(text) else text
+
     class Answer(val text: String, val added: List<String>, val card: String = "", val listIds: List<String> = emptyList(), val filter: String = "",
         /** What the app may remember from this answer (see [lesson]); "" when it is not something to learn. */
         val lesson: String = "", val shape: String = "", val words: Map<String, String> = emptyMap(),
@@ -250,7 +254,7 @@ object AiAgent {
                 val learnt = if (notes.added.isEmpty()) Learnt() else learn(calls, digits, host.names(), known)
                 // Only saved, all of it and nothing to ask: the Saved card says it, no sentence over it.
                 val onlySaved = notes.added.isNotEmpty() && notes.skipped == 0 && calls.all { it.first == "add_entries" } && '?' !in step.text
-                return@runCatching Answer(if (onlySaved) "" else step.text.ifBlank { "Done." }, notes.added, notes.card, notes.listIds, notes.filter,
+                return@runCatching Answer(if (onlySaved) "" else roman(step.text).ifBlank { "Done." }, notes.added, notes.card, notes.listIds, notes.filter,
                     learnt.lesson, learnt.shape, learnt.words)
             }
             calls += step.calls.map { it.name to it.input }
@@ -267,7 +271,7 @@ object AiAgent {
             if (notes.ask.isNotBlank()) return@runCatching Answer("", notes.added, ask = notes.ask)
             // Only asked to show a card, and it is shown: the chat shows the card, not the AI's closing sentence, so that step is not paid for.
             if (step.calls.all { it.name == "show" } && notes.card.isNotBlank() && notes.found > 0 && done.none { it.second.contains("\"error\"") })
-                return@runCatching Answer(step.text, notes.added, notes.card, notes.listIds, notes.filter)
+                return@runCatching Answer(roman(step.text), notes.added, notes.card, notes.listIds, notes.filter)
             Ai.results(messages, done)
         }
         Ai.lastError = "too many steps"
