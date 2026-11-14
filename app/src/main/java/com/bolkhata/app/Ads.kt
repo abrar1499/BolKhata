@@ -1,5 +1,6 @@
 package com.bolkhata.app
 
+import android.app.Activity
 import android.content.Context
 import android.graphics.Color as AColor
 import android.graphics.drawable.GradientDrawable
@@ -34,6 +35,8 @@ import com.google.android.gms.ads.nativead.MediaView
 import com.google.android.gms.ads.nativead.NativeAd
 import com.google.android.gms.ads.nativead.NativeAdOptions
 import com.google.android.gms.ads.nativead.NativeAdView
+import com.google.android.ump.ConsentRequestParameters
+import com.google.android.ump.UserMessagingPlatform
 
 /**
  * Quiet ads from Google AdMob: a small native card that looks like the app (an answer in the chat, a row under the
@@ -48,11 +51,23 @@ object Ads {
     /** Loaded native ads by their place (e.g. "chat-12"), so an ad stays the same while it is on screen and is not fetched again. */
     private val loaded = HashMap<String, NativeAd>()
 
-    fun start(context: Context) = MobileAds.initialize(context) {}
+    /** Ads may load: Google said yes after the consent form, where one is needed. Drawn ads wait for it. */
+    var ready by mutableStateOf(false)
+        private set
+
+    /** Asks for consent where the law needs it (Google's form, set in AdMob › Privacy & messaging), then starts the ads. */
+    fun start(activity: Activity) {
+        val info = UserMessagingPlatform.getConsentInformation(activity)
+        fun go() { if (info.canRequestAds() && !ready) { MobileAds.initialize(activity) {}; ready = true } }
+        info.requestConsentInfoUpdate(activity, ConsentRequestParameters.Builder().build(),
+            { UserMessagingPlatform.loadAndShowConsentFormIfRequired(activity) { go() } }, { go() })
+        go()
+    }
 
     /** The ad for [place], fetched once; [onReady] gets it when it arrives. */
     fun native(context: Context, place: String, onReady: (NativeAd) -> Unit) {
         loaded[place]?.let { onReady(it); return }
+        if (!ready) return
         AdLoader.Builder(context, nativeUnit)
             .forNativeAd { ad -> loaded[place] = ad; onReady(ad) }
             .withNativeAdOptions(NativeAdOptions.Builder().setAdChoicesPlacement(NativeAdOptions.ADCHOICES_TOP_RIGHT)
@@ -69,7 +84,7 @@ object Ads {
 fun NativeAdCard(place: String, modifier: Modifier = Modifier, video: Boolean = false, round: Boolean = true) {
     val context = LocalContext.current
     var ad by remember(place) { mutableStateOf<NativeAd?>(null) }
-    DisposableEffect(place) {
+    DisposableEffect(place, Ads.ready) {
         Ads.native(context, place) { ad = it }
         onDispose { }
     }
@@ -83,6 +98,7 @@ fun NativeAdCard(place: String, modifier: Modifier = Modifier, video: Boolean = 
  */
 @Composable
 fun BannerAd(modifier: Modifier = Modifier, big: Boolean = false, round: Boolean = true) {
+    if (!Ads.ready) return
     val width = LocalConfiguration.current.screenWidthDp - 24
     AndroidView(modifier = modifier.fillMaxWidth().clip(RoundedCornerShape(if (round) 14.dp else 0.dp)).background(Color.White), factory = { ctx: Context ->
         AdView(ctx).apply {

@@ -56,6 +56,8 @@ android {
             // com.bolkhata.app is taken on Google Play, so the Play listing uses its own id; the APK keeps com.bolkhata.app.
             applicationIdSuffix = ".play"
             buildConfigField("boolean", "PLAY", "true")
+            // No built-in key in the Play bundle: anything inside it can be read out.
+            buildConfigField("String", "GROQ_KEY", "\"\"")
         }
     }
     compileOptions {
@@ -104,6 +106,8 @@ dependencies {
     implementation("com.google.android.gms:play-services-auth:21.4.0")
     // Quiet ads (see Ads.kt): native cards and a banner from Google AdMob.
     implementation("com.google.android.gms:play-services-ads:23.6.0")
+    // Google's consent form for ads where the law asks for it (Europe, UK).
+    implementation("com.google.android.ump:user-messaging-platform:3.1.0")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-core")

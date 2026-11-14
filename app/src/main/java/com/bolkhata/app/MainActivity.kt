@@ -39,6 +39,7 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
@@ -290,7 +291,7 @@ fun App(
     var checking by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { newVersion = Updater.check() }
-    LaunchedEffect(Unit) { Ads.start(context) }
+    LaunchedEffect(Unit) { (context as? android.app.Activity)?.let { Ads.start(it) } }
     // The shared brain, read each time the app opens: the app knows more without a new version.
     LaunchedEffect(Unit) {
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Brain.fetch() }?.let { store.brain = it }
@@ -2576,14 +2577,29 @@ fun App(
         // Like ChatGPT, screens run underneath the floating message bar; lists add LocalBarSpace at their end.
         // On the main tabs a swipe left or right moves to the next or previous tab.
         val swipeTabs = results == null && people == null && account == null && ledger == null && partyOpen == null && !bizPage && !profitOpen && tab in KHATA_TABS
+        // The page follows the finger; let go past a fifth of the width and it slides out and the next tab slides in.
+        val slide = remember { androidx.compose.animation.core.Animatable(0f) }
         Box(Modifier.padding(top = pad.calculateTopPadding()).fillMaxSize().pointerInput(swipeTabs, tab) {
             if (!swipeTabs) return@pointerInput
             var dx = 0f
-            detectHorizontalDragGestures(onDragStart = { dx = 0f }, onDragEnd = {
+            val w = size.width.toFloat()
+            fun settle() = scope.launch {
                 val next = KHATA_TABS.indexOf(tab) + if (dx < 0) 1 else -1
-                if (kotlin.math.abs(dx) > 90.dp.toPx() && next in KHATA_TABS.indices) { tab = KHATA_TABS[next]; backToChat = false }
-            }) { _, d -> dx += d }
-        }) {
+                if (kotlin.math.abs(dx) > w / 5 && next in KHATA_TABS.indices) {
+                    val out = if (dx < 0) -w else w
+                    slide.animateTo(out, androidx.compose.animation.core.tween(140))
+                    tab = KHATA_TABS[next]; backToChat = false
+                    slide.snapTo(-out)
+                    slide.animateTo(0f, androidx.compose.animation.core.tween(240, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+                } else slide.animateTo(0f, androidx.compose.animation.core.tween(200))
+            }
+            detectHorizontalDragGestures(onDragStart = { dx = 0f }, onDragEnd = { settle() }, onDragCancel = { settle() }) { _, d ->
+                dx += d
+                // At the first and last tab the page gives only a little: nothing more that way.
+                val end = (KHATA_TABS.indexOf(tab) == 0 && dx > 0) || (KHATA_TABS.indexOf(tab) == KHATA_TABS.lastIndex && dx < 0)
+                scope.launch { slide.snapTo(if (end) dx * 0.3f else dx) }
+            }
+        }.graphicsLayer { translationX = slide.value }) {
             val who = people
             val saveable = rememberSaveableStateHolder()
             val acct = account
