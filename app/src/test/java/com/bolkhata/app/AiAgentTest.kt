@@ -335,6 +335,7 @@ class AiAgentTest {
         // A change to chosen entries, or an answer with its own figures, is not learnt.
         assertEquals("", AiAgent.learn(listOf("delete_entries" to JSONObject().put("ids", JSONArray().put("x1"))), "chai hata do", names, emptyMap(), "Done.").lesson)
         assertEquals("", AiAgent.learn(emptyList(), "kitna bacha", names, emptyMap(), "You have 300 left.").lesson)
+        assertEquals("All good, what do you need?", AiAgent.replay(AiAgent.learn(emptyList(), "kya ho raha hai", names, emptyMap(), "All good, what do you need?").lesson, "kya ho raha hai")!!.reply)
         assertEquals("Great!", AiAgent.replay(AiAgent.learn(emptyList(), "zabardast", names, emptyMap(), "Great!").lesson, "zabardast")!!.reply)
     }
 }
