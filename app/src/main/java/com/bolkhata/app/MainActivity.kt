@@ -1327,6 +1327,7 @@ fun App(
         }
 
         chatLoading = true
+        loadingLabel = "Typing…"
         scope.launch {
             try {
                 // Reading the message runs off the main thread, so the chat keeps scrolling smoothly with many entries.
@@ -1391,6 +1392,7 @@ fun App(
                 var aiDown = false
                 var aiWhy = ""
                 if (Ai.handles(groqKey)) {
+                    loadingLabel = "✦ Thinking…"
                     val started = System.currentTimeMillis()
                     val spoken = aiHeard[0] != null
                     val heardAlso = aiHeard[0].orEmpty()
