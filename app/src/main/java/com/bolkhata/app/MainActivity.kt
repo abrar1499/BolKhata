@@ -289,6 +289,11 @@ fun App(
     var checking by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { newVersion = Updater.check() }
+    // The shared brain, read about once a day: the app knows more without a new version.
+    LaunchedEffect(Unit) {
+        if (System.currentTimeMillis() - store.brainAt > 20 * 3_600_000L)
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Brain.fetch() }?.let { store.brain = it; store.brainAt = System.currentTimeMillis() }
+    }
 
     // While a chat message is being handled, short messages go into the chat instead of a pop-up.
     val chatSink = remember { arrayOfNulls<(String) -> Unit>(1) }
@@ -1326,7 +1331,7 @@ fun App(
                 val scoped = scopeKhataEntries(entries)
                 val names0 = contactNames()
                 // A saved person and a number, nothing else: the chat asks what happened with a small card, in any language.
-                if (!retry) Ask.of(AiAgent.counted(roman), AiAgent.who(names0, store.aiLearned))?.let { (p, n) ->
+                if (!retry) Ask.of(AiAgent.counted(roman), AiAgent.who(names0, store.known()))?.let { (p, n) ->
                     val book = Sides.bookOf(p, entries, sides)
                     lastSpeech = "Choose"
                     postChat("", isUser = false, meta = "ask=$p|$n|" + Ask.kinds(book).joinToString(",") + (if (book == Sides.STAFF) "|staff" else ""))
@@ -1336,10 +1341,10 @@ fun App(
                 // People and numbers are open places in it, so a known sentence with another name needs no AI either.
                 if (!retry) {
                     val host = chatHost(names0)
-                    val who = AiAgent.who(names0, store.aiLearned)
+                    val who = AiAgent.who(names0, store.known())
                     val counted = AiAgent.counted(roman)
                     val shape = AiAgent.shape(counted, who)
-                    store.aiLearned[shape]?.let { AiAgent.replay(it, counted, who) }?.let { r ->
+                    store.known()[shape]?.let { AiAgent.replay(it, counted, who) }?.let { r ->
                         val notes = AiAgent.Notes(said = AiAgent.numbers(counted), lastShown = history.lastOrNull { !it.isUser }?.text.orEmpty())
                         r.calls.forEach { (n, input) -> runCatching { AiAgent.use(n, input, host, System.currentTimeMillis(), notes) } }
                         // A save that saved nothing (the same entry a moment ago) is left to the rules below.
@@ -1404,7 +1409,7 @@ fun App(
                     class Won(val answer: AiAgent.Answer, val calls: List<Pair<String, org.json.JSONObject>>, val key: String, val model: String)
                     val stop = java.util.concurrent.atomic.AtomicBoolean(false)
                     val racers = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO)
-                    val known = store.aiLearned; val picked = aiPicked; val saved = aiSaved
+                    val known = store.known(); val picked = aiPicked; val saved = aiSaved
                     val lastShown = history.lastOrNull { !it.isUser }?.text.orEmpty()
                     val jobs = Ai.chain.filter { (k, _) -> (Ai.restUntil[Ai.provider(k)?.name.orEmpty()] ?: 0L) <= System.currentTimeMillis() }.map { (k, m) ->
                         racers.async {
@@ -2679,7 +2684,9 @@ fun App(
                                 chatMessages.take(i).lastOrNull { it.isUser }?.let { q ->
                                     store.learned = store.learned - Groq.learnKey(runCatching { Translit.toRoman(q.text) }.getOrDefault(q.text))
                                     val said = AiAgent.counted(runCatching { Translit.toRoman(q.text) }.getOrDefault(q.text))
-                                    store.aiLearned = store.aiLearned - AiAgent.shape(said) - AiAgent.shape(said, AiAgent.who(contactNames(), store.aiLearned))
+                                    val shapes = setOf(AiAgent.shape(said), AiAgent.shape(said, AiAgent.who(contactNames(), store.known())))
+                                    store.aiLearned = store.aiLearned - shapes
+                                    store.brainOff = store.brainOff + shapes.filter { it in store.brain }
                                 }
                             }
                             chatRatings = chatRatings + (id to good)
@@ -2706,7 +2713,7 @@ fun App(
                             // Undoing what was just saved also un-teaches it: the app asks the AI again next time.
                             chatMessages.lastOrNull { m -> !m.isUser && m.entryIds.any { it in ids } }?.meta
                                 ?.let { m -> listOf("shape", "words").flatMap { k -> Regex("""$k=([^;]+)""").find(m)?.groupValues?.get(1)?.trim()?.split(",").orEmpty() } }
-                                ?.let { store.aiLearned = store.aiLearned - it.toSet() }
+                                ?.let { store.aiLearned = store.aiLearned - it.toSet(); store.brainOff = store.brainOff + it.filter { s -> s in store.brain } }
                             moveToTrash(ids.toSet())
                         },
                         // A saved row opens its person's account; one without a person opens to change.
