@@ -163,6 +163,14 @@ class LocalAskTest {
     }
 
     @Test
+    fun expShortForExpenseWithAMonthAndYear() = listOf("nov 2026 ka exp batao", "exp nov 2026").forEach {
+        val o = ask(it)
+        assertTrue(it + ": " + o.card, o.card.startsWith("Spent 565 PKR"))
+        assertEquals(it, listOf("expense"), list(o.used("show"), "types"))
+        assertTrue(it, list(o.used("show"), "words").isEmpty())
+    }
+
+    @Test
     fun thisMonthsSpending() = listOf("is mahine ka kharcha", "kharcha is mahine kitna hua", "this month expenses kitne", "how much did I spend this month",
         "kharcah kitna hua is mahine").forEach {
         val o = ask(it)

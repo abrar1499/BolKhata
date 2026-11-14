@@ -828,10 +828,10 @@ object LocalAsk : LocalAgent.Reader {
         v("ab", "abhi", "abi", "now")
         v("alltime", "overall", "lifetime", "ever")
         v("kharcha", "kharche", "kharch", "kharchay", "kharchey", "kharchy", "khrcha", "khrch", "khrche", "kharchon", "kharcho", "expense", "expenses",
-            "spent", "spend", "spending", "spends", "expenditure", "kharchaa", "karcha", "kharaj", "kharj", "kharchah")
+            "spent", "spend", "spending", "spends", "expenditure", "kharchaa", "karcha", "kharaj", "kharj", "kharchah", "exp", "exps", "expns")
         v("laga", "lga", "lagay", "lage", "lagy", "lgy", "lagi", "lgi", "lagaya", "lagaye", "lgaya", "lagae", "laggay")
         v("income", "aamdani", "amdani", "aamdni", "amdni", "aamadni", "kamai", "kamaai", "kamayi", "earning", "earnings", "earned", "earn", "kamaya",
-            "kamaye", "kamaaya", "incom")
+            "kamaye", "kamaaya", "incom", "inc")
         v("sale", "sales", "sell", "sold", "selling", "bikri", "bechi", "becha", "beche", "bechay", "bika", "biki", "farokht")
         v("kaam", "work", "worked", "kaaam")
         v("bana", "bani", "banai", "banayi", "banaye", "bane", "banaya", "banaai", "made", "make", "tayyar", "tayar", "tiyar", "produced")
