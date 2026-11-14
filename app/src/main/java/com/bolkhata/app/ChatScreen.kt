@@ -193,8 +193,8 @@ fun ChatScreen(
                         AnswerActions(ratings[message.id]) { good -> onRate(message.id, good) }
                         // "Groq · 1.2s · 340 tokens" under an answer Groq helped with.
                         Regex("""usage=([^;]+)""").find(message.meta)?.let {
-                            Text(it.groupValues[1], fontSize = 7.sp, lineHeight = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                modifier = Modifier.padding(start = 14.dp).offset(y = (-6).dp))
+                            Text(it.groupValues[1], fontSize = 8.sp, lineHeight = 8.sp, color = Color(0xFFA39E98),
+                                modifier = Modifier.padding(start = 4.dp, top = 3.dp))
                         }
                     }
                     }
@@ -388,25 +388,25 @@ private fun UserBubble(text: String, attachment: String = "") {
     }
 }
 
-/** 👍 and 👎 under each answer, like ChatGPT's. One tap saves the rating; tapping the other one changes it. */
+/** 👍 and 👎 under each answer in a small white card, grey line icons. One tap saves the rating; tapping the other changes it. */
 @Composable
 private fun AnswerActions(rating: Boolean?, onRate: (good: Boolean) -> Unit) {
-    val tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-    Row(Modifier.padding(start = 6.dp, top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = { onRate(true) }, enabled = rating != true, modifier = Modifier.size(24.dp)) {
-            Icon(
-                if (rating == true) Icons.Filled.ThumbUpFilled else Icons.Outlined.ThumbUp,
-                contentDescription = if (rating == true) "Marked good" else "Good answer",
-                tint = if (rating == true) GreenDeep else tint, modifier = Modifier.size(12.dp)
-            )
-        }
-        IconButton(onClick = { onRate(false) }, enabled = rating != false, modifier = Modifier.size(24.dp)) {
-            Icon(
-                if (rating == false) Icons.Filled.ThumbDownFilled else Icons.Outlined.ThumbDown,
-                contentDescription = if (rating == false) "Marked wrong" else "Wrong answer",
-                tint = if (rating == false) MaterialTheme.colorScheme.error else tint, modifier = Modifier.size(12.dp)
-            )
-        }
+    val tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+    Row(Modifier.padding(start = 2.dp, top = 3.dp).shadow(1.dp, RoundedCornerShape(10.dp)).clip(RoundedCornerShape(10.dp))
+        .background(Color.White).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            if (rating == true) Icons.Filled.ThumbUpFilled else Icons.Outlined.ThumbUp,
+            contentDescription = if (rating == true) "Marked good" else "Good answer",
+            tint = if (rating == true) GreenDeep else tint,
+            modifier = Modifier.clickable(enabled = rating != true) { onRate(true) }.padding(horizontal = 5.dp, vertical = 4.dp).size(12.dp)
+        )
+        Box(Modifier.width(1.dp).height(10.dp).background(Color(0xFFE3DFDA)))
+        Icon(
+            if (rating == false) Icons.Filled.ThumbDownFilled else Icons.Outlined.ThumbDown,
+            contentDescription = if (rating == false) "Marked wrong" else "Wrong answer",
+            tint = if (rating == false) MaterialTheme.colorScheme.error else tint,
+            modifier = Modifier.clickable(enabled = rating != false) { onRate(false) }.padding(horizontal = 5.dp, vertical = 4.dp).size(12.dp)
+        )
     }
 }
 
