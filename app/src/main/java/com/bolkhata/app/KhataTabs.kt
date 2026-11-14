@@ -495,8 +495,12 @@ internal fun LazyListScope.ledger(
     if (rows.isEmpty()) item(key = keyPrefix + "empty") { EmptyHint() }
     // Each day's rows, found in one pass (filtering the whole list for every day made long lists slow).
     val byDay = rows.groupBy { dayNumber(it.date) }
+    var days = 0
     rows.forEachIndexed { i, r ->
         if (i == 0 || !sameDay(rows[i - 1].date, r.date)) {
+            // A quiet ad between days, every fourth day.
+            if (days > 0 && days % 4 == 0) item(key = keyPrefix + "ad" + days) { NativeAdCard("ledger-$keyPrefix$title-$days", Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) }
+            days++
             val day = byDay[dayNumber(r.date)].orEmpty()
             item(key = keyPrefix + "d" + r.key) { DayLine(r.date, cols, day, cards) }
         }
@@ -504,6 +508,8 @@ internal fun LazyListScope.ledger(
         val last = i == rows.lastIndex || (cards && !sameDay(rows[i + 1].date, r.date))
         item(key = keyPrefix + r.key) { LedgerRow(r, cols, last, cards) }
     }
+    // The banner at the end of the list, seen only by scrolling down.
+    if (rows.isNotEmpty()) item(key = keyPrefix + "banner") { BannerAd(Modifier.padding(horizontal = 10.dp, vertical = 10.dp)) }
 }
 
 /** What an empty list shows instead of a blank page: the app logo and how to add the first entry. */
@@ -1254,7 +1260,11 @@ fun SideScreen(
                     } }
                     val shown = books.filter { q.isBlank() || it.name.contains(q.trim(), true) ||
                         Sides.kids(it, entries, setup).any { k -> k.name.contains(q.trim(), true) } }
-                    shown.forEachIndexed { i, b ->
+                    shown.forEachIndexed { at, b ->
+                        // Accounts in cards of four with a quiet ad between them.
+                        val i = at % 4
+                        val size = minOf(4, shown.size - at / 4 * 4)
+                        if (at > 0 && i == 0) item(key = "ad$at") { NativeAdCard("accounts-$side-$at", Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) }
                         item(key = "b" + b.name) {
                             val kids = Sides.kids(b, entries, setup)
                             if (b.people) {
@@ -1265,19 +1275,19 @@ fun SideScreen(
                                 val sub = (if (kids.size == 1) "1 person" else "${kids.size} people") +
                                     (if (p > 0.5) " · " + fmt(p) + " to get" else "") + (if (give > 0.5) " · " + fmt(give) + " to give" else "")
                                 ItRow("👤", b.name, sub, fmt(kotlin.math.abs(net)), (if (net >= 0) "to get" else "to give") + " · net",
-                                    if (net >= 0) GreenIn else RedSpend, i, shown.size, onLong = { menu = b to null }) { bookName = b.name; q = "" }
+                                    if (net >= 0) GreenIn else RedSpend, i, size, onLong = { menu = b to null }) { bookName = b.name; q = "" }
                             } else {
                                 // The small line names what the period's money is in, the biggest first (none: the account's first things).
                                 val inside = kids.map { k -> k to k.entries.filter { inPer(it.date) && Sides.counts(b, it) }.sumOf { it.amount } }
                                     .filter { it.second > 0 }.sortedByDescending { it.second }.map { it.first }.ifEmpty { kids }
-                                ItRow(bookIcon(b), b.name, inside.take(4).joinToString(", ") { it.name }, fmt(Sides.done(b, entries, setup, inPer)), word(b, false), ink, i, shown.size,
+                                ItRow(bookIcon(b), b.name, inside.take(4).joinToString(", ") { it.name }, fmt(Sides.done(b, entries, setup, inPer)), word(b, false), ink, i, size,
                                     onLong = if (Sides.isAuto(b)) null else ({ menu = b to null })) { bookName = b.name; q = "" }
                             }
                         }
                     }
                     if (shown.isEmpty()) emptyNote("Nothing found")
-                    if (shown.size >= 2) item(key = "ad") { NativeAdCard("list-$side", Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) }
                     item(key = "addbook") { DashedAdd("+ Add account") { adding = "book" } }
+                    if (shown.isNotEmpty()) item(key = "banner") { BannerAd(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) }
                 }
             }
         }

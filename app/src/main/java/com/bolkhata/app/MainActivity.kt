@@ -2541,7 +2541,6 @@ fun App(
             // The chat bar belongs to Chat only, not to a page opened over it (business page, report).
             if (main && tab == Tab.CHAT && !bizPage && !profitOpen) {
                 Column {
-                    BannerAd(Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
                     InputBar(
                         onSend = { chatInput(it) }, onMic = { startVoice(forChat = true) }, placeholder = "Speak, type or ask…",
                         busy = chatLoading,
