@@ -101,7 +101,7 @@ object AiAgent {
                 "category" to JSONObject().put("type", "string").put("enum", JSONArray(EXPENSE_CATS.map { it.label })).put("description", "For an expense"),
                 "item" to text("1-3 words, e.g. Petrol"),
                 "person" to text("The other person, saved spelling if it matches; needed for lent, borrowed, received_back, paid_back"),
-                "note" to text("Any extra detail"),
+                "note" to text("What it was for, 1-3 words (e.g. Kafeel, School fees), never the whole sentence"),
                 "date" to text("YYYY-MM-DD when a day was said, else leave out (today)"),
                 required = listOf("type")
             )), "more" to JSONObject().put("type", "boolean").put("description", "True when the message asks for something else after this save (a question, a change, an account)"),
@@ -480,6 +480,14 @@ object AiAgent {
         JSONObject().put("entries", list)
     }.getOrNull()
 
+    /** Words that only carry a sentence ("us ne … ko dena tha", "for"), never what the money was for. */
+    private val noteFillers = setOf("os", "us", "usne", "osne", "isne", "ne", "ko", "ka", "ki", "ke", "se", "tha", "thi", "the", "hai", "hain",
+        "dena", "deni", "dene", "diya", "diye", "di", "liya", "liye", "lie", "for", "to", "the", "a", "of", "was", "mein", "me", "wala", "wali", "wale", "k")
+
+    /** A note as the ledger shows it: what the money was for in at most three words ("os ne kafeel ko dena tha": "Kafeel"). */
+    fun shortNote(note: String): String = note.trim().split(Regex("""\s+""")).filter { it.isNotBlank() && it.lowercase().trim('.', ',') !in noteFillers }
+        .take(3).joinToString(" ").trim('.', ',', ' ').replaceFirstChar { it.uppercase() }
+
     /** Runs one tool on the app's data and gives its result as JSON text; what it saved or showed is noted in [notes]. */
     fun use(name: String, input: JSONObject, host: Host, now: Long, notes: Notes = Notes()): String = when (name) {
         "show" -> {
@@ -747,7 +755,7 @@ object AiAgent {
         return Entry(
             id = "e" + System.nanoTime() + i, type = type, amount = amount, category = category,
             item = if (goods) item else item.ifBlank { category.label },
-            person = person.take(40), note = o.optString("note").trim().take(120), date = date + i, createdAt = now + i,
+            person = person.take(40), note = shortNote(o.optString("note")), date = date + i, createdAt = now + i,
             qty = if (goods || o.has("qty")) qty else 0.0, unit = if (per1000) "1000" else o.optString("unit").trim().take(10),
             rate = if (goods) rate else 0.0, paid = goods && o.optBoolean("paid_now", false)
         )

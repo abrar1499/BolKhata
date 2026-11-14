@@ -458,7 +458,21 @@ object LocalAdd : LocalAgent.Reader {
     private fun note(w: List<String>, content: List<String>): String? = when {
         "advance" in w || "adv" in w || "edvance" in w -> "Advance"
         w.any { it in incomeWords } -> content.firstOrNull { it in incomeWords }?.replaceFirstChar { it.uppercase() } ?: "Salary"
-        else -> null
+        else -> forWhat(w)
+    }
+
+    /** What the money was for, as said: "… for kafeel", "kafeel ke liye", "os ne kafeel ko dena tha": "Kafeel" (a few words). */
+    private fun forWhat(w: List<String>): String? {
+        val f = w.indexOf("for")
+        val liye = w.indexOf("liye").takeIf { it >= 2 && w[it - 1] in setOf("ke", "k") }
+        val dena = w.indices.firstOrNull { it >= 2 && w[it] in setOf("dena", "deni", "dene") && w[it - 1] == "ko" }
+        val said = when {
+            f >= 0 -> w.drop(f + 1).takeWhile { num(it) == null && it !in setOf("aur", "and") }
+            liye != null -> w.subList(maxOf(0, liye - 3), liye - 1)
+            dena != null -> listOf(w[dena - 2])
+            else -> return null
+        }.filter { num(it) == null }
+        return AiAgent.shortNote(said.joinToString(" ")).ifBlank { null }
     }
 
     private fun JSONObject.dated(c: Ctx): JSONObject = apply { c.date?.let { put("date", it) } }
