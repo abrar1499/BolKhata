@@ -226,8 +226,11 @@ class AiEvalTest {
     private fun brief(e: Entry) = e.type.name + " " + e.person.ifBlank { "-" } + " " + e.item + (if (e.qty > 0) " " + e.qty + "x" + e.rate + (if (e.unit == "1000") "/1000" else "") else "") +
         " =" + e.amount + " " + e.category.label + " " + dayOf(e.date)
 
-    /** Runs one case the way the chat does: each turn sees the last ones, what was just saved and the card on the screen. */
-    private fun run(c: Case): Outcome {
+    /**
+     * Runs one case the way the chat does: each turn sees the last ones, what was just saved and the card on the screen.
+     * [local]: the app's own assistant (LocalAgent) answers instead of the AI.
+     */
+    private fun run(c: Case, local: Boolean = false): Outcome {
         val world = World().apply(c.prepare).apply { baseIds = entries.map { it.id }.toSet() }
         val trace = mutableListOf<String>()
         val errors = mutableListOf<String>()
@@ -260,8 +263,10 @@ class AiEvalTest {
                 onTool = { name, input, result -> trace += "$name $input -> " + result.take(260) })
             // An overloaded or rate-limited moment is tried once more.
             val began = System.nanoTime()
-            val a = ask()?.also { seconds += (System.nanoTime() - began) / 1e9 } ?: run { Thread.sleep(4000); ask() }
-            if (a == null) errors += Ai.lastError
+            val a = if (local) LocalAgent.run(turn.said, world.host, roman = roman, previous = picked, justSaved = justSaved, lastShown = lastShown, recent = recent,
+                    onTool = { name, input, result -> trace += "$name $input -> " + result.take(260) })
+                else ask()?.also { seconds += (System.nanoTime() - began) / 1e9 } ?: run { Thread.sleep(4000); ask() }
+            if (a == null) errors += if (local) "the app's own assistant did not understand" else Ai.lastError
             history += true to turn.said
             history += false to (a?.card?.ifBlank { a.text } ?: "")
             picked = a?.filter.orEmpty()
@@ -317,21 +322,11 @@ class AiEvalTest {
             val times = mutableListOf<Double>()
             chosen.forEach { c ->
                 val (o, crash) = results.getValue(way.name).getValue(c)
-                val failed = when {
-                    o == null -> listOf("crashed: $crash")
-                    o.errors.isNotEmpty() -> listOf("the AI did not answer: " + o.errors.joinToString("; "))
-                    else -> runCatching { c.check(o).filter { !it.second }.map { it.first } }.getOrElse { listOf("check crashed: " + it.message) }
-                }
+                val failed = report(c, o, crash, body)
                 if (failed.isEmpty()) passed++
                 times += o?.seconds.orEmpty()
                 // The rule is one short sentence: longer answers are listed, they do not fail the case.
                 o?.answers?.mapNotNull { it?.text }?.filter { it.split(Regex("""\s+""")).size > 25 }?.forEach { long += c.name + ": " + it.replace("\n", " ") }
-                body.append(if (failed.isEmpty()) "PASS  " else "FAIL  ").append(c.name).append("  <- ").append(c.turns.joinToString(" | ") { it.said }).append('\n')
-                if (failed.isNotEmpty()) {
-                    body.append("      wanted: ").append(failed.joinToString("; ")).append('\n')
-                    o?.trace?.forEach { body.append("      ").append(it.replace("\n", " ")).append('\n') }
-                    o?.added?.forEach { body.append("      new: ").append(brief(it)).append('\n') }
-                }
             }
             val sorted = times.sorted()
             fun at(share: Double) = if (sorted.isEmpty()) 0.0 else sorted[((sorted.size - 1) * share).toInt()]
@@ -347,4 +342,46 @@ class AiEvalTest {
         File("build/ai-eval.txt").writeText(out.toString())
         println(out)
     }
+
+    /** What a case missed ("" when none), and its PASS or FAIL lines (with the tools used and what was saved) added to [body]. */
+    private fun report(c: Case, o: Outcome?, crash: String, body: StringBuilder): List<String> {
+        val failed = when {
+            o == null -> listOf("crashed: $crash")
+            o.errors.isNotEmpty() -> listOf("no answer: " + o.errors.joinToString("; "))
+            else -> runCatching { c.check(o).filter { !it.second }.map { it.first } }.getOrElse { listOf("check crashed: " + it.message) }
+        }
+        body.append(if (failed.isEmpty()) "PASS  " else "FAIL  ").append(c.name).append("  <- ").append(c.turns.joinToString(" | ") { it.said }).append('\n')
+        if (failed.isNotEmpty()) {
+            body.append("      wanted: ").append(failed.joinToString("; ")).append('\n')
+            o?.trace?.forEach { body.append("      ").append(it.replace("\n", " ")).append('\n') }
+            o?.answers?.forEachIndexed { i, a -> body.append("      answer ${i + 1}: ").append(a?.let { it.text + (if (it.card.isBlank()) "" else " | card: " + it.card.take(160)) + (if (it.ask.isBlank()) "" else " | ask: " + it.ask) }?.replace("\n", " / ") ?: "(none)").append('\n') }
+            o?.added?.forEach { body.append("      new: ").append(brief(it)).append('\n') }
+        }
+        return failed
+    }
+
+    /**
+     * The app's own assistant (LocalAgent, no AI) on the same messages: offline and free, so it runs on every build.
+     * LOCAL_EVAL_ONLY picks cases by name; the report is written to build/local-eval.txt. The build fails when fewer
+     * cases pass than [localFloor], so a change cannot quietly make the app's own answers worse.
+     */
+    @Test
+    fun localEngine() {
+        val only = System.getenv("LOCAL_EVAL_ONLY").orEmpty().split(",").map { it.trim() }.filter { it.isNotBlank() }
+        val chosen = cases.filter { c -> only.isEmpty() || only.any { c.name.contains(it, true) } }
+        val body = StringBuilder()
+        var passed = 0
+        chosen.forEach { c ->
+            val run = runCatching { run(c, local = true) }
+            if (report(c, run.getOrNull(), run.exceptionOrNull()?.let { it.message ?: it.toString() }.orEmpty(), body).isEmpty()) passed++
+        }
+        val out = "Local eval: $passed of ${chosen.size} passed\n\n$body"
+        File("build").mkdirs()
+        File("build/local-eval.txt").writeText(out)
+        println(out)
+        if (only.isEmpty()) org.junit.Assert.assertTrue("The app's own assistant passed $passed of ${chosen.size}; it passed $localFloor before", passed >= localFloor)
+    }
+
+    /** How many everyday messages the app's own assistant got right last time: it may only go up. */
+    private val localFloor = 92
 }

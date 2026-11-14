@@ -21,9 +21,15 @@ object Goods {
         val words = n.lowercase().split(Regex("""\s+"""))
         return known.firstOrNull { k ->
             val kw = k.lowercase().split(Regex("""\s+"""))
-            (kw.size == words.size && kw.zip(words).all { (a, b) -> Names.key(a).length >= 2 && Names.key(a) == Names.key(b) }) ||
+            (kw.size == words.size && kw.zip(words).all { (a, b) -> sounds(a, b) }) ||
                 (n.length >= 5 && distance(k.lowercase(), n.lowercase()) <= 1)
         } ?: n
+    }
+
+    /** One word said two ways ("int", "eent"): the same sound key, and a two-letter key only on words near in length ("bori" is not "bharai"). */
+    private fun sounds(a: String, b: String): Boolean {
+        val k = Names.key(a)
+        return k == Names.key(b) && (k.length >= 3 || (k.length == 2 && kotlin.math.abs(a.length - b.length) <= 1))
     }
 
     /**
@@ -34,7 +40,7 @@ object Goods {
         val c = canonical(name, known)
         if (known.any { it == c }) return c
         fun words(s: String) = s.lowercase().split(Regex("""[^\p{L}\p{N}]+""")).filter { it.isNotBlank() }
-        fun alike(a: String, b: String) = a == b || (Names.key(a).length >= 2 && Names.key(a) == Names.key(b)) || (a.length >= 4 && distance(a, b) <= 1)
+        fun alike(a: String, b: String) = a == b || sounds(a, b) || (a.length >= 4 && distance(a, b) <= 1)
         val mine = words(name)
         return known.firstOrNull { k ->
             val theirs = words(k)

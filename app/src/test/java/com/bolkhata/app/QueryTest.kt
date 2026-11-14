@@ -90,4 +90,11 @@ class QueryTest {
         val f = Query.Filter(cats = setOf(Cat.OTHER), types = setOf(Type.KHARCHA), noPeople = true)
         assertEquals(listOf("7"), Query.select(list, f).map { it.id })
     }
+
+    @Test fun samePersonWordByWord() {
+        val list = listOf(e("k", Type.DIYA, 500.0, Cat.UDHAAR, "Loans", "Salim Khan", 1), e("r", Type.DIYA, 900.0, Cat.UDHAAR, "Loans", "Salim Raza", 1))
+        assertEquals(listOf("k"), Query.select(list, Query.Filter(persons = listOf("Salim Khan"))).map { it.id })
+        assertEquals(listOf("k"), Query.select(list, Query.Filter(persons = listOf("Saleem Khan"))).map { it.id })
+        assertEquals(setOf("k", "r"), Query.select(list, Query.Filter(persons = listOf("Salim"))).map { it.id }.toSet())
+    }
 }

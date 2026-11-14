@@ -520,6 +520,16 @@ class NativeChatEngineTest {
         assertEquals("chat", result.kind)
         assertTrue(result.reply.isNotBlank())
     }
+
+    @Test fun howAreYouSpellingsAndNodsAreSmallTalk() {
+        assertEquals("Good, you?", read("kese ho").reply)
+        assertEquals("chat", read("kesy ho").kind)
+        for (nod in listOf("acha", "ok", "theek hai")) {
+            val r = read(nod)
+            assertEquals(nod, "chat", r.kind)
+            assertEquals(nod, "Okay 👍", r.reply)
+        }
+
 }
 
 class NativeChatEngineDayQuestionTest {
@@ -888,6 +898,7 @@ class ParserCashWordTest {
             Parser.knownPeople = people
         }
     }
+
 }
 
 class ParserProductionTest {
@@ -929,5 +940,6 @@ class VoiceFixTest {
 
     @Test fun aNameThatSoundsTheSameIsSpelledAsSaved() {
         assertEquals("Adnan ko 500 diye", Normalizer.voiceFix("Adnaan ko 500 diye", listOf("Adnan")))
+    }
     }
 }
