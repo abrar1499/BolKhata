@@ -1361,11 +1361,14 @@ fun App(
                     var answer: AiAgent.Answer? = null
                     var by = Ai.key to Ai.model
                     for ((k, m) in Ai.chain) {
-                        Ai.key = k; Ai.model = m
                         val name = Ai.provider(k)?.name.orEmpty()
+                        // Out of credit or at its limit a moment ago: not tried again until it has rested.
+                        if ((Ai.restUntil[name] ?: 0L) > System.currentTimeMillis()) continue
+                        Ai.key = k; Ai.model = m
                         answer = ask()
                         if (answer != null) { by = k to m; Ai.failed.remove(name); Ai.answered = name; break }
                         Ai.failed[name] = Ai.lastError
+                        Ai.restUntil[name] = System.currentTimeMillis() + Ai.restFor(Ai.lastError)
                         aiWhy = name + " " + Ai.lastError.take(90)
                         if (entries !== before) break
                     }
@@ -2415,7 +2418,7 @@ fun App(
                         val use = if (found.isEmpty() || model in found) model else Ai.pick(p, found)
                         if (use != model) keep(use)
                         val error = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Ai.test(k, use) }
-                        if (error.isBlank()) Ai.failed.remove(name) else Ai.failed[name] = error
+                        if (error.isBlank()) { Ai.failed.remove(name); Ai.restUntil.remove(name) } else Ai.failed[name] = error
                         aiTick++
                         driveToast(if (error.isBlank()) "✓ $name works · ${use.ifBlank { p.model }}" else "$name key did not work: $error")
                     }
