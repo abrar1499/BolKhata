@@ -618,7 +618,7 @@ class Store(context: Context) {
         set(v) = prefs.edit().putString("llmKey", v.trim()).apply()
     /** Whether the AI row shows in the side menu (20 taps on the empty space below it turn it and the AI on or off). */
     var aiShown: Boolean
-        get() = prefs.getBoolean("aiShown", llmKey.isNotBlank())
+        get() = prefs.getBoolean("aiShown", false)
         set(v) = prefs.edit().putBoolean("aiShown", v).apply()
     /** The AI key's switch: off keeps the key saved and lets the app answer by itself. */
     var llmOn: Boolean
