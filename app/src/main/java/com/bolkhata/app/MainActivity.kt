@@ -1312,6 +1312,7 @@ fun App(
                 }
                 // Test feature: with an AI key saved, the AI does the whole job itself through tools (see AiAgent).
                 var aiDown = false
+                var aiWhy = ""
                 if (Ai.handles(groqKey)) {
                     val started = System.currentTimeMillis()
                     val spoken = aiHeard[0] != null
@@ -1354,7 +1355,7 @@ fun App(
                         Ai.key = Ai.voiceKey; Ai.model = ""
                         answer = try { ask() } finally { Ai.key = own.first; Ai.model = own.second }
                         byGroq = answer != null
-                        if (answer == null) Ai.lastError = why
+                        if (answer == null) { aiWhy = "Groq " + Ai.lastError.take(90); Ai.lastError = why }
                     }
                     // Neither key answered (no credit, a limit reached, no internet): the app's own engine answers below.
                     if (answer == null) aiDown = true else {
@@ -1490,7 +1491,10 @@ fun App(
                 if (groqKey.isNotBlank() && !reply.isNullOrBlank() && Report.parse(reply!!, currency) == null && Groq.styleOf(reply!!) != askStyle)
                     Groq.localize(groqKey, reply!!, text)?.let { reply = it }
                 // Live voice hears every sentence around the phone: one the app could not read is passed over quietly.
-                if (!reply.isNullOrBlank() && !(live && reply!!.startsWith("Sorry, I didn't get that"))) {
+                val lost = reply?.startsWith("Sorry, I didn't get that") == true
+                // Both AI keys failed and the app alone could not read it: the reason is said, so it can be fixed.
+                if (lost && aiWhy.isNotBlank()) reply = "The AI did not answer ($aiWhy)."
+                if (!reply.isNullOrBlank() && !(live && lost && aiWhy.isBlank())) {
                     lastSpeech = reply
                     postChat(reply, isUser = false, meta = trace, listIds = listedRows[0])
                 }
