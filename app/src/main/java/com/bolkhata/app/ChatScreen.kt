@@ -171,7 +171,9 @@ fun ChatScreen(
                         else if (message.entryIds.isNotEmpty()) SavedCard(message, byId, currency, onUndo, onEditEntry)
                         // The AI's own sentences ("plain") are never read as a report.
                         else remember(message.text, currency) { if (message.meta.contains("; plain")) null else Report.parse(message.text, currency) }
-                            ?.let { ReportCard(it, message.text) } ?: AssistantBubble(message.text)
+                            ?.let { ReportCard(it, message.text) }
+                            // "What rate for 15000 Kachi eent?" on the last answer: the rate is typed right in the chat.
+                            ?: if (message == messages.lastOrNull() && RateAsk.matches(message.text)) RateCard(message.text, onSend) else AssistantBubble(message.text)
                         // "Which A or B do you mean?": one tap on a name opens that khata.
                         if (message == messages.lastOrNull()) {
                             val names = NativeChatEngine.nameChoices(message.text)
@@ -857,6 +859,50 @@ private fun Working(label: String) {
                 androidx.compose.animation.core.tween(500), androidx.compose.animation.core.RepeatMode.Reverse,
                 androidx.compose.animation.core.StartOffset(i * 200)), label = "dot$i")
             Box(Modifier.padding(start = 2.dp).size(3.dp).graphicsLayer { alpha = on }.clip(CircleShape).background(MaterialTheme.colorScheme.onSurfaceVariant))
+        }
+    }
+}
+
+private val RateAsk = Regex("""^What rate for (.+)\?$""")
+
+/**
+ * The app's question for a first work's rate, as a small card in the chat: the rate typed in one box with "per 1000 |
+ * each" inside it, the amount it makes, and Save, which answers the question ("900 per 1000" or "900 each").
+ */
+@Composable
+private fun RateCard(text: String, onSend: (String) -> Unit) {
+    val qty = Regex("""[\d,]+(?:\.\d+)?""").find(text.removePrefix("What rate for "))?.value?.replace(",", "")?.toDoubleOrNull() ?: 0.0
+    var rate by remember { mutableStateOf("") }
+    var per1000 by remember { mutableStateOf(qty >= 1000) }
+    val r = rate.toDoubleOrNull() ?: 0.0
+    val sub = MaterialTheme.colorScheme.onSurfaceVariant
+    Column(Modifier.padding(start = 8.dp).widthIn(max = 280.dp).shadow(1.dp, BotShape).clip(BotShape).background(MaterialTheme.colorScheme.surface)
+        .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 9.dp)) {
+        Text(text, fontSize = 13.sp, lineHeight = 17.5.sp)
+        Row(Modifier.padding(top = 8.dp).fillMaxWidth().height(34.dp).fieldEdge(RoundedCornerShape(12.dp)).padding(start = 10.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f)) {
+                if (rate.isEmpty()) Text("Rate", fontSize = 15.sp, color = sub)
+                androidx.compose.foundation.text.BasicTextField(rate, { v -> rate = v.filter { it.isDigit() || it == '.' } }, singleLine = true,
+                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
+                    cursorBrush = androidx.compose.ui.graphics.SolidColor(EmberTop), modifier = Modifier.fillMaxWidth())
+            }
+            Row(Modifier.clip(RoundedCornerShape(9.dp)).background(Color(0xFFF1EEEA)).padding(2.dp)) {
+                listOf(true to "per 1000", false to "each").forEach { (v, label) ->
+                    val on = per1000 == v
+                    Text(label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = if (on) MaterialTheme.colorScheme.onSurface else sub,
+                        modifier = Modifier.then(if (on) Modifier.shadow(1.dp, RoundedCornerShape(7.dp)) else Modifier).clip(RoundedCornerShape(7.dp))
+                            .background(if (on) Color.White else Color.Transparent).clickable { per1000 = v }.padding(horizontal = 8.dp, vertical = 5.dp))
+                }
+            }
+        }
+        Row(Modifier.padding(top = 7.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(if (r > 0 && qty > 0) "= " + fmt(if (per1000) qty / 1000 * r else qty * r) + " " + LocalCurrency.current else "",
+                fontSize = 11.sp, color = sub, modifier = Modifier.weight(1f))
+            Text("Save", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF1D1D1F),
+                modifier = Modifier.shadow(3.dp, RoundedCornerShape(15.dp)).clip(RoundedCornerShape(15.dp)).background(Color.White)
+                    .clickable(enabled = r > 0) { onSend(rate + if (per1000) " per 1000" else " each") }.padding(horizontal = 14.dp, vertical = 6.dp))
         }
     }
 }
