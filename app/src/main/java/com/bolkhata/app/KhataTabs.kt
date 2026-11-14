@@ -498,8 +498,8 @@ internal fun LazyListScope.ledger(
     var days = 0
     rows.forEachIndexed { i, r ->
         if (i == 0 || !sameDay(rows[i - 1].date, r.date)) {
-            // A quiet ad between days, every fourth day.
-            if (days > 0 && days % 4 == 0) item(key = keyPrefix + "ad" + days) { NativeAdCard("ledger-$keyPrefix$title-$days", Modifier.padding(horizontal = 10.dp, vertical = 6.dp), video = true) }
+            // A quiet ad between days, every sixth day.
+            if (days > 0 && days % 6 == 0) item(key = keyPrefix + "ad" + days) { NativeAdCard("ledger-$keyPrefix$title-$days", Modifier.padding(horizontal = 10.dp, vertical = 6.dp), video = true) }
             days++
             val day = byDay[dayNumber(r.date)].orEmpty()
             item(key = keyPrefix + "d" + r.key) { DayLine(r.date, cols, day, cards) }
@@ -1205,6 +1205,10 @@ fun SideScreen(
                         if (!book.people) PeriodChips(newest, per) { period = it.encode() }
                     } }
                     kids.forEachIndexed { i, k ->
+                        // Things in cards of five with a quiet ad between them.
+                        val at = i % 5
+                        val group = minOf(5, kids.size - i / 5 * 5)
+                        if (i > 0 && at == 0) item(key = "kad$i") { NativeAdCard("kids-${book.name}-$i", Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) }
                         item(key = "k" + k.name.lowercase()) {
                             val (amt, what) = if (book.people) Sides.balanceText(book, k.balance) else fmt(k.total) to word(book, true)
                             ItRow(
@@ -1212,7 +1216,7 @@ fun SideScreen(
                                 if (auto) Sides.qtyOf(k.entries).take(2).joinToString(" · ") { it.name + " " + fmt(it.qty) }
                                     .ifBlank { k.entries.map { it.person.trim().lowercase() }.distinct().size.let { n -> if (n == 1) "1 person" else "$n people" } }
                                 else entryCount(k.entries.size), amt, what.lowercase(),
-                                if (book.people) balanceColor(what) else ink, i, kids.size,
+                                if (book.people) balanceColor(what) else ink, at, group,
                                 // Rename, Move and Delete act on the whole thing, not only the period shown.
                                 onLong = if (auto) null else ({ menu = book to allKids[i] })
                             ) { kidName = k.name }
@@ -1261,9 +1265,9 @@ fun SideScreen(
                     val shown = books.filter { q.isBlank() || it.name.contains(q.trim(), true) ||
                         Sides.kids(it, entries, setup).any { k -> k.name.contains(q.trim(), true) } }
                     shown.forEachIndexed { at, b ->
-                        // Accounts in cards of four with a quiet ad between them.
-                        val i = at % 4
-                        val size = minOf(4, shown.size - at / 4 * 4)
+                        // Accounts in cards of five with a quiet ad between them.
+                        val i = at % 5
+                        val size = minOf(5, shown.size - at / 5 * 5)
                         if (at > 0 && i == 0) item(key = "ad$at") { NativeAdCard("accounts-$side-$at", Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) }
                         item(key = "b" + b.name) {
                             val kids = Sides.kids(b, entries, setup)
@@ -1287,7 +1291,8 @@ fun SideScreen(
                     }
                     if (shown.isEmpty()) emptyNote("Nothing found")
                     item(key = "addbook") { DashedAdd("+ Add account") { adding = "book" } }
-                    if (shown.isNotEmpty()) item(key = "banner") { BannerAd(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) }
+                    // A few accounts leave room: the bigger banner (300 × 250); a long list, the slim one.
+                    if (shown.isNotEmpty()) item(key = "banner") { BannerAd(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), big = shown.size <= 3) }
                 }
             }
         }

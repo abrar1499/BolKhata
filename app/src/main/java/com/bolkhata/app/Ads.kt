@@ -9,6 +9,8 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.ui.Alignment
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -72,13 +74,14 @@ fun NativeAdCard(place: String, modifier: Modifier = Modifier, video: Boolean = 
     AndroidView(factory = { ctx: Context -> if (video) videoRow(ctx) else adRow(ctx) }, modifier = modifier.fillMaxWidth(), update = { v: NativeAdView -> v.show(shown) })
 }
 
-/** The banner above the chat bar: the full width, the smallest Google size. */
+/** The banner at the end of a list: the full width at the smallest Google size, or [big] the 300 × 250 box where there is room. */
 @Composable
-fun BannerAd(modifier: Modifier = Modifier) {
+fun BannerAd(modifier: Modifier = Modifier, big: Boolean = false) {
     val width = LocalConfiguration.current.screenWidthDp - 24
-    AndroidView(modifier = modifier.fillMaxWidth(), factory = { ctx: Context ->
+    // The big box sits in the middle of the line; the slim banner fills it.
+    AndroidView(modifier = modifier.fillMaxWidth().then(if (big) Modifier.wrapContentWidth(Alignment.CenterHorizontally) else Modifier), factory = { ctx: Context ->
         AdView(ctx).apply {
-            setAdSize(AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(ctx, width))
+            setAdSize(if (big) AdSize.MEDIUM_RECTANGLE else AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(ctx, width))
             adUnitId = Ads.bannerUnit
             loadAd(AdRequest.Builder().build())
         }
