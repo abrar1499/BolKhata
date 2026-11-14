@@ -1276,6 +1276,7 @@ fun SideScreen(
                         }
                     }
                     if (shown.isEmpty()) emptyNote("Nothing found")
+                    if (shown.size >= 2) item(key = "ad") { NativeAdCard("list-$side", Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) }
                     item(key = "addbook") { DashedAdd("+ Add account") { adding = "book" } }
                 }
             }
@@ -1922,6 +1923,7 @@ fun ProfitScreen(entries: List<Entry>, currency: String, setup: SideSetup, onBac
                 item(key = "n4") { ReportRow("Assets", "laptop, car, machines… at cost", withSign(worth.assets, "+"), GreenIn) { open = "Assets" } }
                 item(key = "n5") { ReportRow("To pay", "money you owe", withSign(worth.toPay, "−"), RedSpend) { open = "To pay" } }
                 item(key = "n6") { ReportRow("Net worth", "what you are worth today", plusMinus(worth.net).trimStart('+'), if (worth.net < 0) RedSpend else GreenIn, null) }
+                item(key = "ad") { NativeAdCard("report", Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) }
             }
         }
     }

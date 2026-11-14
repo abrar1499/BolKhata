@@ -30,6 +30,10 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+        <!-- Google AdMob app (see Ads.kt). -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-2130743939844876~6537626753" />
         <!-- Hears how a self-update went; asks the person only when Android insists. -->
         <receiver android:name=".Updater$InstallResult" android:exported="false" />
         <activity

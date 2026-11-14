@@ -84,6 +84,7 @@ fun ChatScreen(
     var confirmShare by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val byId = remember(entries) { entries.associateBy { it.id } }
+    val adAfter = remember(messages) { messages.filter { !it.isUser }.map { it.id }.filterIndexed { i, _ -> i % 6 == 5 }.toSet() }
     val itemCount = messages.size + (if (messages.isEmpty()) 1 else 0) + (if (loading) 1 else 0) +
         (if (suggestions.isNotEmpty()) 1 else 0) + (if (imports.isNotEmpty()) 1 else 0) + (if (pendingChanges.isNotEmpty()) 1 else 0)
 
@@ -196,6 +197,8 @@ fun ChatScreen(
                             Text(it.groupValues[1], fontSize = 7.sp, lineHeight = 7.sp, color = Color(0xFFA39E98),
                                 modifier = Modifier.padding(start = 4.dp, top = 3.dp))
                         }
+                        // Now and then (every sixth answer) a quiet ad under the answer.
+                        if (message.id in adAfter) NativeAdCard("chat-" + message.id, Modifier.padding(top = 6.dp))
                     }
                     }
                 }
