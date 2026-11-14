@@ -148,6 +148,10 @@ object ChatLogUploader {
             }
         }
 
+    /** Sends what this phone learnt from the AI (shape to lesson, as JSON), to be checked and put in the shared brain (see Brain). */
+    suspend fun uploadLearned(repo: String, token: String, json: String): Result<Unit> =
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching { putFile(repo, token, "learned/learned.json", json, "Learned") } }
+
     private fun putFile(repo: String, token: String, path: String, content: String, message: String) {
         val url = "https://api.github.com/repos/$repo/contents/$path"
         val sha = request("GET", url, token, null).let { (code, body) ->

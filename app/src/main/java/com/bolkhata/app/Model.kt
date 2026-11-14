@@ -234,7 +234,7 @@ class Store(context: Context) {
         "driveEmail", "driveAt", "driveDirty", "deviceId", "llmKey", "llmModel", "llmIn", "llmOut", "llmMicro", "llmVoice", "llmOn", "aiShown", "aiBoxes")
 
     /** Also kept off Google Drive: the chat history and the background photo (a file on this phone). */
-    private val phoneOnly = setOf("chatMessages", "bgPhoto")
+    private val phoneOnly = setOf("chatMessages", "bgPhoto", "brain", "learnedSent")
 
     /** The Gmail whose Drive this phone syncs with; "" when not signed in. */
     var driveEmail: String
@@ -684,6 +684,24 @@ class Store(context: Context) {
             o.keys().asSequence().associateWith { o.getString(it) }
         }.getOrDefault(emptyMap())
         set(v) = prefs.edit().putString("learned", org.json.JSONObject(v.entries.toList().takeLast(500).associate { it.key to it.value }).toString()).apply()
+
+    /** The shared brain's lessons (see [Brain]), as last read. */
+    var brain: Map<String, String>
+        get() = runCatching {
+            val o = org.json.JSONObject(prefs.getString("brain", "{}") ?: "{}")
+            o.keys().asSequence().associateWith { o.getString(it) }
+        }.getOrDefault(emptyMap())
+        set(v) = prefs.edit().putString("brain", org.json.JSONObject(v).toString()).apply()
+    /** The learnt lessons last sent to the private log repository, so they are sent again only when they change. */
+    var learnedSent: String
+        get() = prefs.getString("learnedSent", "") ?: ""
+        set(v) = prefs.edit().putString("learnedSent", v).apply()
+    /** Shapes of the shared brain marked wrong here (👎 or undo): this phone asks the AI for them instead. */
+    var brainOff: Set<String>
+        get() = prefs.getStringSet("brainOff", emptySet()).orEmpty().toSet()
+        set(v) = prefs.edit().putStringSet("brainOff", v).apply()
+    /** Everything the app knows: the shared brain (less what was turned off here), with this phone's own lessons over it. */
+    fun known(): Map<String, String> = brain - brainOff + aiLearned
 
     /** What the app learnt from the AI: a message's shape to the entries the AI made of it (see AiAgent.lesson). */
     var aiLearned: Map<String, String>
