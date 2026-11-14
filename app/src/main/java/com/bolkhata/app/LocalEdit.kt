@@ -18,7 +18,7 @@ object LocalEdit : LocalAgent.Reader {
     override fun read(s: LocalAgent.Said): LocalAgent.Reply? {
         val m = Msg(s, s.raw, s.roman)
         if (m.w.isEmpty()) return null
-        return answer(m) ?: restore(m) ?: account(m) ?: rename(m) ?: merge(m) ?: delete(m) ?: correct(m) ?: change(m)
+        return pending(m) ?: answer(m) ?: restore(m) ?: account(m) ?: rename(m) ?: merge(m) ?: delete(m) ?: correct(m) ?: change(m)
     }
 
     // ---------- the message ----------
@@ -370,6 +370,63 @@ object LocalEdit : LocalAgent.Reader {
         return LocalAgent.Reply("$item is in $cat now.")
     }
 
+    // ---------- which one to delete ----------
+
+    private val dayMonth = java.text.SimpleDateFormat("d MMM", Locale.US)
+
+    /**
+     * Several entries fit what was said: they are listed, numbered, and kept (in the look-up the next message goes on
+     * from) until the person says which: "1", "dusri", "15 wali", "500 wali", "dono", or "nahi".
+     */
+    private fun askWhich(m: Msg, picked: List<Entry>): LocalAgent.Reply {
+        val list = picked.sortedByDescending { it.date }.take(9)
+        m.s.notes.listIds = list.map { it.id }
+        m.s.notes.filter = JSONObject().put("pending", "delete").put("ids", JSONArray(list.map { it.id })).toString()
+        val rows = list.mapIndexed { n, e ->
+            "${n + 1}. " + dayMonth.format(Date(e.date)) + " · " + e.item.ifBlank { e.category.label } + (if (e.person.isBlank()) "" else " · " + e.person) +
+                " · " + fmt(e.amount) + (if (e.note.isBlank() || e.note.equals(e.item, true)) "" else " · " + e.note)
+        }
+        return LocalAgent.Reply("${list.size} entries like that:\n" + rows.joinToString("\n") + "\nWhich one? Say 1, 2… or all.")
+    }
+
+    /** The answer to "Which one?" of a delete: the entries it names go to Trash; still several, the list is asked again. */
+    private fun pending(m: Msg): LocalAgent.Reply? {
+        val prev = runCatching { JSONObject(m.s.previous) }.getOrNull() ?: return null
+        if (prev.optString("pending") != "delete") return null
+        val ids = prev.optJSONArray("ids")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty()
+        val list = ids.mapNotNull { id -> m.all.firstOrNull { it.id == id } }
+        if (list.isEmpty() || m.w.size > 6) return null
+        val w = m.w
+        if (w.any { it in setOf("nahi", "nai", "na", "no", "cancel", "rehne", "chhodo", "chodo") } && w.none { it.any(Char::isDigit) })
+            return LocalAgent.Reply("Okay, nothing deleted.")
+        val every = w.any { it in setOf("all", "sab", "sari", "saari", "dono", "both", "teeno", "haan", "han", "ha", "yes", "ji") }
+        val chosen: List<Entry> = when {
+            every -> list
+            w.any { it in setOf("akhri", "aakhri", "last") } -> listOf(list.last())
+            else -> {
+                val ord = w.firstNotNullOfOrNull { mapOf("pehli" to 0, "pehla" to 0, "pehle" to 0, "first" to 0, "dusri" to 1, "doosri" to 1, "dusra" to 1, "second" to 1,
+                    "teesri" to 2, "tisri" to 2, "third" to 2)[it] }
+                val (day, _) = runCatching { Parser.extractDate(w.joinToString(" "), m.s.now) }.getOrDefault(null to "")
+                val n = w.firstNotNullOfOrNull { it.toDoubleOrNull() }
+                when {
+                    ord != null -> listOfNotNull(list.getOrNull(ord))
+                    day != null -> list.filter { dayOf(it.date) == dayOf(day) }
+                    n != null && list.any { it.amount == n } -> list.filter { it.amount == n }
+                    n != null && n == Math.floor(n) && n.toInt() in 1..list.size && w.size <= 2 -> listOf(list[n.toInt() - 1])
+                    // "15 wali": the day of the month.
+                    n != null && n == Math.floor(n) && n.toInt() in 1..31 -> list.filter { Calendar.getInstance().apply { timeInMillis = it.date }.get(Calendar.DAY_OF_MONTH) == n.toInt() }
+                    else -> return null
+                }
+            }
+        }
+        if (chosen.isEmpty()) return LocalAgent.Reply("None of those fits. Say 1, 2… or all.")
+        // Still several (and not "all" said): asked again, never more deleted than was meant.
+        if (chosen.size > 1 && !every) return askWhich(m, chosen)
+        val r = m.s.use("delete_entries", JSONObject().put("ids", JSONArray(chosen.map { it.id })))
+        if (r.has("error")) return LocalAgent.Reply("That did not work: " + r.optString("error") + ".")
+        return LocalAgent.Reply(if (chosen.size == 1) "Deleted. It is in Trash if you need it back." else "Deleted ${chosen.size} entries. They are in Trash if you need them back.")
+    }
+
     // ---------- delete ----------
 
     /**
@@ -386,8 +443,7 @@ object LocalEdit : LocalAgent.Reader {
         val wantAll = sure || m.has(allWords) || m.has(manyEntries)
         val picked: List<Entry> = pickFor(m, wantAll) ?: return LocalAgent.Reply("Which entry should I delete?")
         if (picked.isEmpty()) return LocalAgent.Reply("I could not find that entry.")
-        if (picked.size > 1 && !wantAll && !picked.all { it.id in m.s.justSaved })
-            return LocalAgent.Reply("There are ${picked.size} entries like that. Move all ${picked.size} to Trash?")
+        if (picked.size > 1 && !wantAll && !picked.all { it.id in m.s.justSaved }) return askWhich(m, picked)
         val input = JSONObject().put("ids", JSONArray(picked.map { it.id }))
         if (sure) input.put("confirmed", true)
         val r = m.s.use("delete_entries", input)

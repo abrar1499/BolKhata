@@ -338,4 +338,11 @@ class AiAgentTest {
         assertEquals("All good, what do you need?", AiAgent.replay(AiAgent.learn(emptyList(), "kya ho raha hai", names, emptyMap(), "All good, what do you need?").lesson, "kya ho raha hai")!!.reply)
         assertEquals("Great!", AiAgent.replay(AiAgent.learn(emptyList(), "zabardast", names, emptyMap(), "Great!").lesson, "zabardast")!!.reply)
     }
+
+    @Test
+    fun aNoteSaysWhatItWasForInAFewWords() {
+        assertEquals("Kafeel", AiAgent.shortNote("os ne kafeel ko dena tha"))
+        assertEquals("School fees", AiAgent.shortNote("for school fees"))
+        assertEquals("", AiAgent.shortNote("  "))
+    }
 }
