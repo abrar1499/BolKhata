@@ -2668,7 +2668,7 @@ fun App(
                         },
                         onShareDiagnostics = { shareChatDiagnostics() },
                         ratings = chatRatings,
-                        onRate = { id, good ->
+                        onRate = rate@{ id, good ->
                             chatLog.rate(id, good)
                             // 👎 on an answer: forget what was learned for the question before it.
                             if (!good) chatMessages.indexOfFirst { it.id == id }.takeIf { it > 0 }?.let { i ->
@@ -2683,7 +2683,8 @@ fun App(
                             // 👎 on the app's own answer: what it saved goes to Trash and the AI reads the message; a save it makes
                             // is learnt, so the next message of that shape is done right by the app alone.
                             val rated = chatMessages.firstOrNull { it.id == id }
-                            if (!good && rated != null && "engine=LocalAgent" in rated.meta && Ai.handles(groqKey)) {
+                            if (!good && rated != null && !rated.isUser && "engine=AI" !in rated.meta) {
+                                if (!Ai.handles(groqKey)) { driveToast("Turn on an AI key to ask the AI"); return@rate }
                                 chatMessages.take(chatMessages.indexOf(rated)).lastOrNull { it.isUser }?.let { q ->
                                     if (rated.entryIds.isNotEmpty()) moveToTrash(rated.entryIds.toSet())
                                     aiSaved = emptyList(); aiPicked = ""

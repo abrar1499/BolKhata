@@ -629,6 +629,8 @@ object NativeChatEngine {
             has(w, setOf("time", "waqt", "baje", "bje")) && has(w, setOf("kya", "kia", "what", "kitne", "kitny")) ->
                 java.text.SimpleDateFormat("h:mm a", Locale.ENGLISH).format(java.util.Date(now))
             has(w, setOf("hal", "haal", "kaise", "kaisa", "kaisi", "kese", "kesa", "kesi", "kesy", "kaisay", "kaisy", "kasy")) || (has(w, setOf("kya", "kia")) && has(w, setOf("hal", "haal"))) -> "Good, you?"
+            // The answer to "kaise ho": "good", "fine", "alhamdulillah".
+            w.isNotEmpty() && w.size <= 3 && w.all { it in fineWords || it in nods } && w.any { it in fineWords } -> "Great! How can I help?"
             // Only "acha", "ok", "theek hai": a nod, not a search for those words.
             w.isNotEmpty() && w.all { it in nods } -> "Okay 👍"
             w.containsAll(listOf("what", "can", "do")) -> "Add entries, see totals, search, edit and move them."
@@ -639,6 +641,7 @@ object NativeChatEngine {
         }
     }
 
+    private val fineWords = setOf("good", "fine", "alhamdulillah", "alhamdulilah", "shukar", "badhiya", "badiya", "mast", "zabardast", "well")
     private val nods = setOf("acha", "accha", "achha", "ok", "okay", "okk", "theek", "thik", "thek", "hai", "ha", "hmm", "hm", "g", "ji", "jee", "nice", "great", "cool", "sahi", "done")
 
     private fun isQuestion(text: String): Boolean {
