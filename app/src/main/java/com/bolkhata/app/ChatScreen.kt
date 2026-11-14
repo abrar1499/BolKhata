@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.SpanStyle
@@ -830,27 +831,17 @@ private fun AttachmentBubble(path: String, name: String) {
 }
 
 /**
- * While an answer is on its way: the app's logo with three white bars rising and falling, and a word beside it,
- * "Typing…" for the app's own engine, "✦ Thinking…" (an orange logo) while the AI is asked.
+ * While an answer is on its way: the app's own logo gently rises, grows and glows, with a word beside it,
+ * "Typing…" for the app's own engine, "✦ Thinking…" while the AI is asked.
  */
 @Composable
 private fun Working(label: String) {
-    val ai = label.startsWith("✦")
     val beat = androidx.compose.animation.core.rememberInfiniteTransition(label = "working")
+    val t by beat.animateFloat(0f, 1f, androidx.compose.animation.core.infiniteRepeatable(
+        androidx.compose.animation.core.tween(500), androidx.compose.animation.core.RepeatMode.Reverse), label = "lift")
     Row(Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Row(
-            Modifier.size(22.dp).shadow(2.dp, RoundedCornerShape(7.dp)).clip(RoundedCornerShape(7.dp))
-                .background(androidx.compose.ui.graphics.Brush.verticalGradient(
-                    if (ai) listOf(Color(0xFFF0A080), Color(0xFFD97757)) else listOf(Color(0xFFFF6B5E), Color(0xFFD6403A)))),
-            horizontalArrangement = Arrangement.spacedBy(1.5.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically
-        ) {
-            repeat(3) { i ->
-                val h by beat.animateFloat(3f, 12f, androidx.compose.animation.core.infiniteRepeatable(
-                    androidx.compose.animation.core.tween(500, delayMillis = 0), androidx.compose.animation.core.RepeatMode.Reverse,
-                    androidx.compose.animation.core.StartOffset(i * 150)), label = "bar$i")
-                Box(Modifier.width(2.dp).height(h.dp).clip(RoundedCornerShape(1.dp)).background(Color.White))
-            }
-        }
+        GlassLogo(22.dp, Modifier.graphicsLayer { translationY = -3.dp.toPx() * t; scaleX = 1f + 0.08f * t; scaleY = 1f + 0.08f * t }
+            .shadow((5 * t).dp, RoundedCornerShape(7.dp), ambientColor = Color(0xFFD6403A), spotColor = Color(0xFFD6403A)))
         Text(label, fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 7.dp))
     }
 }
