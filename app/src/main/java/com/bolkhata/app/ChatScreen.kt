@@ -831,17 +831,25 @@ private fun AttachmentBubble(path: String, name: String) {
 }
 
 /**
- * While an answer is on its way: the app's own logo gently rises, grows and glows, with a word beside it,
- * "Typing…" for the app's own engine, "✦ Thinking…" while the AI is asked.
+ * While an answer is on its way: the app's own logo beats like a heart, with a word and three blinking dots beside it,
+ * "Typing" for the app's own engine, "✦ Thinking" while the AI is asked.
  */
 @Composable
 private fun Working(label: String) {
     val beat = androidx.compose.animation.core.rememberInfiniteTransition(label = "working")
-    val t by beat.animateFloat(0f, 1f, androidx.compose.animation.core.infiniteRepeatable(
-        androidx.compose.animation.core.tween(500), androidx.compose.animation.core.RepeatMode.Reverse), label = "lift")
+    val size by beat.animateFloat(1f, 1f, androidx.compose.animation.core.infiniteRepeatable(
+        androidx.compose.animation.core.keyframes {
+            durationMillis = 1100
+            1.15f at 165; 1f at 330; 1.1f at 495; 1f at 1100
+        }), label = "beat")
     Row(Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        GlassLogo(22.dp, Modifier.graphicsLayer { translationY = -3.dp.toPx() * t; scaleX = 1f + 0.08f * t; scaleY = 1f + 0.08f * t }
-            .shadow((5 * t).dp, RoundedCornerShape(7.dp), ambientColor = Color(0xFFD6403A), spotColor = Color(0xFFD6403A)))
-        Text(label, fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 7.dp))
+        GlassLogo(22.dp, Modifier.graphicsLayer { scaleX = size; scaleY = size })
+        Text(label.trimEnd('…'), fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 7.dp))
+        repeat(3) { i ->
+            val on by beat.animateFloat(0.2f, 1f, androidx.compose.animation.core.infiniteRepeatable(
+                androidx.compose.animation.core.tween(500), androidx.compose.animation.core.RepeatMode.Reverse,
+                androidx.compose.animation.core.StartOffset(i * 200)), label = "dot$i")
+            Box(Modifier.padding(start = 2.dp).size(3.dp).graphicsLayer { alpha = on }.clip(CircleShape).background(MaterialTheme.colorScheme.onSurfaceVariant))
+        }
     }
 }
