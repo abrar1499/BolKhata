@@ -164,7 +164,8 @@ fun ChatScreen(
                 } else {
                     // Each answer starts with the app's small logo, like a chat assistant's picture.
                     Row(Modifier.fillMaxWidth()) {
-                    GlassLogo(20.dp, Modifier.padding(top = 8.dp))
+                    // Its top level with the answer card's top, as the mock.
+                    GlassLogo(22.dp, Modifier.padding(top = 1.dp))
                     Column(Modifier.weight(1f)) {
                         if (message.entryIds.isEmpty() && message.meta.startsWith("ask=")) OptionCard(message, byId.values) { onAsked(message.id, it) }
                         else if (message.entryIds.isNotEmpty()) SavedCard(message, byId, currency, onUndo, onEditEntry)
@@ -376,13 +377,13 @@ private fun UserBubble(text: String, attachment: String = "") {
             // The question in a dark bubble, the answer in a white card (like the Yaad mock-up).
             color = MaterialTheme.colorScheme.surface,
             fontSize = 13.sp,
-            lineHeight = 17.sp,
+            lineHeight = 17.5.sp,
             modifier = Modifier
                 .widthIn(max = 300.dp)
                 .clip(MeShape)
                 .copyable(text)
                 .background(MaterialTheme.colorScheme.onSurface)
-                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 6.dp)
         )
     }
 }
@@ -451,7 +452,7 @@ private fun AssistantBubble(text: String) {
         text,
         color = MaterialTheme.colorScheme.onSurface,
         fontSize = 13.sp,
-        lineHeight = 18.sp,
+        lineHeight = 17.5.sp,
         modifier = Modifier
             .padding(start = 8.dp)
             .widthIn(max = 320.dp)
@@ -459,7 +460,7 @@ private fun AssistantBubble(text: String) {
             .clip(BotShape)
             .copyable(text)
             .background(MaterialTheme.colorScheme.surface)
-            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 6.dp)
     )
 }
 
