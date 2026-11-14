@@ -21,7 +21,7 @@ object Ai {
     val GROQ = Provider("Groq", "https://api.groq.com/openai/v1/chat/completions", "openai/gpt-oss-120b")
     /** Groq models tried in turn when the one in use has reached its per-minute limit. */
     val GROQ_SPARE = listOf("openai/gpt-oss-20b", "llama-3.3-70b-versatile")
-    val OPENROUTER = Provider("OpenRouter", "https://openrouter.ai/api/v1/chat/completions", "anthropic/claude-opus-5.5")
+    val OPENROUTER = Provider("OpenRouter", "https://openrouter.ai/api/v1/chat/completions", "openrouter/free")
     val GEMINI = Provider("Gemini", "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", "gemini-2.5-flash")
     val OPENAI = Provider("ChatGPT", "https://api.openai.com/v1/chat/completions", "gpt-5-mini")
 
