@@ -228,7 +228,7 @@ class Store(context: Context) {
 
     /** Keys left out of a backup: AI keys are private and stay on this phone, as do this phone's Drive sync notes. */
     private val notBackedUp = setOf("aiKey", "fastKey", "aiModel", "fileKey", "groqKey", "elevenKey", "logToken",
-        "driveEmail", "driveAt", "driveDirty", "deviceId", "llmKey", "llmModel", "llmIn", "llmOut", "llmMicro", "llmVoice", "llmOn")
+        "driveEmail", "driveAt", "driveDirty", "deviceId", "llmKey", "llmModel", "llmIn", "llmOut", "llmMicro", "llmVoice", "llmOn", "aiShown")
 
     /** Also kept off Google Drive: the chat history and the background photo (a file on this phone). */
     private val phoneOnly = setOf("chatMessages", "bgPhoto")
@@ -616,6 +616,10 @@ class Store(context: Context) {
     var llmKey: String
         get() = prefs.getString("llmKey", "") ?: ""
         set(v) = prefs.edit().putString("llmKey", v.trim()).apply()
+    /** Whether the AI row shows in the side menu (20 taps on the empty space below it turn it and the AI on or off). */
+    var aiShown: Boolean
+        get() = prefs.getBoolean("aiShown", llmKey.isNotBlank())
+        set(v) = prefs.edit().putBoolean("aiShown", v).apply()
     /** The AI key's switch: off keeps the key saved and lets the app answer by itself. */
     var llmOn: Boolean
         get() = prefs.getBoolean("llmOn", true)

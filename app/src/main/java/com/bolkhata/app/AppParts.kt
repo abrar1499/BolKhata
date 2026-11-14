@@ -11,6 +11,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.border
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -205,8 +206,12 @@ internal fun SideMenu(
     driveBusy: String? = null,
     /** Test feature: the AI key row (null: not in this build). */
     ai: AiInfo? = null, onAiOpen: () -> Unit = {}, onAiSave: (key: String, model: String, voice: String) -> Unit = { _, _, _ -> }, onAiOn: (Boolean) -> Unit = {}, onVoiceOff: () -> Unit = {},
-    onSignIn: () -> Unit = {}, onSyncNow: () -> Unit = {}, onSignOut: () -> Unit = {}
+    onSignIn: () -> Unit = {}, onSyncNow: () -> Unit = {}, onSignOut: () -> Unit = {},
+    /** 20 quick taps on the menu's empty space. */
+    onSecret: () -> Unit = {}
 ) {
+    // Taps on the empty space and when the last one was; a pause of over a second starts the count again.
+    val secret = remember { longArrayOf(0, 0) }
     var driveOpen by remember { mutableStateOf(false) }
     var aiOpen by remember { mutableStateOf(false) }
     if (aiOpen && ai != null) {
@@ -276,6 +281,12 @@ internal fun SideMenu(
         drawerShape = RoundedCornerShape(0.dp),
         windowInsets = WindowInsets(0, 0, 0, 0)
     ) {
+        Box(Modifier.fillMaxSize().clickable(remember { MutableInteractionSource() }, indication = null) {
+            val now = System.currentTimeMillis()
+            secret[0] = if (now - secret[1] < 1000) secret[0] + 1 else 1
+            secret[1] = now
+            if (secret[0] >= 20) { secret[0] = 0; onSecret() }
+        }) {
         Column(Modifier.verticalScroll(rememberScrollState()).statusBarsPadding().padding(bottom = 16.dp)) {
             Row(Modifier.padding(start = 14.dp, end = 14.dp, top = 16.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 GlassLogo(34.dp)
@@ -356,6 +367,7 @@ internal fun SideMenu(
                 MenuRow(onClick = onTrash) { MenuLabel("🗑", "Trash"); MenuValue("›") }
                 MenuRow(onClick = onVersion, last = true) { MenuLabel("⬆️", "Version"); MenuValue(version) }
             }
+        }
         }
     }
 }

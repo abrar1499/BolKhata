@@ -151,11 +151,12 @@ fun App(
     // Groq is switched off for now (Groq.ENABLED): the app reads and answers every message by itself.
     // Test feature (APK build only): an AI key of any provider, saved in the side menu, runs the chat instead; see Ai.
     remember {
-        if (!BuildConfig.PLAY) { Ai.key = if (store.llmOn) store.llmKey else ""; Ai.model = store.llmModel; Ai.voiceKey = store.llmVoice; Ai.sink = { i, o, micro -> store.llmIn += i; store.llmOut += o; store.llmMicro += micro } }
+        if (!BuildConfig.PLAY) { Ai.key = if (store.llmOn && store.aiShown) store.llmKey else ""; Ai.model = store.llmModel; Ai.voiceKey = if (store.aiShown) store.llmVoice else ""; Ai.sink = { i, o, micro -> store.llmIn += i; store.llmOut += o; store.llmMicro += micro } }
     }
-    fun groqKeyNow() = Ai.key.ifBlank { if (!Groq.ENABLED) "" else store.groqKey.ifBlank { if (Groq.sharedReady && !store.groqOff) Groq.SHARED else "" } }
+    fun groqKeyNow() = Ai.key.ifBlank { if (!Groq.ENABLED || !store.aiShown) "" else store.groqKey.ifBlank { if (Groq.sharedReady && !store.groqOff) Groq.SHARED else "" } }
     var groqKey by remember { mutableStateOf(groqKeyNow()) }
     var aiTick by remember { mutableIntStateOf(0) }
+    var aiShown by remember { mutableStateOf(store.aiShown) }
     var groqVoice by remember { mutableStateOf(store.groqVoice) }
     // The Play build has no ElevenLabs voice: calls always use the phone's own voice.
     var elevenKey by remember { mutableStateOf(if (BuildConfig.PLAY) "" else store.elevenKey) }
@@ -2373,7 +2374,7 @@ fun App(
                         else { tab = Tab.CHAT; drawer.close() }
                     }
                 },
-                ai = if (BuildConfig.PLAY) null else remember(aiTick, groqKey) {
+                ai = if (BuildConfig.PLAY || !aiShown) null else remember(aiTick, groqKey) {
                     AiInfo(Ai.provider(store.llmKey)?.name.orEmpty(), store.llmModel, Ai.modelNow(), voice = store.llmVoice.isNotBlank(), on = store.llmOn, used =
                         if (store.llmIn + store.llmOut == 0L) "" else Ai.usageText(store.llmIn, store.llmOut,
                             dollars = if (Ai.price(Ai.modelNow()) == null) null else store.llmMicro / 1_000_000.0))
@@ -2396,6 +2397,13 @@ fun App(
                         aiTick++
                         driveToast(if (error.isBlank()) "✓ ${Ai.provider(Ai.key)?.name} is on · ${Ai.modelNow()}" else "AI key did not work: $error")
                     }
+                },
+                // Hidden switch: shows the AI row and turns the AI on, or hides it and turns every AI off (keys are kept).
+                onSecret = {
+                    aiShown = !aiShown; store.aiShown = aiShown; store.llmOn = aiShown
+                    Ai.key = if (aiShown) store.llmKey else ""; Ai.voiceKey = if (aiShown) store.llmVoice else ""
+                    groqKey = groqKeyNow(); aiTick++
+                    driveToast(if (aiShown) "AI on" else "AI off")
                 },
                 onVoiceOff = { store.llmVoice = ""; Ai.voiceKey = ""; aiTick++; driveToast("Voice key removed · the mic listens with the phone") },
                 // The switch: off keeps the key on the phone, so on needs no key again.
