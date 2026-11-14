@@ -102,6 +102,8 @@ dependencies {
     implementation("com.google.mlkit:text-recognition:16.0.1")
     // Sign in with Google and sync to the person's own Google Drive (hidden app folder).
     implementation("com.google.android.gms:play-services-auth:21.4.0")
+    // Quiet ads (see Ads.kt): native cards and a banner from Google AdMob.
+    implementation("com.google.android.gms:play-services-ads:23.6.0")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-core")

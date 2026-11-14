@@ -290,6 +290,7 @@ fun App(
     var checking by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { newVersion = Updater.check() }
+    LaunchedEffect(Unit) { Ads.start(context) }
     // The shared brain, read each time the app opens: the app knows more without a new version.
     LaunchedEffect(Unit) {
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Brain.fetch() }?.let { store.brain = it }
@@ -2540,6 +2541,7 @@ fun App(
             // The chat bar belongs to Chat only, not to a page opened over it (business page, report).
             if (main && tab == Tab.CHAT && !bizPage && !profitOpen) {
                 Column {
+                    BannerAd(Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
                     InputBar(
                         onSend = { chatInput(it) }, onMic = { startVoice(forChat = true) }, placeholder = "Speak, type or ask…",
                         busy = chatLoading,
