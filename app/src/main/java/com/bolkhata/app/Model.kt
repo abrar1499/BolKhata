@@ -692,10 +692,6 @@ class Store(context: Context) {
             o.keys().asSequence().associateWith { o.getString(it) }
         }.getOrDefault(emptyMap())
         set(v) = prefs.edit().putString("brain", org.json.JSONObject(v).toString()).apply()
-    /** The owner's GitHub token for the shared brain repository only (see Brain.publish); kept on this phone only. */
-    var brainToken: String
-        get() = prefs.getString("brainToken", "") ?: ""
-        set(v) = prefs.edit().putString("brainToken", v.trim()).apply()
     /** The learnt lessons last sent to the shared brain, so they are sent again only when they change. */
     var learnedSent: String
         get() = prefs.getString("learnedSent", "") ?: ""

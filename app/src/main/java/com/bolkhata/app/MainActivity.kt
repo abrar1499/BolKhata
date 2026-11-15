@@ -334,15 +334,12 @@ fun App(
         }
     }
 
-    /** The token the shared brain is written with: the one pasted in the Brain box, else the app's own. */
-    fun brainTokenNow() = store.brainToken.ifBlank { Brain.unhide(BuildConfig.BRAIN_TOKEN) }
-
     /**
      * What the app learnt from the AI goes straight into the shared brain when it changed (only lessons safe to share,
-     * see Brain.safe), with [brainTokenNow]; every install then reads it. No one has to do anything.
+     * see Brain.safe), with the app's own token for that repository; every install then reads it. No one has to do anything.
      */
     fun sendLearned() {
-        val token = brainTokenNow()
+        val token = Brain.unhide(BuildConfig.BRAIN_TOKEN)
         if (token.isBlank()) return
         val learned = store.aiLearned.filterKeys { !it.startsWith("=") }
         val sent = org.json.JSONObject(learned).toString()
@@ -2516,8 +2513,6 @@ fun App(
                     }
                 },
                 // The switch in a box: off keeps the key on the phone, so on needs no key again.
-                brainSet = brainTokenNow().isNotBlank(),
-                onBrainToken = { t -> store.brainToken = t; store.learnedSent = ""; aiTick++; driveToast(if (t.isBlank()) "Brain token removed" else "✓ Brain token saved"); sendLearned() },
                 onAiSwitch = { name, on ->
                     store.aiBoxes[name]?.let { store.aiBoxes = store.aiBoxes + (name to it.copy(on = on)) }
                     aiChain(); groqKey = groqKeyNow(); aiTick++
