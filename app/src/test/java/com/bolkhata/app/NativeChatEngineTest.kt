@@ -527,6 +527,7 @@ class NativeChatEngineTest {
 
     @Test fun howAreYouSpellingsAndNodsAreSmallTalk() {
         assertEquals("Good, you?", read("kese ho").reply)
+        listOf("kase ho", "kasy ho", "kesay ho", "kse ho").forEach { assertEquals(it, "Good, you?", read(it).reply) }
         assertEquals("chat", read("kesy ho").kind)
         assertEquals("Great! How can I help?", read("good").reply)
         assertEquals("Great! How can I help?", read("alhamdulillah theek").reply)
