@@ -2724,7 +2724,9 @@ fun App(
                 }
                 shown == Tab.CASHBOOK -> CashBookScreen(
                     entries, currency, onMenu = { openMenu() }, business = businessName,
-                    onEdit = { editing = it }, onReport = { profitOpen = true }
+                    onEdit = { editing = it }, onReport = { profitOpen = true },
+                    setup = sides, onSetup = { s -> sides = s; store.saveSides(s) },
+                    onSave = { e -> save(listOf(e) + entries); lastAdded = listOf(e.id) }
                 )
                 shown == Tab.EXPENSE || shown == Tab.INCOME || shown == Tab.PARTIES -> {
                     SideScreen(
