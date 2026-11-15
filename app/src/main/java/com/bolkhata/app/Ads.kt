@@ -10,11 +10,6 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.background
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -22,14 +17,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import com.google.android.gms.ads.AdListener
 import com.google.android.gms.ads.AdLoader
 import com.google.android.gms.ads.AdRequest
-import com.google.android.gms.ads.AdSize
-import com.google.android.gms.ads.AdView
 import com.google.android.gms.ads.MobileAds
 import com.google.android.gms.ads.VideoOptions
 import com.google.android.gms.ads.nativead.MediaView
@@ -47,13 +39,14 @@ internal fun adTapsOn(day: String, savedDay: String, saved: Int): Int = if (save
 
 /**
  * Quiet ads from Google AdMob: a small native card that looks like the app (an answer in the chat, a row under the
- * accounts, a tip under the report) and a banner above the chat bar. Each keeps its small "Ad" tag. The APK the owner
+ * accounts, a slim one at the end of a list, a big one under a short list). Each keeps its small "Ad" tag. The APK the owner
  * installs shows Google's test ads (so the account is never hurt by the owner's own taps); the Play build the real ones.
  */
 object Ads {
     private val play = BuildConfig.PLAY
     val nativeUnit = if (play) "ca-app-pub-2130743939844876/8559275509" else "ca-app-pub-3940256099942544/2247696110"
-    val bannerUnit = if (play) "ca-app-pub-2130743939844876/3306948824" else "ca-app-pub-3940256099942544/9214589741"
+    /** Pictures only (no video), for the slim row between accounts: a video would need the tall card there. */
+    val smallUnit = if (play) "ca-app-pub-2130743939844876/4019539897" else "ca-app-pub-3940256099942544/2247696110"
 
     /** Loaded native ads by their place (e.g. "chat-12"), so an ad stays the same while it is on screen and is not fetched again. */
     private val loaded = HashMap<String, NativeAd>()
@@ -66,8 +59,10 @@ object Ads {
      * True once this phone tapped ads [AD_TAPS_A_DAY] times today: no ad is drawn or fetched until tomorrow. It keeps the
      * account safe from someone tapping the ads again and again on purpose; a real reader never gets that far.
      */
-    var resting by mutableStateOf(false)
-        private set
+    val resting: Boolean get() = restDay == today()
+
+    /** The day the taps ran out; the next day the ads are back by themselves, also when the app was left open overnight. */
+    private var restDay by mutableStateOf("")
 
     private fun today() = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(java.util.Date())
     private fun saved(c: Context) = c.getSharedPreferences("ads", Context.MODE_PRIVATE)
@@ -79,13 +74,13 @@ object Ads {
             val c = context.applicationContext
             val n = tapsToday(c) + 1
             saved(c).edit().putString("day", today()).putInt("taps", n).apply()
-            if (n >= AD_TAPS_A_DAY) resting = true
+            if (n >= AD_TAPS_A_DAY) restDay = today()
         }
     }
 
     /** Asks for consent where the law needs it (Google's form, set in AdMob › Privacy & messaging), then starts the ads. */
     fun start(activity: Activity) {
-        resting = tapsToday(activity) >= AD_TAPS_A_DAY
+        restDay = if (tapsToday(activity) >= AD_TAPS_A_DAY) today() else ""
         val info = UserMessagingPlatform.getConsentInformation(activity)
         fun go() { if (info.canRequestAds() && !ready) { MobileAds.initialize(activity) {}; ready = true } }
         info.requestConsentInfoUpdate(activity, ConsentRequestParameters.Builder().build(),
@@ -93,11 +88,11 @@ object Ads {
         go()
     }
 
-    /** The ad for [place], fetched once; [onReady] gets it when it arrives. */
-    fun native(context: Context, place: String, onReady: (NativeAd) -> Unit) {
+    /** The ad for [place], fetched once; [onReady] gets it when it arrives. [small]: from the pictures-only unit. */
+    fun native(context: Context, place: String, small: Boolean = false, onReady: (NativeAd) -> Unit) {
         loaded[place]?.let { onReady(it); return }
         if (!ready || resting) return
-        AdLoader.Builder(context, nativeUnit)
+        AdLoader.Builder(context, if (small) smallUnit else nativeUnit)
             .forNativeAd { ad -> loaded[place] = ad; onReady(ad) }
             .withAdListener(taps(context))
             .withNativeAdOptions(NativeAdOptions.Builder().setAdChoicesPlacement(NativeAdOptions.ADCHOICES_TOP_RIGHT)
@@ -109,36 +104,23 @@ object Ads {
 /**
  * A native ad as one soft row: its small picture, headline with its "Ad" tag, a short line, and the green action word;
  * nothing when no ad came. [video], or an ad that is a video: a 120 × 120 picture or video (playing without sound) on
- * the left instead (Google asks for the ad's picture in its own MediaView, and a video no smaller than that).
+ * the left instead (Google asks for the ad's picture in its own MediaView, and a video no smaller than that). [small]:
+ * an ad of pictures only, so the row stays slim between accounts and at the end of a list. [big]: the card under a
+ * short list, with the picture or video across it.
  */
+/** Ads between rows take turns, counted from 1: a video card first, then a slim picture, and so on. */
+fun videoTurn(nth: Int) = nth % 2 == 1
+
 @Composable
-fun NativeAdCard(place: String, modifier: Modifier = Modifier, video: Boolean = false, round: Boolean = true) {
+fun NativeAdCard(place: String, modifier: Modifier = Modifier, video: Boolean = false, round: Boolean = true, small: Boolean = false, big: Boolean = false) {
     val context = LocalContext.current
     var ad by remember(place) { mutableStateOf<NativeAd?>(null) }
     DisposableEffect(place, Ads.ready) {
-        Ads.native(context, place) { ad = it }
+        Ads.native(context, place, small) { ad = it }
         onDispose { }
     }
     val shown = ad?.takeIf { !Ads.resting } ?: return
-    AndroidView(factory = { ctx: Context -> (if (video || shown.mediaContent?.hasVideoContent() == true) videoRow(ctx) else adRow(ctx)).also { if (!round) (it.getChildAt(0).background as? GradientDrawable)?.cornerRadius = 0f } }, modifier = modifier.fillMaxWidth(), update = { v: NativeAdView -> v.show(shown) })
-}
-
-/**
- * The banner at the end of a list, as wide as the cards above it and shaped like them ([round] corners, or square
- * under the square ledger sheets): the slim one, or [big] a taller one (up to 250) where there is room.
- */
-@Composable
-fun BannerAd(modifier: Modifier = Modifier, big: Boolean = false, round: Boolean = true) {
-    if (!Ads.ready || Ads.resting) return
-    val width = LocalConfiguration.current.screenWidthDp - 24
-    AndroidView(modifier = modifier.fillMaxWidth().clip(RoundedCornerShape(if (round) 14.dp else 0.dp)).background(Color.White), factory = { ctx: Context ->
-        AdView(ctx).apply {
-            setAdSize(if (big) AdSize.getInlineAdaptiveBannerAdSize(width, 250) else AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(ctx, width))
-            adUnitId = Ads.bannerUnit
-            adListener = Ads.taps(ctx)
-            loadAd(AdRequest.Builder().build())
-        }
-    }, onRelease = { v: AdView -> v.destroy() })
+    AndroidView(factory = { ctx: Context -> (if (big) bigCard(ctx) else if (video || shown.mediaContent?.hasVideoContent() == true) videoRow(ctx) else adRow(ctx)).also { if (!round) (it.getChildAt(0).background as? GradientDrawable)?.cornerRadius = 0f } }, modifier = modifier.fillMaxWidth(), update = { v: NativeAdView -> v.show(shown) })
 }
 
 private fun Context.dp(v: Int) = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), resources.displayMetrics).toInt()
@@ -204,11 +186,53 @@ private fun videoRow(ctx: Context): NativeAdView {
     return view
 }
 
+/** The big card under a short list: the ad's picture or video across the card (16:9), then its icon, headline with the "Ad" tag, a line and the green button. */
+private fun bigCard(ctx: Context): NativeAdView {
+    val view = NativeAdView(ctx)
+    val card = LinearLayout(ctx).apply {
+        orientation = LinearLayout.VERTICAL
+        background = GradientDrawable().apply { cornerRadius = ctx.dp(14).toFloat(); setColor(AColor.WHITE) }
+        clipToOutline = true
+    }
+    val wide = ctx.resources.displayMetrics.widthPixels - ctx.dp(20)
+    val media = MediaView(ctx).apply {
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, wide * 9 / 16)
+        setImageScaleType(ImageView.ScaleType.CENTER_CROP)
+        setBackgroundColor(AColor.rgb(238, 247, 241))
+    }
+    val line = LinearLayout(ctx).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(ctx.dp(10), ctx.dp(9), ctx.dp(10), ctx.dp(9))
+    }
+    val icon = ImageView(ctx).apply { layoutParams = LinearLayout.LayoutParams(ctx.dp(36), ctx.dp(36)); clipToOutline = true
+        background = GradientDrawable().apply { cornerRadius = ctx.dp(8).toFloat(); setColor(AColor.rgb(238, 247, 241)) } }
+    val texts = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL
+        layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = ctx.dp(9); marginEnd = ctx.dp(8) } }
+    val titleRow = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+    val headline = TextView(ctx).apply { textSize = 12f; setTextColor(AColor.rgb(29, 29, 31)); maxLines = 1; paint.isFakeBoldText = true }
+    val tag = TextView(ctx).apply { text = "Ad"; textSize = 8f; setTextColor(AColor.rgb(155, 149, 142)); setPadding(ctx.dp(3), 0, ctx.dp(3), 0)
+        background = GradientDrawable().apply { cornerRadius = ctx.dp(4).toFloat(); setStroke(ctx.dp(1), AColor.rgb(214, 209, 202)) }
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginStart = ctx.dp(5) } }
+    val body = TextView(ctx).apply { textSize = 10.5f; setTextColor(AColor.rgb(138, 133, 128)); maxLines = 1 }
+    val action = TextView(ctx).apply { textSize = 11f; setTextColor(AColor.WHITE); paint.isFakeBoldText = true
+        setPadding(ctx.dp(11), ctx.dp(6), ctx.dp(11), ctx.dp(6))
+        background = GradientDrawable().apply { cornerRadius = ctx.dp(10).toFloat(); setColor(AColor.rgb(31, 154, 84)) } }
+    titleRow.addView(headline); titleRow.addView(tag)
+    texts.addView(titleRow); texts.addView(body)
+    line.addView(icon); line.addView(texts); line.addView(action)
+    card.addView(media); card.addView(line)
+    view.addView(card)
+    view.iconView = icon; view.mediaView = media; view.headlineView = headline; view.bodyView = body; view.callToActionView = action
+    return view
+}
+
 /** Fills the row with [ad] and hands it to Google, which counts its showing and opens it on a tap. */
 private fun NativeAdView.show(ad: NativeAd) {
     (headlineView as TextView).text = ad.headline
     (bodyView as TextView).text = ad.body.orEmpty()
     (callToActionView as TextView).text = (ad.callToAction ?: "Open") + " ›"
+    (iconView as? ImageView)?.let { it.setImageDrawable(ad.icon?.drawable); it.visibility = if (ad.icon == null) android.view.View.GONE else android.view.View.VISIBLE }
     ad.mediaContent?.let { mediaView?.mediaContent = it }
     setNativeAd(ad)
 }

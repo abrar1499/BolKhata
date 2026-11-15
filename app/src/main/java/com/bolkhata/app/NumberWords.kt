@@ -37,7 +37,8 @@ object NumberWords {
 
     private val multipliers = mapOf(
         "hundred" to 100.0, "sau" to 100.0, "سو" to 100.0,
-        "thousand" to 1_000.0, "hazar" to 1_000.0, "hazaar" to 1_000.0, "hazzar" to 1_000.0, "ہزار" to 1_000.0,
+        "thousand" to 1_000.0, "hazar" to 1_000.0, "hazaar" to 1_000.0, "hazzar" to 1_000.0, "hazr" to 1_000.0, "hzar" to 1_000.0, "hzr" to 1_000.0,
+        "hajar" to 1_000.0, "ہزار" to 1_000.0,
         "lakh" to 100_000.0, "lac" to 100_000.0, "لاکھ" to 100_000.0,
         "million" to 1_000_000.0
     )

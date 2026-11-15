@@ -201,9 +201,22 @@ object LocalAdd : LocalAgent.Reader {
         val groups = groups(w)
         val out = mutableListOf<JSONObject>()
         for (g in groups) {
-            val n = g.indices.firstOrNull { num(g[it]) != null && !isQty(g, it) }?.let { num(g[it]) } ?: continue
+            val n = g.indices.firstOrNull { num(g[it]) != null && !isQty(g, it) }?.let { num(g[it]) }
+                // "5000 ka suit liya": the only number, with "ka" after it, is the price, not how many suits.
+                ?: g.indices.singleOrNull { num(g[it]) != null }?.takeIf { g.getOrNull(it + 1) in possessives }?.let { num(g[it]) } ?: continue
             val gf = if (groups.size == 1) f else Flags(g)
-            val content = g.filter { isContent(it) }.map { expand(it) }
+            // A word that also counts things ("suit", "jora") is the thing bought when nothing else is named.
+            val named = g.filter { isContent(it) }.map { expand(it) }.ifEmpty { g.filter { it in extra } }
+            fun known(x: String) = Parser.guessCategory(x) != null || x in extra || Parser.nearThing(x) != null
+            // "bilal k kapre laye", "dukan ka kiraya": whose it was goes to the note; the thing is what was bought.
+            val whose = g.indices.firstOrNull { i ->
+                g.getOrNull(i + 1) in possessives && g[i] in named && named.size > 1 && !known(g[i]) &&
+                    (Understand.isCommonName(g[i]) || (named - g[i]).any { known(it) })
+            }?.let { g[it] }
+            // A thing misspelt ("kapprye") is written as the app knows it ("kapre"), unless it is a thing of the person's own books.
+            val content = (if (whose != null) named - whose else named).map { x ->
+                if (Parser.guessCategory(x) != null || x in extra || c.known.any { k -> x in k.lowercase(Locale.ROOT).split(' ') }) x else Parser.nearThing(x) ?: x
+            }
             val cat = categoryOf(content, if (groups.size == 1) c.script else null, g.filter { num(it) == null })
             val family = g.firstOrNull { it in familyWords || it == "bhai" }
             val text = (if (family != null && content.size > 1) content - familyWords else content).ifEmpty { listOfNotNull(family) }.take(3).joinToString(" ")
@@ -222,6 +235,7 @@ object LocalAdd : LocalAgent.Reader {
                 content.isNotEmpty() -> JSONObject().put("type", "expense").put("amount", n).put("category", Cat.OTHER.label).put("item", item)
                 else -> return Got.Lost
             }
+            if (whose != null) e.put("note", whose.replaceFirstChar { it.uppercase() })
             out += e.dated(c)
         }
         return if (out.isEmpty()) Got.Lost else Got.Save(out)
@@ -526,7 +540,9 @@ object LocalAdd : LocalAgent.Reader {
                     if (b != null && (num(b) == 1000.0 || b in thousandWords)) { per1000 = true; if (num(b) != null) taken += i + 2 + skip }
                 }
                 a == "rate" || a in eachWords || (a in setOf("wala", "wali", "wale")) -> { rate = n; taken += i }
-                a in priceWords && (b in setOf("ek", "aik", "one", "dana") || b in unitWords) -> { rate = n; taken += i }
+                // "12 ka ek", "40 ka piece": a price for one. Not "5000 ka suit liya", where the only number is what the suit cost.
+                a in priceWords && (b in setOf("ek", "aik", "one", "dana") || b in unitWords) &&
+                    !(b in extra && w.indices.none { j -> j != i && num(w[j]) != null }) -> { rate = n; taken += i }
                 w.getOrNull(i - 1) in setOf("rate", "at", "@") -> {
                     rate = n; taken += i
                     if (a in perWords && b != null && (num(b) == 1000.0 || b in thousandWords)) { per1000 = true; if (num(b) != null) taken += i + 2 }
@@ -669,11 +685,17 @@ object LocalAdd : LocalAgent.Reader {
         t = t.replace(Regex("""(\d+(?:\.\d+)?)k(?![\p{L}])""")) { plain(it.groupValues[1].toDouble() * 1000) }
         t = t.replace(Regex("""(\d)(\p{L})"""), "$1 $2").replace(Regex("""(\p{L})(\d)"""), "$1 $2")
         t = t.replace(Regex("""(?<![\p{L}])(ek|aik|do|teen|char|chaar|panch|paanch|chhe|che|saat|aath|nau|das|dus|\d+)\s+(?:so|sow|sao)(?![\p{L}])"""), "$1 sau")
+        // "hazar" written without its vowels or with others ("hazr", "hzar", "hzr", "hajar", "hazaar").
+        t = t.replace(Regex("""(?<![\p{L}])h+a*[zj]+a*r+(?![\p{L}])"""), "hazar").replace(Regex("""(?<![\p{L}])(?:laakh|lak|lakh+)(?![\p{L}])"""), "lakh")
         t = t.replace(Regex("""(?:(sadhe|saadhe|sarhe|saarhe|sawa|sava|paune|pone)\s+)?(\d+(?:\.\d+)?)\s*(sau|hundred|hazar|hazaar|hazzar|hajar|thousand|lakh|lac|lakhs|lacs|crore|karor|karod)(?![\p{L}])""")) { m ->
             val part = when (m.groupValues[1]) { "" -> 0.0; "sawa", "sava" -> 0.25; "paune", "pone" -> -0.25; else -> 0.5 }
             val times = when (m.groupValues[3]) { "sau", "hundred" -> 100.0; "lakh", "lac", "lakhs", "lacs" -> 100_000.0; "crore", "karor", "karod" -> 10_000_000.0; else -> 1000.0 }
-            plain((m.groupValues[2].toDouble() + part) * times)
+            val n = m.groupValues[2].toDouble()
+            // "5000 hazar ka suit": a number already in thousands with "hazar" said after it is that number.
+            if (times == 1000.0 && part == 0.0 && n >= 1000) plain(n) else plain((n + part) * times)
         }
+        // "5000 kia suit": "kia" written for "ka" after the amount.
+        t = t.replace(Regex("""(?<=\d)\s+kia(?![\p{L}])"""), " ka")
         t = runCatching { NumberWords.convert(t) }.getOrDefault(t)
         // A lone number word before "ka" or a verb ("pachas diye", "bees ki chai"), which the number reader leaves.
         return t.replace(Regex("""(?<![\p{L}\d])(""" + numberWords.keys.joinToString("|") + """)\s+(?=(?:ka|ki|ke|rupay|rupaye|rs|riyal|diye|diya|di|mile|mila|mili|liye|liya|li|lagaye|lage|laga)(?![\p{L}]))""")) {
@@ -910,6 +932,7 @@ object LocalAdd : LocalAgent.Reader {
     private val cashWords = setOf("cash", "naqad", "naqd", "nakad")
     private val commandWords = setOf("karo", "kro", "kardo", "krdo", "kariye", "kijiye", "kijie", "karein", "karen", "daldo", "banao", "bnao")
     private val saveWords = setOf("likh", "likho", "likhdo", "likhlo", "save", "add", "darj", "note", "record")
+    private val possessives = setOf("k", "ka", "ke", "ki", "kay", "ky")
     private val stop = setOf("ko", "ku", "kou", "koo", "ne", "nay", "ny", "nei", "se", "say", "sy", "sey", "sai", "sae", "ka", "ki", "ke", "kay", "ky", "kaa",
         "mein", "me", "mai", "main", "mujhe", "mjhe", "maine", "mene", "mainay", "hum", "ham", "humne", "hamne", "apne", "apni", "apna", "mera", "meri", "mere",
         "hamara", "hamari", "hamare", "tum", "tumne", "aap", "aapne", "ap", "par", "pe", "pr", "py", "tak", "liye", "lie", "lye", "wala", "wali", "wale", "walay",
@@ -930,7 +953,7 @@ object LocalAdd : LocalAgent.Reader {
             "tv", "television", "computer", "machine", "plot", "zameen").forEach { put(it, Cat.ASSETS to it.replaceFirstChar { c -> c.uppercase() }) }
         listOf("rickshaw", "riksha", "rikshaw", "qingqi", "chingchi", "fare").forEach { put(it, Cat.TRANSPORT to "Rickshaw") }
         listOf("plumber", "electrician", "mistri", "carpenter", "painter", "mazdoori").forEach { put(it, Cat.OTHER to "Repairs") }
-        listOf("darzi", "tailor", "silai").forEach { put(it, Cat.SHOPPING to "Clothes") }
+        listOf("darzi", "tailor", "silai", "suit", "suits", "jora", "joray", "dress", "dupatta", "shalwar", "kameez").forEach { put(it, Cat.SHOPPING to "Clothes") }
         listOf("samosa", "samosay", "pakora", "pakoray", "sandwich", "halwa", "jalebi", "lassi", "nimko", "paratha").forEach { put(it, Cat.KHANA to "Snacks") }
         listOf("easyload", "load").forEach { put(it, Cat.MOBILE to "Mobile recharge") }
         listOf("naai", "nai", "hajjam", "hajam").forEach { put(it, Cat.PERSONAL to "Haircut") }

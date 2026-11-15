@@ -1319,9 +1319,9 @@ fun App(
      * The app's own assistant answers first; the AI only when it cannot. [retry]: the same message again after 👎 on
      * the app's answer, straight to the AI (not shown twice), so the AI's right reading is learnt for next time.
      * [said]: the person's own words when [raw] is their translation (see chatSay); [quiet]: their words are in the
-     * chat already.
+     * chat already. [spelled]: this is the message read again with its misspelt words put right (see Spell).
      */
-    fun chatInput(raw: String, retry: Boolean = false, said: String = "", quiet: Boolean = false) {
+    fun chatInput(raw: String, retry: Boolean = false, said: String = "", quiet: Boolean = false, spelled: Boolean = false) {
         if (chatMessages.isEmpty()) lastGroqQuery = ""
         val text = raw.trim()
         if (text.isEmpty() || chatLoading) return
@@ -1362,6 +1362,8 @@ fun App(
         chatLoading = true
         loadingLabel = "Typing…"
         scope.launch {
+            // The message with its misspelt words put right, when the app did not understand it as written: it is read once more.
+            var again: String? = null
             try {
                 // The app's own answer is ready at once; a short beat lets "Typing…" show, so the chat feels like a reply.
                 if (!retry) kotlinx.coroutines.delay(450)
@@ -1624,16 +1626,21 @@ fun App(
                 val lost = reply?.startsWith("Sorry, I didn't get that") == true
                 // Both AI keys failed and the app alone could not read it: the reason is said, so it can be fixed.
                 if (lost && aiWhy.isNotBlank()) reply = "The AI did not answer ($aiWhy)."
+                if (lost && spelled) sayNote[0] = ""
+                if (lost && aiWhy.isBlank() && !spelled && !retry) {
+                    val fixed = offMain { Spell.fix(text, names0 + entries.map { it.item }) }
+                    if (!fixed.equals(text, true)) again = fixed
+                }
                 // A full sentence the app could not read, clearly in another language: the chat offers that language's pack.
                 var offer = ""
-                if (lost && aiWhy.isBlank() && !live && text.length >= 12 && text.count { it == ' ' } >= 2) {
+                if (again == null && lost && aiWhy.isBlank() && !live && text.length >= 12 && text.count { it == ' ' } >= 2) {
                     val code = Lingo.guess(text)
                     if (code.isNotBlank() && code != Lingo.code(lang)) {
                         offer = "; offer=$code"
                         reply = "This looks like ${Lingo.name(code)}. Download ${Lingo.name(code)} (30 MB) so I can read it?"
                     }
                 }
-                if (!reply.isNullOrBlank() && !(live && lost && aiWhy.isBlank())) {
+                if (again == null && !reply.isNullOrBlank() && !(live && lost && aiWhy.isBlank())) {
                     lastSpeech = reply
                     postChat(reply, isUser = false, meta = trace + offer, listIds = listedRows[0])
                 }
@@ -1646,6 +1653,7 @@ fun App(
             } finally {
                 chatLoading = false
             }
+            again?.let { sayNote[0] = "Read as: $it"; chatInput(it, quiet = true, spelled = true) }
         }
     }
 

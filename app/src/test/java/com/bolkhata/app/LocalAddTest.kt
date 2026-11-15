@@ -202,6 +202,15 @@ class LocalAddTest {
 
     // ---- more everyday ways
 
+    // ---- loose spellings in everyday messages
+    @Test fun hazarWithoutItsVowels() = saves("aaj main 10 hazr hamid se liye") { added.single().let { it.amount == 10_000.0 && it.person == "Hamid Akram" } }
+    @Test fun hazarAfterAFullNumberIsThatNumber() = saves("5000 hazr kia suit liya") { has(Type.KHARCHA, amount = 5_000.0, cat = Cat.SHOPPING, item = "suit") && added.none { it.item.contains("haz", true) } }
+    @Test fun aThingNamedAfterHazarKia() = saves("aur 2000 hazr kia always liye") { has(Type.KHARCHA, amount = 2_000.0, item = "always") && added.none { it.item.contains("haz", true) } }
+    @Test fun whoseItWasGoesToTheNote() = saves("aur 1000 farooq k kapprye laye") {
+        has(Type.KHARCHA, amount = 1_000.0, cat = Cat.SHOPPING, item = "kapre") && added.single().let { it.note.contains("Farooq", true) && !it.item.contains("farooq", true) }
+    }
+    @Test fun aKnownThingBeforeKaIsNotAnOwner() = saves("petrol ka kharcha 60") { has(Type.KHARCHA, amount = 60.0, cat = Cat.TRANSPORT) && added.single().note.isBlank()
+    }
     @Test fun numberWordBeforeVerb() = saves("hamid ko pachas diye") { has(Type.DIYA, "Hamid Akram", 50.0) }
     @Test fun numberWordBeforeKa() = saves("bees ki chai pi") { has(Type.KHARCHA, amount = 20.0, cat = Cat.KHANA) }
     @Test fun namesListedWithCommas() = saves("hamid, zubair aur salim khan ko 500 500 300 diye", 3) {
