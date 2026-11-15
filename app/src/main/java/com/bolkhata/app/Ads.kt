@@ -77,8 +77,9 @@ object Ads {
 }
 
 /**
- * A native ad as one soft row: icon, headline with its "Ad" tag, a short line, and the green action word; nothing when
- * no ad came. [video]: a 120 × 120 picture or video (playing without sound) on the left instead of the small icon.
+ * A native ad as one soft row: its small picture, headline with its "Ad" tag, a short line, and the green action word;
+ * nothing when no ad came. [video], or an ad that is a video: a 120 × 120 picture or video (playing without sound) on
+ * the left instead (Google asks for the ad's picture in its own MediaView, and a video no smaller than that).
  */
 @Composable
 fun NativeAdCard(place: String, modifier: Modifier = Modifier, video: Boolean = false, round: Boolean = true) {
@@ -89,7 +90,7 @@ fun NativeAdCard(place: String, modifier: Modifier = Modifier, video: Boolean = 
         onDispose { }
     }
     val shown = ad ?: return
-    AndroidView(factory = { ctx: Context -> (if (video) videoRow(ctx) else adRow(ctx)).also { if (!round) (it.getChildAt(0).background as? GradientDrawable)?.cornerRadius = 0f } }, modifier = modifier.fillMaxWidth(), update = { v: NativeAdView -> v.show(shown) })
+    AndroidView(factory = { ctx: Context -> (if (video || shown.mediaContent?.hasVideoContent() == true) videoRow(ctx) else adRow(ctx)).also { if (!round) (it.getChildAt(0).background as? GradientDrawable)?.cornerRadius = 0f } }, modifier = modifier.fillMaxWidth(), update = { v: NativeAdView -> v.show(shown) })
 }
 
 /**
@@ -111,7 +112,7 @@ fun BannerAd(modifier: Modifier = Modifier, big: Boolean = false, round: Boolean
 
 private fun Context.dp(v: Int) = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), resources.displayMetrics).toInt()
 
-/** The native ad's own view, drawn like the mock: a soft white rounded row, 36 icon, two lines, green action. */
+/** The native ad's own view, drawn like the mock: a soft white rounded row, its picture 64 × 36, two lines, green action. */
 private fun adRow(ctx: Context): NativeAdView {
     val view = NativeAdView(ctx)
     val row = LinearLayout(ctx).apply {
@@ -121,7 +122,8 @@ private fun adRow(ctx: Context): NativeAdView {
         setPadding(ctx.dp(10), ctx.dp(7), ctx.dp(10), ctx.dp(7))
         background = GradientDrawable().apply { cornerRadius = ctx.dp(12).toFloat(); setColor(AColor.argb(153, 255, 255, 255)) }
     }
-    val icon = ImageView(ctx).apply { layoutParams = LinearLayout.LayoutParams(ctx.dp(36), ctx.dp(36)); clipToOutline = true
+    val media = MediaView(ctx).apply { layoutParams = LinearLayout.LayoutParams(ctx.dp(64), ctx.dp(36)); clipToOutline = true
+        setImageScaleType(ImageView.ScaleType.CENTER_CROP)
         background = GradientDrawable().apply { cornerRadius = ctx.dp(8).toFloat(); setColor(AColor.rgb(238, 247, 241)) } }
     val texts = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL
         layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = ctx.dp(9); marginEnd = ctx.dp(8) } }
@@ -134,9 +136,9 @@ private fun adRow(ctx: Context): NativeAdView {
     val action = TextView(ctx).apply { textSize = 10.5f; setTextColor(AColor.rgb(31, 154, 84)); paint.isFakeBoldText = true }
     titleRow.addView(headline); titleRow.addView(tag)
     texts.addView(titleRow); texts.addView(body)
-    row.addView(icon); row.addView(texts); row.addView(action)
+    row.addView(media); row.addView(texts); row.addView(action)
     view.addView(row)
-    view.iconView = icon; view.headlineView = headline; view.bodyView = body; view.callToActionView = action
+    view.mediaView = media; view.headlineView = headline; view.bodyView = body; view.callToActionView = action
     return view
 }
 
@@ -176,7 +178,6 @@ private fun NativeAdView.show(ad: NativeAd) {
     (headlineView as TextView).text = ad.headline
     (bodyView as TextView).text = ad.body.orEmpty()
     (callToActionView as TextView).text = (ad.callToAction ?: "Open") + " ›"
-    (iconView as? ImageView)?.setImageDrawable(ad.icon?.drawable)
     ad.mediaContent?.let { mediaView?.mediaContent = it }
     setNativeAd(ad)
 }
