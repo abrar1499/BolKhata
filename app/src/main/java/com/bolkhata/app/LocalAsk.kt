@@ -453,7 +453,10 @@ object LocalAsk : LocalAgent.Reader {
         fun filler(i: Int) = words[i] in stop || canon[i] in setOf("kitna", "batao", "dikhao", "kholo", "what", "kya") || i in used
 
         private val raw = s.lower
-        val command = has("cmd", "chahiye") || words.indices.any { i -> words[i] in pairVerbs && words.getOrNull(i + 1) in pairEnds } ||
+        /** "open karo", "dikha kardo": the helping verb right after a look-up word is no command of its own. */
+        private val helping = canon.indices.filter { i -> i > 0 && canon[i] == "cmd" && words[i].startsWith("k") && canon[i - 1] in setOf("kholo", "dikhao", "batao") }.toSet()
+        val command = canon.indices.any { it !in used && it !in helping && canon[it] in setOf("cmd", "chahiye") } ||
+            words.indices.any { i -> words[i] in pairVerbs && words.getOrNull(i + 1) in pairEnds } ||
             Regex("""\b(?:wapas|wapis|vapas)\s+(?:la|lao|le\s+aao|le\s+ao|laao|kar)\b|\b(?:naya|nayi|naye|new)\s+(?:khata|account|khaata)\b""").containsMatchIn(raw)
         val marker = canon.firstOrNull() in setOf("aur", "and", "also") || has("sirf", "only") || Regex("""\b(?:what|how)\s+about\b""").containsMatchIn(raw)
         val verb = has("did", "diye", "mile", "liye", "dali", "kharida")
