@@ -359,7 +359,8 @@ class AiKeys(val boxes: Map<String, AiBox>, val answered: String, val failed: Ma
 /** Each provider's colour and a few words on what it costs. */
 private val aiLook = mapOf(
     "Claude" to (Color(0xFFD97757) to "Paid · best"), "ChatGPT" to (Color(0xFF10A37F) to "Paid"),
-    "Groq" to (Color(0xFFF55036) to "Free · fast"), "OpenRouter" to (Color(0xFF6466F1) to "Free models + paid")
+    "Gemini" to (Color(0xFF4285F4) to "Free with limits"), "Groq" to (Color(0xFFF55036) to "Free · fast"),
+    "OpenRouter" to (Color(0xFF6466F1) to "Free models + paid")
 )
 
 /** The AI keys page: one box per provider, best first; the ones turned on answer in that order, each handing over to the next. */

@@ -11,6 +11,7 @@ class AiTest {
         assertEquals("Claude", Ai.provider("sk-ant-api03-abc")?.name)
         assertEquals("Groq", Ai.provider("gsk_abc")?.name)
         assertEquals("OpenRouter", Ai.provider("sk-or-v1-abc")?.name)
+        assertEquals("Gemini", Ai.provider(" AIzaSyabc ")?.name)
         assertEquals("ChatGPT", Ai.provider("sk-proj-abc")?.name)
         assertNull(Ai.provider("hello"))
     }
