@@ -639,7 +639,7 @@ class Store(context: Context) {
     fun saveAiModels(name: String, models: List<String>) = prefs.edit().putString("aiModels.$name", models.joinToString("\n")).apply()
     /** Whether the AI row shows in the side menu (20 taps on the empty space below it turn it and the AI on or off). */
     var aiShown: Boolean
-        get() = prefs.getBoolean("aiShown", false)
+        get() = prefs.getBoolean("aiShown", true)
         set(v) = prefs.edit().putBoolean("aiShown", v).apply()
     /** The tokens the AI used so far. */
     var llmIn: Long
