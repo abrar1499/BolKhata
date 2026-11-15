@@ -109,6 +109,8 @@ object LocalAdd : LocalAgent.Reader {
         relativeDay(all)?.let { c.date = if (it == 0) null else day(c.s.now - it * DAY) }
         val w = all.filter { it !in dayWords }
         if (w.isEmpty()) return Got.Empty
+        // "mere pas 10000 thay": money one had, not money that moved.
+        if (w.any { it in haveWords } && w.any { it in beWords } && w.none { it in giveWords || it in getWords || it in spendWords }) return Got.Empty
         val isNew = w.any { it in newWords }
         val book = w.firstNotNullOfOrNull { bookWords[it] }
         val mentions = mutableListOf<Mention>()
@@ -907,11 +909,14 @@ object LocalAdd : LocalAgent.Reader {
         "brick" to "eent", "bricks" to "eent", "loading" to "bharai", "loaded" to "bharai", "unloading" to "nikasi", "unloaded" to "nikasi",
         "moulding" to "thapai", "molding" to "thapai")
     private val dayWords = setOf("aaj", "aj", "today", "kal", "kl", "kall", "yesterday", "parso", "parson", "parsu", "parsun", "parsoon", "prso", "prson", "abhi")
-    private val joiners = setOf("aur", "or", "and", "phir", "fir", "then", "also", "plus", "orr")
+    /** "mere pas … tha": what one had ("pas"), and the words that only say it was or is. */
+    private val haveWords = setOf("pas", "paas", "pass", "pasy")
+    private val beWords = setOf("tha", "thay", "the", "thi", "thy", "thae", "hai", "hain", "hen", "hy")
+    private val joiners = setOf("aur", "or", "ar", "aor", "awr", "and", "phir", "fir", "then", "also", "plus", "orr")
     private val endVerbs = setOf("diye", "diya", "di", "dia", "diy", "de", "dye", "mile", "mila", "mili", "liye", "liya", "li", "le", "lia", "dala", "dali", "daali",
         "dale", "dalwaya", "bhara", "bhari", "khaya", "khai", "khaye", "piya", "pi", "kharida", "kharide", "kharidi", "bheje", "bheja", "bheji", "kiya", "kiye", "ki",
         "kia", "aaye", "aaya", "aayi", "aye", "aya", "gave", "paid", "spent", "bought", "got", "received", "sent", "took", "lent", "borrowed", "returned", "sold",
-        "becha", "bechi", "banai", "banaye", "lagaye", "laga", "lage", "hai", "hain", "tha", "thi", "the")
+        "becha", "bechi", "banai", "banaye", "lagaye", "laga", "lage", "hai", "hain", "tha", "thi", "the", "thay", "thy", "thae")
     private val askWords = setOf("kitna", "kitne", "kitni", "kitnay", "kitny", "kya", "kyun", "kyon", "kab", "kahan", "kaun", "kon", "kis", "kisne",
         "kisko", "kese", "kaise", "how", "what", "when", "where", "who", "whom", "which", "why", "show", "dikhao", "dikha", "dikhana", "batao", "bata", "btao",
         "bataen", "bataiye", "list", "report", "summary", "pdf", "statement", "dekho", "dekh", "search", "find")

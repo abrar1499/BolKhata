@@ -250,4 +250,20 @@ class LocalAddTest {
     @Test fun lookUpIsLeft() = leaves("hamid ka hisab batao")
     @Test fun changeIsLeft() = leaves("kal wali chai 5 ki jagah 8 kar do")
     @Test fun bareNumberIsLeft() = leaves("500")
+
+    @Test
+    fun aLongStoryOfWhereTheMoneyWentSavesEachPartOnly() {
+        // "Had 10000, out of it gave 1000 to a person, 100 on a thing and 2000 on another": what one had is not an entry.
+        val b = Books()
+        b.say("mere pas 10000 ruoees thay jis me se mene 1000 ahmed ko diye 100 ki chez li ar 2000 k always liye")
+        assertEquals(3, b.added.size)
+        assertTrue(b.has(Type.DIYA, "Ahmed", 1_000.0))
+        assertTrue(b.has(Type.KHARCHA, amount = 100.0, item = "Chez"))
+        assertTrue(b.has(Type.KHARCHA, amount = 2_000.0, item = "Always"))
+        // "ar" is "aur".
+        val c = Books()
+        c.say("chai 50 ar petrol 200")
+        assertTrue(c.has(Type.KHARCHA, amount = 50.0, item = "Chai") || c.has(Type.KHARCHA, amount = 50.0, item = "Tea"))
+        assertTrue(c.has(Type.KHARCHA, amount = 200.0, item = "Petrol"))
+    }
 }
