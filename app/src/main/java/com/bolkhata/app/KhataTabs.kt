@@ -509,7 +509,8 @@ internal fun LazyListScope.ledger(
         item(key = keyPrefix + r.key) { LedgerRow(r, cols, last, cards) }
     }
     // The banner at the end of the list, seen only by scrolling down.
-    if (rows.isNotEmpty()) item(key = keyPrefix + "banner", contentType = "ad") { BannerAd(Modifier.padding(horizontal = 10.dp, vertical = 10.dp), round = false) }
+    // At the end of the list: a slim picture ad, square like the sheet above it.
+    if (rows.isNotEmpty()) item(key = keyPrefix + "banner", contentType = "ad") { NativeAdCard("ledger-end-$keyPrefix$title", Modifier.padding(horizontal = 10.dp, vertical = 10.dp), round = false, small = true) }
 }
 
 /** What an empty list shows instead of a blank page: the app logo and how to add the first entry. */
@@ -1301,7 +1302,11 @@ fun SideScreen(
                     if (shown.isEmpty()) emptyNote("Nothing found")
                     item(key = "addbook") { DashedAdd("+ Add account") { adding = "book" } }
                     // A few accounts leave room: the bigger banner (300 × 250); a long list, the slim one.
-                    if (shown.isNotEmpty()) item(key = "banner", contentType = "ad") { BannerAd(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), big = shown.size <= 3) }
+                    // Under the accounts: with three or fewer there is room for the big card (picture or video); else a slim picture ad.
+                    if (shown.isNotEmpty()) item(key = "banner", contentType = "ad") {
+                        if (shown.size <= 3) NativeAdCard("accounts-big-$side", Modifier.padding(horizontal = 10.dp, vertical = 10.dp), big = true)
+                        else NativeAdCard("accounts-end-$side", Modifier.padding(horizontal = 12.dp, vertical = 10.dp), small = true)
+                    }
                 }
             }
         }
