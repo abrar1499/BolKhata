@@ -1217,7 +1217,7 @@ fun SideScreen(
                         // Things in cards of five with a quiet ad between them.
                         val at = i % 5
                         val group = minOf(5, kids.size - i / 5 * 5)
-                        if (i > 0 && at == 0) item(key = "kad$i", contentType = "ad") { NativeAdCard("kids-${book.name}-$i", Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) }
+                        if (i > 0 && at == 0) item(key = "kad$i", contentType = "ad") { NativeAdCard("kids-${book.name}-$i", Modifier.padding(horizontal = 12.dp, vertical = 6.dp), small = true) }
                         item(key = "k" + k.name.lowercase()) {
                             val (amt, what) = if (book.people) Sides.balanceText(book, k.balance) else fmt(k.total) to word(book, true)
                             ItRow(
@@ -1277,7 +1277,7 @@ fun SideScreen(
                         // Accounts in cards of five with a quiet ad between them.
                         val i = at % 5
                         val size = minOf(5, shown.size - at / 5 * 5)
-                        if (at > 0 && i == 0) item(key = "ad$at", contentType = "ad") { NativeAdCard("accounts-$side-$at", Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) }
+                        if (at > 0 && i == 0) item(key = "ad$at", contentType = "ad") { NativeAdCard("accounts-$side-$at", Modifier.padding(horizontal = 12.dp, vertical = 6.dp), small = true) }
                         item(key = "b" + b.name) {
                             val kids = Sides.kids(b, entries, setup)
                             if (b.people) {

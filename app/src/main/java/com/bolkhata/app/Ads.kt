@@ -53,6 +53,8 @@ internal fun adTapsOn(day: String, savedDay: String, saved: Int): Int = if (save
 object Ads {
     private val play = BuildConfig.PLAY
     val nativeUnit = if (play) "ca-app-pub-2130743939844876/8559275509" else "ca-app-pub-3940256099942544/2247696110"
+    /** Pictures only (no video), for the slim row between accounts: a video would need the tall card there. */
+    val smallUnit = if (play) "ca-app-pub-2130743939844876/4019539897" else "ca-app-pub-3940256099942544/2247696110"
     val bannerUnit = if (play) "ca-app-pub-2130743939844876/3306948824" else "ca-app-pub-3940256099942544/9214589741"
 
     /** Loaded native ads by their place (e.g. "chat-12"), so an ad stays the same while it is on screen and is not fetched again. */
@@ -95,11 +97,11 @@ object Ads {
         go()
     }
 
-    /** The ad for [place], fetched once; [onReady] gets it when it arrives. */
-    fun native(context: Context, place: String, onReady: (NativeAd) -> Unit) {
+    /** The ad for [place], fetched once; [onReady] gets it when it arrives. [small]: from the pictures-only unit. */
+    fun native(context: Context, place: String, small: Boolean = false, onReady: (NativeAd) -> Unit) {
         loaded[place]?.let { onReady(it); return }
         if (!ready || resting) return
-        AdLoader.Builder(context, nativeUnit)
+        AdLoader.Builder(context, if (small) smallUnit else nativeUnit)
             .forNativeAd { ad -> loaded[place] = ad; onReady(ad) }
             .withAdListener(taps(context))
             .withNativeAdOptions(NativeAdOptions.Builder().setAdChoicesPlacement(NativeAdOptions.ADCHOICES_TOP_RIGHT)
@@ -111,14 +113,15 @@ object Ads {
 /**
  * A native ad as one soft row: its small picture, headline with its "Ad" tag, a short line, and the green action word;
  * nothing when no ad came. [video], or an ad that is a video: a 120 × 120 picture or video (playing without sound) on
- * the left instead (Google asks for the ad's picture in its own MediaView, and a video no smaller than that).
+ * the left instead (Google asks for the ad's picture in its own MediaView, and a video no smaller than that). [small]:
+ * an ad of pictures only, so the row stays slim between accounts.
  */
 @Composable
-fun NativeAdCard(place: String, modifier: Modifier = Modifier, video: Boolean = false, round: Boolean = true) {
+fun NativeAdCard(place: String, modifier: Modifier = Modifier, video: Boolean = false, round: Boolean = true, small: Boolean = false) {
     val context = LocalContext.current
     var ad by remember(place) { mutableStateOf<NativeAd?>(null) }
     DisposableEffect(place, Ads.ready) {
-        Ads.native(context, place) { ad = it }
+        Ads.native(context, place, small) { ad = it }
         onDispose { }
     }
     val shown = ad?.takeIf { !Ads.resting } ?: return
