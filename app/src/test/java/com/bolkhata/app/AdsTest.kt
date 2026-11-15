@@ -11,4 +11,9 @@ class AdsTest {
         assertEquals(0, adTapsOn("20261116", "20261115", 3))
         assertEquals(0, adTapsOn("20261115", "", 0))
     }
+
+    @Test
+    fun adsBetweenRowsTakeTurns() {
+        assertEquals(listOf(true, false, true, false), (1..4).map { videoTurn(it) })
+    }
 }

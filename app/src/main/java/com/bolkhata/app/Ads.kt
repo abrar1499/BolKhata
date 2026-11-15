@@ -108,6 +108,9 @@ object Ads {
  * an ad of pictures only, so the row stays slim between accounts and at the end of a list. [big]: the card under a
  * short list, with the picture or video across it.
  */
+/** Ads between rows take turns, counted from 1: a video card first, then a slim picture, and so on. */
+fun videoTurn(nth: Int) = nth % 2 == 1
+
 @Composable
 fun NativeAdCard(place: String, modifier: Modifier = Modifier, video: Boolean = false, round: Boolean = true, small: Boolean = false, big: Boolean = false) {
     val context = LocalContext.current

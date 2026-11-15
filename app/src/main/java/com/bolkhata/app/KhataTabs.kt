@@ -498,8 +498,12 @@ internal fun LazyListScope.ledger(
     var days = 0
     rows.forEachIndexed { i, r ->
         if (i == 0 || !sameDay(rows[i - 1].date, r.date)) {
-            // A quiet ad between days, every sixth day.
-            if (days > 0 && days % 6 == 0) item(key = keyPrefix + "ad" + days, contentType = "ad") { NativeAdCard("ledger-$keyPrefix$title-$days", Modifier.padding(horizontal = 10.dp, vertical = 6.dp), video = true, round = false) }
+            // An ad between days, every third day: a video card and a slim picture in turn.
+            if (days > 0 && days % 3 == 0) {
+                val n = days
+                val video = videoTurn(n / 3)
+                item(key = keyPrefix + "ad" + n, contentType = "ad") { NativeAdCard("ledger-$keyPrefix$title-$n", Modifier.padding(horizontal = 10.dp, vertical = 6.dp), video = video, round = false, small = !video) }
+            }
             days++
             val day = byDay[dayNumber(r.date)].orEmpty()
             item(key = keyPrefix + "d" + r.key) { DayLine(r.date, cols, day, cards) }
@@ -508,8 +512,7 @@ internal fun LazyListScope.ledger(
         val last = i == rows.lastIndex || (cards && !sameDay(rows[i + 1].date, r.date))
         item(key = keyPrefix + r.key) { LedgerRow(r, cols, last, cards) }
     }
-    // The banner at the end of the list, seen only by scrolling down.
-    // At the end of the list: the same card as between the days (picture or video), square like the sheet above it.
+    // At the end of the list: a video card, square like the sheet above it.
     if (rows.isNotEmpty()) item(key = keyPrefix + "banner", contentType = "ad") { NativeAdCard("ledger-end-$keyPrefix$title", Modifier.padding(horizontal = 10.dp, vertical = 10.dp), video = true, round = false) }
 }
 
@@ -1238,6 +1241,11 @@ fun SideScreen(
                             fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
                         )
                     } else item(key = "addkid") { DashedAdd("+ Add in ${book.name}") { adding = "kid" } }
+                    // Under the things, as under the accounts: the big card with three or fewer, else a video card.
+                    if (kids.isNotEmpty()) item(key = "kend", contentType = "ad") {
+                        if (kids.size <= 3) NativeAdCard("kids-big-${book.name}", Modifier.padding(horizontal = 10.dp, vertical = 10.dp), big = true)
+                        else NativeAdCard("kids-end-${book.name}", Modifier.padding(horizontal = 12.dp, vertical = 10.dp), video = true)
+                    }
                 }
                 else -> {
                     stickyHeader { TabHead {
@@ -1301,11 +1309,10 @@ fun SideScreen(
                     }
                     if (shown.isEmpty()) emptyNote("Nothing found")
                     item(key = "addbook") { DashedAdd("+ Add account") { adding = "book" } }
-                    // A few accounts leave room: the bigger banner (300 × 250); a long list, the slim one.
-                    // Under the accounts: with three or fewer there is room for the big card (picture or video); else a slim picture ad.
+                    // Under the accounts: with three or fewer there is room for the big card; else a video card.
                     if (shown.isNotEmpty()) item(key = "banner", contentType = "ad") {
                         if (shown.size <= 3) NativeAdCard("accounts-big-$side", Modifier.padding(horizontal = 10.dp, vertical = 10.dp), big = true)
-                        else NativeAdCard("accounts-end-$side", Modifier.padding(horizontal = 12.dp, vertical = 10.dp), small = true)
+                        else NativeAdCard("accounts-end-$side", Modifier.padding(horizontal = 12.dp, vertical = 10.dp), video = true)
                     }
                 }
             }

@@ -82,7 +82,7 @@ fun ChatScreen(
     var confirmShare by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val byId = remember(entries) { entries.associateBy { it.id } }
-    val adAfter = remember(messages) { messages.filter { !it.isUser }.map { it.id }.filterIndexed { i, _ -> i % 8 == 7 }.toSet() }
+    val adAfter = remember(messages) { messages.filter { !it.isUser }.map { it.id }.filterIndexed { i, _ -> i % 5 == 4 }.withIndex().associate { (n, id) -> id to videoTurn(n + 1) } }
     val itemCount = messages.size + (if (messages.isEmpty()) 1 else 0) + (if (loading) 1 else 0) +
         (if (suggestions.isNotEmpty()) 1 else 0) + (if (imports.isNotEmpty()) 1 else 0) + (if (pendingChanges.isNotEmpty()) 1 else 0)
 
@@ -204,7 +204,7 @@ fun ChatScreen(
                                 modifier = Modifier.padding(start = 14.dp, top = 3.dp))
                         }
                         // Now and then (every eighth answer) a quiet ad under the answer: always the same card, picture or video.
-                        if (message.id in adAfter) NativeAdCard("chat-" + message.id, Modifier.padding(top = 6.dp), video = true)
+                        adAfter[message.id]?.let { video -> NativeAdCard("chat-" + message.id, Modifier.padding(top = 6.dp), video = video, small = !video) }
                     }
                     }
                 }
