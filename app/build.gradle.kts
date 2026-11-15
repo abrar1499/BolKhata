@@ -107,6 +107,9 @@ dependencies {
     implementation("com.tom-roush:pdfbox-android:2.0.27.0")
     // Bundled Latin OCR model: text recognition works without a network request at runtime.
     implementation("com.google.mlkit:text-recognition:16.0.1")
+    // Other languages: a message is turned into English on the phone, and the language of a message is told (see Lingo).
+    implementation("com.google.mlkit:translate:17.0.3")
+    implementation("com.google.mlkit:language-id:17.0.6")
     // Sign in with Google and sync to the person's own Google Drive (hidden app folder).
     implementation("com.google.android.gms:play-services-auth:21.4.0")
     // Quiet ads (see Ads.kt): native cards and a banner from Google AdMob.

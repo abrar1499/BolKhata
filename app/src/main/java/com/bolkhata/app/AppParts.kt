@@ -208,7 +208,8 @@ internal fun SideMenu(
     /** Test feature: the AI key row (null: not in this build). */
     ai: AiKeys? = null, onAiOpen: () -> Unit = {}, aiModels: (String) -> List<String> = { emptyList() },
     onAiSave: (name: String, key: String, model: String) -> Unit = { _, _, _ -> }, onAiSwitch: (name: String, on: Boolean) -> Unit = { _, _ -> },
-    /** Whether a token for the shared brain is saved, and saving one ("" removes it). */
+    /** The other language picked last (see Lingo), kept in the short Language list. */
+    moreLang: String = "",
     onSignIn: () -> Unit = {}, onSyncNow: () -> Unit = {}, onSignOut: () -> Unit = {},
     /** 20 quick taps on the menu's empty space. */
     onSecret: () -> Unit = {}
@@ -309,11 +310,31 @@ internal fun SideMenu(
                 }
                 Box {
                     var open by remember { mutableStateOf(false) }
-                    val langs = listOf("" to "Auto", "hi-IN" to "Roman Urdu", "en-US" to "English", "ur-PK" to "Urdu")
-                    MenuRow(onClick = { open = true }) { MenuLabel("🌐", "Language"); MenuValue((langs.firstOrNull { it.first == lang }?.second ?: "Auto") + " ▾") }
+                    var more by remember { mutableStateOf(false) }
+                    // The four the app reads itself, the other language picked last (see Lingo), then the way to all the rest.
+                    val langs = listOf("" to "Auto", "hi-IN" to "Roman Urdu", "en-US" to "English", "ur-PK" to "Urdu") +
+                        (if (moreLang.isBlank()) emptyList() else listOf(moreLang to Lingo.name(moreLang)))
+                    val now = langs.firstOrNull { it.first == lang }?.second ?: "Auto"
+                    val code = Lingo.code(lang)
+                    val busy = code.isNotBlank() && Lingo.loading == code
+                    val ready = code.isNotBlank() && Lingo.arrived == code
+                    LaunchedEffect(ready) { if (ready) { kotlinx.coroutines.delay(1500); Lingo.seen() } }
+                    MenuRow(onClick = { open = true }) {
+                        Column(Modifier.weight(1f)) {
+                            Text("🌐 Language", fontSize = 13.sp, maxLines = 1)
+                            // Under it: the pack's size while it comes down, then Ready for a moment.
+                            if (busy) Text("Downloading · 30 MB", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 22.dp))
+                            else if (ready) Text("✓ Ready", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = GreenIn, modifier = Modifier.padding(start = 22.dp))
+                        }
+                        if (busy) CircularProgressIndicator(Modifier.padding(end = 6.dp).size(14.dp), color = EmberTop, strokeWidth = 2.dp, trackColor = Color(0xFFE3DFD9))
+                        MenuValue("$now ▾")
+                    }
                     // The language's name shows (the code means nothing to people).
-                    CompactPicker(open, langs.map { it.second to "" }, langs.firstOrNull { it.first == lang }?.second ?: "Auto",
-                        search = false, onDismiss = { open = false }) { picked -> onLang(langs.first { it.second == picked }.first); open = false }
+                    CompactPicker(open, langs.map { it.second to "" } + ("More languages…" to ""), now, search = false, onDismiss = { open = false }) { picked ->
+                        open = false
+                        if (picked == "More languages…") more = true else onLang(langs.first { it.second == picked }.first)
+                    }
+                    if (more) LanguageSheet("Language for the mic", base = false, current = lang, onClose = { more = false }) { more = false; onLang(it) }
                 }
                 MenuRow(onClick = null) {
                     MenuLabel("🖌", "Header")
@@ -406,6 +427,46 @@ private fun AiKeysSheet(ai: AiKeys, models: (String) -> List<String>, onSave: (S
                     }
                     AiBoxCard(i + 1, p, box, status, models(p.name), { k, m -> onSave(p.name, k, m) }) { onSwitch(p.name, it) }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Every language to pick from, in a sheet of the page's colour: a search box, then one line per language with its name
+ * in its own writing on the right. [base]: the four the app reads itself come first (the mic's first question).
+ */
+@Composable
+internal fun LanguageSheet(title: String, base: Boolean, current: String, onClose: () -> Unit, onPick: (String) -> Unit) {
+    val all = remember(base) {
+        (if (base) listOf(Lingo.Lang("", "Auto", "your phone's language"), Lingo.Lang("hi-IN", "Roman Urdu", ""),
+            Lingo.Lang("en-US", "English", ""), Lingo.Lang("ur-PK", "Urdu", "اردو")) else emptyList()) + Lingo.all()
+    }
+    var q by remember { mutableStateOf("") }
+    val shown = all.filter { q.isBlank() || it.name.contains(q.trim(), true) || it.local.contains(q.trim(), true) }
+    val sub = MaterialTheme.colorScheme.onSurfaceVariant
+    Dialog(onDismissRequest = onClose) {
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(LocalPage.current).padding(12.dp)) {
+            Text(title, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 4.dp, top = 2.dp, bottom = 8.dp))
+            BasicTextField(
+                q, { q = it }, singleLine = true, textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface),
+                modifier = Modifier.fillMaxWidth().height(38.dp).fieldEdge(RoundedCornerShape(16.dp)).padding(horizontal = 14.dp).wrapContentHeight(Alignment.CenterVertically),
+                decorationBox = { f -> Box { if (q.isEmpty()) Text("Search language", fontSize = 13.sp, color = sub.copy(alpha = 0.6f)); f() } }
+            )
+            androidx.compose.foundation.lazy.LazyColumn(
+                Modifier.padding(top = 8.dp).fillMaxWidth().heightIn(max = 420.dp).clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.surface)
+            ) {
+                items(shown.size) { i ->
+                    val l = shown[i]
+                    val on = l.code == current
+                    if (i > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                    Row(Modifier.fillMaxWidth().clickable { onPick(l.code) }.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(l.name, fontSize = 13.5.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
+                            color = if (on) RedSpend else MaterialTheme.colorScheme.onSurface, maxLines = 1, modifier = Modifier.weight(1f))
+                        Text(l.local, fontSize = 11.5.sp, color = sub, maxLines = 1)
+                    }
+                }
+                if (shown.isEmpty()) item { Text("No language like that", fontSize = 12.5.sp, color = sub, modifier = Modifier.fillMaxWidth().padding(18.dp)) }
             }
         }
     }

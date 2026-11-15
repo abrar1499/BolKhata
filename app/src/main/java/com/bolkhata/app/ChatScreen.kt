@@ -64,6 +64,8 @@ fun ChatScreen(
     onEditEntry: (Entry) -> Unit,
     /** An option card was answered: the entry to save for that message, or null when it was closed. */
     onAsked: (id: String, e: Entry?) -> Unit = { _, _ -> },
+    /** The offer of a language pack was answered: its code to bring it down, "" for no. */
+    onLanguage: (String) -> Unit = {},
     onAddSuggestions: (List<Entry>) -> Unit,
     onIgnoreSuggestions: (Set<String>) -> Unit,
     imports: List<Entry> = emptyList(),
@@ -167,7 +169,10 @@ fun ChatScreen(
                     // Level with the answer card's top, as the mock.
                     GlassLogo(22.dp, Modifier.padding(top = 2.dp))
                     Column(Modifier.weight(1f)) {
-                        if (message.entryIds.isEmpty() && message.meta.startsWith("ask=")) OptionCard(message, byId.values) { onAsked(message.id, it) }
+                        // "This looks like Dutch. Download Dutch…" on the last answer: the question with its two answers.
+                        val offer = if (message == messages.lastOrNull()) Regex("""offer=(\w+)""").find(message.meta)?.groupValues?.get(1).orEmpty() else ""
+                        if (offer.isNotBlank()) OfferCard(message.text, onYes = { onLanguage(offer) }, onNo = { onLanguage("") })
+                        else if (message.entryIds.isEmpty() && message.meta.startsWith("ask=")) OptionCard(message, byId.values) { onAsked(message.id, it) }
                         else if (message.entryIds.isNotEmpty()) SavedCard(message, byId, currency, onUndo, onEditEntry)
                         // The AI's own sentences ("plain") are never read as a report.
                         else remember(message.text, currency) { if (message.meta.contains("; plain")) null else Report.parse(message.text, currency) }
@@ -859,6 +864,24 @@ private fun Working(label: String) {
                 androidx.compose.animation.core.tween(500), androidx.compose.animation.core.RepeatMode.Reverse,
                 androidx.compose.animation.core.StartOffset(i * 200)), label = "dot$i")
             Box(Modifier.padding(start = 2.dp).size(3.dp).graphicsLayer { alpha = on }.clip(CircleShape).background(MaterialTheme.colorScheme.onSurfaceVariant))
+        }
+    }
+}
+
+/** The chat's offer of a language pack: the question, then Download and No as two white buttons in the same card. */
+@Composable
+private fun OfferCard(text: String, onYes: () -> Unit, onNo: () -> Unit) {
+    Column(
+        Modifier.padding(start = 8.dp).widthIn(max = 320.dp).shadow(1.dp, BotShape).clip(BotShape)
+            .background(MaterialTheme.colorScheme.surface).padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 10.dp)
+    ) {
+        Text(text, color = MaterialTheme.colorScheme.onSurface, fontSize = 13.sp, lineHeight = 17.5.sp)
+        Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("Download" to onYes, "No" to onNo).forEach { (word, tap) ->
+                Text(word, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF1D1D1F),
+                    modifier = Modifier.shadow(3.dp, RoundedCornerShape(16.dp)).clip(RoundedCornerShape(16.dp)).background(Color.White)
+                        .clickable { tap() }.padding(horizontal = 16.dp, vertical = 7.dp))
+            }
         }
     }
 }
