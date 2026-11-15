@@ -66,8 +66,10 @@ object Ads {
      * True once this phone tapped ads [AD_TAPS_A_DAY] times today: no ad is drawn or fetched until tomorrow. It keeps the
      * account safe from someone tapping the ads again and again on purpose; a real reader never gets that far.
      */
-    var resting by mutableStateOf(false)
-        private set
+    val resting: Boolean get() = restDay == today()
+
+    /** The day the taps ran out; the next day the ads are back by themselves, also when the app was left open overnight. */
+    private var restDay by mutableStateOf("")
 
     private fun today() = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(java.util.Date())
     private fun saved(c: Context) = c.getSharedPreferences("ads", Context.MODE_PRIVATE)
@@ -79,13 +81,13 @@ object Ads {
             val c = context.applicationContext
             val n = tapsToday(c) + 1
             saved(c).edit().putString("day", today()).putInt("taps", n).apply()
-            if (n >= AD_TAPS_A_DAY) resting = true
+            if (n >= AD_TAPS_A_DAY) restDay = today()
         }
     }
 
     /** Asks for consent where the law needs it (Google's form, set in AdMob › Privacy & messaging), then starts the ads. */
     fun start(activity: Activity) {
-        resting = tapsToday(activity) >= AD_TAPS_A_DAY
+        restDay = if (tapsToday(activity) >= AD_TAPS_A_DAY) today() else ""
         val info = UserMessagingPlatform.getConsentInformation(activity)
         fun go() { if (info.canRequestAds() && !ready) { MobileAds.initialize(activity) {}; ready = true } }
         info.requestConsentInfoUpdate(activity, ConsentRequestParameters.Builder().build(),
