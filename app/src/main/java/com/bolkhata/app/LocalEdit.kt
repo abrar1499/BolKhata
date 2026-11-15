@@ -171,7 +171,7 @@ object LocalEdit : LocalAgent.Reader {
             val second = account(again(m, w.drop(cut + 1).joinToString(" ") + if (w.drop(cut + 1).none { it in putWords || it in doWords }) " daal do" else ""))
             return LocalAgent.Reply(listOfNotNull(first.text, second?.text).joinToString(" "))
         }
-        val into = w.getOrNull(at.last + 1) in inWords + putWords + makeWords || w.getOrNull(at.first - 1) in setOf("in", "into", "to", "as", "a", "an")
+        val into = w.getOrNull(at.last + 1) in inWords + putWords + makeWords + openWords || w.getOrNull(at.first - 1) in setOf("in", "into", "to", "as", "a", "an")
         val out = w.getOrNull(at.last + 1) in setOf("se", "say", "sy", "from") && w.any { it in outWords || isDelete(it) }
         val put = w.any { it in putWords || it in doWords }
         val state = w.any { it in isWords } && !w.any { isDelete(it) }
@@ -219,7 +219,7 @@ object LocalEdit : LocalAgent.Reader {
         // "aur us mein akbar ko daal do": the people part, after the account's name.
         val join = w.indices.firstOrNull { i -> i > khata && w[i] in setOf("aur", "or", "and", "jis", "with") }
         val head = if (join != null) w.subList(0, join) else w
-        val nameWords = head.filter { it !in accountFiller && it !in khataWords && it !in makeWords && it !in newWords && it !in expenseWords && it !in incomeWords && it !in doWords }
+        val nameWords = head.filter { it !in accountFiller && it !in khataWords && it !in makeWords && it !in openWords && it !in newWords && it !in expenseWords && it !in incomeWords && it !in doWords }
         if (nameWords.isEmpty()) return LocalAgent.Reply("What should the new account be called?")
         val name = title(nameWords.joinToString(" "))
         val tail = if (join != null) Msg(m.s, w.subList(join + 1, w.size).joinToString(" "), w.subList(join + 1, w.size).joinToString(" ")) else null
@@ -937,7 +937,9 @@ object LocalEdit : LocalAgent.Reader {
     private val monthNames = setOf("january", "jan", "february", "feb", "march", "mar", "april", "apr", "may", "june", "jun", "july", "jul", "august", "aug",
         "september", "sep", "sept", "october", "oct", "november", "nov", "december", "dec")
     private val khataWords = setOf("khata", "khate", "khaata", "khatta", "khaate", "khatay", "account", "accounts", "ledger")
-    private val makeWords = setOf("bana", "banao", "banado", "banaen", "banayen", "banaye", "bnao", "bnado", "banana", "banaiye", "create", "make", "open", "kholo", "khol", "add")
+    private val makeWords = setOf("bana", "banao", "banado", "banaen", "banayen", "banaye", "bnao", "bnado", "banana", "banaiye", "create", "make", "add")
+    /** "hamid ka khata kholo", "open hamid's account": to look at an account, not to make one (that takes "naya" or "new" with it). */
+    private val openWords = setOf("open", "kholo", "khol")
     private val putWords = setOf("daal", "dal", "daalo", "dalo", "daldo", "daaldo", "dalna", "daalna", "dalden", "daalden", "rakh", "rakho", "rakhdo", "add", "put", "move",
         "shift", "bhej", "bhejo", "include", "shamil", "mila", "milao", "bana", "banao", "banado")
     private val outWords = setOf("nikal", "nikalo", "nikaldo", "hata", "hatao", "hatado", "remove")
@@ -971,7 +973,7 @@ object LocalEdit : LocalAgent.Reader {
     /** Every word these messages use to say what to do, never a thing or a name. */
     private val keywords = glueWords + pronouns + pastWords + isWords + noWords + doWords + yesWords + politeWords + allWords + entryWords + backWords +
         bringWords + askWords + fieldWords + rateWords + moneyWords + newWords + giveWords + takeWords + loanWords + minuteWords + hourWords + jagahWords +
-        dateWords + monthWords + weekWords + khataWords + makeWords + putWords + outWords + inWords + expenseWords + incomeWords + nameWords + deleteWords + oneWords +
+        dateWords + monthWords + weekWords + khataWords + makeWords + openWords + putWords + outWords + inWords + expenseWords + incomeWords + nameWords + deleteWords + oneWords +
         markers + accountFiller + usualBooks.values.flatten()
     private val notNames = keywords + groupWords + setOf("advance", "udhaar", "udhar", "wapis", "kaam", "kam", "work", "sale",
         "becha", "rename", "merge", "same", "ban", "bane", "gaye", "mujhe", "mujh", "hum", "hamein", "apna", "apni", "dono", "sath", "saath", "sahab", "sahib",

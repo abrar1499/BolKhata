@@ -114,7 +114,8 @@ class LocalAskTest {
     }
 
     @Test
-    fun accountShowsEntriesWithTheBalanceOnTop() = listOf("hamid ka hisab batao", "hamid ka khata dikhao", "hamid ka account", "hamid", "hamid ka hisaab dikhaoo").forEach {
+    fun accountShowsEntriesWithTheBalanceOnTop() = listOf("hamid ka hisab batao", "hamid ka khata dikhao", "hamid ka account", "hamid", "hamid ka hisaab dikhaoo",
+        "hamid ka khata kholo", "hamid ka khata open karo", "open hamid account", "hamid ka khata khol do").forEach {
         val o = ask(it)
         assertTrue("$it -> ${o.card}", o.card.startsWith("Hamid Akram will pay you 30,000 PKR\n"))
         assertTrue(o.card.contains("Kachi eent"))

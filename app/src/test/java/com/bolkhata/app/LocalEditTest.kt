@@ -425,4 +425,18 @@ class LocalEditTest {
     @Test fun moreAfterASaveIsLeft() = listOf("hamid ko 250 diye", "us ne 10000 diye", "hamid ko 500 aur diye", "kal hamid ko 300 diye the", "petrol 70 tha").forEach { text ->
         leaves(text) { saved("hamid ko 250 diye", lent("j1", "Hamid Akram", 250.0)) }
     }
+
+    /** "Open" and "kholo" mean show the account: LocalEdit leaves the message to the look-ups and makes nothing. */
+    @Test
+    fun openOrKholoLooksAtAnAccountAndMakesNone() = Books().run {
+        listOf("hamid ka khata kholo", "open hamid account", "petrol ka khata khol do", "zubair ka khata open karo").forEach { assertNull(it, say(it)) }
+        assertEquals(Sides.STAFF, bookOf("Hamid Akram"))
+        assertEquals(base, entries.map { it.id }.toSet())
+    }
+
+    @Test
+    fun aNewAccountCanStillBeOpened() = Books().run {
+        say("diesel ka naya expense khata kholo")
+        assertTrue("add_account" in tools)
+    }
 }
