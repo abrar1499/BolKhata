@@ -639,7 +639,7 @@ class Store(context: Context) {
     fun saveAiModels(name: String, models: List<String>) = prefs.edit().putString("aiModels.$name", models.joinToString("\n")).apply()
     /** Whether the AI row shows in the side menu (20 taps on the empty space below it turn it and the AI on or off). */
     var aiShown: Boolean
-        get() = prefs.getBoolean("aiShown", false)
+        get() = prefs.getBoolean("aiShown", true)
         set(v) = prefs.edit().putBoolean("aiShown", v).apply()
     /** The tokens the AI used so far. */
     var llmIn: Long
@@ -692,10 +692,6 @@ class Store(context: Context) {
             o.keys().asSequence().associateWith { o.getString(it) }
         }.getOrDefault(emptyMap())
         set(v) = prefs.edit().putString("brain", org.json.JSONObject(v).toString()).apply()
-    /** The owner's GitHub token for the shared brain repository only (see Brain.publish); kept on this phone only. */
-    var brainToken: String
-        get() = prefs.getString("brainToken", "") ?: ""
-        set(v) = prefs.edit().putString("brainToken", v.trim()).apply()
     /** The learnt lessons last sent to the shared brain, so they are sent again only when they change. */
     var learnedSent: String
         get() = prefs.getString("learnedSent", "") ?: ""

@@ -209,7 +209,6 @@ internal fun SideMenu(
     ai: AiKeys? = null, onAiOpen: () -> Unit = {}, aiModels: (String) -> List<String> = { emptyList() },
     onAiSave: (name: String, key: String, model: String) -> Unit = { _, _, _ -> }, onAiSwitch: (name: String, on: Boolean) -> Unit = { _, _ -> },
     /** Whether a token for the shared brain is saved, and saving one ("" removes it). */
-    brainSet: Boolean = false, onBrainToken: (String) -> Unit = {},
     onSignIn: () -> Unit = {}, onSyncNow: () -> Unit = {}, onSignOut: () -> Unit = {},
     /** 20 quick taps on the menu's empty space. */
     onSecret: () -> Unit = {}
@@ -218,7 +217,7 @@ internal fun SideMenu(
     val secret = remember { longArrayOf(0, 0) }
     var driveOpen by remember { mutableStateOf(false) }
     var aiOpen by remember { mutableStateOf(false) }
-    if (aiOpen && ai != null) AiKeysSheet(ai, aiModels, onAiSave, onAiSwitch, brainSet, onBrainToken) { aiOpen = false }
+    if (aiOpen && ai != null) AiKeysSheet(ai, aiModels, onAiSave, onAiSwitch) { aiOpen = false }
     if (driveOpen) {
         // The app's own popup: the Gmail in a white box, then Sign out and Sync now.
         AppPopup("Google Drive", "Sync now", onDismiss = { driveOpen = false }, onAction = { driveOpen = false; onSyncNow() },
@@ -366,7 +365,7 @@ private val aiLook = mapOf(
 /** The AI keys page: one box per provider, best first; the ones turned on answer in that order, each handing over to the next. */
 @Composable
 private fun AiKeysSheet(ai: AiKeys, models: (String) -> List<String>, onSave: (String, String, String) -> Unit, onSwitch: (String, Boolean) -> Unit,
-    brainSet: Boolean, onBrainToken: (String) -> Unit, onClose: () -> Unit) {
+    onClose: () -> Unit) {
     val sub = MaterialTheme.colorScheme.onSurfaceVariant
     val live = ai.live()
     val now = live.firstOrNull { it.name == ai.answered } ?: live.firstOrNull { it.name !in ai.failed }
@@ -407,29 +406,6 @@ private fun AiKeysSheet(ai: AiKeys, models: (String) -> List<String>, onSave: (S
                     }
                     AiBoxCard(i + 1, p, box, status, models(p.name), { k, m -> onSave(p.name, k, m) }) { onSwitch(p.name, it) }
                 }
-                // The shared brain: with its token, what the app learns from the AI goes to every install by itself. One short row; a tap opens it.
-                var brainOpen by remember { mutableStateOf(false) }
-                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surface)
-                    .clickable { brainOpen = !brainOpen }.padding(horizontal = 12.dp, vertical = 7.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(26.dp).clip(RoundedCornerShape(8.dp)).background(LocalPage.current), contentAlignment = Alignment.Center) { Text("🧠", fontSize = 14.sp) }
-                        Column(Modifier.padding(start = 8.dp).weight(1f)) {
-                            Text("Brain", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                            Text(if (brainSet) "On · what the app learns is shared by itself" else "Paste the GitHub token of the brain repository",
-                                fontSize = 10.sp, color = if (brainSet) GreenIn else sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                        Text(if (brainOpen) "▴" else "▾", fontSize = 11.sp, color = sub)
-                    }
-                    if (brainOpen) {
-                        var token by remember { mutableStateOf("") }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            WellField(token, { token = it.trim() }, if (brainSet) "Token saved · paste to change" else "github_pat_…", Modifier.weight(1f), small = true)
-                            Text("Save", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF1D1D1F), modifier = Modifier.padding(start = 6.dp, top = 6.dp)
-                                .shadow(3.dp, RoundedCornerShape(16.dp)).clip(RoundedCornerShape(16.dp)).background(Color.White)
-                                .clickable { if (token.isNotBlank()) { onBrainToken(token); token = "" } }.padding(horizontal = 14.dp, vertical = 7.dp))
-                        }
-                    }
-                }
             }
         }
     }
@@ -465,7 +441,7 @@ private fun AiBoxCard(n: Int, p: Ai.Provider, box: AiBox, status: Pair<String, C
             }
         }
         if (open) {
-            WellField(key, { key = it.trim() }, if (box.key.isBlank()) "Paste ${p.name} key" else box.key.take(6) + "••••••" + box.key.takeLast(3), small = true)
+            WellField(key, { key = it.trim() }, "Paste API key", small = true)
             Row(Modifier.padding(top = 5.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.weight(1f)) {
                     Row(Modifier.fillMaxWidth().fieldEdge(RoundedCornerShape(12.dp)).clickable { pick = true }.padding(horizontal = 12.dp, vertical = 7.dp),

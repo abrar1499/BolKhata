@@ -1487,7 +1487,8 @@ internal fun WellField(value: String, onChange: (String) -> Unit, hint: String, 
         // White with a soft edge, like the search box: every popup's fields look the same.
         modifier.padding(top = if (small) 6.dp else 10.dp).fillMaxWidth().fieldEdge(RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = if (small) 7.dp else 11.dp)
     ) {
-        if (value.isEmpty()) Text(hint, style = style.copy(color = MaterialTheme.colorScheme.onSurfaceVariant))
+        // In the small field the hint is fainter, so it reads as "put it here", not as something already typed.
+        if (value.isEmpty()) Text(hint, style = style.copy(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (small) 0.6f else 1f)), maxLines = 1)
         BasicTextField(
             value, { v -> onChange(if (number) v.filter { it.isDigit() || it == '.' } else v) }, singleLine = true, textStyle = style,
             cursorBrush = SolidColor(EmberTop), modifier = Modifier.fillMaxWidth(),
