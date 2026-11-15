@@ -129,6 +129,11 @@ fun App(
     var currency by remember { mutableStateOf(store.currency) }
     var name by remember { mutableStateOf(store.name) }
     var lang by remember { mutableStateOf(store.language) }
+    var moreLang by remember { mutableStateOf(store.moreLanguage) }
+    // The mic's first question: which language will be spoken.
+    var askLang by remember { mutableStateOf(false) }
+    // "Dutch → I paid 20 for petrol": what a translated message was read as, shown small under the answer to it.
+    val sayNote = remember { arrayOf("") }
     val tabNav = remember { TabNav() }
     var tab by tabNav
     // The status bar is see-through: the theme band shows through it on the khata tabs, the page colour elsewhere.
@@ -1174,6 +1179,13 @@ fun App(
 
     /** Adds a message to the chat and keeps it on the phone. */
     fun postChat(text: String, isUser: Boolean, entryIds: List<String> = emptyList(), attachment: String = "", meta: String = "", listIds: List<String> = emptyList()) {
+        // The answer to a translated message carries what it was read as, in its small line (option cards have none).
+        val note = if (isUser || meta.startsWith("ask=")) "" else sayNote[0].also { sayNote[0] = "" }
+        val noted = when {
+            note.isBlank() -> meta
+            "usage=" in meta -> meta.replace(Regex("""usage=([^;]+)""")) { "usage=" + it.groupValues[1] + " · " + note }
+            else -> meta + (if (meta.isBlank()) "" else "; ") + "usage=" + note
+        }
         val message = ChatMessage(
             listIds = listIds,
             id = "chat-" + System.currentTimeMillis() + "-" + System.nanoTime(),
@@ -1181,7 +1193,7 @@ fun App(
             text = text,
             entryIds = entryIds,
             attachment = attachment,
-            meta = meta
+            meta = noted
         )
         chatLog.record(message)
         val updated = chatMessages + message
@@ -1306,8 +1318,10 @@ fun App(
     /**
      * The app's own assistant answers first; the AI only when it cannot. [retry]: the same message again after 👎 on
      * the app's answer, straight to the AI (not shown twice), so the AI's right reading is learnt for next time.
+     * [said]: the person's own words when [raw] is their translation (see chatSay); [quiet]: their words are in the
+     * chat already.
      */
-    fun chatInput(raw: String, retry: Boolean = false) {
+    fun chatInput(raw: String, retry: Boolean = false, said: String = "", quiet: Boolean = false) {
         if (chatMessages.isEmpty()) lastGroqQuery = ""
         val text = raw.trim()
         if (text.isEmpty() || chatLoading) return
@@ -1320,7 +1334,7 @@ fun App(
                 latestAssistant.entryIds.isNotEmpty(), text, System.currentTimeMillis()
             )
         ) {
-            postChat(text, isUser = true)
+            if (!quiet) postChat(said.ifBlank { text }, isUser = true)
             postChat("That's already done. Say 'add another' for one more.", isUser = false)
             return
         }
@@ -1329,7 +1343,7 @@ fun App(
         val history = chatMessages.takeLast(60)
         // What is said in live voice is kept for the AI's memory of the talk, but not shown.
         val live = liveSay[0]
-        if (!retry) postChat(text, isUser = true, attachment = voiceNote[0].orEmpty(), meta = if (live) "live" else "")
+        if (!retry && !quiet) postChat(said.ifBlank { text }, isUser = true, attachment = voiceNote[0].orEmpty(), meta = if (live) "live" else "")
         voiceNote[0] = null
         liveSay[0] = false
 
@@ -1609,9 +1623,18 @@ fun App(
                 val lost = reply?.startsWith("Sorry, I didn't get that") == true
                 // Both AI keys failed and the app alone could not read it: the reason is said, so it can be fixed.
                 if (lost && aiWhy.isNotBlank()) reply = "The AI did not answer ($aiWhy)."
+                // A full sentence the app could not read, clearly in another language: the chat offers that language's pack.
+                var offer = ""
+                if (lost && aiWhy.isBlank() && !live && text.length >= 12 && text.count { it == ' ' } >= 2) {
+                    val code = Lingo.guess(text)
+                    if (code.isNotBlank() && code != Lingo.code(lang)) {
+                        offer = "; offer=$code"
+                        reply = "This looks like ${Lingo.name(code)}. Download ${Lingo.name(code)} (30 MB) so I can read it?"
+                    }
+                }
                 if (!reply.isNullOrBlank() && !(live && lost && aiWhy.isBlank())) {
                     lastSpeech = reply
-                    postChat(reply, isUser = false, meta = trace, listIds = listedRows[0])
+                    postChat(reply, isUser = false, meta = trace + offer, listIds = listedRows[0])
                 }
             } catch (e: Exception) {
                 // With an AI key the reason is shown, so a failure can be understood and fixed.
@@ -1622,6 +1645,52 @@ fun App(
             } finally {
                 chatLoading = false
             }
+        }
+    }
+
+    /**
+     * What the person typed or said. In a language the app does not read itself (see Lingo) it is turned into English on
+     * the phone first; the chat shows their own words, and the answer's small line what they were read as. With an AI
+     * key the AI reads every language itself. [live]: a sentence of live voice.
+     */
+    fun chatSay(raw: String, live: Boolean = false) {
+        val code = Lingo.code(lang)
+        val text = raw.trim()
+        if (code.isBlank() || text.isEmpty() || chatLoading || Ai.handles(groqKey)) { liveSay[0] = live; chatInput(raw); liveSay[0] = false; return }
+        chatLoading = true
+        loadingLabel = "Typing…"
+        scope.launch {
+            val english = Lingo.toEnglish(code, text)?.trim().orEmpty()
+            chatLoading = false
+            liveSay[0] = live
+            if (english.isBlank()) chatInput(text)
+            else { sayNote[0] = (Lingo.name(code) + " → " + english).replace(';', ','); chatInput(english, said = text) }
+            liveSay[0] = false
+        }
+    }
+
+    /** Picks the language to listen in. Another language than the app's own stays in the short list, and its pack comes down at once ([fetch]). */
+    fun setLanguage(l: String, fetch: Boolean = true) {
+        lang = l; store.language = l
+        val code = Lingo.code(l)
+        if (code.isBlank()) return
+        moreLang = l; store.moreLanguage = l
+        if (fetch) scope.launch { Lingo.fetch(code) }
+    }
+
+    /** The answer to the chat's offer of a language pack: [code] to bring it down and read the message again, "" for no. */
+    fun answerOffer(code: String) {
+        val asked = chatMessages.lastOrNull { it.isUser }?.text.orEmpty()
+        chatMessages.lastOrNull()?.takeIf { !it.isUser && "offer=" in it.meta }?.let { o -> chatMessages = chatMessages - o; store.saveChatMessages(chatMessages) }
+        if (code.isBlank() || asked.isBlank()) { postChat("Okay. Try 'tea 5' or 'food this month'.", isUser = false); return }
+        setLanguage(code, fetch = false)
+        chatLoading = true
+        loadingLabel = "Downloading " + Lingo.name(code) + " · 30 MB…"
+        scope.launch {
+            val english = if (Lingo.fetch(code)) Lingo.toEnglish(code, asked)?.trim().orEmpty() else ""
+            chatLoading = false
+            if (english.isBlank()) postChat("Could not get " + Lingo.name(code) + ". Check the internet and try again.", isUser = false)
+            else { sayNote[0] = (Lingo.name(code) + " → " + english).replace(';', ','); chatInput(english, quiet = true) }
         }
     }
 
@@ -2359,6 +2428,8 @@ fun App(
     LaunchedEffect(chatLoading) { if (!chatLoading) listener.resume() }
 
     fun startVoice(forChat: Boolean = false) {
+        // The first time, the chat's mic asks which language will be spoken (it can only listen in one).
+        if (forChat && !store.micAsked && lang.isBlank()) { askLang = true; return }
         // Every mic listens live with the phone, also with a Groq key: the words go as soon as they are said.
         if (!android.speech.SpeechRecognizer.isRecognitionAvailable(context)) { toast("Google voice not found. Update the Google app from Play Store."); return }
         val granted = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) ==
@@ -2366,17 +2437,15 @@ fun App(
         if (!granted) { recordPermission.launch(android.Manifest.permission.RECORD_AUDIO); return }
         heardSoFar = ""
         listener.onListening = { hearing = it }
-        listener.onPartial = { heardSoFar = runCatching { Translit.toRoman(it) }.getOrDefault(it) }
+        listener.onPartial = { heardSoFar = if (Lingo.code(lang).isNotBlank()) it else runCatching { Translit.toRoman(it) }.getOrDefault(it) }
         listener.onLevel = { voiceLevel = it }
         listener.onError = { toast(it) }
         listener.onFinal = { said ->
             keepHearings(listOf(said), said)
             // With the AI reading it, the words go as heard; else the app's own voice fixes come first.
-            val fixed = if (Ai.handles(groqKey)) said else Normalizer.voiceFix(said, voiceKnown())
+            val fixed = if (Ai.handles(groqKey) || Lingo.code(lang).isNotBlank()) said else Normalizer.voiceFix(said, voiceKnown())
             if (forChat) {
-                liveSay[0] = true
-                chatInput(fixed)
-                liveSay[0] = false
+                chatSay(fixed, live = true)
                 // Answered on the spot (nothing is being worked on): listen for the next sentence at once.
                 if (!chatLoading) listener.resume()
             } else homeInput(fixed)
@@ -2471,7 +2540,7 @@ fun App(
                 onAddBusiness = { bizNew = true; bizPage = true; close() },
                 onBusinessPage = { bizPage = true; close() },
                 onCurrency = { c -> currency = c; store.currency = c; toast("✓ Currency set to $c") },
-                onLang = { lang = it; store.language = it },
+                onLang = { setLanguage(it) }, moreLang = moreLang,
                 onTheme = onTheme,
                 page = page, onPage = { onPhoto(""); onDark(false); onPage(it) },
                 onDark = { c -> onPhoto(""); onDark(true); onPage(c) },
@@ -2550,7 +2619,7 @@ fun App(
             if (main && tab == Tab.CHAT && !bizPage && !profitOpen) {
                 Column {
                     InputBar(
-                        onSend = { chatInput(it) }, onMic = { startVoice(forChat = true) }, placeholder = "Speak, type or ask…",
+                        onSend = { chatSay(it) }, onMic = { startVoice(forChat = true) }, placeholder = "Speak, type or ask…",
                         busy = chatLoading,
                         voice = if (recorder != null) VoiceState(true, "Recording", "tap to send", level = voiceLevel) { finishRecording() }
                             else if (hearing) VoiceState(true, if (listener.live && chatLoading) "Working" else "Listening", heardSoFar.ifBlank { "tap to send" },
@@ -2728,6 +2797,7 @@ fun App(
                         onMenu = { openMenu() },
                         business = businessName,
                         onSend = { chatInput(it) },
+                        onLanguage = { answerOffer(it) },
                         onClear = {
                             chatMessages = emptyList()
                             store.saveChatMessages(emptyList())
@@ -2969,6 +3039,11 @@ fun App(
                         )
                     }
                 }
+            }
+            if (askLang) LanguageSheet("Which language will you speak?", base = true, current = lang, onClose = { askLang = false; store.micAsked = true }) { l ->
+                askLang = false; store.micAsked = true
+                setLanguage(l)
+                startVoice(forChat = true)
             }
             if (confirmEmptyTrash) {
                 AppAlert(
