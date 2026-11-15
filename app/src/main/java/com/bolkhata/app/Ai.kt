@@ -22,14 +22,11 @@ object Ai {
     /** Groq models tried in turn when the one in use has reached its per-minute limit. */
     val GROQ_SPARE = listOf("openai/gpt-oss-20b", "llama-3.3-70b-versatile")
     val OPENROUTER = Provider("OpenRouter", "https://openrouter.ai/api/v1/chat/completions", "openrouter/free")
-    val GEMINI = Provider("Gemini", "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", "gemini-flash-latest")
     val OPENAI = Provider("ChatGPT", "https://api.openai.com/v1/chat/completions", "gpt-5-mini")
-    val CEREBRAS = Provider("Cerebras", "https://api.cerebras.ai/v1/chat/completions", "gpt-oss-120b")
-    val MISTRAL = Provider("Mistral", "https://api.mistral.ai/v1/chat/completions", "mistral-small-latest")
     /** Every provider with a box in the side menu, best first: the ones turned on answer in this order. */
-    val ALL = listOf(CLAUDE, OPENAI, GEMINI, GROQ, CEREBRAS, MISTRAL, OPENROUTER)
+    val ALL = listOf(CLAUDE, OPENAI, GROQ, OPENROUTER)
 
-    /** The keys saved in the side menu and whose they are (a Mistral key does not show it by how it starts). */
+    /** The keys saved in the side menu and whose they are. */
     @Volatile var saved: Map<String, Provider> = emptyMap()
     /** The keys turned on, best first, each with its model (blank: the usual one): when one does not answer, the next one does. */
     @Volatile var chain: List<Pair<String, String>> = emptyList()
@@ -57,8 +54,6 @@ object Ai {
             k.startsWith("sk-ant-") -> CLAUDE
             k.startsWith("gsk_") -> GROQ
             k.startsWith("sk-or-") -> OPENROUTER
-            k.startsWith("AIza") -> GEMINI
-            k.startsWith("csk-") -> CEREBRAS
             k.startsWith("sk-") -> OPENAI
             else -> null
         }
@@ -96,7 +91,6 @@ object Ai {
     /** Whether [m] is free on this provider's free plan, as far as the app knows. */
     fun free(p: Provider, m: String): Boolean = when (p) {
         CLAUDE, OPENAI -> false
-        GEMINI -> "pro" !in m
         OPENROUTER -> m == OPENROUTER.model || m.endsWith(":free")
         else -> true
     }
@@ -327,7 +321,7 @@ object Ai {
         return code to JSONObject().put("content", content).put("in", input).put("out", usage.optInt("output_tokens")).toString()
     }
 
-    /** Groq, OpenRouter, Gemini and ChatGPT all take the OpenAI chat format. */
+    /** Groq, OpenRouter and ChatGPT all take the OpenAI chat format. */
     private fun openAiLike(p: Provider, o: JSONObject): Pair<Int, String> {
         o.put("model", modelNow())
         if (p !== GROQ) {
