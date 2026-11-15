@@ -263,9 +263,16 @@ class AiEvalTest {
                 onTool = { name, input, result -> trace += "$name $input -> " + result.take(260) })
             // An overloaded or rate-limited moment is tried once more.
             val began = System.nanoTime()
-            val a = if (local) LocalAgent.run(turn.said, world.host, roman = roman, previous = picked, justSaved = justSaved, lastShown = lastShown, recent = recent,
+            var a = if (local) LocalAgent.run(turn.said, world.host, roman = roman, previous = picked, justSaved = justSaved, lastShown = lastShown, recent = recent,
                     onTool = { name, input, result -> trace += "$name $input -> " + result.take(260) })
                 else ask()?.also { seconds += (System.nanoTime() - began) / 1e9 } ?: run { Thread.sleep(4000); ask() }
+            // The app's own assistant asks the rate with the last one filled in on its card: Save there keeps it ("ok").
+            val rateAsked = a?.text.orEmpty()
+            if (local && Regex("""What rate for .+ \(last .+\)\?""").matches(rateAsked)) {
+                val then = recent + (if (recent.isBlank()) "" else "\n") + "Person: " + turn.said.take(200) + "\nApp: " + rateAsked
+                a = LocalAgent.run("ok", world.host, roman = "ok", previous = picked, justSaved = justSaved, lastShown = rateAsked, recent = then,
+                    onTool = { name, input, result -> trace += "$name $input -> " + result.take(260) })
+            }
             if (a == null) errors += if (local) "the app's own assistant did not understand" else Ai.lastError
             history += true to turn.said
             history += false to (a?.card?.ifBlank { a.text } ?: "")

@@ -34,6 +34,8 @@ class LocalAddTest {
         /** The option card of the last message ("person|number"), when it asked with one. */
         var ask = ""
         val added get() = entries.filter { it.id !in base }
+        /** Save is tapped on the rate card when it comes filled with the last rate (the usual case); off to look at the card itself. */
+        var keepRate = true
 
         /** One message read by LocalAdd alone, with the chat before it as LocalAgent passes it. */
         fun say(text: String): LocalAgent.Reply? {
@@ -47,6 +49,7 @@ class LocalAddTest {
             history += "App: " + reply?.text.orEmpty()
             justSaved = notes.added.toList()
             ask = notes.ask
+            if (keepRate && reply != null && Regex("""What rate for .+ \(last .+\)\?""").matches(reply.text)) return say("ok")
             return reply
         }
 
@@ -164,6 +167,20 @@ class LocalAddTest {
         assertTrue(say("hamid ne kaam kiya")?.text.orEmpty().contains("?"))
         say("4000 kachi eent")
         assertTrue(has(Type.PURCHASE, "Hamid Akram", 4_000.0, qty = 4_000.0, item = "Kachi eent"))
+    }
+    @Test fun aKnownRateIsAskedFilledInAndKept() = Books().run {
+        keepRate = false
+        val asked = say("hamid ne 5000 kachi eent dali")?.text.orEmpty()
+        assertTrue(asked, asked.startsWith("What rate for 5000 ") && asked.endsWith("(last 1000 per 1000)?"))
+        assertTrue(added.isEmpty())
+        say("ok")
+        assertTrue(has(Type.PURCHASE, "Hamid Akram", 5_000.0, qty = 5_000.0, item = "Kachi eent"))
+    }
+    @Test fun aKnownRateCanBeChangedOnItsCard() = Books().run {
+        keepRate = false
+        say("hamid ne 5000 kachi eent dali")
+        say("900 per 1000")
+        assertTrue(has(Type.PURCHASE, "Hamid Akram", 4_500.0, qty = 5_000.0, item = "Kachi eent"))
     }
     @Test fun rateNotKnownYet() = Books().run {
         assertTrue(say("akbar ne 300 jootay banaye")?.text.orEmpty().contains("?"))
