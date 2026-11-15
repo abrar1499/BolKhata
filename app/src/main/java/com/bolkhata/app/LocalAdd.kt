@@ -15,7 +15,9 @@ import java.util.Locale
 object LocalAdd : LocalAgent.Reader {
 
     override fun read(s: LocalAgent.Said): LocalAgent.Reply? {
-        val back = followUp(s)
+        // The rate card's answer ("900 per 1000", or "ok" for the rate it showed): the message it asked about, read again with that rate.
+        val rated = rateAnswer(s)
+        val back = rated?.first ?: followUp(s)
         val raw = back ?: s.raw
         val roman = if (back == null) s.roman else runCatching { Translit.toRoman(back) }.getOrDefault(back)
         val prepared = prepare(raw, roman)
@@ -38,9 +40,14 @@ object LocalAdd : LocalAgent.Reader {
             return LocalAgent.Reply("")
         }
         if (saves.isEmpty()) return null
-        saves.firstOrNull { needsRate(it, c) }?.let { e ->
+        if (rated != null) saves.filter { noRate(it) }.forEach { it.put("rate", rated.second).put("per_1000", rated.third) }
+        // A message that is one sale or work with no rate said: the chat asks for it every time, its card filled with the
+        // last rate to keep or change (one person's rate may differ from another's). With more in the message (an advance
+        // too, a second thing), the last rate is used and only a rate never known is asked.
+        saves.filter { noRate(it) }.firstOrNull { saves.size == 1 || usualRate(it, c) == null }?.let { e ->
             val n = e.optDouble("qty", 0.0)
-            return LocalAgent.Reply("What rate for " + plain(n) + " " + e.optString("item").ifBlank { "of them" } + "?")
+            val last = usualRate(e, c)?.let { " (last " + plain(it.rate) + (if (it.unit == "1000") " per 1000" else " each") + ")" }.orEmpty()
+            return LocalAgent.Reply("What rate for " + plain(n) + " " + e.optString("item").ifBlank { "of them" } + last + "?")
         }
         s.notes.said = (s.notes.said + saves.flatMap { e -> listOf("amount", "qty").map { e.optDouble(it, 0.0) } }.filter { it > 0 }).distinct()
         c.setups.forEach { (book, name) -> s.use("put_in_account", JSONObject().put("account", book).put("people", JSONArray(listOf(name)))) }
@@ -448,14 +455,18 @@ object LocalAdd : LocalAgent.Reader {
         return last.unit == "1000" && kotlin.math.abs(Math.log(rate / last.rate)) <= kotlin.math.abs(Math.log(rate * 1000 / last.rate))
     }
 
-    /** A sale or work with no rate said and none known before: ask for it rather than fail. */
-    private fun needsRate(e: JSONObject, c: Ctx): Boolean {
+    /** A sale or work with a count but no rate or amount said. */
+    private fun noRate(e: JSONObject): Boolean {
         val type = e.optString("type")
-        if ((type != "sale" && type != "work") || e.optDouble("qty", 0.0) <= 0 || e.has("rate") || e.has("amount")) return false
+        return (type == "sale" || type == "work") && e.optDouble("qty", 0.0) > 0 && !e.has("rate") && !e.has("amount")
+    }
+
+    /** The rate last used for this thing (the person's own first), else the person's last of this kind; null when none is known. */
+    private fun usualRate(e: JSONObject, c: Ctx): Entry? {
         val person = e.optString("person")
-        val t = if (type == "sale") Type.SALE else Type.PURCHASE
-        return Goods.lastRate(e.optString("item"), person, t == Type.PURCHASE, c.all) == null &&
-            c.all.none { it.type == t && it.rate > 0 && it.person.equals(person, true) }
+        val t = if (e.optString("type") == "sale") Type.SALE else Type.PURCHASE
+        return Goods.lastRate(e.optString("item"), person, t == Type.PURCHASE, c.all)
+            ?: c.all.filter { it.type == t && it.rate > 0 && person.isNotBlank() && it.person.equals(person, true) }.maxByOrNull { it.date }
     }
 
     private fun note(w: List<String>, content: List<String>): String? = when {
@@ -735,13 +746,15 @@ object LocalAdd : LocalAgent.Reader {
 
     private val COUNT = Regex("""How many did (.+) make, and of what\?""")
     private val RATE = Regex("""What rate for (.+)\?""")
+    private val LAST_RATE = Regex("""\(last ([\d.]+) (per 1000|each)\)""")
+    private val CARD_RATE = Regex("""([\d.]+) (per 1000|each)""")
+    private val keepWords = setOf("ok", "okay", "oky", "haan", "han", "ha", "yes", "ji", "same", "wohi", "wahi", "theek", "thik", "sahi", "save", "hai")
 
     /** The message to read when this one answers the app's last question: the earlier message with the person picked, the count or the rate. */
     private fun followUp(s: LocalAgent.Said): String? {
         LocalAgent.picked(s)?.let { return it }
         val asked = s.lastShown.trim()
         if (!asked.endsWith("?")) return null
-        val before = s.recent.lines().lastOrNull { it.startsWith("Person: ") }?.removePrefix("Person: ")?.trim()
         if (s.lower.isBlank()) return null
         // An answer is short, names no one and says no money word; anything else is a new message.
         val answer = s.counted.any { it.isDigit() } && s.words.size <= 4 && s.words.none { w -> w in giveWords || w in getWords || w in spendWords } &&
@@ -753,11 +766,36 @@ object LocalAdd : LocalAgent.Reader {
             return "$name ne " + s.counted + if (usual != null && s.words.all { num(it) != null }) " $usual" else ""
         }
         RATE.matchEntire(asked)?.let {
-            if (before == null || !answer) return null
+            val meant = asked(s)
+            if (meant == null || !answer) return null
             val bare = s.words.size == 1 && num(s.words[0]) != null
-            return before + " " + s.counted + if (bare) " ke hisab se" else ""
+            return meant + " " + s.counted + if (bare) " ke hisab se" else ""
         }
         return null
+    }
+
+    /** The message the app's last question was about; when that one answered a question itself ("3000" to "How many…"), what it stood for. */
+    private fun asked(s: LocalAgent.Said): String? {
+        val lines = s.recent.lines()
+        val at = lines.indexOfLast { it.startsWith("Person: ") }
+        val before = lines.getOrNull(at)?.removePrefix("Person: ")?.trim() ?: return null
+        val shownThen = lines.take(at).lastOrNull { it.startsWith("App: ") }?.removePrefix("App: ")?.trim().orEmpty()
+        val roman = runCatching { Translit.toRoman(before) }.getOrDefault(before)
+        return followUp(LocalAgent.Said(before, roman, AiAgent.counted(roman), s.host, s.now, "", emptyList(), shownThen, lines.take(at).joinToString("\n"), s.notes) { _, _, _ -> }) ?: before
+    }
+
+    /**
+     * The rate card's answer to "What rate for …?": the message asked about, the rate and whether it is per thousand.
+     * "900 per 1000" and "900 each" are what the card sends; "ok", "haan" or "same" keep the last rate the question showed.
+     */
+    private fun rateAnswer(s: LocalAgent.Said): Triple<String, Double, Boolean>? {
+        val question = s.lastShown.trim()
+        if (!RATE.matches(question)) return null
+        val said = CARD_RATE.matchEntire(s.lower.trim())
+            ?: LAST_RATE.find(question)?.takeIf { s.words.isNotEmpty() && s.words.size <= 2 && s.words.all { it in keepWords } }
+            ?: return null
+        val rate = said.groupValues[1].toDoubleOrNull()?.takeIf { it > 0 } ?: return null
+        return Triple(asked(s) ?: return null, rate, said.groupValues[2] == "per 1000")
     }
 
     // ---------- small helpers ----------

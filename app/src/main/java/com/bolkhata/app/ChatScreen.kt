@@ -889,19 +889,21 @@ private fun OfferCard(text: String, onYes: () -> Unit, onNo: () -> Unit) {
 private val RateAsk = Regex("""^What rate for (.+)\?$""")
 
 /**
- * The app's question for a first work's rate, as a small card in the chat: the rate typed in one box with "per 1000 |
- * each" inside it, the amount it makes, and Save, which answers the question ("900 per 1000" or "900 each").
+ * The app's question for a work's or sale's rate, as a small card in the chat: the rate in one box with "per 1000 |
+ * each" inside it, the amount it makes, and Save, which answers the question ("900 per 1000" or "900 each"). The box
+ * comes filled with the last rate when the question carries one ("(last 900 per 1000)"): Save keeps it, or it is changed.
  */
 @Composable
 private fun RateCard(text: String, onSend: (String) -> Unit) {
     val qty = Regex("""[\d,]+(?:\.\d+)?""").find(text.removePrefix("What rate for "))?.value?.replace(",", "")?.toDoubleOrNull() ?: 0.0
-    var rate by remember { mutableStateOf("") }
-    var per1000 by remember { mutableStateOf(qty >= 1000) }
+    val last = remember(text) { Regex("""\(last ([\d.]+) (per 1000|each)\)""").find(text) }
+    var rate by remember { mutableStateOf(last?.groupValues?.get(1).orEmpty()) }
+    var per1000 by remember { mutableStateOf(last?.let { it.groupValues[2] == "per 1000" } ?: (qty >= 1000)) }
     val r = rate.toDoubleOrNull() ?: 0.0
     val sub = MaterialTheme.colorScheme.onSurfaceVariant
     Column(Modifier.padding(start = 8.dp).widthIn(max = 280.dp).shadow(1.dp, BotShape).clip(BotShape).background(MaterialTheme.colorScheme.surface)
         .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 9.dp)) {
-        Text(text, fontSize = 13.sp, lineHeight = 17.5.sp)
+        Text(text.replace(Regex(""" \(last [^)]*\)"""), ""), fontSize = 13.sp, lineHeight = 17.5.sp)
         Row(Modifier.padding(top = 8.dp).fillMaxWidth().height(34.dp).fieldEdge(RoundedCornerShape(12.dp)).padding(start = 10.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f)) {
