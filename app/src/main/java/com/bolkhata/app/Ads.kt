@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
+import com.google.android.gms.ads.AdListener
 import com.google.android.gms.ads.AdLoader
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
@@ -37,6 +38,12 @@ import com.google.android.gms.ads.nativead.NativeAdOptions
 import com.google.android.gms.ads.nativead.NativeAdView
 import com.google.android.ump.ConsentRequestParameters
 import com.google.android.ump.UserMessagingPlatform
+
+/** Most taps on ads one phone may make in a day; after that its ads rest until the next day. */
+internal const val AD_TAPS_A_DAY = 3
+
+/** The taps on ads counted so far on [day], from what was saved ([savedDay], [saved]): a new day starts at none. */
+internal fun adTapsOn(day: String, savedDay: String, saved: Int): Int = if (savedDay == day) saved else 0
 
 /**
  * Quiet ads from Google AdMob: a small native card that looks like the app (an answer in the chat, a row under the
@@ -55,8 +62,30 @@ object Ads {
     var ready by mutableStateOf(false)
         private set
 
+    /**
+     * True once this phone tapped ads [AD_TAPS_A_DAY] times today: no ad is drawn or fetched until tomorrow. It keeps the
+     * account safe from someone tapping the ads again and again on purpose; a real reader never gets that far.
+     */
+    var resting by mutableStateOf(false)
+        private set
+
+    private fun today() = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(java.util.Date())
+    private fun saved(c: Context) = c.getSharedPreferences("ads", Context.MODE_PRIVATE)
+    private fun tapsToday(c: Context) = saved(c).let { adTapsOn(today(), it.getString("day", "").orEmpty(), it.getInt("taps", 0)) }
+
+    /** Counts each tap on the ad it is given to. */
+    fun taps(context: Context): AdListener = object : AdListener() {
+        override fun onAdClicked() {
+            val c = context.applicationContext
+            val n = tapsToday(c) + 1
+            saved(c).edit().putString("day", today()).putInt("taps", n).apply()
+            if (n >= AD_TAPS_A_DAY) resting = true
+        }
+    }
+
     /** Asks for consent where the law needs it (Google's form, set in AdMob › Privacy & messaging), then starts the ads. */
     fun start(activity: Activity) {
+        resting = tapsToday(activity) >= AD_TAPS_A_DAY
         val info = UserMessagingPlatform.getConsentInformation(activity)
         fun go() { if (info.canRequestAds() && !ready) { MobileAds.initialize(activity) {}; ready = true } }
         info.requestConsentInfoUpdate(activity, ConsentRequestParameters.Builder().build(),
@@ -67,9 +96,10 @@ object Ads {
     /** The ad for [place], fetched once; [onReady] gets it when it arrives. */
     fun native(context: Context, place: String, onReady: (NativeAd) -> Unit) {
         loaded[place]?.let { onReady(it); return }
-        if (!ready) return
+        if (!ready || resting) return
         AdLoader.Builder(context, nativeUnit)
             .forNativeAd { ad -> loaded[place] = ad; onReady(ad) }
+            .withAdListener(taps(context))
             .withNativeAdOptions(NativeAdOptions.Builder().setAdChoicesPlacement(NativeAdOptions.ADCHOICES_TOP_RIGHT)
                 .setVideoOptions(VideoOptions.Builder().setStartMuted(true).build()).build())
             .build().loadAd(AdRequest.Builder().build())
@@ -89,7 +119,7 @@ fun NativeAdCard(place: String, modifier: Modifier = Modifier, video: Boolean = 
         Ads.native(context, place) { ad = it }
         onDispose { }
     }
-    val shown = ad ?: return
+    val shown = ad?.takeIf { !Ads.resting } ?: return
     AndroidView(factory = { ctx: Context -> (if (video || shown.mediaContent?.hasVideoContent() == true) videoRow(ctx) else adRow(ctx)).also { if (!round) (it.getChildAt(0).background as? GradientDrawable)?.cornerRadius = 0f } }, modifier = modifier.fillMaxWidth(), update = { v: NativeAdView -> v.show(shown) })
 }
 
@@ -99,12 +129,13 @@ fun NativeAdCard(place: String, modifier: Modifier = Modifier, video: Boolean = 
  */
 @Composable
 fun BannerAd(modifier: Modifier = Modifier, big: Boolean = false, round: Boolean = true) {
-    if (!Ads.ready) return
+    if (!Ads.ready || Ads.resting) return
     val width = LocalConfiguration.current.screenWidthDp - 24
     AndroidView(modifier = modifier.fillMaxWidth().clip(RoundedCornerShape(if (round) 14.dp else 0.dp)).background(Color.White), factory = { ctx: Context ->
         AdView(ctx).apply {
             setAdSize(if (big) AdSize.getInlineAdaptiveBannerAdSize(width, 250) else AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(ctx, width))
             adUnitId = Ads.bannerUnit
+            adListener = Ads.taps(ctx)
             loadAd(AdRequest.Builder().build())
         }
     }, onRelease = { v: AdView -> v.destroy() })
