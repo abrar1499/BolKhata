@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.graphics.Color as AColor
 import android.graphics.drawable.GradientDrawable
+import android.text.TextUtils
 import android.util.TypedValue
 import android.view.Gravity
 import android.widget.ImageView
@@ -101,16 +102,16 @@ object Ads {
     }
 }
 
-/**
- * A native ad as one soft row: its small picture, headline with its "Ad" tag, a short line, and the green action word;
- * nothing when no ad came. [video], or an ad that is a video: a 120 × 120 picture or video (playing without sound) on
- * the left instead (Google asks for the ad's picture in its own MediaView, and a video no smaller than that). [small]:
- * an ad of pictures only, so the row stays slim between accounts and at the end of a list. [big]: the card under a
- * short list, with the picture or video across it.
- */
 /** Ads between rows take turns, counted from 1: a video card first, then a slim picture, and so on. */
 fun videoTurn(nth: Int) = nth % 2 == 1
 
+/**
+ * A native ad as one soft row: its small picture, headline with its "Ad" tag, a short line, and the green action word;
+ * nothing when no ad came; [round] false gives it square corners, like the cashbook sheet. [video], or an ad that is a video: a 120 × 120 picture or video (playing without sound) on
+ * the left instead (Google asks for the ad's picture in its own MediaView, and a video no smaller than that). [small]:
+ * an ad of pictures only, so the row stays slim between accounts. [big]: the white card under a short list, its picture
+ * or video wider (192 × 120).
+ */
 @Composable
 fun NativeAdCard(place: String, modifier: Modifier = Modifier, video: Boolean = false, round: Boolean = true, small: Boolean = false, big: Boolean = false) {
     val context = LocalContext.current
@@ -120,7 +121,7 @@ fun NativeAdCard(place: String, modifier: Modifier = Modifier, video: Boolean = 
         onDispose { }
     }
     val shown = ad?.takeIf { !Ads.resting } ?: return
-    AndroidView(factory = { ctx: Context -> (if (big) bigCard(ctx) else if (video || shown.mediaContent?.hasVideoContent() == true) videoRow(ctx) else adRow(ctx)).also { if (!round) (it.getChildAt(0).background as? GradientDrawable)?.cornerRadius = 0f } }, modifier = modifier.fillMaxWidth(), update = { v: NativeAdView -> v.show(shown) })
+    AndroidView(factory = { ctx: Context -> (if (big) videoRow(ctx, wide = true) else if (video || shown.mediaContent?.hasVideoContent() == true) videoRow(ctx) else adRow(ctx)).also { if (!round) (it.getChildAt(0).background as? GradientDrawable)?.cornerRadius = 0f } }, modifier = modifier.fillMaxWidth(), update = { v: NativeAdView -> v.show(shown) })
 }
 
 private fun Context.dp(v: Int) = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), resources.displayMetrics).toInt()
@@ -155,17 +156,21 @@ private fun adRow(ctx: Context): NativeAdView {
     return view
 }
 
-/** The video card: 120 × 120 media on the left, then the headline with its "Ad" tag, two lines and a green action button. */
-private fun videoRow(ctx: Context): NativeAdView {
+/**
+ * The video card: the ad's picture or video flush on the left, 120 high (Google's smallest for video), 120 wide or 192
+ * when [wide]; beside it the headline with its "Ad" tag, two lines and a green action button.
+ */
+private fun videoRow(ctx: Context, wide: Boolean = false): NativeAdView {
     val view = NativeAdView(ctx)
     val row = LinearLayout(ctx).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
-        setPadding(ctx.dp(8), ctx.dp(8), ctx.dp(8), ctx.dp(8))
-        background = GradientDrawable().apply { cornerRadius = ctx.dp(12).toFloat(); setColor(AColor.argb(153, 255, 255, 255)) }
+        setPadding(0, 0, ctx.dp(10), 0)
+        background = GradientDrawable().apply { cornerRadius = ctx.dp(if (wide) 14 else 12).toFloat(); setColor(if (wide) AColor.WHITE else AColor.argb(179, 255, 255, 255)) }
+        clipToOutline = true
     }
-    val media = MediaView(ctx).apply { layoutParams = LinearLayout.LayoutParams(ctx.dp(120), ctx.dp(120)); clipToOutline = true
-        background = GradientDrawable().apply { cornerRadius = ctx.dp(10).toFloat(); setColor(AColor.rgb(238, 247, 241)) } }
+    val media = MediaView(ctx).apply { layoutParams = LinearLayout.LayoutParams(ctx.dp(if (wide) 192 else 120), ctx.dp(120))
+        setImageScaleType(ImageView.ScaleType.CENTER_CROP); setBackgroundColor(AColor.rgb(238, 247, 241)) }
     val texts = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL
         layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = ctx.dp(10) } }
     val titleRow = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
@@ -173,7 +178,7 @@ private fun videoRow(ctx: Context): NativeAdView {
         layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f) }
     val tag = TextView(ctx).apply { text = "Ad"; textSize = 8f; setTextColor(AColor.rgb(155, 149, 142)); setPadding(ctx.dp(3), 0, ctx.dp(3), 0)
         background = GradientDrawable().apply { cornerRadius = ctx.dp(4).toFloat(); setStroke(ctx.dp(1), AColor.rgb(214, 209, 202)) } }
-    val body = TextView(ctx).apply { textSize = 10.5f; setTextColor(AColor.rgb(138, 133, 128)); maxLines = 2; setPadding(0, ctx.dp(4), 0, 0) }
+    val body = TextView(ctx).apply { textSize = 10.5f; setTextColor(AColor.rgb(138, 133, 128)); maxLines = 2; ellipsize = TextUtils.TruncateAt.END; setPadding(0, ctx.dp(3), 0, 0) }
     val action = TextView(ctx).apply { textSize = 11f; setTextColor(AColor.WHITE); paint.isFakeBoldText = true
         setPadding(ctx.dp(11), ctx.dp(6), ctx.dp(11), ctx.dp(6))
         background = GradientDrawable().apply { cornerRadius = ctx.dp(10).toFloat(); setColor(AColor.rgb(31, 154, 84)) }
@@ -183,47 +188,6 @@ private fun videoRow(ctx: Context): NativeAdView {
     row.addView(media); row.addView(texts)
     view.addView(row)
     view.mediaView = media; view.headlineView = headline; view.bodyView = body; view.callToActionView = action
-    return view
-}
-
-/** The big card under a short list: the ad's picture or video across the card (16:9), then its icon, headline with the "Ad" tag, a line and the green button. */
-private fun bigCard(ctx: Context): NativeAdView {
-    val view = NativeAdView(ctx)
-    val card = LinearLayout(ctx).apply {
-        orientation = LinearLayout.VERTICAL
-        background = GradientDrawable().apply { cornerRadius = ctx.dp(14).toFloat(); setColor(AColor.WHITE) }
-        clipToOutline = true
-    }
-    val wide = ctx.resources.displayMetrics.widthPixels - ctx.dp(20)
-    val media = MediaView(ctx).apply {
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, wide * 9 / 16)
-        setImageScaleType(ImageView.ScaleType.CENTER_CROP)
-        setBackgroundColor(AColor.rgb(238, 247, 241))
-    }
-    val line = LinearLayout(ctx).apply {
-        orientation = LinearLayout.HORIZONTAL
-        gravity = Gravity.CENTER_VERTICAL
-        setPadding(ctx.dp(10), ctx.dp(9), ctx.dp(10), ctx.dp(9))
-    }
-    val icon = ImageView(ctx).apply { layoutParams = LinearLayout.LayoutParams(ctx.dp(36), ctx.dp(36)); clipToOutline = true
-        background = GradientDrawable().apply { cornerRadius = ctx.dp(8).toFloat(); setColor(AColor.rgb(238, 247, 241)) } }
-    val texts = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL
-        layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = ctx.dp(9); marginEnd = ctx.dp(8) } }
-    val titleRow = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-    val headline = TextView(ctx).apply { textSize = 12f; setTextColor(AColor.rgb(29, 29, 31)); maxLines = 1; paint.isFakeBoldText = true }
-    val tag = TextView(ctx).apply { text = "Ad"; textSize = 8f; setTextColor(AColor.rgb(155, 149, 142)); setPadding(ctx.dp(3), 0, ctx.dp(3), 0)
-        background = GradientDrawable().apply { cornerRadius = ctx.dp(4).toFloat(); setStroke(ctx.dp(1), AColor.rgb(214, 209, 202)) }
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginStart = ctx.dp(5) } }
-    val body = TextView(ctx).apply { textSize = 10.5f; setTextColor(AColor.rgb(138, 133, 128)); maxLines = 1 }
-    val action = TextView(ctx).apply { textSize = 11f; setTextColor(AColor.WHITE); paint.isFakeBoldText = true
-        setPadding(ctx.dp(11), ctx.dp(6), ctx.dp(11), ctx.dp(6))
-        background = GradientDrawable().apply { cornerRadius = ctx.dp(10).toFloat(); setColor(AColor.rgb(31, 154, 84)) } }
-    titleRow.addView(headline); titleRow.addView(tag)
-    texts.addView(titleRow); texts.addView(body)
-    line.addView(icon); line.addView(texts); line.addView(action)
-    card.addView(media); card.addView(line)
-    view.addView(card)
-    view.iconView = icon; view.mediaView = media; view.headlineView = headline; view.bodyView = body; view.callToActionView = action
     return view
 }
 

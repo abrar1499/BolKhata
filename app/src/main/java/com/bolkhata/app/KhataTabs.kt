@@ -512,8 +512,6 @@ internal fun LazyListScope.ledger(
         val last = i == rows.lastIndex || (cards && !sameDay(rows[i + 1].date, r.date))
         item(key = keyPrefix + r.key) { LedgerRow(r, cols, last, cards) }
     }
-    // At the end of the list: a video card, square like the sheet above it.
-    if (rows.isNotEmpty()) item(key = keyPrefix + "banner", contentType = "ad") { NativeAdCard("ledger-end-$keyPrefix$title", Modifier.padding(horizontal = 10.dp, vertical = 10.dp), video = true, round = false) }
 }
 
 /** What an empty list shows instead of a blank page: the app logo and how to add the first entry. */
@@ -1241,7 +1239,7 @@ fun SideScreen(
                             fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
                         )
                     } else item(key = "addkid") { DashedAdd("+ Add in ${book.name}") { adding = "kid" } }
-                    // Under the things, as under the accounts: the big card with three or fewer, else a video card.
+                    // Under the things, as under the accounts: the wider white card with three or fewer, else a video card.
                     if (kids.isNotEmpty()) item(key = "kend", contentType = "ad") {
                         if (kids.size <= 3) NativeAdCard("kids-big-${book.name}", Modifier.padding(horizontal = 10.dp, vertical = 10.dp), big = true)
                         else NativeAdCard("kids-end-${book.name}", Modifier.padding(horizontal = 12.dp, vertical = 10.dp), video = true)
@@ -1309,7 +1307,7 @@ fun SideScreen(
                     }
                     if (shown.isEmpty()) emptyNote("Nothing found")
                     item(key = "addbook") { DashedAdd("+ Add account") { adding = "book" } }
-                    // Under the accounts: with three or fewer there is room for the big card; else a video card.
+                    // Under the accounts: with three or fewer the wider white card; else a video card.
                     if (shown.isNotEmpty()) item(key = "banner", contentType = "ad") {
                         if (shown.size <= 3) NativeAdCard("accounts-big-$side", Modifier.padding(horizontal = 10.dp, vertical = 10.dp), big = true)
                         else NativeAdCard("accounts-end-$side", Modifier.padding(horizontal = 12.dp, vertical = 10.dp), video = true)
