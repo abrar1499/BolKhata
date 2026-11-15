@@ -379,10 +379,10 @@ private fun AiKeysSheet(ai: AiKeys, models: (String) -> List<String>, onSave: (S
                 Text("AI keys", fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 10.dp))
             }
             Text("Put a key in each box you have. Best first: the best one turned on answers. When it is busy or out of credit, the next best answers by itself.",
-                fontSize = 11.sp, lineHeight = 15.sp, color = sub, modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 10.dp))
+                fontSize = 11.sp, lineHeight = 15.sp, color = sub, modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 8.dp))
             // Who answers, in turn; the one answering now in green.
-            Row(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 10.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surface)
-                .horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 6.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surface)
+                .horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (live.isEmpty()) Text("Turn on a key to use the AI", fontSize = 11.sp, color = sub)
                 live.forEachIndexed { i, p ->
                     if (i > 0) Text("→", fontSize = 11.sp, modifier = Modifier.padding(horizontal = 5.dp))
@@ -390,7 +390,7 @@ private fun AiKeysSheet(ai: AiKeys, models: (String) -> List<String>, onSave: (S
                         modifier = Modifier.clip(RoundedCornerShape(7.dp)).background(if (p == now) GreenIn.copy(alpha = 0.1f) else LocalPage.current).padding(horizontal = 7.dp, vertical = 2.dp))
                 }
             }
-            Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Ai.ALL.forEachIndexed { i, p ->
                     val box = ai.boxes[p.name] ?: AiBox()
                     val why = ai.failed[p.name].orEmpty().lowercase()
@@ -409,16 +409,16 @@ private fun AiKeysSheet(ai: AiKeys, models: (String) -> List<String>, onSave: (S
                     AiBoxCard(i + 1, p, box, status, models(p.name), { k, m -> onSave(p.name, k, m) }) { onSwitch(p.name, it) }
                 }
                 // The shared brain: with its token, what the app learns from the AI goes to every install by itself.
-                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surface).padding(horizontal = 12.dp, vertical = 10.dp)) {
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surface).padding(horizontal = 12.dp, vertical = 7.dp)) {
                     Text("🧠 Brain", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     Text(if (brainSet) "On · what the app learns is shared by itself" else "Paste the GitHub token of the brain repository",
                         fontSize = 10.sp, color = if (brainSet) GreenIn else sub)
                     var token by remember { mutableStateOf("") }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        WellField(token, { token = it.trim() }, if (brainSet) "Token saved · paste to change" else "github_pat_…", Modifier.weight(1f))
-                        Text("Save", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF1D1D1F), modifier = Modifier.padding(start = 6.dp, top = 10.dp)
+                        WellField(token, { token = it.trim() }, if (brainSet) "Token saved · paste to change" else "github_pat_…", Modifier.weight(1f), small = true)
+                        Text("Save", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF1D1D1F), modifier = Modifier.padding(start = 6.dp, top = 6.dp)
                             .shadow(3.dp, RoundedCornerShape(16.dp)).clip(RoundedCornerShape(16.dp)).background(Color.White)
-                            .clickable { if (token.isNotBlank()) { onBrainToken(token); token = "" } }.padding(horizontal = 14.dp, vertical = 8.dp))
+                            .clickable { if (token.isNotBlank()) { onBrainToken(token); token = "" } }.padding(horizontal = 14.dp, vertical = 6.dp))
                     }
                 }
             }
@@ -438,7 +438,7 @@ private fun AiBoxCard(n: Int, p: Ai.Provider, box: AiBox, status: Pair<String, C
     val on = box.on && box.key.isNotBlank()
     fun label(m: String) = m + if (Ai.free(p, m)) " · Free" else " · Paid"
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surface)
-        .clickable(enabled = !shown) { open = true }.padding(horizontal = 12.dp, vertical = 10.dp)) {
+        .clickable(enabled = !shown) { open = true }.padding(horizontal = 12.dp, vertical = 7.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(18.dp).clip(CircleShape).background(LocalPage.current), contentAlignment = Alignment.Center) {
                 Text("$n", fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = sub)
@@ -457,10 +457,10 @@ private fun AiBoxCard(n: Int, p: Ai.Provider, box: AiBox, status: Pair<String, C
             }
         }
         if (shown) {
-            WellField(key, { key = it.trim() }, if (box.key.isBlank()) "Paste ${p.name} key" else box.key.take(6) + "••••••" + box.key.takeLast(3))
-            Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            WellField(key, { key = it.trim() }, if (box.key.isBlank()) "Paste ${p.name} key" else box.key.take(6) + "••••••" + box.key.takeLast(3), small = true)
+            Row(Modifier.padding(top = 5.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.weight(1f)) {
-                    Row(Modifier.fillMaxWidth().fieldEdge(RoundedCornerShape(12.dp)).clickable { pick = true }.padding(horizontal = 12.dp, vertical = 9.dp),
+                    Row(Modifier.fillMaxWidth().fieldEdge(RoundedCornerShape(12.dp)).clickable { pick = true }.padding(horizontal = 12.dp, vertical = 7.dp),
                         verticalAlignment = Alignment.CenterVertically) {
                         Text(label(model), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                         Text("▾", fontSize = 11.sp, color = sub)
@@ -472,9 +472,9 @@ private fun AiBoxCard(n: Int, p: Ai.Provider, box: AiBox, status: Pair<String, C
                     }
                 }
                 Text("Save", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF1D1D1F), modifier = Modifier.padding(start = 6.dp).shadow(3.dp, RoundedCornerShape(16.dp))
-                    .clip(RoundedCornerShape(16.dp)).background(Color.White).clickable { onSave(key, model); key = "" }.padding(horizontal = 14.dp, vertical = 8.dp))
+                    .clip(RoundedCornerShape(16.dp)).background(Color.White).clickable { onSave(key, model); key = "" }.padding(horizontal = 14.dp, vertical = 6.dp))
             }
-            Text(status.first, fontSize = 10.sp, color = status.second, modifier = Modifier.padding(top = 4.dp))
+            Text(status.first, fontSize = 10.sp, lineHeight = 13.sp, color = status.second, modifier = Modifier.padding(top = 3.dp))
         }
     }
 }

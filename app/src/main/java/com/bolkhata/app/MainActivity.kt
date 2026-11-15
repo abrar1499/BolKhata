@@ -2577,22 +2577,35 @@ fun App(
         // Like ChatGPT, screens run underneath the floating message bar; lists add LocalBarSpace at their end.
         // On the main tabs a swipe left or right moves to the next or previous tab.
         val swipeTabs = results == null && people == null && account == null && ledger == null && partyOpen == null && !bizPage && !profitOpen && tab in KHATA_TABS
-        // A swipe past a fifth of the width moves to the next tab, which comes in with a short slide and fade from that
-        // side (the page itself never leaves an empty half screen).
-        val slide = remember { androidx.compose.animation.core.Animatable(0f) }
-        Box(Modifier.padding(top = pad.calculateTopPadding()).fillMaxSize().pointerInput(swipeTabs, tab) {
+        // The tabs sit side by side on one track (pos = the tab index in view). The track follows the finger; let go past
+        // 22% of the width and it settles on the next tab, otherwise it springs back. The first and last tab resist.
+        val at = KHATA_TABS.indexOf(tab)
+        val pos = remember { androidx.compose.animation.core.Animatable(at.toFloat()) }
+        LaunchedEffect(at) { if (pos.targetValue != at.toFloat()) pos.snapTo(at.toFloat()) }
+        val near by remember { derivedStateOf { kotlin.math.floor(pos.value).toInt() to kotlin.math.ceil(pos.value).toInt() } }
+        val track = swipeTabs && at >= near.first && at <= near.second
+        Box(Modifier.padding(top = pad.calculateTopPadding()).fillMaxSize().pointerInput(swipeTabs, at) {
             if (!swipeTabs) return@pointerInput
+            val w = size.width.toFloat().coerceAtLeast(1f)
+            val last = KHATA_TABS.lastIndex
+            var start = 0f
             var dx = 0f
-            val w = size.width.toFloat()
-            detectHorizontalDragGestures(onDragStart = { dx = 0f }, onDragEnd = {
-                val next = KHATA_TABS.indexOf(tab) + if (dx < 0) 1 else -1
-                if (kotlin.math.abs(dx) > w / 5 && next in KHATA_TABS.indices) scope.launch {
-                    tab = KHATA_TABS[next]; backToChat = false
-                    slide.snapTo(if (dx < 0) w / 4 else -w / 4)
-                    slide.animateTo(0f, androidx.compose.animation.core.tween(220, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+            val settle = {
+                val moved = pos.value - at
+                val to = (at + if (moved > 0.22f) 1 else if (moved < -0.22f) -1 else 0).coerceIn(0, last)
+                scope.launch {
+                    if (to != at) { tab = KHATA_TABS[to]; backToChat = false }
+                    pos.animateTo(to.toFloat(), androidx.compose.animation.core.tween(320, easing = androidx.compose.animation.core.CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f)))
                 }
-            }) { _, d -> dx += d }
-        }.graphicsLayer { translationX = slide.value; alpha = 1f - kotlin.math.abs(slide.value) / (size.width / 4f).coerceAtLeast(1f) * 0.6f }) {
+                Unit
+            }
+            detectHorizontalDragGestures(onDragStart = { start = pos.value; dx = 0f }, onDragEnd = settle, onDragCancel = settle) { _, d ->
+                dx += d
+                val raw = (start - dx / w).coerceIn(at - 1f, at + 1f)
+                val p = if (raw < 0f) raw * 0.3f else if (raw > last) last + (raw - last) * 0.3f else raw
+                scope.launch { pos.snapTo(p) }
+            }
+        }) {
             val who = people
             val saveable = rememberSaveableStateHolder()
             val acct = account
@@ -2606,7 +2619,9 @@ fun App(
             ) {
             // Each screen keeps its own scroll and picks when another opens over it (a party, a report…),
             // so Back returns to the same place in the list.
-            saveable.SaveableStateProvider("$tab|$partyOpen|${who != null}|${results != null}|${acct != null}") {
+            // One tab's screen. While a swipe is under way the tab beside it is drawn too, so both follow the finger.
+            val page: @Composable (Tab) -> Unit = { shown ->
+            saveable.SaveableStateProvider("$shown|$partyOpen|${who != null}|${results != null}|${acct != null}") {
             when {
                 results != null -> {
                     val (q, editMode) = results!!
@@ -2631,20 +2646,20 @@ fun App(
                 profitOpen -> ProfitScreen(entries, currency, sides, onBack = { profitOpen = false }, onEdit = { editing = it }) { b, k ->
                     profitOpen = false; backToChat = false; sideJump = b to k; tab = Tab.PARTIES
                 }
-                tab == Tab.CASHBOOK -> CashBookScreen(
+                shown == Tab.CASHBOOK -> CashBookScreen(
                     entries, currency, onMenu = { openMenu() }, business = businessName,
                     onEdit = { editing = it }, onReport = { profitOpen = true }
                 )
-                tab == Tab.EXPENSE || tab == Tab.INCOME || tab == Tab.PARTIES -> {
+                shown == Tab.EXPENSE || shown == Tab.INCOME || shown == Tab.PARTIES -> {
                     SideScreen(
-                        when (tab) { Tab.INCOME -> Side.INC; Tab.PARTIES -> Side.PARTY; else -> Side.EXP },
+                        when (shown) { Tab.INCOME -> Side.INC; Tab.PARTIES -> Side.PARTY; else -> Side.EXP },
                         entries, currency, sides, onSetup = { s -> sides = s; store.saveSides(s) },
                         onMenu = { openMenu() }, business = businessName, onEdit = { editing = it },
                         // No toast: it would cover the add buttons, and the new entry shows in the list at once.
                         onSave = { e -> save(listOf(e) + entries); lastAdded = listOf(e.id) },
                         onReport = { profitOpen = true },
-                        jump = sideJump, onJumped = { sideJump = null },
-                        leave = if (backToChat && tab == Tab.PARTIES) ({ backToChat = false; tab = Tab.CHAT }) else null,
+                        jump = if (shown == tab) sideJump else null, onJumped = { sideJump = null },
+                        leave = if (backToChat && shown == Tab.PARTIES) ({ backToChat = false; tab = Tab.CHAT }) else null,
                         onUpdate = { changed -> val m = changed.associateBy { it.id }; save(entries.map { m[it.id] ?: it }) },
                         onMoveEntries = { n, ids -> if (ids.isEmpty()) toast("Nothing to move") else movingAll = n to ids },
                         onDeleteEntries = { n, ids, after ->
@@ -2654,21 +2669,21 @@ fun App(
                         onRenamePerson = { from, to -> renameOrMergeKhata(from, to, merge = entries.any { it.person.equals(to, true) }) }
                     )
                 }
-                tab == Tab.HOME -> HomeScreen(
+                shown == Tab.HOME -> HomeScreen(
                     name = name, entries = entries, currency = currency,
                     newVersion = null, progress = progress, onUpdate = { startUpdate() },
                     onAdd = { adding = true }, onMenu = { openMenu() }, onSearch = { searching = true }, onEdit = { editing = it },
                     onPeople = { people = it }, onReports = { reportStart = it; tab = Tab.REPORTS }, onSeeAll = { tab = Tab.ENTRIES },
                     chatBadge = suggestions.size, onTab = { tab = it }
                 )
-                tab == Tab.STOCK -> StockScreen(
+                shown == Tab.STOCK -> StockScreen(
                     entries = entries, currency = currency, chatBadge = suggestions.size,
                     onTab = { tab = it }, onMenu = { openMenu() },
                     onTrade = { trade = it }, onReports = { reportStart = it; tab = Tab.REPORTS }
                 )
-                tab == Tab.ENTRIES -> TransactionsScreen(entries, currency, onEdit = { editing = it }, onAdd = { adding = true }, onMenu = { openMenu() })
-                tab == Tab.REPORTS -> ReportsScreen(entries, currency, onMenu = { openMenu() }, startKind = reportStart)
-                tab == Tab.TRASH -> TrashScreen(
+                shown == Tab.ENTRIES -> TransactionsScreen(entries, currency, onEdit = { editing = it }, onAdd = { adding = true }, onMenu = { openMenu() })
+                shown == Tab.REPORTS -> ReportsScreen(entries, currency, onMenu = { openMenu() }, startKind = reportStart)
+                shown == Tab.TRASH -> TrashScreen(
                     trash = trash, currency = currency, onMenu = { openMenu() },
                     onRestore = { e ->
                         if (entries.any { it.id == e.id }) {
@@ -2693,7 +2708,7 @@ fun App(
                     },
                     onEmpty = { if (trash.isNotEmpty()) confirmEmptyTrash = true }
                 )
-                tab == Tab.CHAT -> {
+                shown == Tab.CHAT -> {
                     DisposableEffect(Unit) { onDispose { if (voiceOn) stopVoice() } }
                     val monthStart = java.util.Calendar.getInstance().apply {
                         set(java.util.Calendar.DAY_OF_MONTH, 1)
@@ -2898,6 +2913,11 @@ fun App(
                     onImport = { importFile.launch(arrayOf("application/json", "text/plain", "application/octet-stream", "*/*")) },
                 )
             }
+            }
+            }
+            val pages = if (track) listOfNotNull(KHATA_TABS.getOrNull(near.first), KHATA_TABS.getOrNull(near.second)).distinct() else listOf(tab)
+            for (t in pages) key(t) {
+                Box(Modifier.fillMaxSize().graphicsLayer { if (track) translationX = (KHATA_TABS.indexOf(t) - pos.value) * size.width }) { page(t) }
             }
             }
             // Main accounts open over the list, so going back returns to the same place in the list.
