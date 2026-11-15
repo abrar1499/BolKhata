@@ -203,8 +203,8 @@ fun ChatScreen(
                             Text(it.groupValues[1], fontSize = 8.sp, lineHeight = 8.sp, color = Color(0xFFA39E98),
                                 modifier = Modifier.padding(start = 14.dp, top = 3.dp))
                         }
-                        // Now and then (every eighth answer) a quiet ad under the answer.
-                        if (message.id in adAfter) NativeAdCard("chat-" + message.id, Modifier.padding(top = 6.dp))
+                        // Now and then (every eighth answer) a quiet ad under the answer: always the same card, picture or video.
+                        if (message.id in adAfter) NativeAdCard("chat-" + message.id, Modifier.padding(top = 6.dp), video = true)
                     }
                     }
                 }

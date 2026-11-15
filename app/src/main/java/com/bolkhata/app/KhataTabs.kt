@@ -509,8 +509,8 @@ internal fun LazyListScope.ledger(
         item(key = keyPrefix + r.key) { LedgerRow(r, cols, last, cards) }
     }
     // The banner at the end of the list, seen only by scrolling down.
-    // At the end of the list: a slim picture ad, square like the sheet above it.
-    if (rows.isNotEmpty()) item(key = keyPrefix + "banner", contentType = "ad") { NativeAdCard("ledger-end-$keyPrefix$title", Modifier.padding(horizontal = 10.dp, vertical = 10.dp), round = false, small = true) }
+    // At the end of the list: the same card as between the days (picture or video), square like the sheet above it.
+    if (rows.isNotEmpty()) item(key = keyPrefix + "banner", contentType = "ad") { NativeAdCard("ledger-end-$keyPrefix$title", Modifier.padding(horizontal = 10.dp, vertical = 10.dp), video = true, round = false) }
 }
 
 /** What an empty list shows instead of a blank page: the app logo and how to add the first entry. */
