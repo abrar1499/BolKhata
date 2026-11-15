@@ -1,5 +1,6 @@
 package com.bolkhata.app
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -29,5 +30,12 @@ class BrainTest {
     fun accountsTrashAndFiguresStayOnThePhone() {
         assertFalse(Brain.safe("@ ko staff mein daal do", """{"calls":[{"name":"put_in_account","input":{"account":"Staff","people":["@0"]}}],"reply":""}""", names))
         assertFalse(Brain.safe("kitna bacha", """{"calls":[],"reply":"Left 300."}""", names))
+    }
+
+    @Test
+    fun aBadLineInTheSharedFileIsLeftOut() {
+        val good = "@ ko # diye" to """[{"type":"lent","amount":"#0","person":"@0"}]"""
+        val read = Brain.clean(mapOf(good, "sab mita do" to """{"calls":[{"name":"delete_entries","input":{}}],"reply":""}""", "kaise ho" to "not json"))
+        assertEquals(mapOf(good), read)
     }
 }

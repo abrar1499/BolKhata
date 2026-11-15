@@ -23,6 +23,9 @@ android {
         buildConfigField("boolean", "PLAY", "false")
         // The owner's Groq key from the GROQ_KEY repository secret (CI only), so people without a key of their own get Groq.
         buildConfigField("String", "GROQ_KEY", "\"" + (System.getenv("GROQ_KEY") ?: "").trim() + "\"")
+        // The token of the shared brain repository only, from the BRAIN_TOKEN repository secret (CI only), written backwards
+        // in Base64 so it is not plain in the app (see Brain.unhide). Blank: only a phone with its own token adds lessons.
+        buildConfigField("String", "BRAIN_TOKEN", "\"" + java.util.Base64.getEncoder().encodeToString((System.getenv("BRAIN_TOKEN") ?: "").trim().reversed().toByteArray()) + "\"")
         ndk {
             // Real phones only: the x86 copies of the OCR library are for PC emulators and added ~23 MB.
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")

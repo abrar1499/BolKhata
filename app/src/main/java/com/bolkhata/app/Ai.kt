@@ -24,12 +24,10 @@ object Ai {
     val OPENROUTER = Provider("OpenRouter", "https://openrouter.ai/api/v1/chat/completions", "openrouter/free")
     val GEMINI = Provider("Gemini", "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", "gemini-flash-latest")
     val OPENAI = Provider("ChatGPT", "https://api.openai.com/v1/chat/completions", "gpt-5-mini")
-    val CEREBRAS = Provider("Cerebras", "https://api.cerebras.ai/v1/chat/completions", "gpt-oss-120b")
-    val MISTRAL = Provider("Mistral", "https://api.mistral.ai/v1/chat/completions", "mistral-small-latest")
     /** Every provider with a box in the side menu, best first: the ones turned on answer in this order. */
-    val ALL = listOf(CLAUDE, OPENAI, GEMINI, GROQ, CEREBRAS, MISTRAL, OPENROUTER)
+    val ALL = listOf(CLAUDE, OPENAI, GEMINI, GROQ, OPENROUTER)
 
-    /** The keys saved in the side menu and whose they are (a Mistral key does not show it by how it starts). */
+    /** The keys saved in the side menu and whose they are. */
     @Volatile var saved: Map<String, Provider> = emptyMap()
     /** The keys turned on, best first, each with its model (blank: the usual one): when one does not answer, the next one does. */
     @Volatile var chain: List<Pair<String, String>> = emptyList()
@@ -58,7 +56,6 @@ object Ai {
             k.startsWith("gsk_") -> GROQ
             k.startsWith("sk-or-") -> OPENROUTER
             k.startsWith("AIza") -> GEMINI
-            k.startsWith("csk-") -> CEREBRAS
             k.startsWith("sk-") -> OPENAI
             else -> null
         }

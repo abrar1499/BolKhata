@@ -33,6 +33,7 @@ jobs:
       - name: Build
         env:
           GROQ_KEY: ${{ secrets.GROQ_KEY }}
+          BRAIN_TOKEN: ${{ secrets.BRAIN_TOKEN }}
         run: |
           set -o pipefail
           gradle testReleaseUnitTest assembleRelease bundlePlay --no-daemon 2>&1 | tee build.log || {

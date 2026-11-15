@@ -8,8 +8,9 @@ import java.net.URL
 /**
  * The shared brain: lessons (a message's shape and what to do for it, see AiAgent.learn) in brain.json of the public
  * repository abrar1499/bolkhata-brain. Every install reads it each time it opens, so the app gets better without a new
- * version. The owner's phone (with a token for that repository only) adds what it learnt from the AI by itself, but only
- * lessons [safe] to share: open places for names and numbers, never anyone's name or figures.
+ * version. Every phone that learns from the AI adds it by itself (with the app's token for that repository only), but
+ * only lessons [safe] to share: open places for names and numbers, never anyone's name or figures. What is read is
+ * checked the same way ([clean]), so a bad line in the file does nothing.
  */
 object Brain {
     private const val REPO = "abrar1499/bolkhata-brain"
@@ -22,8 +23,14 @@ object Brain {
         conn.connectTimeout = 8_000
         conn.readTimeout = 15_000
         if (conn.responseCode != 200) return@runCatching null
-        lessonsOf(JSONObject(conn.inputStream.bufferedReader().use { it.readText() }))
+        clean(lessonsOf(JSONObject(conn.inputStream.bufferedReader().use { it.readText() })))
     }.getOrNull()
+
+    /** Only the lessons of the shared file that are [safe]: anyone's bad line in it is left out. */
+    fun clean(lessons: Map<String, String>): Map<String, String> = lessons.filter { (shape, lesson) -> safe(shape, lesson) }
+
+    /** The app's own token for the brain repository as the build wrote it (BuildConfig.BRAIN_TOKEN: backwards, in Base64). */
+    fun unhide(hidden: String): String = runCatching { String(android.util.Base64.decode(hidden, android.util.Base64.DEFAULT)).reversed() }.getOrDefault("")
 
     private fun lessonsOf(o: JSONObject): Map<String, String> =
         (o.optJSONObject("lessons") ?: JSONObject()).let { l -> l.keys().asSequence().associateWith { l.getString(it) } }
@@ -64,7 +71,7 @@ object Brain {
 
     /**
      * Adds the [learnt] lessons that are [safe] (checked against the saved [names]) and not yet in the shared file, with
-     * the owner's [token] for that repository only. Returns how many went in, or null when GitHub could not be reached.
+     * the [token] for that repository only. Returns how many went in, or null when GitHub could not be reached.
      */
     fun publish(token: String, learnt: Map<String, String>, names: List<String>): Int? = runCatching {
         val (code, text) = call("GET", "$API?ref=main", token, null)
