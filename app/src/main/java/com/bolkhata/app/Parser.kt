@@ -566,6 +566,22 @@ object Parser {
 
     // ---------- spending ----------
 
+    /**
+     * The rule word a misspelt thing most likely is ("kapprye" is kapre): the same consonants in order, a letter or two
+     * off, and only one rule as near. Null when it is not clear.
+     */
+    fun nearThing(word: String): String? {
+        val w = word.lowercase()
+        if (w.length < 4 || !w.all { it in 'a'..'z' }) return null
+        val edits = if (w.length <= 5) 1 else 2
+        val bones = Spell.bones(w)
+        val near = rules.flatMap { r -> r.keys.filter { ' ' !in it && it.length >= 4 && Spell.bones(it) == bones }.map { Triple(it, Normalizer.distance(w, it), r) } }
+            .filter { it.second <= edits }
+        val best = near.minOfOrNull { it.second } ?: return null
+        val top = near.filter { it.second == best }
+        return if (top.map { it.third }.toSet().size == 1) top.first().first else null
+    }
+
     /** Category for a shop or item name, e.g. "PANDA RETAIL" -> Groceries. Null if unknown. */
     fun guessCategory(text: String): Pair<Cat, String>? {
         val t = text.lowercase()
