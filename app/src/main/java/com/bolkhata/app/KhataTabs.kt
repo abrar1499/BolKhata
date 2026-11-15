@@ -499,7 +499,7 @@ internal fun LazyListScope.ledger(
     rows.forEachIndexed { i, r ->
         if (i == 0 || !sameDay(rows[i - 1].date, r.date)) {
             // A quiet ad between days, every sixth day.
-            if (days > 0 && days % 6 == 0) item(key = keyPrefix + "ad" + days) { NativeAdCard("ledger-$keyPrefix$title-$days", Modifier.padding(horizontal = 10.dp, vertical = 6.dp), video = true, round = false) }
+            if (days > 0 && days % 6 == 0) item(key = keyPrefix + "ad" + days, contentType = "ad") { NativeAdCard("ledger-$keyPrefix$title-$days", Modifier.padding(horizontal = 10.dp, vertical = 6.dp), video = true, round = false) }
             days++
             val day = byDay[dayNumber(r.date)].orEmpty()
             item(key = keyPrefix + "d" + r.key) { DayLine(r.date, cols, day, cards) }
@@ -509,7 +509,7 @@ internal fun LazyListScope.ledger(
         item(key = keyPrefix + r.key) { LedgerRow(r, cols, last, cards) }
     }
     // The banner at the end of the list, seen only by scrolling down.
-    if (rows.isNotEmpty()) item(key = keyPrefix + "banner") { BannerAd(Modifier.padding(horizontal = 10.dp, vertical = 10.dp), round = false) }
+    if (rows.isNotEmpty()) item(key = keyPrefix + "banner", contentType = "ad") { BannerAd(Modifier.padding(horizontal = 10.dp, vertical = 10.dp), round = false) }
 }
 
 /** What an empty list shows instead of a blank page: the app logo and how to add the first entry. */
@@ -643,13 +643,22 @@ private fun BoxScope.PlusButton(onClick: () -> Unit) {
     }
 }
 
-/** Round ↑ button that appears once the list is scrolled down. */
+/** Round ↑ button that appears once the list is scrolled down. It steps aside while an ad is under it: nothing may cover an ad. */
 @Composable
 private fun BoxScope.UpButton(state: LazyListState) {
     val scope = rememberCoroutineScope()
-    val show by remember { derivedStateOf { state.firstVisibleItemIndex > 4 } }
+    val bottom = LocalBarSpace.current + 60.dp
+    // How far above the list's end the button's lower and upper edge sit, with a little room around it.
+    val (low, high) = with(androidx.compose.ui.platform.LocalDensity.current) { (bottom - 6.dp).roundToPx() to (bottom + 46.dp).roundToPx() }
+    val show by remember(low, high) {
+        derivedStateOf {
+            val end = state.layoutInfo.viewportEndOffset
+            state.firstVisibleItemIndex > 4 &&
+                state.layoutInfo.visibleItemsInfo.none { it.contentType == "ad" && it.offset < end - low && it.offset + it.size > end - high }
+        }
+    }
     if (show) Box(
-        Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = LocalBarSpace.current + 60.dp)
+        Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = bottom)
             .size(40.dp).shadow(2.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.onSurface)
             .clickable { scope.launch { state.animateScrollToItem(0) } },
         contentAlignment = Alignment.Center
@@ -1208,7 +1217,7 @@ fun SideScreen(
                         // Things in cards of five with a quiet ad between them.
                         val at = i % 5
                         val group = minOf(5, kids.size - i / 5 * 5)
-                        if (i > 0 && at == 0) item(key = "kad$i") { NativeAdCard("kids-${book.name}-$i", Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) }
+                        if (i > 0 && at == 0) item(key = "kad$i", contentType = "ad") { NativeAdCard("kids-${book.name}-$i", Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) }
                         item(key = "k" + k.name.lowercase()) {
                             val (amt, what) = if (book.people) Sides.balanceText(book, k.balance) else fmt(k.total) to word(book, true)
                             ItRow(
@@ -1268,7 +1277,7 @@ fun SideScreen(
                         // Accounts in cards of five with a quiet ad between them.
                         val i = at % 5
                         val size = minOf(5, shown.size - at / 5 * 5)
-                        if (at > 0 && i == 0) item(key = "ad$at") { NativeAdCard("accounts-$side-$at", Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) }
+                        if (at > 0 && i == 0) item(key = "ad$at", contentType = "ad") { NativeAdCard("accounts-$side-$at", Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) }
                         item(key = "b" + b.name) {
                             val kids = Sides.kids(b, entries, setup)
                             if (b.people) {
@@ -1292,7 +1301,7 @@ fun SideScreen(
                     if (shown.isEmpty()) emptyNote("Nothing found")
                     item(key = "addbook") { DashedAdd("+ Add account") { adding = "book" } }
                     // A few accounts leave room: the bigger banner (300 × 250); a long list, the slim one.
-                    if (shown.isNotEmpty()) item(key = "banner") { BannerAd(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), big = shown.size <= 3) }
+                    if (shown.isNotEmpty()) item(key = "banner", contentType = "ad") { BannerAd(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), big = shown.size <= 3) }
                 }
             }
         }
@@ -1940,7 +1949,7 @@ fun ProfitScreen(entries: List<Entry>, currency: String, setup: SideSetup, onBac
                 item(key = "n4") { ReportRow("Assets", "laptop, car, machines… at cost", withSign(worth.assets, "+"), GreenIn) { open = "Assets" } }
                 item(key = "n5") { ReportRow("To pay", "money you owe", withSign(worth.toPay, "−"), RedSpend) { open = "To pay" } }
                 item(key = "n6") { ReportRow("Net worth", "what you are worth today", plusMinus(worth.net).trimStart('+'), if (worth.net < 0) RedSpend else GreenIn, null) }
-                item(key = "ad") { NativeAdCard("report", Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) }
+                item(key = "ad", contentType = "ad") { NativeAdCard("report", Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) }
             }
         }
     }
