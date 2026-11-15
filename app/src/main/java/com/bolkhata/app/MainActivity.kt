@@ -162,7 +162,7 @@ fun App(
         Ai.model = Ai.chain.firstOrNull()?.second.orEmpty()
     }
     remember {
-        if (!BuildConfig.PLAY) { aiChain(); Ai.sink = { i, o, micro -> store.llmIn += i; store.llmOut += o; store.llmMicro += micro } }
+        aiChain(); Ai.sink = { i, o, micro -> store.llmIn += i; store.llmOut += o; store.llmMicro += micro }
     }
     fun groqKeyNow() = Ai.key.ifBlank { if (!Groq.ENABLED || !store.aiShown) "" else store.groqKey.ifBlank { if (Groq.sharedReady && !store.groqOff) Groq.SHARED else "" } }
     var groqKey by remember { mutableStateOf(groqKeyNow()) }
@@ -2490,7 +2490,7 @@ fun App(
                         else { tab = Tab.CHAT; drawer.close() }
                     }
                 },
-                ai = if (BuildConfig.PLAY || !aiShown) null else remember(aiTick, groqKey) { AiKeys(store.aiBoxes, Ai.answered, Ai.failed.toMap()) },
+                ai = if (!aiShown) null else remember(aiTick, groqKey) { AiKeys(store.aiBoxes, Ai.answered, Ai.failed.toMap()) },
                 onAiOpen = { aiTick++ },
                 aiModels = { store.aiModels(it) },
                 // Save in a box: keeps the key and model, turns it on, then reads the provider's model list and tries the key.
