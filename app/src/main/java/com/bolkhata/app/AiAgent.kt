@@ -448,6 +448,16 @@ object AiAgent {
     /** A remembered lesson done again: its tools filled with this message's numbers and people, and the reply to give. */
     class Replay(val calls: List<Pair<String, JSONObject>>, val reply: String)
 
+    /**
+     * True when [calls] would save one sale or work with a count and no rate or amount said: the chat then asks the
+     * rate on its card (filled with the last one) rather than save by itself (see LocalAdd).
+     */
+    fun needsRate(calls: List<Pair<String, JSONObject>>): Boolean {
+        val one = calls.singleOrNull()?.takeIf { it.first == "add_entries" }?.second?.optJSONArray("entries")
+            ?.takeIf { it.length() == 1 }?.optJSONObject(0) ?: return false
+        return one.optString("type") in setOf("sale", "work") && one.optDouble("qty", 0.0) > 0 && !one.has("rate") && !one.has("amount")
+    }
+
     /** [lesson] (a save, or tools and a reply) filled with the numbers and people of a new message of the same shape; null when it does not fit. */
     fun replay(lesson: String, said: String, who: (String) -> String? = { null }): Replay? = runCatching {
         if (lesson.trimStart().startsWith("[")) return@runCatching recall(lesson, said, who)?.let { Replay(listOf("add_entries" to it), "") }

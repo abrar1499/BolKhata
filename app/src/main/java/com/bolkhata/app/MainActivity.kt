@@ -1382,7 +1382,8 @@ fun App(
                     val who = AiAgent.who(names0, store.known())
                     val counted = AiAgent.counted(roman)
                     val shape = AiAgent.shape(counted, who)
-                    store.known()[shape]?.let { AiAgent.replay(it, counted, who) }?.let { r ->
+                    // (One sale or work with no rate said is left to the app's own assistant, which asks the rate on its card.)
+                    store.known()[shape]?.let { AiAgent.replay(it, counted, who) }?.takeIf { !AiAgent.needsRate(it.calls) }?.let { r ->
                         val notes = AiAgent.Notes(said = AiAgent.numbers(counted), lastShown = history.lastOrNull { !it.isUser }?.text.orEmpty())
                         r.calls.forEach { (n, input) -> runCatching { AiAgent.use(n, input, host, System.currentTimeMillis(), notes) } }
                         // A save that saved nothing (the same entry a moment ago) is left to the rules below.

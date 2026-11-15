@@ -345,4 +345,13 @@ class AiAgentTest {
         assertEquals("School fees", AiAgent.shortNote("for school fees"))
         assertEquals("", AiAgent.shortNote("  "))
     }
+
+    /** A learnt save of one sale or work without a rate goes to the rate card; with a rate, or for money, it is saved as learnt. */
+    @Test
+    fun aLearntSaleWithNoRateAsksOnTheCard() {
+        fun calls(entry: String) = listOf("add_entries" to org.json.JSONObject("""{"entries":[$entry]}"""))
+        org.junit.Assert.assertTrue(AiAgent.needsRate(calls("""{"type":"sale","qty":3500,"item":"Pakki eent","person":"Nargis Salim Rashid"}""")))
+        org.junit.Assert.assertFalse(AiAgent.needsRate(calls("""{"type":"sale","qty":3500,"rate":12000,"per_1000":true,"item":"Pakki eent","person":"Nargis Salim Rashid"}""")))
+        org.junit.Assert.assertFalse(AiAgent.needsRate(calls("""{"type":"lent","amount":500,"person":"Hamid Akram"}""")))
+    }
 }
