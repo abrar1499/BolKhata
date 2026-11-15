@@ -441,7 +441,7 @@ private fun AiBoxCard(n: Int, p: Ai.Provider, box: AiBox, status: Pair<String, C
             }
         }
         if (open) {
-            WellField(key, { key = it.trim() }, if (box.key.isBlank()) "Paste ${p.name} key" else box.key.take(6) + "••••••" + box.key.takeLast(3), small = true)
+            WellField(key, { key = it.trim() }, if (box.key.isBlank()) "API key · type or paste" else box.key.take(6) + "••••••" + box.key.takeLast(3) + " · type or paste to change", small = true)
             Row(Modifier.padding(top = 5.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.weight(1f)) {
                     Row(Modifier.fillMaxWidth().fieldEdge(RoundedCornerShape(12.dp)).clickable { pick = true }.padding(horizontal = 12.dp, vertical = 7.dp),
