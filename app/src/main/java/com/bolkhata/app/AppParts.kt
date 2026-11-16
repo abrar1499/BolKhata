@@ -281,8 +281,7 @@ internal fun SideMenu(
         }) {
         Column(Modifier.verticalScroll(rememberScrollState()).statusBarsPadding().padding(bottom = 16.dp)) {
             Row(Modifier.padding(start = 14.dp, end = 14.dp, top = 16.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                // The app's logo keeps its own red in the dark theme; the business logos wear the header's colours.
-                GlassLogo(34.dp, brand = LocalLook.current != null)
+                GlassLogo(34.dp)
                 Spacer(Modifier.width(10.dp))
                 Column {
                     Text("Smart Expense", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)

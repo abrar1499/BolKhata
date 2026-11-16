@@ -203,15 +203,18 @@ private fun DrawScope.drawBand(theme: HeaderTheme, h: Float) {
 /** White pill at the top: the glossy app logo and the open business; a tap opens the side menu (businesses and settings). */
 @Composable
 internal fun BusinessPill(name: String, onMenu: () -> Unit) {
+    // In the dark theme it is glass like the 🌐 pill beside it.
+    val dark = LocalLook.current != null
     Row(
-        Modifier.padding(top = 12.dp).lift(1.dp, CircleShape).clip(CircleShape).background(Color.White)
+        Modifier.padding(top = 12.dp).then(if (dark) Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.surface)
+            else Modifier.lift(1.dp, CircleShape).clip(CircleShape).background(Color.White))
             .clickable(onClickLabel = "Menu") { onMenu() }.padding(start = 6.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         GlassLogo(24.dp)
         Spacer(Modifier.width(6.dp))
-        Text(name, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1C1917), maxLines = 1, overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.widthIn(max = 170.dp))
+        Text(name, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (dark) MaterialTheme.colorScheme.onSurface else Color(0xFF1C1917),
+            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 170.dp))
     }
 }
 
