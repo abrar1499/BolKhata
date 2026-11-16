@@ -162,7 +162,8 @@ fun App(
     fun aiChain() {
         val boxes = store.aiBoxes
         Ai.saved = Ai.ALL.mapNotNull { p -> boxes[p.name]?.key?.trim()?.takeIf { it.isNotBlank() }?.let { it to p } }.toMap()
-        Ai.chain = if (!store.aiShown) emptyList() else Ai.ALL.mapNotNull { p -> boxes[p.name]?.takeIf { it.on && it.key.isNotBlank() }?.let { it.key.trim() to it.model } }
+        Ai.chain = if (!store.aiShown) emptyList() else Ai.chainOf(Ai.ALL.mapNotNull { p -> boxes[p.name]?.takeIf { it.on && it.key.isNotBlank() }?.let { it.key.trim() to it.model } },
+            Brain.unhide(BuildConfig.CLAUDE_KEY))
         Ai.key = Ai.chain.firstOrNull()?.first.orEmpty()
         Ai.model = Ai.chain.firstOrNull()?.second.orEmpty()
     }

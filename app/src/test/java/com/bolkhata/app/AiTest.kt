@@ -17,6 +17,13 @@ class AiTest {
     }
 
     @Test
+    fun theBuiltInClaudeKeyAnswersOnlyWithoutAKeyOfOnesOwn() {
+        assertEquals(listOf("sk-ant-app" to ""), Ai.chainOf(emptyList(), " sk-ant-app "))
+        assertEquals(listOf("gsk_mine" to ""), Ai.chainOf(listOf("gsk_mine" to ""), "sk-ant-app"))
+        assertEquals(emptyList<Pair<String, String>>(), Ai.chainOf(emptyList(), ""))
+    }
+
+    @Test
     fun costComesFromThePricePerMillion() {
         // 1,000,000 in at $4 and 500,000 out at $20 = $14.
         assertEquals("1,000,000 in · 500,000 out · $14.0000", Ai.usageText(1_000_000, 500_000, "claude-opus-5-5"))
