@@ -57,7 +57,8 @@ import androidx.compose.ui.unit.sp
 
 /**
  * The message bar above the tabs on Chat (as in the mock-up): one 38-high rounded field on the page, the text and a
- * white round mic that sends what is typed (or starts speaking when empty) and shows a spinner while the app is answering.
+ * white round mic that sends what is typed (when empty: opens the keyboard to speak into; a long press: the app's own
+ * listening) and shows a spinner while the app is answering.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
