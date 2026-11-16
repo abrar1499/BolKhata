@@ -162,13 +162,11 @@ fun App(
     fun aiChain() {
         val boxes = store.aiBoxes
         Ai.saved = Ai.ALL.mapNotNull { p -> boxes[p.name]?.key?.trim()?.takeIf { it.isNotBlank() }?.let { it to p } }.toMap()
-        Ai.chain = if (!store.aiShown) emptyList() else Ai.ALL.mapNotNull { p -> boxes[p.name]?.takeIf { it.on && it.key.isNotBlank() }?.let { it.key.trim() to it.model } } +
-            Ai.serverChain()
+        Ai.chain = if (!store.aiShown) emptyList() else Ai.ALL.mapNotNull { p -> boxes[p.name]?.takeIf { it.on && it.key.isNotBlank() }?.let { it.key.trim() to it.model } }
         Ai.key = Ai.chain.firstOrNull()?.first.orEmpty()
         Ai.model = Ai.chain.firstOrNull()?.second.orEmpty()
     }
     remember {
-        Ai.relay = BuildConfig.RELAY_URL; Ai.relayToken = Brain.unhide(BuildConfig.RELAY_TOKEN)
         aiChain(); Ai.sink = { i, o, micro -> store.llmIn += i; store.llmOut += o; store.llmMicro += micro }
     }
     fun groqKeyNow() = Ai.key.ifBlank { if (!Groq.ENABLED || !store.aiShown) "" else store.groqKey.ifBlank { if (Groq.sharedReady && !store.groqOff) Groq.SHARED else "" } }
@@ -1455,27 +1453,18 @@ fun App(
                     val racers = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO)
                     val known = store.known(); val picked = aiPicked; val saved = aiSaved
                     val lastShown = history.lastOrNull { !it.isUser }?.text.orEmpty()
-                    // Each of the person's own keys races the others; the server's keys are one racer, tried one after another
-                    // (they are the owner's, so only one is paid for a message).
-                    val ready = Ai.chain.filter { (k, _) -> (Ai.restUntil[(if (Ai.isServer(k)) Ai.SERVER else "") + Ai.provider(k)?.name.orEmpty()] ?: 0L) <= System.currentTimeMillis() }
-                    val racersList = ready.filterNot { Ai.isServer(it.first) }.map { listOf(it) } + listOfNotNull(ready.filter { Ai.isServer(it.first) }.takeIf { it.isNotEmpty() })
-                    val jobs = racersList.map { turns ->
+                    val jobs = Ai.chain.filter { (k, _) -> (Ai.restUntil[Ai.provider(k)?.name.orEmpty()] ?: 0L) <= System.currentTimeMillis() }.map { (k, m) ->
                         racers.async {
-                            var got: Won? = null
-                            for ((k, m) in turns) {
-                                if (stop.get()) break
-                                val name = (if (Ai.isServer(k)) Ai.SERVER else "") + Ai.provider(k)?.name.orEmpty()
-                                val calls = mutableListOf<Pair<String, org.json.JSONObject>>()
-                                val a = Ai.using(k, m) {
-                                    AiAgent.run(text, recent, copy(), roman = roman, previous = picked, justSaved = saved, heardAlso = heardAlso, spoken = spoken,
-                                        known = known, lastShown = lastShown, onTool = { n, input, _ -> calls += n to input }, stop = { stop.get() }).also { a ->
-                                        // Out of credit or at its limit: left to rest before it is tried again.
-                                        if (a == null && !stop.get()) { Ai.failed[name] = Ai.lastError; Ai.restUntil[name] = System.currentTimeMillis() + Ai.restFor(Ai.lastError); aiWhy = name + " " + Ai.lastError.take(90) }
-                                    }
+                            val name = Ai.provider(k)?.name.orEmpty()
+                            val calls = mutableListOf<Pair<String, org.json.JSONObject>>()
+                            val a = Ai.using(k, m) {
+                                AiAgent.run(text, recent, copy(), roman = roman, previous = picked, justSaved = saved, heardAlso = heardAlso, spoken = spoken,
+                                    known = known, lastShown = lastShown, onTool = { n, input, _ -> calls += n to input }, stop = { stop.get() }).also { a ->
+                                    // Out of credit or at its limit: left to rest before it is tried again.
+                                    if (a == null && !stop.get()) { Ai.failed[name] = Ai.lastError; Ai.restUntil[name] = System.currentTimeMillis() + Ai.restFor(Ai.lastError); aiWhy = name + " " + Ai.lastError.take(90) }
                                 }
-                                if (a != null) { got = Won(a, calls, k, m); break }
                             }
-                            got
+                            a?.let { Won(it, calls, k, m) }
                         }
                     }
                     var won: Won? = null

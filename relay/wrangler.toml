@@ -1,5 +1,0 @@
-# The app's AI server on Cloudflare Workers (free plan). Deployed by .github/workflows/relay.yml; the keys are secrets.
-name = "smart-expense-ai"
-main = "worker.js"
-compatibility_date = "2025-09-01"
-workers_dev = true
