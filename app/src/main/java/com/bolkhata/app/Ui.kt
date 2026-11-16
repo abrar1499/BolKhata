@@ -135,6 +135,8 @@ val HEADER_THEMES = listOf(
 
 /** The header theme to show; "Clean" follows dark mode so its text stays readable. */
 fun headerTheme(name: String, dark: Boolean = false): HeaderTheme {
+    // The dark theme always wears the Navy band (the header dots are for the light look).
+    if (dark) HEADER_THEMES.firstOrNull { it.name == "Navy" }?.let { return it }
     val theme = HEADER_THEMES.firstOrNull { it.name == name } ?: HEADER_THEMES.first()
     return if (theme.name == "Clean" && dark) h("Clean", 0xFF0F0F0F, 0xFF0F0F0F, 0xFF0F0F0F, false) else theme
 }
@@ -767,7 +769,8 @@ fun DrawScope.drawGlass(colors: List<Color>, h: Float) {
  */
 @Composable
 fun GlassLogo(size: Dp, modifier: Modifier = Modifier, onBand: Boolean = false) {
-    val c = glassColors(LocalHeader.current)
+    // In the dark theme the logo keeps its own red, whatever the band.
+    val c = if (LocalLook.current != null) BrandGlass else glassColors(LocalHeader.current)
     val shape = RoundedCornerShape(size * 0.26f)
     Canvas(
         modifier.size(size)
@@ -856,15 +859,6 @@ fun Modifier.lift(
     elevation: androidx.compose.ui.unit.Dp, shape: androidx.compose.ui.graphics.Shape = androidx.compose.ui.graphics.RectangleShape,
     ambientColor: Color = androidx.compose.ui.graphics.DefaultShadowColor, spotColor: Color = androidx.compose.ui.graphics.DefaultShadowColor
 ): Modifier = if (LocalLook.current?.glow == true) this else shadow(elevation, shape, ambientColor = ambientColor, spotColor = spotColor)
-
-/** True in the glow look (Navy glow): no header band, glass pills, the tabs float. */
-@Composable
-@androidx.compose.runtime.ReadOnlyComposable
-fun isGlow(): Boolean = LocalLook.current?.glow == true
-
-/** See-through glass, as the glow look's cards: a light veil and a light edge. */
-fun Modifier.glass(shape: androidx.compose.ui.graphics.Shape): Modifier =
-    clip(shape).background(Color.White.copy(alpha = 0.10f)).border(1.dp, Color.White.copy(alpha = 0.16f), shape)
 
 /** A solid card for things that float over a list (tabs, menus, the + button): in the glow look frosted glass on the glow. */
 @Composable

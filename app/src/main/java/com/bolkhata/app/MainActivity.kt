@@ -146,7 +146,7 @@ fun App(
     // The status bar is see-through: the theme band shows through it on the khata tabs, the page colour elsewhere.
     val pageColor = MaterialTheme.colorScheme.background
     val header = LocalHeader.current
-    val banded = header.name != "Clean" && tab in BAND_TABS && LocalLook.current?.glow != true
+    val banded = header.name != "Clean" && tab in BAND_TABS
     LaunchedEffect(pageColor, dark, banded, header) {
         (context as? Activity)?.window?.let { w ->
             @Suppress("DEPRECATION")
@@ -2553,16 +2553,6 @@ fun App(
         sides = store.loadSides()
         partyOpen = null
     }
-    // A photo picked for the background is copied into the app's own storage (the old one is removed).
-    val pickBg = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        val f = java.io.File(context.filesDir, "bg-${System.currentTimeMillis()}.jpg")
-        runCatching {
-            context.contentResolver.openInputStream(uri)?.use { input -> f.outputStream().use { input.copyTo(it) } }
-            context.filesDir.listFiles { x -> x.name.startsWith("bg-") && x.name != f.name }?.forEach { it.delete() }
-            onPhoto(f.absolutePath)
-        }.onFailure { toast("Couldn't use that photo") }
-    }
     val drawer = rememberDrawerState(DrawerValue.Closed)
     // The chat changes the side menu's settings too (the AI's app_setting tool and LocalSettings): the answer says what
     // changed at once, the change itself is made on the main thread.
@@ -2653,7 +2643,6 @@ fun App(
                 onTheme = onTheme,
                 page = page, onPage = { onPhoto(""); onDark(false); onPage(it) },
                 onDark = { c -> onPhoto(""); onDark(true); onPage(c) },
-                onPhoto = { pickBg.launch("image/*") },
                 onExport = {
                     val day = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
                     exportFile.launch("SmartExpense-backup-$day.json"); close()

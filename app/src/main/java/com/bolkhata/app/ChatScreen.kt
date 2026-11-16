@@ -383,21 +383,19 @@ private fun UserBubble(text: String, attachment: String = "") {
         AttachmentBubble(attachment, text)
         return
     }
-    // In the glow look the question is in a lighter glass bubble with light text, as the mock.
-    val glow = isGlow()
+    val dark = LocalLook.current != null
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
         Text(
             text,
-            // The question in a dark bubble, the answer in a white card (like the Yaad mock-up).
-            color = if (glow) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.surfaceContainer,
+            // The question in a dark bubble, the answer in a white card (like the Yaad mock-up); in the dark theme too.
+            color = if (dark) Color.White else MaterialTheme.colorScheme.surfaceContainer,
             fontSize = 13.sp,
             lineHeight = 17.5.sp,
             modifier = Modifier
                 .widthIn(max = 300.dp)
                 .clip(MeShape)
                 .copyable(text)
-                .then(if (glow) Modifier.background(Color.White.copy(alpha = 0.16f)).border(1.dp, Color.White.copy(alpha = 0.16f), MeShape)
-                    else Modifier.background(MaterialTheme.colorScheme.onSurface))
+                .background(if (dark) Color(0xFF1C1917) else MaterialTheme.colorScheme.onSurface)
                 .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 6.dp)
         )
     }

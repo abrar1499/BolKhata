@@ -208,7 +208,7 @@ internal fun SideMenu(
     onBusinessPage: () -> Unit,
     onRenameBusiness: (id: String, name: String) -> Unit, onDeleteBusiness: (id: String) -> Unit,
     onCurrency: (String) -> Unit, onLang: (String) -> Unit, onTheme: (String) -> Unit,
-    page: Long, onPage: (Long) -> Unit, onDark: (Long) -> Unit, onPhoto: () -> Unit,
+    page: Long, onPage: (Long) -> Unit, onDark: (Long) -> Unit,
     onExport: () -> Unit, onImport: () -> Unit, onTrash: () -> Unit, onVersion: () -> Unit,
     /** The Gmail synced with Google Drive ("" when not signed in) and how the last save went. */
     driveEmail: String = "", driveStatus: String = "",
@@ -363,19 +363,18 @@ internal fun SideMenu(
                         onAppLang(apps.first { it.second == picked }.first)
                     }
                 }
-                MenuRow(onClick = null) {
+                // The header dots are for the light look; the dark theme always wears Navy.
+                if (!dark) MenuRow(onClick = null) {
                     MenuLabel("🖌", "Header")
                     MENU_THEMES.mapNotNull { n -> HEADER_THEMES.firstOrNull { it.name == n } }.forEach { t ->
                         Dot(Brush.linearGradient(listOf(t.c1, t.c2, t.c3)), themeName == t.name) { onTheme(t.name) }
                     }
                 }
-                MenuRow(onClick = null, last = true) {
-                    // Like Header: the label, the light colours, the dull dark ones, then a photo.
-                    MenuLabel("🎨", "Background")
-                    PAGE_COLORS.forEach { c -> Dot(SolidColor(Color(c)), !dark && !photo && page == c) { onPage(c) } }
-                    DARK_PAGES.forEach { c -> Dot(SolidColor(Color(c)), dark && !photo && (page == c || (c == DARK_PAGES[0] && page !in DARK_PAGES))) { onDark(c) } }
-                    Text("🖼", fontSize = 16.sp, modifier = Modifier.padding(start = 5.dp).clip(CircleShape).clickable(onClick = onPhoto)
-                                .then(if (photo) Modifier.border(2.dp, EmberTop, CircleShape) else Modifier).padding(2.dp))
+                // Dark theme: on is Navy glow (soft lights, glass cards, the Navy band); off is the warm grey page, the default.
+                val darkOn = dark && !photo
+                MenuRow(onClick = { if (darkOn) onPage(PAGE_COLORS[0]) else onDark(DARK_PAGES[1]) }, last = true) {
+                    MenuLabel("🌙", "Dark theme")
+                    OnOff(darkOn)
                 }
             }
             Spacer(Modifier.height(8.dp))
@@ -524,10 +523,7 @@ private fun AiBoxCard(n: Int, p: Ai.Provider, box: AiBox, status: Pair<String, C
                 Text(status.first, fontSize = 10.sp, color = status.second, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             // The switch: without a key it opens the box for one.
-            Box(Modifier.size(34.dp, 20.dp).clip(RoundedCornerShape(10.dp)).background(if (on) GreenIn else Color(0xFFD6D2CC))
-                .clickable { if (box.key.isBlank()) open = !open else onSwitch(!box.on) }) {
-                Box(Modifier.align(if (on) Alignment.CenterEnd else Alignment.CenterStart).padding(2.dp).size(16.dp).lift(1.dp, CircleShape).clip(CircleShape).background(Color.White))
-            }
+            OnOff(on, Modifier.clickable { if (box.key.isBlank()) open = !open else onSwitch(!box.on) })
         }
         if (open) {
             WellField(key, { key = it.trim() }, "Paste API key", small = true)
@@ -602,12 +598,21 @@ private fun MenuRow(onClick: (() -> Unit)?, last: Boolean = false, onLong: (() -
 
 @Composable
 private fun RowScope.MenuLabel(icon: String, label: String) {
-    Text("$icon $label", fontSize = 13.sp, maxLines = 1, modifier = Modifier.weight(1f))
+    // The label is put in the app's language on its own (the icon in front would hide it from the table).
+    Text("$icon " + t(label), fontSize = 13.sp, maxLines = 1, modifier = Modifier.weight(1f))
 }
 
 @Composable
 private fun MenuValue(value: String) {
     Text(value, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+}
+
+/** A small on/off switch: green with the knob right when on. */
+@Composable
+private fun OnOff(on: Boolean, modifier: Modifier = Modifier) {
+    Box(Modifier.size(34.dp, 20.dp).clip(RoundedCornerShape(10.dp)).background(if (on) GreenIn else Color(0xFFD6D2CC)).then(modifier)) {
+        Box(Modifier.align(if (on) Alignment.CenterEnd else Alignment.CenterStart).padding(2.dp).size(16.dp).lift(1.dp, CircleShape).clip(CircleShape).background(Color.White))
+    }
 }
 
 /** A small round colour to pick (header theme or background), ringed when chosen. */
