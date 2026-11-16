@@ -62,6 +62,7 @@ class MainActivity : ComponentActivity() {
         // The app draws under the status bar, so the theme band runs to the very top of the screen in one piece.
         WindowCompat.setDecorFitsSystemWindows(window, false)
         val store = Store(this)
+        store.pickCurrencyOnce(this)
         // The app's words in the chosen language (or the phone's), before the first screen is drawn.
         I18n.use(this, store.appLanguage)
         setContent {
