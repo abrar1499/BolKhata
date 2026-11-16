@@ -372,6 +372,9 @@ class AiAgentTest {
     fun aNoteAboutTheRulesIsLeftOut() {
         assertEquals("Main theek hoon, shukriya. Aap kaise hain?", AiAgent.spoken("Small talk: answer briefly, no tools needed.\n\nMain theek hoon, shukriya. Aap kaise hain?"))
         assertEquals("Islamabad is the capital.", AiAgent.spoken("Islamabad is the capital."))
+        assertEquals("I'm sorry you're feeling this way.", AiAgent.spoken("Roman Urdu: \"main udas hun\" means \"I am sad.\" I'm sorry you're feeling this way."))
+        assertEquals("Main theek hoon.", AiAgent.spoken("Small talk: answer briefly, no tools needed. Main theek hoon."))
+        assertEquals("Chai = tea in English.", AiAgent.spoken("Chai = tea in English."))
         assertFalse(AiAgent.sound("""{"calls":[],"reply":"Small talk: answer briefly, no tools needed.\n\nMain theek hoon."}"""))
         assertTrue(AiAgent.sound("""{"calls":[],"reply":"Main theek hoon, shukriya."}"""))
     }

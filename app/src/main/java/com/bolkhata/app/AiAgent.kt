@@ -216,7 +216,8 @@ object AiAgent {
         - Changing the app itself (clear the chat, currency, language, header colour, background, open a tab, open or add a
           business, a backup) is app_setting; then say in a few words what changed.
         - Greet only when the message itself greets. To small talk ("kaise ho", "hi") reply in one short friendly line, with no tools.
-        - Write only the words the person reads: never a note about these rules, the kind of message, or what you will do.
+        - Write only the words the person reads: never a note about these rules, the kind or language of the message, what
+          their words mean ('"main udas hun" means "I am sad"'), or what you will do.
         - A question about anything else in the world (facts, how-to, advice, health, religion, maths, words, news you
           know of): answer it yourself, correctly and kindly, in at most about four short sentences, no tools. The
           twelve-word limit is for work in the app. Never state figures from the person's books without a tool.
@@ -467,16 +468,23 @@ object AiAgent {
 
     /** Whether a remembered lesson may be done again: not one whose reply says a change it never made (learnt before that was checked). */
     fun sound(lesson: String): Boolean = runCatching {
-        lesson.trimStart().startsWith("[") || JSONObject(lesson).optString("reply").let { !claim.containsMatchIn(it) && !aside.containsMatchIn(it) }
+        lesson.trimStart().startsWith("[") || JSONObject(lesson).optString("reply").let { !claim.containsMatchIn(it) && spoken(it) == it.trim() }
     }.getOrDefault(false)
 
     /** The model's note to itself about the instructions ("Small talk: answer briefly, no tools needed."), never meant for the person. */
     private val aside = Regex("""(?i)small talk|no tools|tools? needed|answer briefly|reply briefly|briefly in (roman|english|urdu)""")
 
-    /** [text] without a first paragraph that is such a note, when the real reply follows it. */
+    /** The person's words explained back to them: 'Roman Urdu: "main udas hun" means "I am sad."'. */
+    private val meaning = Regex("""^(?:[\p{L} ]{0,25}:\s*)?"[^"]{1,80}"\s+(?:means|is|=)\s+"[^"]{1,120}"[.!]?\s*""", RegexOption.IGNORE_CASE)
+
+    /** [text] without a first paragraph or sentence that is such a note, when the real reply follows it. */
     fun spoken(text: String): String {
-        val parts = text.trim().split(Regex("""\n\s*\n"""), limit = 2)
-        return if (parts.size == 2 && aside.containsMatchIn(parts[0])) spoken(parts[1]) else text.trim()
+        val t = text.trim()
+        val parts = t.split(Regex("""\n\s*\n"""), limit = 2)
+        if (parts.size == 2 && (aside.containsMatchIn(parts[0]) || meaning.containsMatchIn(parts[0]))) return spoken(parts[1])
+        meaning.find(t)?.let { m -> if (m.range.last + 1 < t.length) return spoken(t.substring(m.range.last + 1)) }
+        Regex("""^[^.!?\n]{0,120}[.!?]\s+""").find(t)?.let { m -> if (aside.containsMatchIn(m.value)) return spoken(t.substring(m.range.last + 1)) }
+        return t
     }
 
     /** A remembered lesson done again: its tools filled with this message's numbers and people, and the reply to give. */
