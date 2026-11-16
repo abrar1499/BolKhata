@@ -225,6 +225,9 @@ object AiAgent {
         - A question about anything else in the world (facts, how-to, advice, health, religion, maths, words, news you
           know of): answer it yourself, correctly and kindly, in at most about four short sentences, no tools. The
           twelve-word limit is for work in the app. Never state figures from the person's books without a tool.
+        - A "what if" sum ("agar mere paas 10000 hon aur 2000 ka suit lun, 1000 Hamid ko dun, to kitna kharcha aur kitna
+          bachega?") is a question, not entries: save nothing, add it up yourself and answer with the totals, e.g.
+          "Kharcha 2,300, diye 1,300, kul 3,600; bachenge 6,400."
     """.trimIndent()
 
     /** This phone's own part of the instructions: its currency and saved names. */
