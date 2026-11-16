@@ -402,4 +402,8 @@ class LocalAskTest {
         assertNull("$it -> ${o.text}", o.reply)
         assertTrue(it, o.tools.isEmpty())
     }
+
+    /** Asking what the app can help with is not a look-up ("No entries."): the other readers or the AI answer it. */
+    @Test
+    fun askingForHelpIsNotALookUp() = listOf("kya madad kr sakty ho", "kya madad kar sakte ho", "help").forEach { assertNull(it, ask(it).reply) }
 }

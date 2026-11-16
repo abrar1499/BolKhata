@@ -17,6 +17,8 @@ object LocalAsk : LocalAgent.Reader {
         // "khan wala" after "Which Salim do you mean…?": the question asked again with that name, or not a question at all.
         LocalAgent.picked(s)?.let { return read(s.again(it)) }
         val m = Msg(s)
+        // "kya madad kar sakte ho": a question about the app, not a look-up in the books.
+        if (s.words.any { it == "madad" || it == "help" }) return null
         val who = people(m)
         val prev = s.previous.takeIf { it.isNotBlank() }?.let { runCatching { JSONObject(it) }.getOrNull() }
         val p = m.pick(who)
