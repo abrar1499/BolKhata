@@ -33,6 +33,9 @@ object Spell {
         out.filterKeys { w -> w.length >= 3 && w.all { it in 'a'..'z' } }
     }
 
+    /** Whether the app's own readers know [word] (the brain may only add words it does not). */
+    fun knows(word: String) = word.lowercase() in known || (Understand.isCommonName(word) && !Lexicon.isName(word))
+
     /** A list of number words: "dedh", "sau", "lakh". */
     private fun numberList(list: String) = list.startsWith("NumberWords.") || "multipliers" in list || "halves" in list
 
@@ -70,7 +73,8 @@ object Spell {
             // Mohsin misheard, which the readers match to the saved name).
             val namePlace = words.getOrNull(at + 1)?.lowercase() in setOf("ko", "ku", "ne", "nay", "ny", "se", "sy", "say") ||
                 words.getOrNull(at - 1)?.lowercase() in setOf("to", "from")
-            if (w.length < 3 || !w.all { it in 'a'..'z' } || w in known || w in own || Understand.isCommonName(w)) return@mapIndexed raw
+            if (w.length < 3 || !w.all { it in 'a'..'z' } || w in known || w in own || Understand.isCommonName(w) || Lexicon.isName(w) ||
+                Lexicon.thing(listOf(w)) != null) return@mapIndexed raw
             val edits = if (w.length <= 5) 1 else 2
             // Known words with the same consonants, also when two letters were swapped ("rikcshaw", "paacnh").
             val swaps = (0 until w.length - 1).map { i -> w.substring(0, i) + w[i + 1] + w[i] + w.substring(i + 2) }

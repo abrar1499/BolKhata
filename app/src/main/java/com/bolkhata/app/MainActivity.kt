@@ -300,8 +300,11 @@ fun App(
     LaunchedEffect(Unit) { (context as? android.app.Activity)?.let { Ads.start(it) } }
     // The shared brain, read each time the app opens: the app knows more without a new version.
     LaunchedEffect(Unit) {
+        // The brain's words as last read, at once (also without internet); the fresh ones replace them below.
+        Lexicon.load(store.brainWords)
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Brain.fetch() }?.let {
             store.brain = it
+            store.brainWords = Lexicon.saved
             // The owner's switch for the built-in AI, for everyone.
             if (store.aiForAll != Brain.aiForAll) { store.aiForAll = Brain.aiForAll; aiChain(); groqKey = groqKeyNow(); aiTick++ }
         }
@@ -1344,7 +1347,7 @@ fun App(
             postChat("That's already done. Say 'add another' for one more.", isUser = false)
             return
         }
-        val roman = runCatching { Translit.toRoman(text) }.getOrDefault(text)
+        val roman = Lexicon.apply(runCatching { Translit.toRoman(text) }.getOrDefault(text))
         // A long window, so a follow-up still knows the search or list from many turns back.
         val history = chatMessages.takeLast(60)
         // What is said in live voice is kept for the AI's memory of the talk, but not shown.
