@@ -370,7 +370,8 @@ internal fun SideMenu(
                         DropdownMenuItem(text = { Text("Import data") }, onClick = { open = false; onImport() })
                     }
                 }
-                if (ai != null) MenuRow(onClick = { onAiOpen(); aiOpen = true }) { MenuLabel("🤖", "AI keys"); MenuValue(ai.live().firstOrNull()?.name ?: "Off") }
+                // Own AI keys are for the APK only; the Play build runs on the app's own key.
+                if (ai != null && !BuildConfig.PLAY) MenuRow(onClick = { onAiOpen(); aiOpen = true }) { MenuLabel("🤖", "AI keys"); MenuValue(ai.live().firstOrNull()?.name ?: "Off") }
                 MenuRow(onClick = onTrash) { MenuLabel("🗑", "Trash"); MenuValue("›") }
                 MenuRow(onClick = onVersion, last = true) { MenuLabel("⬆️", "Version"); MenuValue(version) }
             }
