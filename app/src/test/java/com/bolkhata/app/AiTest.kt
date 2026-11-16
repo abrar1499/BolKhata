@@ -24,6 +24,13 @@ class AiTest {
     }
 
     @Test
+    fun aKeyWithNoModelPickedRunsItsProvidersUsualOne() {
+        // The built-in key comes with no model picked: its cost is still known, so the price shows under the answer.
+        assertEquals("claude-haiku-5-5", Ai.modelOf("sk-ant-app", ""))
+        assertEquals("claude-sonnet-5-5", Ai.modelOf("sk-ant-app", "claude-sonnet-5-5"))
+    }
+
+    @Test
     fun costComesFromThePricePerMillion() {
         // 1,000,000 in at $4 and 500,000 out at $20 = $14.
         assertEquals("1,000,000 in · 500,000 out · $14.0000", Ai.usageText(1_000_000, 500_000, "claude-opus-5-5"))
