@@ -748,6 +748,8 @@ object Parser {
             }
         }
         rules.firstOrNull { rule -> rule.keys.any { matches(it, t, words) } }?.let { return it.cat to it.item }
+        // Things the shared brain knows (added without a new version).
+        Lexicon.thing(words)?.let { return it }
         if (carWords.any { matches(it, t, words) }) return Cat.TRANSPORT to "Car (other)"
         if (phoneWords.any { matches(it, t, words) }) return Cat.MOBILE to "Mobile recharge"
         // Second pass: allow one wrong letter in longer words (petrl, bottel, choclate…)

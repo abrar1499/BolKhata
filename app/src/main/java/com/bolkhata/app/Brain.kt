@@ -20,7 +20,7 @@ object Brain {
     /** Whether the owner's built-in AI key answers for everyone ("ai" in the shared file; on unless the owner turned it off). */
     @Volatile var aiForAll = true
 
-    /** The lessons in the shared file ({"lessons": {shape: lesson}, "ai": true}); null when it could not be read. Reads [aiForAll] too. */
+    /** The lessons in the shared file ({"lessons": {shape: lesson}, "ai": true}); null when it could not be read. Reads [aiForAll] and the words (see [Lexicon]) too. */
     fun fetch(): Map<String, String>? = runCatching {
         val conn = URL(URL).openConnection() as HttpURLConnection
         conn.connectTimeout = 8_000
@@ -28,6 +28,7 @@ object Brain {
         if (conn.responseCode != 200) return@runCatching null
         val o = JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
         aiForAll = o.optBoolean("ai", true)
+        o.optJSONObject("words")?.let { Lexicon.load(it.toString()) }
         clean(lessonsOf(o))
     }.getOrNull()
 

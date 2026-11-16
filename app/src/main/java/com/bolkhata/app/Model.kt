@@ -234,7 +234,7 @@ class Store(context: Context) {
         "driveEmail", "driveAt", "driveDirty", "deviceId", "llmKey", "llmModel", "llmIn", "llmOut", "llmMicro", "llmVoice", "llmOn", "aiShown", "aiBoxes", "brainToken")
 
     /** Also kept off Google Drive: the chat history and the background photo (a file on this phone). */
-    private val phoneOnly = setOf("chatMessages", "bgPhoto", "brain", "learnedSent")
+    private val phoneOnly = setOf("chatMessages", "bgPhoto", "brain", "brainWords", "learnedSent")
 
     /** The Gmail whose Drive this phone syncs with; "" when not signed in. */
     var driveEmail: String
@@ -718,6 +718,10 @@ class Store(context: Context) {
             o.keys().asSequence().associateWith { o.getString(it) }
         }.getOrDefault(emptyMap())
         set(v) = prefs.edit().putString("brain", org.json.JSONObject(v).toString()).apply()
+    /** The shared brain's words (see [Lexicon]), as last read. */
+    var brainWords: String
+        get() = prefs.getString("brainWords", "").orEmpty()
+        set(v) = prefs.edit().putString("brainWords", v).apply()
     /** The learnt lessons last sent to the shared brain, so they are sent again only when they change. */
     var learnedSent: String
         get() = prefs.getString("learnedSent", "") ?: ""
