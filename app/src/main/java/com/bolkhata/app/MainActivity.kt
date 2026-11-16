@@ -1336,7 +1336,8 @@ fun App(
         trash = { ids -> moveToTrash(ids) }, names = { names }, currency = currency,
         setup = { sides }, saveSetup = { s -> sides = s; store.saveSides(s) }, pdf = { doc -> aiPdf[0]?.invoke(doc) },
         trashed = { trash }, restore = { ids -> val back = trash.filter { it.id in ids }; save(back + entries); saveTrash(trash.filter { it.id !in ids }) },
-        settings = { k, v -> appSet[0]?.invoke(k, v) ?: org.json.JSONObject().put("error", "not ready").toString() }
+        settings = { k, v -> appSet[0]?.invoke(k, v) ?: org.json.JSONObject().put("error", "not ready").toString() },
+        language = I18n.englishName
     )
 
     /**
@@ -1411,7 +1412,7 @@ fun App(
                     val counted = AiAgent.counted(roman)
                     val shape = AiAgent.shape(counted, who)
                     // (One sale or work with no rate said is left to the app's own assistant, which asks the rate on its card.)
-                    store.known()[shape]?.let { AiAgent.replay(it, counted, who) }?.takeIf { !AiAgent.needsRate(it.calls) }?.let { r ->
+                    store.known()[shape]?.let { AiAgent.replay(it, counted, who, I18n.englishName) }?.takeIf { !AiAgent.needsRate(it.calls) }?.let { r ->
                         val notes = AiAgent.Notes(said = AiAgent.numbers(counted), lastShown = history.lastOrNull { !it.isUser }?.text.orEmpty())
                         r.calls.forEach { (n, input) -> runCatching { AiAgent.use(n, input, host, System.currentTimeMillis(), notes) } }
                         // A save that saved nothing (the same entry a moment ago) is left to the rules below.

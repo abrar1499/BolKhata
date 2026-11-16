@@ -25,13 +25,18 @@ object AiAgent {
         /** What is in Trash, newest first, and putting some of it back. */
         val trashed: () -> List<Entry> = { emptyList() }, val restore: (Set<String>) -> Unit = {},
         /** Changes one of the side menu's settings (see [AppSettings]); JSON with "done" (what changed) or "error". */
-        val settings: (setting: String, value: String) -> String = { _, _ -> JSONObject().put("error", "not here").toString() }
+        val settings: (setting: String, value: String) -> String = { _, _ -> JSONObject().put("error", "not here").toString() },
+        /** The app's language by its English name ("Urdu"): the AI answers in it. */
+        val language: String = "English"
     )
 
     /**
      * The AI's reply and the entries it saved (shown as the Saved card). When it asked the app to show a list or a
      * breakdown, [card] is the app's own answer text (drawn as the usual card) and [listIds] the rows in it.
      */
+    /** App languages written in their own script: the AI's answer is kept as written. */
+    private val SCRIPTS = setOf("Urdu", "Hindi", "Arabic", "Bengali")
+
     /** The app talks in Roman letters: an answer the model wrote in Hindi or Urdu script is turned into Roman. */
     fun roman(text: String): String =
         if (text.any { it in '\u0600'..'\u06FF' || it in '\u0900'..'\u097F' }) runCatching { Translit.toRoman(text) }.getOrDefault(text) else text
@@ -153,11 +158,8 @@ object AiAgent {
         People write Roman Urdu, Urdu or Hindi script, or English, often misspelled or heard from voice.
         - Do what is asked with the tools, then answer in one short sentence of at most about twelve words, only about
           this message: never bring up earlier messages, other entries or what was or was not saved before unless
-          asked. Answer in the language and script of the
-          latest message (English gets English, Roman Urdu gets Roman Urdu). Plain text only: no tables, no markdown.
-          A voice message's script is the recogniser's choice, not the person's: answer a voice message in Urdu, Hindi
-          or English in Roman letters (Roman Urdu, or English when the words are English), never in Urdu or Hindi
-          script. A message in another language (Arabic, Bengali, Persian…) is answered in that language and script.
+          asked. Answer in the app's language, named in "Answer in" at the end, whatever language or script the
+          message is in. Plain text only: no tables, no markdown.
         - Every amount, total, count or balance you state must come from a tool result of this turn. Never add up or
           guess money yourself: ask the totals tool.
         - When the person wants to see entries, a detail, a list or where the money went, call show: the app draws
@@ -232,9 +234,10 @@ object AiAgent {
           "Kharcha 2,300, diye 1,300, kul 3,600; bachenge 6,400."
     """.trimIndent()
 
-    /** This phone's own part of the instructions: its currency and saved names. */
-    fun personal(currency: String, names: List<String>) =
-        "Currency: " + currency.ifBlank { "none shown" } + "." + if (names.isEmpty()) "" else "\nSaved names: " + names.joinToString(", ")
+    /** This phone's own part of the instructions: its currency, saved names and the language to answer in. */
+    fun personal(currency: String, names: List<String>, language: String = "English") =
+        "Currency: " + currency.ifBlank { "none shown" } + "." + (if (names.isEmpty()) "" else "\nSaved names: " + names.joinToString(", ")) +
+            "\nAnswer in: " + language + if (language == "English") "." else ", in its own script."
 
     /**
      * Lets the AI work until it answers (at most 8 rounds); null when the provider failed (see [Ai.lastError]).
@@ -277,17 +280,19 @@ object AiAgent {
                 (if (digits.trim().equals(roman.trim(), true)) "" else "\nIts numbers worked out by the app (use exactly these): " + digits.take(600))
         )
         val system = system()
-        val mine = personal(host.currency, names)
+        val mine = personal(host.currency, names, host.language)
         for (round in 1..8) {
             if (stop()) return@runCatching null
             val step = Ai.step(system, tools, messages, mine) ?: return@runCatching null
             if (step.calls.isEmpty()) {
                 val said = spoken(step.text)
                 // Learnt from the message with its numbers in digits, so "teen sau" and "300" are one shape.
-                val learnt = learn(calls, digits, host.names(), known, said)
+                val learnt = learn(calls, digits, host.names(), known, said, host.language)
                 // Only saved, all of it and nothing to ask: the Saved card says it, no sentence over it.
                 val onlySaved = notes.added.isNotEmpty() && notes.skipped == 0 && calls.all { it.first == "add_entries" } && '?' !in said
-                return@runCatching Answer(if (onlySaved) "" else roman(said).ifBlank { "Done." }, notes.added, notes.card, notes.listIds, notes.filter,
+                // Answers stay in Roman letters, unless the app itself is in a language with its own script.
+                val text = if (host.language in SCRIPTS) said else roman(said)
+                return@runCatching Answer(if (onlySaved) "" else text.ifBlank { "Done." }, notes.added, notes.card, notes.listIds, notes.filter,
                     learnt.lesson, learnt.shape, learnt.words)
             }
             calls += step.calls.map { it.name to it.input }
@@ -407,7 +412,7 @@ object AiAgent {
      * A save is learnt as its entries ([lesson]); any other work the app can do again by itself, or a plain answer, as
      * its tools and [reply] ([steps]).
      */
-    fun learn(calls: List<Pair<String, JSONObject>>, said: String, names: List<String>, known: Map<String, String>, reply: String = ""): Learnt {
+    fun learn(calls: List<Pair<String, JSONObject>>, said: String, names: List<String>, known: Map<String, String>, reply: String = "", lang: String = ""): Learnt {
         val list = calls.singleOrNull()?.takeIf { it.first == "add_entries" }?.second?.optJSONArray("entries")
         val before = who(names, known)
         val named = people(said, before)
@@ -415,7 +420,7 @@ object AiAgent {
             .filter { p -> p.isNotBlank() && named.none { it.equals(p, true) } }
             .mapNotNull { p -> word(said, p, before)?.let { "=$it" to p } }.toMap()
         val after = who(names, known + words)
-        val lesson = (if (list != null) lesson(calls, said, after) else steps(calls, said, after, reply)) ?: return Learnt(words = words)
+        val lesson = (if (list != null) lesson(calls, said, after) else steps(calls, said, after, reply, lang)) ?: return Learnt(words = words)
         return Learnt(shape(said, after), lesson, words)
     }
 
@@ -458,7 +463,7 @@ object AiAgent {
      * [reply] when it holds no figure of its own. Null when any tool works on chosen entries (a change or delete), a day
      * was worked out (it must be worked out afresh), the AI asked something, or a person named was not used.
      */
-    private fun steps(calls: List<Pair<String, JSONObject>>, said: String, who: (String) -> String?, reply: String): String? {
+    private fun steps(calls: List<Pair<String, JSONObject>>, said: String, who: (String) -> String?, reply: String, lang: String): String? {
         val people = people(said, who)
         val nums = numbers(said)
         val usedP = mutableSetOf<Int>()
@@ -477,7 +482,8 @@ object AiAgent {
         if (done.isEmpty() && (text.isBlank() || nums.isNotEmpty())) return null
         // "Entry deleted" after only a look: a reply saying a change the tools did not make is never done again.
         if (claim.containsMatchIn(text)) return null
-        return JSONObject().put("calls", out).put("reply", text).toString()
+        // The reply's language goes with it: another app language gets its own answer from the AI.
+        return JSONObject().put("calls", out).put("reply", text).put("lang", lang).toString()
     }
 
     /** Words of a question whose answer changes from day to day ("aaj kya din hai", "mausam kaisa hai"). */
@@ -521,7 +527,7 @@ object AiAgent {
     }
 
     /** [lesson] (a save, or tools and a reply) filled with the numbers and people of a new message of the same shape; null when it does not fit. */
-    fun replay(lesson: String, said: String, who: (String) -> String? = { null }): Replay? = runCatching {
+    fun replay(lesson: String, said: String, who: (String) -> String? = { null }, lang: String = ""): Replay? = runCatching {
         if (lesson.trimStart().startsWith("[")) return@runCatching recall(lesson, said, who)?.let { Replay(listOf("add_entries" to it), "") }
         val nums = numbers(said)
         val people = people(said, who)
@@ -537,7 +543,10 @@ object AiAgent {
         }
         val o = JSONObject(lesson)
         val calls = o.getJSONArray("calls").let { a -> (0 until a.length()).map { a.getJSONObject(it).let { c -> c.getString("name") to (fill(c.getJSONObject("input")) as JSONObject) } } }
-        Replay(calls, Regex("""@(\d+)""").replace(o.optString("reply")) { people[it.groupValues[1].toInt()] })
+        // A reply learnt in another app language is not said again; plain talk then goes to the AI for one in this language.
+        val reply = if (o.optString("lang") == lang) o.optString("reply") else ""
+        if (calls.isEmpty() && reply.isBlank()) return@runCatching null
+        Replay(calls, Regex("""@(\d+)""").replace(reply) { people[it.groupValues[1].toInt()] })
     }.getOrNull()
 
     /** A remembered [lesson] filled with the numbers and people of a new message of the same shape, ready for add_entries; null when it does not fit. */
