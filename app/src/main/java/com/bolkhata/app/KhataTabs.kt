@@ -844,6 +844,8 @@ private fun EntryPicker(all: List<Entry>, setup: SideSetup, onSetup: (SideSetup)
     var kind by remember { mutableIntStateOf(-1) }
     // The account a new thing goes in; "" makes it an account of its own.
     var group by remember { mutableStateOf<String?>(null) }
+    // The things inside the picked account are showing in the accounts' place (‹ goes back to the accounts).
+    var inside by remember { mutableStateOf(false) }
     val list = remember(all, setup) { targets(all, setup) }
     val sub = MaterialTheme.colorScheme.onSurfaceVariant
     // Opens all the way, not half: everything in it shows at once (and scrolls on a small phone).
@@ -867,7 +869,7 @@ private fun EntryPicker(all: List<Entry>, setup: SideSetup, onSetup: (SideSetup)
                             }
                         }
                     }
-                    DashedAdd("+ New account", inset = 0.dp) { name = q.trim(); kind = -1; group = null; step = "new" }
+                    DashedAdd("+ New account", inset = 0.dp) { name = q.trim(); kind = -1; group = null; inside = false; step = "new" }
                 }
                 else -> {
                     SheetHead("New account", "Name and what it is", { step = "who" }, onDismiss)
@@ -876,23 +878,25 @@ private fun EntryPicker(all: List<Entry>, setup: SideSetup, onSetup: (SideSetup)
                         Row(Modifier.padding(top = if (r == 0) 10.dp else 8.dp).height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             row.forEach { k ->
                                 val i = newKinds.indexOf(k)
-                                KindCard(k, kind == i, Modifier.weight(1f).fillMaxHeight()) { kind = i; group = null }
+                                KindCard(k, kind == i, Modifier.weight(1f).fillMaxHeight()) { kind = i; group = null; inside = false }
                             }
                         }
                     }
                     val k = newKinds.getOrNull(kind)
+                    // A people kind: who is already in it, so a tap opens that person instead of making them twice.
+                    val saved = remember(k, list) { if (k?.party == null) emptyList() else list.filter { it.book.side == Side.PARTY && it.book.name == k.party } }
+                    if (saved.isNotEmpty()) {
+                        Text("Already in ${k!!.party}", fontSize = 11.sp, color = sub, modifier = Modifier.padding(start = 2.dp, top = 10.dp))
+                        FlowRow(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            saved.forEach { t -> PickChip("👤 ${t.name}", false) { onPick(t) } }
+                        }
+                    }
                     if (k != null && k.party == null) {
-                        Text("Inside which " + (if (k.side == Side.INC) "income" else "expense") + "?", fontSize = 11.sp, color = sub,
-                            modifier = Modifier.padding(start = 2.dp, top = 10.dp))
                         val groups = remember(k, all, setup) {
                             (Sides.books(k.side, all, setup).filterNot(Sides::isAuto).map { it.name to bookIcon(it) } + accountPicks[k.side].orEmpty())
                                 .distinctBy { it.first.lowercase() }
                         }
-                        FlowRow(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            groups.forEach { (g, icon) -> PickChip("$icon $g", group == g) { group = g } }
-                            PickChip("+ New", group == "") { group = "" }
-                        }
-                        // The things inside the picked account, on the same page: a tap is the name; else it is typed above.
+                        // The things inside the picked account: a tap is the name; else it is typed above.
                         val g = group
                         val things = remember(g, k, all, setup) {
                             if (g.isNullOrBlank()) emptyList() else {
@@ -902,10 +906,22 @@ private fun EntryPicker(all: List<Entry>, setup: SideSetup, onSetup: (SideSetup)
                                     .distinctBy { it.lowercase() }
                             }
                         }
-                        if (things.isNotEmpty()) {
-                            Text("Inside $g", fontSize = 11.sp, color = sub, modifier = Modifier.padding(start = 2.dp, top = 12.dp))
-                            FlowRow(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        if (inside && things.isNotEmpty()) {
+                            // In the accounts' place: ‹ and the account's name, then its things.
+                            Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                RoundTap("‹") { inside = false }
+                                Spacer(Modifier.width(8.dp))
+                                Text(g.orEmpty(), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            }
+                            FlowRow(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 things.forEach { n -> PickChip("${iconFor(n, k.side == Side.INC)} $n", name.trim().equals(n, true)) { name = n } }
+                            }
+                        } else {
+                            Text("Inside which " + (if (k.side == Side.INC) "income" else "expense") + "?", fontSize = 11.sp, color = sub,
+                                modifier = Modifier.padding(start = 2.dp, top = 10.dp))
+                            FlowRow(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                groups.forEach { (gr, icon) -> PickChip("$icon $gr", group == gr) { group = gr; inside = true } }
+                                PickChip("+ New", group == "") { group = ""; inside = false }
                             }
                         }
                     }
