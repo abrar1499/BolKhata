@@ -146,7 +146,7 @@ fun App(
     // The status bar is see-through: the theme band shows through it on the khata tabs, the page colour elsewhere.
     val pageColor = MaterialTheme.colorScheme.background
     val header = LocalHeader.current
-    val banded = header.name != "Clean" && tab in BAND_TABS
+    val banded = header.name != "Clean" && tab in BAND_TABS && LocalLook.current?.glow != true
     LaunchedEffect(pageColor, dark, banded, header) {
         (context as? Activity)?.window?.let { w ->
             @Suppress("DEPRECATION")

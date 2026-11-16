@@ -113,9 +113,16 @@ val KHATA_TABS = listOf(Tab.CHAT, Tab.CASHBOOK, Tab.PARTIES, Tab.EXPENSE, Tab.IN
 
 @Composable
 fun KhataNav(tab: Tab, onTab: (Tab) -> Unit) {
-    // No shadow: it joins the white chat strip above into one bottom panel.
-    Surface(Modifier.solidCard(), color = Color.Transparent, contentColor = MaterialTheme.colorScheme.onSurface) {
-        Row(Modifier.fillMaxWidth().navigationBarsPadding().height(58.dp)) {
+    // No shadow: it joins the white chat strip above into one bottom panel. In the glow look it floats: a rounded glass
+    // bar a little off the edges, as the mock.
+    val glow = isGlow()
+    val bar = RoundedCornerShape(22.dp)
+    Surface(
+        if (glow) Modifier.navigationBarsPadding().padding(start = 10.dp, end = 10.dp, bottom = 10.dp).clip(bar).solidCard()
+            .border(1.dp, Color.White.copy(alpha = 0.16f), bar) else Modifier.solidCard(),
+        color = Color.Transparent, contentColor = MaterialTheme.colorScheme.onSurface
+    ) {
+        Row(Modifier.fillMaxWidth().then(if (glow) Modifier else Modifier.navigationBarsPadding()).height(if (glow) 56.dp else 58.dp)) {
             KHATA_TABS.forEach { t ->
                 val (label, icon) = navItem(t)
                 val on = t == tab
@@ -158,7 +165,8 @@ private fun KhataTop(
     business: String? = null, onPdf: (() -> Unit)? = null, card: @Composable () -> Unit
 ) {
     val theme = LocalHeader.current
-    val banded = theme.name != "Clean"
+    // The glow look has no band: its soft lights run to the top.
+    val banded = theme.name != "Clean" && !isGlow()
     val ink = if (banded) theme.on else MaterialTheme.colorScheme.onSurface
     // The theme band runs from the top of the screen to the middle of the summary card.
     var cardH by remember { mutableIntStateOf(0) }
@@ -203,15 +211,16 @@ private fun DrawScope.drawBand(theme: HeaderTheme, h: Float) {
 /** White pill at the top: the glossy app logo and the open business; a tap opens the side menu (businesses and settings). */
 @Composable
 internal fun BusinessPill(name: String, onMenu: () -> Unit) {
+    val glow = isGlow()
     Row(
-        Modifier.padding(top = 12.dp).lift(1.dp, CircleShape).clip(CircleShape).background(Color.White)
+        Modifier.padding(top = 12.dp).then(if (glow) Modifier.glass(CircleShape) else Modifier.lift(1.dp, CircleShape).clip(CircleShape).background(Color.White))
             .clickable(onClickLabel = "Menu") { onMenu() }.padding(start = 6.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         GlassLogo(24.dp)
         Spacer(Modifier.width(6.dp))
-        Text(name, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1C1917), maxLines = 1, overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.widthIn(max = 170.dp))
+        Text(name, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (glow) MaterialTheme.colorScheme.onSurface else Color(0xFF1C1917),
+            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 170.dp))
     }
 }
 

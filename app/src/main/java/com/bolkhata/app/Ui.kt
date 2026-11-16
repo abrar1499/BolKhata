@@ -857,6 +857,15 @@ fun Modifier.lift(
     ambientColor: Color = androidx.compose.ui.graphics.DefaultShadowColor, spotColor: Color = androidx.compose.ui.graphics.DefaultShadowColor
 ): Modifier = if (LocalLook.current?.glow == true) this else shadow(elevation, shape, ambientColor = ambientColor, spotColor = spotColor)
 
+/** True in the glow look (Navy glow): no header band, glass pills, the tabs float. */
+@Composable
+@androidx.compose.runtime.ReadOnlyComposable
+fun isGlow(): Boolean = LocalLook.current?.glow == true
+
+/** See-through glass, as the glow look's cards: a light veil and a light edge. */
+fun Modifier.glass(shape: androidx.compose.ui.graphics.Shape): Modifier =
+    clip(shape).background(Color.White.copy(alpha = 0.10f)).border(1.dp, Color.White.copy(alpha = 0.16f), shape)
+
 /** A solid card for things that float over a list (tabs, menus, the + button): in the glow look frosted glass on the glow. */
 @Composable
 fun Modifier.solidCard(): Modifier = pageGround().background(MaterialTheme.colorScheme.surface)
