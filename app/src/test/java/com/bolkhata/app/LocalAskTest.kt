@@ -198,7 +198,7 @@ class LocalAskTest {
     @Test
     fun aDayWithNothingSavedIsSaidPlainly() {
         val o = ask("pichle hafte ka kharcha")
-        assertEquals("Nothing found for expenses last week.", o.text)
+        assertEquals("No expenses last week.", o.text)
         assertTrue(o.card.isBlank())
         assertNull(o.used("show"))
     }
