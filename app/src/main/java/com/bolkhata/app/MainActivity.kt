@@ -68,13 +68,11 @@ class MainActivity : ComponentActivity() {
         I18n.use(this, store.appLanguage)
         setContent {
             var dark by remember { mutableStateOf(store.dark) }
-            var themeName by remember { mutableStateOf(store.theme) }
-            // The dark theme has its own header (Navy until another is picked); the side menu's dots change the one in use.
-            var darkHeader by remember { mutableStateOf(store.darkHeader) }
             var photo by remember { mutableStateOf(store.bgPhoto) }
             var page by remember { mutableLongStateOf(store.page) }
             val bg = remember(photo) { photo.takeIf { it.isNotBlank() }?.let { android.graphics.BitmapFactory.decodeFile(it)?.asImageBitmap() } }
-            val header = headerTheme(if (dark) darkHeader else themeName, dark)
+            // The header is fixed: the red band on the light page, Navy in the dark theme.
+            val header = headerTheme(if (dark) "Navy" else "Red", dark)
             // Every phone shows the design 1:1: the screen is 350 units wide (the 390 mock-up, everything a bit bigger) and the phone's
             // font-size and display-size settings don't blow the compact ledgers up.
             val m = resources.displayMetrics
@@ -86,8 +84,6 @@ class MainActivity : ComponentActivity() {
                         if (bg != null) androidx.compose.foundation.Image(bg, null, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
                         App(
                             store, dark, { dark = it; store.dark = it },
-                            themeName = if (dark) darkHeader else themeName,
-                            onTheme = { if (dark) { darkHeader = it; store.darkHeader = it } else { themeName = it; store.theme = it } },
                             photo = bg != null, onPhoto = { photo = it; store.bgPhoto = it },
                             page = page, onPage = { page = it; store.page = it }
                         )
@@ -125,7 +121,7 @@ private suspend fun <T> offMain(block: () -> T): T = kotlinx.coroutines.withCont
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun App(
-    store: Store, dark: Boolean, onDark: (Boolean) -> Unit, themeName: String, onTheme: (String) -> Unit,
+    store: Store, dark: Boolean, onDark: (Boolean) -> Unit,
     photo: Boolean = false, onPhoto: (String) -> Unit = {},
     page: Long = PAGE_COLORS[0], onPage: (Long) -> Unit = {}
 ) {
@@ -2567,7 +2563,7 @@ fun App(
             "currency" -> AppSettings.currency(name)?.let { c -> act = { currency = c; store.currency = c }; "Currency is $c now." }
             "language" -> (AppSettings.language(name) ?: Lingo.all().firstOrNull { it.name.equals(name, true) }?.code)?.let { code ->
                 act = { setLanguage(code) }; "Language: " + name.replaceFirstChar { it.uppercase() } + "." }
-            "header" -> AppSettings.header(name, HEADER_THEMES.map { it.name })?.let { t -> act = { onTheme(t) }; "Header is $t now." }
+            "header" -> "The header stays red (Navy in the dark theme)."
             "background" -> when (AppSettings.background(name)) {
                 "light:0" -> { act = { onPhoto(""); onDark(false); onPage(PAGE_COLORS[0]) }; "Background: warm grey." }
                 "light:1" -> { act = { onPhoto(""); onDark(false); onPage(PAGE_COLORS[1]) }; "Background: light slate." }
@@ -2632,7 +2628,7 @@ fun App(
         drawerContent = {
             fun close() = scope.launch { drawer.close() }
             SideMenu(
-                currency = currency, lang = lang, dark = dark, photo = photo, themeName = themeName,
+                currency = currency, lang = lang, dark = dark, photo = photo,
                 version = BuildConfig.VERSION_NAME,
                 businesses = remember(businessTick, businessName) { store.businesses() }, current = store.business,
                 onBusiness = { id -> if (id != store.business) openBusiness(id); close() },
@@ -2643,7 +2639,6 @@ fun App(
                 onCurrency = { c -> currency = c; store.currency = c; toast("✓ Currency set to $c") },
                 onLang = { setLanguage(it) }, moreLang = moreLang,
                 appLang = appLang, onAppLang = { appLang = it; store.appLanguage = it; I18n.use(context, it) },
-                onTheme = onTheme,
                 page = page, onPage = { onPhoto(""); onDark(false); onPage(it) },
                 onDark = { c -> onPhoto(""); onDark(true); onPage(c) },
                 onExport = {
@@ -3072,8 +3067,8 @@ fun App(
                         }
                     },
                     onMenu = { openMenu() },
-                    themeName = themeName,
-                    onTheme = onTheme,
+                    themeName = LocalHeader.current.name,
+                    onTheme = {},
                     logRepo = logRepo,
                     logTokenSet = logToken.isNotBlank(),
                     logStatus = if (logSending) "Sending…" else logStatus,

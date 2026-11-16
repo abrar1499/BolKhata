@@ -817,18 +817,6 @@ class Store(context: Context) {
         }
         set(v) = prefs.edit().putString("memory", JSONArray(v.takeLast(80)).toString()).apply()
 
-    var theme: String
-        get() {
-            // The red band look is given to everyone once; any theme picked afterwards (Clean too) is kept.
-            if (!prefs.getBoolean("redBandV1", false)) prefs.edit().putBoolean("redBandV1", true).putString("theme", "Red").apply()
-            return prefs.getString("theme", "Red") ?: "Red"
-        }
-        set(v) = prefs.edit().putString("theme", v).apply()
-
-    /** The header picked for the dark theme, kept apart from the light one's; Navy until another is picked. */
-    var darkHeader: String
-        get() = prefs.getString("darkHeader", "Navy") ?: "Navy"
-        set(v) = prefs.edit().putString("darkHeader", v).apply()
 
     var dark: Boolean
         get() = prefs.getBoolean("dark", false)

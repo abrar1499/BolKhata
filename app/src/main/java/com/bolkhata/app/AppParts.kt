@@ -191,7 +191,6 @@ private fun LiveWave(level: Float, working: Boolean) {
 }
 
 /** Header themes offered in the side menu (the app's glossy bands), in this order. */
-private val MENU_THEMES = listOf("Clean", "Red", "Green", "Navy")
 
 /**
  * The side menu, which is also Settings: the app logo, the businesses (+ Add business), then every setting in plain
@@ -199,7 +198,7 @@ private val MENU_THEMES = listOf("Clean", "Red", "Green", "Navy")
  */
 @Composable
 internal fun SideMenu(
-    currency: String, lang: String, dark: Boolean, photo: Boolean, themeName: String, version: String,
+    currency: String, lang: String, dark: Boolean, photo: Boolean, version: String,
     businesses: List<Pair<String, String>>, current: String,
     onBusiness: (String) -> Unit,
     /** + Add business: opens the business page for a new one. */
@@ -207,7 +206,7 @@ internal fun SideMenu(
     /** The open business's own page (details and card). */
     onBusinessPage: () -> Unit,
     onRenameBusiness: (id: String, name: String) -> Unit, onDeleteBusiness: (id: String) -> Unit,
-    onCurrency: (String) -> Unit, onLang: (String) -> Unit, onTheme: (String) -> Unit,
+    onCurrency: (String) -> Unit, onLang: (String) -> Unit,
     page: Long, onPage: (Long) -> Unit, onDark: (Long) -> Unit,
     onExport: () -> Unit, onImport: () -> Unit, onTrash: () -> Unit, onVersion: () -> Unit,
     /** The Gmail synced with Google Drive ("" when not signed in) and how the last save went. */
@@ -363,14 +362,7 @@ internal fun SideMenu(
                         onAppLang(apps.first { it.second == picked }.first)
                     }
                 }
-                // The header dots; the dark theme keeps its own pick (Navy at first).
-                MenuRow(onClick = null) {
-                    MenuLabel("🖌", "Header")
-                    MENU_THEMES.mapNotNull { n -> HEADER_THEMES.firstOrNull { it.name == n } }.forEach { t ->
-                        Dot(Brush.linearGradient(listOf(t.c1, t.c2, t.c3)), themeName == t.name) { onTheme(t.name) }
-                    }
-                }
-                // Dark theme: on is Navy glow (soft lights, glass cards, its own header); off is the warm grey page, the default.
+                // Dark theme: on is Navy glow (soft lights, glass cards, the Navy band); off is the warm grey page with the red band, the default.
                 val darkOn = dark && !photo
                 MenuRow(onClick = { if (darkOn) onPage(PAGE_COLORS[0]) else onDark(DARK_PAGES[1]) }, last = true) {
                     MenuLabel("🌙", "Dark theme")
@@ -613,16 +605,6 @@ private fun OnOff(on: Boolean, modifier: Modifier = Modifier) {
     Box(Modifier.size(34.dp, 20.dp).clip(RoundedCornerShape(10.dp)).background(if (on) GreenIn else Color(0xFFD6D2CC)).then(modifier)) {
         Box(Modifier.align(if (on) Alignment.CenterEnd else Alignment.CenterStart).padding(2.dp).size(16.dp).lift(1.dp, CircleShape).clip(CircleShape).background(Color.White))
     }
-}
-
-/** A small round colour to pick (header theme or background), ringed when chosen. */
-@Composable
-private fun Dot(fill: Brush, on: Boolean, onClick: () -> Unit) {
-    Box(
-        Modifier.padding(start = 4.dp).size(18.dp)
-            .then(if (on) Modifier.border(2.dp, EmberTop, CircleShape).padding(3.dp) else Modifier.border(1.dp, MaterialTheme.colorScheme.outline, CircleShape))
-            .clip(CircleShape).background(fill).clickable(onClick = onClick)
-    )
 }
 
 /** A friendly one-tap question for things the app did not understand. */
