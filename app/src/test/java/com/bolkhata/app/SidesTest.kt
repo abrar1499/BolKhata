@@ -1,6 +1,7 @@
 package com.bolkhata.app
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** Party, Expense and Income accounts: staff Paid | Work, customers Given | Received, Purchases / Sales, profit and net worth, all from the entries. */
@@ -99,5 +100,16 @@ class SidesTest {
         // Cash: 50,000 in − 20,000 − 1,500 − 9,000 out; to get 32,000; nothing in stock cost anything; nothing to pay.
         assertEquals(19500.0, w.cash, 0.0)
         assertEquals(19500.0 + 32000.0 + 9000.0, w.net, 0.0)
+    }
+
+    @Test
+    fun aNewBookStartsWithTheEverydayExpenseAccounts() {
+        val s = Sides.withCommon(SideSetup())
+        val shown = Sides.books(Side.EXP, emptyList(), s).map { it.name }
+        assertTrue(shown.containsAll(listOf("Food", "Transport", "Bills", "Rent", "Mobile & Internet", "Health", "Shopping", "Sent home")))
+        // Food is the Food category's account: its entries show in it.
+        assertEquals(Cat.KHANA, Sides.books(Side.EXP, emptyList(), s).first { it.name == "Food" }.cat)
+        // Added once: an account the person already has is not added again.
+        assertEquals(s.books.size, Sides.withCommon(s).books.size)
     }
 }
