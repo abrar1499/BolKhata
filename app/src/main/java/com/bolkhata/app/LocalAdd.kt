@@ -235,6 +235,8 @@ object LocalAdd : LocalAgent.Reader {
                 cat != null -> JSONObject().put("type", "expense").put("amount", n).put("category", cat.first.label).put("item", item)
                 family != null && (gf.give || gf.spend) -> JSONObject().put("type", "expense").put("amount", n).put("category", Cat.GHAR.label).put("item", item)
                 content.isNotEmpty() -> JSONObject().put("type", "expense").put("amount", n).put("category", Cat.OTHER.label).put("item", item)
+                // "kharcha 500", "500 kharch kiye": spent, on nothing named.
+                gf.spend -> JSONObject().put("type", "expense").put("amount", n).put("category", Cat.OTHER.label).put("item", Cat.OTHER.label)
                 else -> return Got.Lost
             }
             if (whose != null) e.put("note", whose.replaceFirstChar { it.uppercase() })
@@ -421,7 +423,7 @@ object LocalAdd : LocalAgent.Reader {
             else -> null
         }
         if (f.ret) return when (way) {
-            'T' -> if (balance < -0.5) "paid_back" else "lent"
+            'T' -> if (balance < -0.5 || f.give) "paid_back" else "lent"
             'B', 'F' -> "received_back"
             else -> if (f.give && !f.get && balance < -0.5) "paid_back" else "received_back"
         }
@@ -631,7 +633,10 @@ object LocalAdd : LocalAgent.Reader {
     private fun unitAt(w: List<String>, qtyAt: Int) = w.getOrNull(qtyAt + 1)?.takeIf { it in unitWords }
 
     /** A number followed by a unit ("5 kg"): a count, never money. */
-    private fun isQty(w: List<String>, i: Int) = w.getOrNull(i + 1) in unitWords
+    private fun isQty(w: List<String>, i: Int) = w.getOrNull(i + 1) in unitWords ||
+        // "2 chai 20 ki": a small count before a thing whose price follows.
+        (num(w[i])?.let { it <= 20 && it % 1.0 == 0.0 } == true && w.getOrNull(i + 1)?.let { isContent(it) } == true &&
+            (i + 2 until w.size).any { j -> num(w[j]) != null && w.getOrNull(j + 1) in possessives })
 
     /** Two spellings of one word of a thing's name: the same, one letter apart, the same sound, or its English ("bricks": eent). */
     private fun alike(said: String, part: String): Boolean {
@@ -728,6 +733,8 @@ object LocalAdd : LocalAgent.Reader {
             when {
                 x == "," -> if (counted) push()
                 x in joiners && counted -> push()
+                // "…thay, jis me se …", "us mein se": what follows was spent out of it.
+                counted && x in outOf && t.getOrNull(i + 1) in setOf("me", "mein", "men", "main", "mai") && t.getOrNull(i + 2) in setOf("se", "say", "sy") -> { push(); cur += x }
                 counted && t.getOrNull(i - 1) in endVerbs && x !in endVerbs && x !in stop && numberAhead(t, i) && !ratePhrase(t, i) -> { push(); cur += x }
                 else -> cur += x
             }
@@ -873,12 +880,12 @@ object LocalAdd : LocalAgent.Reader {
         "kia", "kari", "kare", "kri", "made", "make", "did", "done", "produced", "laya", "layi", "laye", "lai", "laaya", "supplied", "supply", "delivered",
         "brought", "tayyar", "tayar", "nikali", "nikale", "bhari", "bhare")
     private val workWords = setOf("kaam", "work", "worked", "mazdoori", "mazduri", "molding", "moulding")
-    private val spendWords = setOf("kharch", "kharcha", "kharche", "kharchay", "spent", "spend", "lagaye", "lagay", "lage", "laga", "lagi", "lagai", "lgaye",
+    private val spendWords = setOf("kharch", "kharcha", "kharche", "kharchay", "spent", "spend", "lagaye", "lagay", "lage", "laga", "lagi", "lag", "lagai", "lgaye",
         "dalwaya", "dalwaye", "bhara", "bharwaya", "bharwaye", "khaya", "khaye", "khai", "khaaya", "piya", "pi", "pee", "bought", "buy", "purchased", "kharida",
         "kharide", "kharidi", "khareeda", "khareedi", "khareede")
     private val incomeWords = setOf("salary", "tankhwah", "tankhwa", "tankha", "tankhuwa", "tankhah", "tanqa", "income", "aamdani", "amdani", "kamai", "kamaai",
         "kamaye", "kamaya", "commission", "comission", "bonus", "overtime", "profit", "munafa", "nafa", "interest", "sood", "tip", "tips", "dihari", "dehari",
-        "wages", "earning", "earnings")
+        "wages", "earning", "earnings", "freelance", "freelancing", "fiverr", "upwork")
     private val moneyNouns = setOf("advance", "edvance", "adv", "paise", "pese", "paisay", "pesay", "paisa", "pesa", "rupay", "rupaye", "rupees", "rupee", "rs",
         "riyal", "riyals", "rial", "sar", "pkr", "dollar", "dollars", "dirham", "rupy", "rupe", "rupaiye", "rupaya", "rupya", "rupiya", "rakam", "raqam", "amount", "cash", "naqad", "naqd", "payment", "total", "kul",
         "money", "price", "keemat", "qeemat", "jama", "jamaa", "baqi", "baki", "baaqi", "bakaya", "balance", "remaining", "due")
@@ -910,7 +917,8 @@ object LocalAdd : LocalAgent.Reader {
         "moulding" to "thapai", "molding" to "thapai")
     private val dayWords = setOf("aaj", "aj", "today", "kal", "kl", "kall", "yesterday", "parso", "parson", "parsu", "parsun", "parsoon", "prso", "prson", "abhi")
     /** "mere pas … tha": what one had ("pas"), and the words that only say it was or is. */
-    private val haveWords = setOf("pas", "paas", "pass", "pasy")
+    private val haveWords = setOf("pas", "paas", "pass", "pasy", "jeb", "jaib", "pocket", "wallet")
+    private val outOf = setOf("jis", "jin", "us", "os", "is", "un", "in")
     private val beWords = setOf("tha", "thay", "the", "thi", "thy", "thae", "hai", "hain", "hen", "hy")
     private val joiners = setOf("aur", "or", "ar", "aor", "awr", "and", "phir", "fir", "then", "also", "plus", "orr")
     private val endVerbs = setOf("diye", "diya", "di", "dia", "diy", "de", "dye", "mile", "mila", "mili", "liye", "liya", "li", "le", "lia", "dala", "dali", "daali",
@@ -927,7 +935,7 @@ object LocalAdd : LocalAgent.Reader {
         "lena", "lene", "dunga", "doonga", "dungi", "denge", "lunga", "loonga", "lenge", "will", "chahiye", "karunga", "karenge", "dega", "degi", "dengi",
         "lega", "legi", "aayega", "ayega", "aaega", "number", "nmbr")
     private val numberWords = mapOf("teen" to "3", "char" to "4", "chaar" to "4", "panch" to "5", "paanch" to "5", "chhe" to "6", "saat" to "7", "aath" to "8",
-        "das" to "10", "dus" to "10", "gyarah" to "11", "barah" to "12", "terah" to "13", "chaudah" to "14", "pandrah" to "15", "solah" to "16", "satrah" to "17",
+        "das" to "10", "dus" to "10", "gyarah" to "11", "barah" to "12", "terah" to "13", "chaudah" to "14", "chauda" to "14", "pandrah" to "15", "pandra" to "15", "solah" to "16", "satrah" to "17", "satra" to "17",
         "atharah" to "18", "unees" to "19", "bees" to "20", "pachees" to "25", "tees" to "30", "chalees" to "40", "chalis" to "40", "pachas" to "50",
         "pachaas" to "50", "sattar" to "70", "assi" to "80")
     private val timeUnits = setOf("baje", "bje", "bajay", "am", "pm", "din", "days", "day", "ghante", "ghanta", "hours", "hour", "minute", "minutes", "mint",
