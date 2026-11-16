@@ -260,7 +260,10 @@ fun BolTheme(dark: Boolean, clear: Boolean = false, page: Long = PAGE_COLORS[0],
         surfaceContainerLowest = Color.White, surfaceContainerLow = bg, surfaceContainer = Color.White,
         surfaceContainerHigh = bg, surfaceContainerHighest = Color(0xFFF1F1F2), surfaceTint = Color.Transparent
     )
-    androidx.compose.runtime.CompositionLocalProvider(LocalLook provides look, LocalPage provides bg) {
+    // Arabic and Urdu read right to left: the whole app turns round with them.
+    val direction = if (I18n.rtl) androidx.compose.ui.unit.LayoutDirection.Rtl else androidx.compose.ui.unit.LayoutDirection.Ltr
+    androidx.compose.runtime.CompositionLocalProvider(LocalLook provides look, LocalPage provides bg,
+        androidx.compose.ui.platform.LocalLayoutDirection provides direction) {
         MaterialTheme(colorScheme = if (clear) scheme.copy(background = Color.Transparent) else scheme, typography = AppTypography) {
             // A light tick on every tap, with the usual ripple (see HapticIndication).
             androidx.compose.runtime.CompositionLocalProvider(

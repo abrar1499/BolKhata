@@ -62,6 +62,8 @@ class MainActivity : ComponentActivity() {
         // The app draws under the status bar, so the theme band runs to the very top of the screen in one piece.
         WindowCompat.setDecorFitsSystemWindows(window, false)
         val store = Store(this)
+        // The app's words in the chosen language (or the phone's), before the first screen is drawn.
+        I18n.use(this, store.language)
         setContent {
             var dark by remember { mutableStateOf(store.dark) }
             var themeName by remember { mutableStateOf(store.theme) }
@@ -1722,6 +1724,7 @@ fun App(
     /** Picks the language to listen in. Another language than the app's own stays in the short list, and its pack comes down at once ([fetch]). */
     fun setLanguage(l: String, fetch: Boolean = true) {
         lang = l; store.language = l
+        I18n.use(context, l)
         val code = Lingo.code(l)
         if (code.isBlank()) return
         moreLang = l; store.moreLanguage = l
@@ -3052,7 +3055,7 @@ fun App(
                     version = BuildConfig.VERSION_NAME, checking = checking,
                     onName = { name = it; store.name = it; toast("✓ Name saved") },
                     onCurrency = { currency = it; store.currency = it },
-                    onLang = { lang = it; store.language = it },
+                    onLang = { lang = it; store.language = it; I18n.use(context, it) },
                     onDark = onDark,
                     onCheckUpdate = {
                         scope.launch {
