@@ -52,6 +52,11 @@ object I18n {
     /** Written right to left (Arabic, Urdu). */
     val rtl get() = code in RTL
 
+    /** The app language's English name, for the AI to answer in ("Urdu"); English for Auto on an English phone. */
+    val englishName get() = NAMES[code] ?: "English"
+    private val NAMES = mapOf("en" to "English", "ur" to "Urdu", "hi" to "Hindi", "ar" to "Arabic", "bn" to "Bengali", "es" to "Spanish",
+        "fr" to "French", "de" to "German", "pt" to "Portuguese", "tr" to "Turkish")
+
     /** The app's language for the Language setting [lang] ("" Auto: the phone's; "hi-IN" is Roman Urdu, in English letters). */
     fun of(lang: String): String {
         val base = when {

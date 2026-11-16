@@ -1336,7 +1336,8 @@ fun App(
         trash = { ids -> moveToTrash(ids) }, names = { names }, currency = currency,
         setup = { sides }, saveSetup = { s -> sides = s; store.saveSides(s) }, pdf = { doc -> aiPdf[0]?.invoke(doc) },
         trashed = { trash }, restore = { ids -> val back = trash.filter { it.id in ids }; save(back + entries); saveTrash(trash.filter { it.id !in ids }) },
-        settings = { k, v -> appSet[0]?.invoke(k, v) ?: org.json.JSONObject().put("error", "not ready").toString() }
+        settings = { k, v -> appSet[0]?.invoke(k, v) ?: org.json.JSONObject().put("error", "not ready").toString() },
+        language = I18n.englishName
     )
 
     /**
@@ -1411,7 +1412,7 @@ fun App(
                     val counted = AiAgent.counted(roman)
                     val shape = AiAgent.shape(counted, who)
                     // (One sale or work with no rate said is left to the app's own assistant, which asks the rate on its card.)
-                    store.known()[shape]?.let { AiAgent.replay(it, counted, who) }?.takeIf { !AiAgent.needsRate(it.calls) }?.let { r ->
+                    store.known()[shape]?.let { AiAgent.replay(it, counted, who, I18n.englishName) }?.takeIf { !AiAgent.needsRate(it.calls) }?.let { r ->
                         val notes = AiAgent.Notes(said = AiAgent.numbers(counted), lastShown = history.lastOrNull { !it.isUser }?.text.orEmpty())
                         r.calls.forEach { (n, input) -> runCatching { AiAgent.use(n, input, host, System.currentTimeMillis(), notes) } }
                         // A save that saved nothing (the same entry a moment ago) is left to the rules below.
@@ -3240,9 +3241,9 @@ fun App(
                 shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.onSurface
             ) {
                 Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("${selection.ids.size} selected", color = MaterialTheme.colorScheme.surface, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                    TextButton(enabled = selection.ids.isNotEmpty(), onClick = { movingPicked = true }) { Text("Move", color = MaterialTheme.colorScheme.surface, fontWeight = FontWeight.Bold) }
-                    IconButton(onClick = { selection.clear() }) { Icon(Icons.Filled.Close, contentDescription = "Stop selecting", tint = MaterialTheme.colorScheme.surface) }
+                    Text("${selection.ids.size} selected", color = MaterialTheme.colorScheme.surfaceContainer, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    TextButton(enabled = selection.ids.isNotEmpty(), onClick = { movingPicked = true }) { Text("Move", color = MaterialTheme.colorScheme.surfaceContainer, fontWeight = FontWeight.Bold) }
+                    IconButton(onClick = { selection.clear() }) { Icon(Icons.Filled.Close, contentDescription = "Stop selecting", tint = MaterialTheme.colorScheme.surfaceContainer) }
                 }
             }
             menuFor?.let { e ->
@@ -3431,7 +3432,7 @@ fun App(
         ) {
             // Compact: icon and title on one row, then either the button or a slim progress line in its place.
             Surface(
-                shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 12.dp,
+                shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surfaceContainer, shadowElevation = 12.dp,
                 modifier = Modifier.fillMaxWidth(0.86f)
             ) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {

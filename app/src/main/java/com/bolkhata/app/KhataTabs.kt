@@ -204,7 +204,7 @@ private fun DrawScope.drawBand(theme: HeaderTheme, h: Float) {
 @Composable
 internal fun BusinessPill(name: String, onMenu: () -> Unit) {
     Row(
-        Modifier.padding(top = 12.dp).shadow(1.dp, CircleShape).clip(CircleShape).background(Color.White)
+        Modifier.padding(top = 12.dp).lift(1.dp, CircleShape).clip(CircleShape).background(Color.White)
             .clickable(onClickLabel = "Menu") { onMenu() }.padding(start = 6.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -244,7 +244,7 @@ private fun SumCard(
     Surface(
         shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 1.dp
     ) {
-        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.solidCard().fillMaxWidth().height(IntrinsicSize.Min).padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
             listOfNotNull(a, b, c).forEachIndexed { i, (value, label, color) ->
                 if (i > 0) VerticalDivider(Modifier.fillMaxHeight(), color = MaterialTheme.colorScheme.outlineVariant)
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -398,7 +398,7 @@ internal fun PeriodChips(newest: List<Entry>, period: Period, onPick: (Period) -
                 ) {
                     val shape = RoundedCornerShape(12.dp)
                     Column(
-                        Modifier.widthIn(min = 110.dp).shadow(8.dp, shape).clip(shape).solidCard()
+                        Modifier.widthIn(min = 110.dp).lift(8.dp, shape).clip(shape).solidCard()
                             .border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape).padding(vertical = 4.dp)
                     ) {
                         (listOf("All") + years.map { it.toString() } + "Dates…").forEach { v ->
@@ -540,7 +540,7 @@ private fun LedgerHead(
     val sel = LocalSelection.current
     Row(
         Modifier.padding(start = 10.dp, end = 10.dp, top = 8.dp).fillMaxWidth().height(IntrinsicSize.Min)
-            .then(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp, bottomStart = if (empty) 14.dp else 0.dp, bottomEnd = if (empty) 14.dp else 0.dp).let { Modifier.shadow(1.dp, it).clip(it) })
+            .then(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp, bottomStart = if (empty) 14.dp else 0.dp, bottomEnd = if (empty) 14.dp else 0.dp).let { Modifier.lift(1.dp, it).clip(it) })
             .background(MaterialTheme.colorScheme.surface)
             .then(if (onHold != null) Modifier.combinedClickable(onLongClick = onHold) {} else Modifier)
     ) {
@@ -604,7 +604,7 @@ private fun LedgerRow(r: LRow, cols: List<LCol>, last: Boolean, card: Boolean = 
     val picking = sel?.active == true && r.entry != null
     val picked = picking && r.entry!!.id in sel!!.ids
     Row(
-        Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(IntrinsicSize.Min).shadow(1.dp, shape).clip(shape)
+        Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(IntrinsicSize.Min).lift(1.dp, shape).clip(shape)
             .background(MaterialTheme.colorScheme.surface).background(if (picked) Ember.copy(alpha = 0.12f) else Color.Transparent)
             .combinedClickable(onLongClick = r.entry?.let { e -> if (picking) ({ sel!!.toggle(e.id) }) else menu?.let { { it(e) } } }) {
                 if (picking) sel!!.toggle(r.entry!!.id) else r.onClick()
@@ -641,7 +641,7 @@ private fun BoxScope.PlusButton(onClick: () -> Unit) {
     val shape = RoundedCornerShape(14.dp)
     Row(
         Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = LocalBarSpace.current + 6.dp)
-            .height(46.dp).shadow(2.dp, shape).clip(shape).solidCard()
+            .height(46.dp).lift(2.dp, shape).clip(shape).solidCard()
             .clickable { onClick() }.padding(start = 10.dp, end = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -674,10 +674,10 @@ private fun BoxScope.UpButton(state: LazyListState) {
     val clear = !adUnder(state, bottom - 6.dp, bottom + 46.dp)
     if (down && clear) Box(
         Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = bottom)
-            .size(40.dp).shadow(2.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.onSurface)
+            .size(40.dp).lift(2.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.onSurface)
             .clickable { scope.launch { state.animateScrollToItem(0) } },
         contentAlignment = Alignment.Center
-    ) { Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Back to top", tint = MaterialTheme.colorScheme.surface) }
+    ) { Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Back to top", tint = MaterialTheme.colorScheme.surfaceContainer) }
 }
 
 private fun matches(e: Entry, q: String) =
@@ -772,7 +772,7 @@ private fun BoxScope.AddRound(state: LazyListState, onClick: () -> Unit) {
     val red = Color(0xFFE3342F)
     if (!adUnder(state, bottom - 6.dp, bottom + 50.dp)) Box(
         Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = bottom).size(44.dp)
-            .shadow(6.dp, CircleShape, ambientColor = red, spotColor = red).clip(CircleShape)
+            .lift(6.dp, CircleShape, ambientColor = red, spotColor = red).clip(CircleShape)
             .background(Brush.linearGradient(listOf(Color(0xFFFF7A45), red, Color(0xFFB91C3C))))
             .clickable { onClick() }
             .drawBehind {
@@ -829,7 +829,7 @@ private fun SheetHead(title: String, sub: String, onBack: (() -> Unit)?, onClose
 
 @Composable
 private fun RoundTap(mark: String, onClick: () -> Unit) = Box(
-    Modifier.size(28.dp).shadow(1.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.surface).clickable { onClick() },
+    Modifier.size(28.dp).lift(1.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.surface).clickable { onClick() },
     contentAlignment = Alignment.Center
 ) { Text(mark, fontSize = if (mark == "‹") 16.sp else 12.sp) }
 
@@ -950,7 +950,7 @@ private fun EntryPicker(all: List<Entry>, setup: SideSetup, onSetup: (SideSetup)
                                 })
                             },
                         contentAlignment = Alignment.Center
-                    ) { Text("Next", color = MaterialTheme.colorScheme.surface, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+                    ) { Text("Next", color = MaterialTheme.colorScheme.surfaceContainer, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
                 }
             }
         }
@@ -977,7 +977,7 @@ private fun TargetRow(t: EntryTarget, first: Boolean, onClick: () -> Unit) {
 private fun KindCard(k: NewKind, on: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val shape = RoundedCornerShape(14.dp)
     Row(
-        modifier.shadow(1.dp, shape).clip(shape).background(MaterialTheme.colorScheme.surface)
+        modifier.lift(1.dp, shape).clip(shape).background(MaterialTheme.colorScheme.surface)
             .then(if (on) Modifier.border(2.dp, MaterialTheme.colorScheme.onSurface, shape) else Modifier)
             .clickable { onClick() }.padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -1126,7 +1126,7 @@ private fun ItRow(
 ) = Tight {
     val shape = sheetRow(i, n)
     Row(
-        Modifier.padding(start = 10.dp, end = 10.dp, top = if (i == 0) 6.dp else 0.dp).fillMaxWidth().shadow(1.dp, shape).clip(shape)
+        Modifier.padding(start = 10.dp, end = 10.dp, top = if (i == 0) 6.dp else 0.dp).fillMaxWidth().lift(1.dp, shape).clip(shape)
             .background(MaterialTheme.colorScheme.surface)
             .then(if (onClick != null || onLong != null) Modifier.combinedClickable(onLongClick = onLong) { onClick?.invoke() } else Modifier)
             .padding(start = 12.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
@@ -1182,7 +1182,7 @@ private fun ledgerTable(heading: String, cols: List<String>, rows: List<Pair<Ent
 @Composable
 private fun PdfButton(onClick: () -> Unit) {
     Row(
-        Modifier.shadow(1.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.surface)
+        Modifier.lift(1.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.surface)
             .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape).clickable { onClick() }.padding(horizontal = 11.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) { Text("⤓ PDF", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface) }
@@ -1194,7 +1194,7 @@ private fun BackHead(title: String, crumb: String, onBack: () -> Unit, onPdf: ((
     Column(Modifier.statusBarsPadding().padding(start = 12.dp, end = 12.dp, top = 12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
-                Modifier.size(34.dp).shadow(2.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.surface).clickable { onBack() },
+                Modifier.size(34.dp).lift(2.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.surface).clickable { onBack() },
                 contentAlignment = Alignment.Center
             ) { Text("‹", fontSize = 20.sp, fontWeight = FontWeight.Bold) }
             Spacer(Modifier.width(10.dp))
@@ -1239,7 +1239,7 @@ private fun LazyListScope.simpleLedger(cols: List<Pair<String, Color>>, totals: 
     item(key = "klh") {
         Tight {
             val shape = RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp, bottomStart = if (rows.isEmpty()) 14.dp else 0.dp, bottomEnd = if (rows.isEmpty()) 14.dp else 0.dp)
-            Row(Modifier.padding(start = 10.dp, end = 10.dp, top = 8.dp).fillMaxWidth().height(IntrinsicSize.Min).shadow(1.dp, shape).clip(shape).background(MaterialTheme.colorScheme.surface)) {
+            Row(Modifier.padding(start = 10.dp, end = 10.dp, top = 8.dp).fillMaxWidth().height(IntrinsicSize.Min).lift(1.dp, shape).clip(shape).background(MaterialTheme.colorScheme.surface)) {
                 Column(Modifier.weight(1f).padding(start = 12.dp, top = 7.dp, bottom = 7.dp)) {
                     Text(head, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold)
                     Text(entryCount(rows.size), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1262,7 +1262,7 @@ private fun LazyListScope.simpleLedger(cols: List<Pair<String, Color>>, totals: 
                 val shape = if (last) RoundedCornerShape(bottomStart = 14.dp, bottomEnd = 14.dp) else RectangleShape
                 val menu = LocalEntryMenu.current
                 Row(
-                    Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(IntrinsicSize.Min).shadow(1.dp, shape).clip(shape)
+                    Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(IntrinsicSize.Min).lift(1.dp, shape).clip(shape)
                         .background(MaterialTheme.colorScheme.surface).combinedClickable(onLongClick = menu?.let { { it(e) } }) { onEdit(e) }
                 ) {
                     Column(Modifier.weight(1f).padding(start = 12.dp, end = 4.dp, top = 7.dp, bottom = 7.dp)) {
@@ -1724,7 +1724,7 @@ internal fun AppPopup(
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(LocalPage.current).padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(title, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
-                Box(Modifier.size(28.dp).shadow(1.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.surface).clickable { onDismiss() }, contentAlignment = Alignment.Center) { Text("✕", fontSize = 12.sp) }
+                Box(Modifier.size(28.dp).lift(1.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.surface).clickable { onDismiss() }, contentAlignment = Alignment.Center) { Text("✕", fontSize = 12.sp) }
             }
             content()
             Row(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1991,7 +1991,7 @@ private fun PickBox(text: String, modifier: Modifier, onClick: () -> Unit) {
 @Composable
 private fun ReportRow(title: String, sub: String, amount: String, color: Color, onClick: (() -> Unit)?) = Tight {
     Row(
-        Modifier.padding(start = 10.dp, end = 10.dp, top = 2.dp).fillMaxWidth().height(IntrinsicSize.Min).shadow(1.dp)
+        Modifier.padding(start = 10.dp, end = 10.dp, top = 2.dp).fillMaxWidth().height(IntrinsicSize.Min).lift(1.dp)
             .background(MaterialTheme.colorScheme.surface).then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
     ) {
         Column(Modifier.weight(1f).padding(start = 12.dp, end = 4.dp, top = 10.dp, bottom = 10.dp), verticalArrangement = Arrangement.Center) {
@@ -2015,7 +2015,7 @@ private fun shareColor(i: Int) = ShareColors.getOrElse(i) { ShareOther }
 @Composable
 private fun ShareBar(values: List<Double>) {
     val parts = values.take(5).mapIndexed { i, v -> v to shareColor(i) } + listOfNotNull(values.drop(5).sum().takeIf { it > 0 }?.let { it to ShareOther })
-    Box(Modifier.padding(start = 10.dp, end = 10.dp, top = 8.dp).fillMaxWidth().shadow(1.dp, RoundedCornerShape(14.dp))
+    Box(Modifier.padding(start = 10.dp, end = 10.dp, top = 8.dp).fillMaxWidth().lift(1.dp, RoundedCornerShape(14.dp))
         .clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surface).padding(12.dp)) {
         Row(Modifier.fillMaxWidth().height(14.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             parts.filter { it.first > 0 }.forEach { (v, c) ->
@@ -2031,7 +2031,7 @@ private fun ShareRow(icon: String, name: String, v: Double, total: Double, mark:
     val shape = sheetRow(i, n)
     val pc = if (total > 0) (v / total * 100).roundToInt() else 0
     Row(
-        Modifier.padding(start = 10.dp, end = 10.dp, top = if (i == 0) 6.dp else 0.dp).fillMaxWidth().shadow(1.dp, shape).clip(shape)
+        Modifier.padding(start = 10.dp, end = 10.dp, top = if (i == 0) 6.dp else 0.dp).fillMaxWidth().lift(1.dp, shape).clip(shape)
             .background(MaterialTheme.colorScheme.surface).clickable { onClick() }.padding(start = 12.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -2266,7 +2266,7 @@ internal fun BusinessPage(
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
         item(key = "bh") { BackHead(if (isNew) "New business" else n.ifBlank { "Business" }, "Business ›", { leave() }) {} }
         item(key = "df") {
-            Column(Modifier.padding(start = 10.dp, end = 10.dp, top = 2.dp).fillMaxWidth().shadow(1.dp, RoundedCornerShape(16.dp)).clip(RoundedCornerShape(16.dp))
+            Column(Modifier.padding(start = 10.dp, end = 10.dp, top = 2.dp).fillMaxWidth().lift(1.dp, RoundedCornerShape(16.dp)).clip(RoundedCornerShape(16.dp))
                 .background(MaterialTheme.colorScheme.surface).padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 CompactField(n, "Business name", Modifier.fillMaxWidth()) { n = it }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -2294,7 +2294,7 @@ internal fun BusinessPage(
         item(key = "cb") {
             androidx.compose.foundation.Image(
                 card.asImageBitmap(), "Business card",
-                Modifier.padding(start = 44.dp, end = 44.dp, top = 6.dp).fillMaxWidth().aspectRatio(1.75f).shadow(10.dp, RoundedCornerShape(16.dp)).clip(RoundedCornerShape(16.dp))
+                Modifier.padding(start = 44.dp, end = 44.dp, top = 6.dp).fillMaxWidth().aspectRatio(1.75f).lift(10.dp, RoundedCornerShape(16.dp)).clip(RoundedCornerShape(16.dp))
             )
         }
         item(key = "cbt") {

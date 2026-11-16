@@ -387,7 +387,7 @@ private fun UserBubble(text: String, attachment: String = "") {
         Text(
             text,
             // The question in a dark bubble, the answer in a white card (like the Yaad mock-up).
-            color = MaterialTheme.colorScheme.surface,
+            color = MaterialTheme.colorScheme.surfaceContainer,
             fontSize = 13.sp,
             lineHeight = 17.5.sp,
             modifier = Modifier
@@ -502,7 +502,7 @@ private fun AssistantBubble(text: String) {
         modifier = Modifier
             .padding(start = 8.dp)
             .widthIn(max = 320.dp)
-            .shadow(1.dp, BotShape)
+            .lift(1.dp, BotShape)
             .clip(BotShape)
             .copyable(text)
             .background(MaterialTheme.colorScheme.surface)
@@ -611,13 +611,13 @@ private fun SavedCard(
     Column(Modifier.padding(start = 8.dp).copyable(copyText), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         // The assistant's own line, when it had something to say or ask.
         if (message.text.isNotBlank() && !message.text.startsWith("✓")) Text(message.text, fontSize = 12.sp, lineHeight = 16.sp,
-            color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.fillMaxWidth(0.85f).shadow(1.dp, BotShape).clip(BotShape)
+            color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.fillMaxWidth(0.85f).lift(1.dp, BotShape).clip(BotShape)
                 .background(MaterialTheme.colorScheme.surface).padding(horizontal = 10.dp, vertical = 7.dp))
         // One small row per entry, like an account row: icon, the name, and under it one word, the amount and Undo. A tap opens the person's account.
         live.forEach { e ->
             val shape = RoundedCornerShape(10.dp)
             Row(
-                Modifier.widthIn(max = 200.dp).shadow(1.dp, shape).clip(shape).background(MaterialTheme.colorScheme.surface)
+                Modifier.widthIn(max = 200.dp).lift(1.dp, shape).clip(shape).background(MaterialTheme.colorScheme.surface)
                     .clickable { onEditEntry(e) }.padding(4.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
@@ -661,7 +661,7 @@ private fun OptionCard(message: ChatMessage, all: Collection<Entry>, onDone: (En
     val shape = RoundedCornerShape(10.dp)
     fun save(k: String, i: String = "", r: Double = 0.0, p: Boolean = false) = onDone(Ask.entry(k, person, n, staff, System.currentTimeMillis(), i, r, p))
     Column(
-        Modifier.padding(start = 8.dp).widthIn(max = 250.dp).shadow(1.dp, shape).clip(shape).background(MaterialTheme.colorScheme.surface)
+        Modifier.padding(start = 8.dp).widthIn(max = 250.dp).lift(1.dp, shape).clip(shape).background(MaterialTheme.colorScheme.surface)
             .padding(start = 3.dp, top = 3.dp, end = 7.dp, bottom = 6.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -703,7 +703,7 @@ private fun OptionCard(message: ChatMessage, all: Collection<Entry>, onDone: (En
 @Composable
 private fun OptionPill(symbol: String, label: String, color: Color, onClick: () -> Unit) {
     Row(
-        Modifier.height(22.dp).shadow(2.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.surface).clickable { onClick() }.padding(start = 6.dp, end = 8.dp),
+        Modifier.height(22.dp).lift(2.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.surface).clickable { onClick() }.padding(start = 6.dp, end = 8.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)
     ) {
         if (symbol.isNotEmpty()) Text(symbol, fontSize = 10.sp, color = color)
@@ -920,7 +920,7 @@ private fun RateCard(text: String, onSend: (String) -> Unit) {
     var per1000 by remember { mutableStateOf(last?.let { it.groupValues[2] == "per 1000" } ?: (qty >= 1000)) }
     val r = rate.toDoubleOrNull() ?: 0.0
     val sub = MaterialTheme.colorScheme.onSurfaceVariant
-    Column(Modifier.padding(start = 8.dp).widthIn(max = 280.dp).shadow(1.dp, BotShape).clip(BotShape).background(MaterialTheme.colorScheme.surface)
+    Column(Modifier.padding(start = 8.dp).widthIn(max = 280.dp).lift(1.dp, BotShape).clip(BotShape).background(MaterialTheme.colorScheme.surface)
         .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 9.dp)) {
         Text(text.replace(Regex(""" \(last [^)]*\)"""), ""), fontSize = 13.sp, lineHeight = 17.5.sp)
         Row(Modifier.padding(top = 8.dp).fillMaxWidth().height(34.dp).fieldEdge(RoundedCornerShape(12.dp)).padding(start = 10.dp, end = 4.dp),
@@ -936,7 +936,7 @@ private fun RateCard(text: String, onSend: (String) -> Unit) {
                 listOf(true to "per 1000", false to "each").forEach { (v, label) ->
                     val on = per1000 == v
                     Text(label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = if (on) MaterialTheme.colorScheme.onSurface else sub,
-                        modifier = Modifier.then(if (on) Modifier.shadow(1.dp, RoundedCornerShape(7.dp)) else Modifier).clip(RoundedCornerShape(7.dp))
+                        modifier = Modifier.then(if (on) Modifier.lift(1.dp, RoundedCornerShape(7.dp)) else Modifier).clip(RoundedCornerShape(7.dp))
                             .background(if (on) Color.White else Color.Transparent).clickable { per1000 = v }.padding(horizontal = 8.dp, vertical = 5.dp))
                 }
             }
@@ -945,7 +945,7 @@ private fun RateCard(text: String, onSend: (String) -> Unit) {
             Text(if (r > 0 && qty > 0) "= " + fmt(if (per1000) qty / 1000 * r else qty * r) + " " + LocalCurrency.current else "",
                 fontSize = 11.sp, color = sub, modifier = Modifier.weight(1f))
             Text("Save", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF1D1D1F),
-                modifier = Modifier.shadow(3.dp, RoundedCornerShape(15.dp)).clip(RoundedCornerShape(15.dp)).background(Color.White)
+                modifier = Modifier.lift(3.dp, RoundedCornerShape(15.dp)).clip(RoundedCornerShape(15.dp)).background(Color.White)
                     .clickable(enabled = r > 0) { onSend(rate + if (per1000) " per 1000" else " each") }.padding(horizontal = 14.dp, vertical = 6.dp))
         }
     }

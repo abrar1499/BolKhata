@@ -715,7 +715,7 @@ fun BoxScope.CompactPicker(open: Boolean, items: List<Pair<String, String>>, sel
             properties = androidx.compose.ui.window.PopupProperties(focusable = true)
         ) {
             val shape = RoundedCornerShape(14.dp)
-            Column(Modifier.width(270.dp).shadow(8.dp, shape).clip(shape).solidCard().padding(vertical = 6.dp)) {
+            Column(Modifier.width(270.dp).lift(8.dp, shape).clip(shape).solidCard().padding(vertical = 6.dp)) {
                 if (search) androidx.compose.foundation.text.BasicTextField(
                     q, { q = it }, singleLine = true,
                     textStyle = TextStyle(fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface),
@@ -771,7 +771,7 @@ fun GlassLogo(size: Dp, modifier: Modifier = Modifier, onBand: Boolean = false) 
     val shape = RoundedCornerShape(size * 0.26f)
     Canvas(
         modifier.size(size)
-            .shadow(if (onBand) size * 0.12f else 2.dp, shape)
+            .lift(if (onBand) size * 0.12f else 2.dp, shape)
             .then(if (onBand) Modifier.border(1.dp, Color.White.copy(alpha = 0.95f), shape) else Modifier)
             .clip(shape)
     ) {
@@ -847,6 +847,16 @@ fun Modifier.pageGround(): Modifier {
     }
 }
 
+/**
+ * A soft shadow, as Modifier.shadow, except in the glow look: under see-through glass Android draws the shadow through
+ * the card, which shows as a darker ring with a lighter box inside.
+ */
+@Composable
+fun Modifier.lift(
+    elevation: androidx.compose.ui.unit.Dp, shape: androidx.compose.ui.graphics.Shape = androidx.compose.ui.graphics.RectangleShape,
+    ambientColor: Color = androidx.compose.ui.graphics.DefaultShadowColor, spotColor: Color = androidx.compose.ui.graphics.DefaultShadowColor
+): Modifier = if (LocalLook.current?.glow == true) this else shadow(elevation, shape, ambientColor = ambientColor, spotColor = spotColor)
+
 /** A solid card for things that float over a list (tabs, menus, the + button): in the glow look frosted glass on the glow. */
 @Composable
 fun Modifier.solidCard(): Modifier = pageGround().background(MaterialTheme.colorScheme.surface)
@@ -860,6 +870,6 @@ fun Modifier.fieldEdge(shape: androidx.compose.ui.graphics.Shape): Modifier {
     val look = LocalLook.current
     val fill = look?.let { Color(it.field) } ?: Color.White
     val edge = if (look != null) Color(0x26DEDCD1) else Color(0x261F1E1D)
-    val base = this.shadow(3.dp, shape, ambientColor = Color.Black.copy(alpha = 0.05f), spotColor = Color.Black.copy(alpha = 0.05f)).clip(shape)
+    val base = this.lift(3.dp, shape, ambientColor = Color.Black.copy(alpha = 0.05f), spotColor = Color.Black.copy(alpha = 0.05f)).clip(shape)
     return (if (look?.glow == true) base.solidCard() else base.background(fill, shape)).border(1.dp, edge, shape)
 }

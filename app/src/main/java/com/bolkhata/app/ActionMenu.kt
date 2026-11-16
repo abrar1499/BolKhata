@@ -58,7 +58,7 @@ fun ActionMenu(
         ) {
             Surface(
                 Modifier.width(240.dp).clickable(remember { MutableInteractionSource() }, indication = null) {},
-                shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 8.dp
+                shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceContainer, shadowElevation = 8.dp
             ) {
                 Column(Modifier.padding(vertical = 4.dp)) {
                     Row(Modifier.padding(start = 14.dp, end = 14.dp, top = 8.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {

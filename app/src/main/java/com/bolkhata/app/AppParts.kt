@@ -129,7 +129,7 @@ internal fun InputBar(
                     Box(
                         Modifier
                             .size(30.dp)
-                            .shadow(1.dp, CircleShape)
+                            .lift(1.dp, CircleShape)
                             .clip(CircleShape)
                             .background(if (talking && !voice!!.live) RedSpend else MaterialTheme.colorScheme.surface)
                             .combinedClickable(enabled = talking || !busy, onLongClick = { if (!talking && text.isBlank()) onMic() }) {
@@ -421,7 +421,7 @@ private fun AiKeysSheet(ai: AiKeys, models: (String) -> List<String>, onSave: (S
     Dialog(onDismissRequest = onClose) {
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(LocalPage.current).padding(vertical = 14.dp)) {
             Row(Modifier.padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(34.dp).shadow(3.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.surface).clickable { onClose() },
+                Box(Modifier.size(34.dp).lift(3.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.surface).clickable { onClose() },
                     contentAlignment = Alignment.Center) { Text("‹", fontSize = 16.sp) }
                 Text("AI keys", fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 10.dp))
             }
@@ -526,7 +526,7 @@ private fun AiBoxCard(n: Int, p: Ai.Provider, box: AiBox, status: Pair<String, C
             // The switch: without a key it opens the box for one.
             Box(Modifier.size(34.dp, 20.dp).clip(RoundedCornerShape(10.dp)).background(if (on) GreenIn else Color(0xFFD6D2CC))
                 .clickable { if (box.key.isBlank()) open = !open else onSwitch(!box.on) }) {
-                Box(Modifier.align(if (on) Alignment.CenterEnd else Alignment.CenterStart).padding(2.dp).size(16.dp).shadow(1.dp, CircleShape).clip(CircleShape).background(Color.White))
+                Box(Modifier.align(if (on) Alignment.CenterEnd else Alignment.CenterStart).padding(2.dp).size(16.dp).lift(1.dp, CircleShape).clip(CircleShape).background(Color.White))
             }
         }
         if (open) {
@@ -544,7 +544,7 @@ private fun AiBoxCard(n: Int, p: Ai.Provider, box: AiBox, status: Pair<String, C
                         }
                     }
                 }
-                Text("Save", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF1D1D1F), modifier = Modifier.padding(start = 6.dp).shadow(3.dp, RoundedCornerShape(16.dp))
+                Text("Save", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF1D1D1F), modifier = Modifier.padding(start = 6.dp).lift(3.dp, RoundedCornerShape(16.dp))
                     .clip(RoundedCornerShape(16.dp)).background(Color.White).clickable { onSave(key, model); key = "" }.padding(horizontal = 14.dp, vertical = 7.dp))
             }
         }
@@ -559,7 +559,7 @@ private fun DriveRow(email: String, status: String, modifier: Modifier = Modifie
         Box(Modifier.size(30.dp), contentAlignment = Alignment.Center) {
             if (busy) CircularProgressIndicator(Modifier.requiredSize(38.dp), color = EmberTop, strokeWidth = 2.5.dp)
             Box(
-                Modifier.size(30.dp).shadow(if (email.isBlank()) 1.dp else 0.dp, CircleShape).clip(CircleShape)
+                Modifier.size(30.dp).lift(if (email.isBlank()) 1.dp else 0.dp, CircleShape).clip(CircleShape)
                     .background(if (email.isBlank()) Color.White else Color(0xFF7C3AED)),
                 contentAlignment = Alignment.Center
             ) {
@@ -638,7 +638,7 @@ internal fun AskDialog(entry: Entry, currency: String, onPick: (Entry) -> Unit, 
         rate = if (needRate) rateValue else entry.rate
     )
     Dialog(onDismissRequest = onSkip) {
-        Surface(shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 12.dp) {
+        Surface(shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surfaceContainer, shadowElevation = 12.dp) {
             Column(Modifier.padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(
                     Modifier.size(56.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
