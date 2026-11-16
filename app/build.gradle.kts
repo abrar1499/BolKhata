@@ -28,6 +28,10 @@ android {
         // The token of the shared brain repository only, from the BRAIN_TOKEN repository secret (CI only), written backwards
         // in Base64 so it is not plain in the app (see Brain.unhide). Blank: only a phone with its own token adds lessons.
         buildConfigField("String", "BRAIN_TOKEN", "\"" + Base64.getEncoder().encodeToString((System.getenv("BRAIN_TOKEN") ?: "").trim().reversed().toByteArray()) + "\"")
+        // The app's own AI server, which keeps the owner's AI keys (RELAY_URL), and what the app shows it (RELAY_TOKEN, hidden
+        // like BRAIN_TOKEN). Blank: no server, only keys people put in themselves.
+        buildConfigField("String", "RELAY_URL", "\"" + (System.getenv("RELAY_URL") ?: "").trim() + "\"")
+        buildConfigField("String", "RELAY_TOKEN", "\"" + Base64.getEncoder().encodeToString((System.getenv("RELAY_TOKEN") ?: "").trim().reversed().toByteArray()) + "\"")
         ndk {
             // Real phones only: the x86 copies of the OCR library are for PC emulators and added ~23 MB.
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")

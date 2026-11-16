@@ -27,6 +27,25 @@ object Ai {
     /** Every provider with a box in the side menu, best first: the ones turned on answer in this order. */
     val ALL = listOf(CLAUDE, OPENAI, GEMINI, GROQ, OPENROUTER)
 
+    /** A chain key that is a key kept on the app's own server ("server:Claude"): the phone never holds it. */
+    const val SERVER = "server:"
+    /** The app's own AI server (BuildConfig.RELAY_URL), which adds its keys to the calls sent through it; blank: none. */
+    @Volatile var relay = ""
+    /** What the app shows the server so it answers (BuildConfig.RELAY_TOKEN). */
+    @Volatile var relayToken = ""
+
+    fun isServer(k: String) = k.startsWith(SERVER)
+
+    /** The server's keys after the person's own, best first; the server skips one it has no key for, and the next is tried. */
+    fun serverChain(): List<Pair<String, String>> = if (relay.isBlank()) emptyList() else ALL.map { SERVER + it.name to "" }
+
+    /** Where a call to [url] goes, with which headers: straight to the provider with the key, or through the server, which adds its own. */
+    fun relayed(url: String, headers: Map<String, String>, k: String = key, base: String = relay, token: String = relayToken): Pair<String, Map<String, String>> {
+        if (!isServer(k) || base.isBlank()) return url to headers
+        val p = ALL.firstOrNull { it.url == url } ?: return url to headers
+        return base.trimEnd('/') + "/" + p.name.lowercase(Locale.ROOT) to (headers.filterKeys { it != "x-api-key" && it != "Authorization" } + ("x-app" to token))
+    }
+
     /** The keys saved in the side menu and whose they are. */
     @Volatile var saved: Map<String, Provider> = emptyMap()
     /** The keys turned on, best first, each with its model (blank: the usual one): when one does not answer, the next one does. */
@@ -52,6 +71,7 @@ object Ai {
     /** The provider a key belongs to: its side-menu box, else how the key starts; null when it is not a known kind. */
     fun provider(key: String): Provider? = key.trim().let { k ->
         saved[k] ?: when {
+            isServer(k) -> ALL.firstOrNull { it.name == k.removePrefix(SERVER) }
             k.startsWith("sk-ant-") -> CLAUDE
             k.startsWith("gsk_") -> GROQ
             k.startsWith("sk-or-") -> OPENROUTER
@@ -88,7 +108,7 @@ object Ai {
     fun handles(k: String) = key.isNotBlank() && k == key
     fun modelNow(): String = model.ifBlank { provider(key)?.model.orEmpty() }
     /** The key the mic's recording is sent with, or "" when the phone's own hearing is used. [k] is the chat's key. */
-    fun voiceKeyFor(k: String): String = if (k.isNotBlank() && (!handles(k) || provider(k) === GROQ)) k else ""
+    fun voiceKeyFor(k: String): String = if (k.isNotBlank() && !isServer(k) && (!handles(k) || provider(k) === GROQ)) k else ""
 
     /** Whether [m] is free on this provider's free plan, as far as the app knows. */
     fun free(p: Provider, m: String): Boolean = when (p) {
@@ -352,7 +372,8 @@ object Ai {
         return code to ((if (code < 400) conn.inputStream else conn.errorStream)?.bufferedReader()?.use { it.readText() } ?: "")
     }
 
-    private fun send(url: String, headers: Map<String, String>, body: String): Pair<Int, String> {
+    private fun send(direct: String, keyed: Map<String, String>, body: String): Pair<Int, String> {
+        val (url, headers) = relayed(direct, keyed)
         val conn = URL(url).openConnection() as HttpURLConnection
         conn.requestMethod = "POST"
         conn.connectTimeout = 8_000

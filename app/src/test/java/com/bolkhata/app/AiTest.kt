@@ -17,6 +17,18 @@ class AiTest {
     }
 
     @Test
+    fun theServersKeysGoThroughTheServerWithoutAKeyOnThePhone() {
+        assertEquals("Groq", Ai.provider("server:Groq")?.name)
+        val (url, headers) = Ai.relayed(Ai.CLAUDE.url, mapOf("x-api-key" to "server:Claude", "anthropic-version" to "2026-10-21"),
+            k = "server:Claude", base = "https://ai.example.workers.dev/", token = "t1")
+        assertEquals("https://ai.example.workers.dev/claude", url)
+        assertEquals(mapOf("anthropic-version" to "2026-10-21", "x-app" to "t1"), headers)
+        // A person's own key goes straight to the provider.
+        assertEquals(Ai.GROQ.url, Ai.relayed(Ai.GROQ.url, mapOf("Authorization" to "Bearer gsk_x"), k = "gsk_x", base = "https://ai.example.workers.dev").first)
+        assertEquals("", Ai.voiceKeyFor("server:Groq"))
+    }
+
+    @Test
     fun costComesFromThePricePerMillion() {
         // 1,000,000 in at $4 and 500,000 out at $20 = $14.
         assertEquals("1,000,000 in · 500,000 out · $14.0000", Ai.usageText(1_000_000, 500_000, "claude-opus-5-5"))

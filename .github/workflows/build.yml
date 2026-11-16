@@ -34,6 +34,8 @@ jobs:
         env:
           GROQ_KEY: ${{ secrets.GROQ_KEY }}
           BRAIN_TOKEN: ${{ secrets.BRAIN_TOKEN }}
+          RELAY_URL: ${{ secrets.RELAY_URL }}
+          RELAY_TOKEN: ${{ secrets.RELAY_TOKEN }}
         run: |
           set -o pipefail
           gradle testReleaseUnitTest assembleRelease bundlePlay --no-daemon 2>&1 | tee build.log || {
