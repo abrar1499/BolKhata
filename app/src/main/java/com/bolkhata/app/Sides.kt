@@ -75,9 +75,15 @@ object Sides {
         return (things + own).distinctBy { it.name.lowercase() }
     }
 
-    /** The everyday expense accounts every book starts with, in the order they show. */
-    val common = listOf(Cat.KHANA, Cat.TRANSPORT, Cat.BIJLI, Cat.RENT, Cat.MOBILE, Cat.SEHAT, Cat.SHOPPING, Cat.EDU, Cat.PERSONAL,
-        Cat.CHARITY, Cat.GHAR, Cat.FEES)
+    /** The basic expense accounts every book starts with, in the order they show. */
+    val common = listOf(Cat.KHANA, Cat.TRANSPORT, Cat.BIJLI, Cat.RENT, Cat.MOBILE, Cat.SHOPPING, Cat.SEHAT)
+
+    /** Accounts an earlier version added to every book (not basic); their entries still show them, as for any category. */
+    private val noLongerCommon = listOf(Cat.EDU, Cat.PERSONAL, Cat.CHARITY, Cat.GHAR, Cat.FEES)
+
+    /** [s] without the accounts an earlier version added that are not basic. */
+    fun trimCommon(s: SideSetup): SideSetup =
+        s.copy(books = s.books.filterNot { b -> b.side == Side.EXP && !b.people && noLongerCommon.any { it.label.equals(b.name, true) } })
 
     /** [s] with the everyday expense accounts ([common]) added, those it does not have yet. */
     fun withCommon(s: SideSetup): SideSetup {

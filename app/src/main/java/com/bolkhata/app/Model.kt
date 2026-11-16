@@ -529,8 +529,14 @@ class Store(context: Context) {
      * The first time a book is opened it gets the everyday expense accounts ([Sides.withCommon]); one deleted later stays gone.
      */
     fun loadSides(): SideSetup = readSides().let { s ->
-        if (prefs.getBoolean(scoped("commonAdded"), false)) s
-        else Sides.withCommon(s).also { saveSides(it); prefs.edit().putBoolean(scoped("commonAdded"), true).apply() }
+        val added = prefs.getBoolean(scoped("commonAdded"), false)
+        val trimmed = prefs.getBoolean(scoped("commonTrimmed"), false)
+        when {
+            !added -> Sides.withCommon(s).also { saveSides(it) }
+            // 1.509 added more than the basic ones once: those go again (an account with entries still shows).
+            !trimmed -> Sides.trimCommon(s).also { saveSides(it) }
+            else -> s
+        }.also { if (!added || !trimmed) prefs.edit().putBoolean(scoped("commonAdded"), true).putBoolean(scoped("commonTrimmed"), true).apply() }
     }
 
     private fun readSides(): SideSetup = try {

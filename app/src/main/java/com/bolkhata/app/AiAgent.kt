@@ -23,7 +23,9 @@ object AiAgent {
         /** Builds the PDF and opens the share sheet. */
         val pdf: (PdfDoc) -> Unit = {},
         /** What is in Trash, newest first, and putting some of it back. */
-        val trashed: () -> List<Entry> = { emptyList() }, val restore: (Set<String>) -> Unit = {}
+        val trashed: () -> List<Entry> = { emptyList() }, val restore: (Set<String>) -> Unit = {},
+        /** Changes one of the side menu's settings (see [AppSettings]); JSON with "done" (what changed) or "error". */
+        val settings: (setting: String, value: String) -> String = { _, _ -> JSONObject().put("error", "not here").toString() }
     )
 
     /**
@@ -133,7 +135,13 @@ object AiAgent {
         Ai.Tool("rename_person", "Gives a person a new name everywhere: all their entries and their place in an account. Also puts two spellings of one person together (to: the name that stays).",
             shape("from" to text("The saved name now"), "to" to text("The new name"), required = listOf("from", "to"))),
         Ai.Tool("restore_entries", "Brings entries back from Trash: the last so many deleted, or by id. With nothing given it lists what is in Trash.", shape(
-            "last" to number("How many of the most recently deleted to bring back"), "ids" to words("Ids from the Trash list")))
+            "last" to number("How many of the most recently deleted to bring back"), "ids" to words("Ids from the Trash list"))),
+        Ai.Tool("app_setting", "Changes the app itself, as its side menu does: clear_chat (empties the chat), currency (a code: PKR, SAR, AED, INR, USD…), " +
+            "language (auto, roman urdu, english, urdu, hindi, or another language's English name), header (the top colour: Clean, Red, Green, Navy, " +
+            "Teal, Indigo, Violet, Black…), background (warm grey, light slate, dark, dark navy), open (chat, cashbook, party, expense, income, report, " +
+            "trash, menu), business (opens the business of that name), add_business (a new business of that name), backup (saves a backup file).",
+            shape("setting" to JSONObject().put("type", "string").put("enum", JSONArray(AppSettings.NAMES)), "value" to text("The new value; empty for clear_chat and backup"),
+                required = listOf("setting")))
     )
 
     /** The same from message to message (until a new name is saved), so the provider can cache it; the time goes with the message. */
@@ -205,6 +213,8 @@ object AiAgent {
           no entry. An advance or payment to a worker is "lent" with that person, and the person goes in Staff.
         - A PDF, record, statement or report to share is make_pdf with the same picking fields: the app puts every
           matching entry in it and opens the share sheet; then say shortly that it is ready.
+        - Changing the app itself (clear the chat, currency, language, header colour, background, open a tab, open or add a
+          business, a backup) is app_setting; then say in a few words what changed.
         - Greet only when the message itself greets. Small talk: answer briefly, no tools.
         - A question about anything else in the world (facts, how-to, advice, health, religion, maths, words, news you
           know of): answer it yourself, correctly and kindly, in at most about four short sentences, no tools. The
@@ -673,6 +683,7 @@ object AiAgent {
             host.saveSetup(setup.copy(books = books, people = setup.people.filterKeys { k -> people.none { it.equals(k.trim(), true) } } + people.associateWith { name }))
             JSONObject().put("account", name).put("people_now_in_it", JSONArray(people)).toString()
         }
+        "app_setting" -> host.settings(input.optString("setting"), input.optString("value"))
         "add_account" -> {
             val side = if (input.optString("side") == "income") Side.INC else Side.EXP
             val name = input.optString("name").trim().ifBlank { error("name is needed") }

@@ -883,7 +883,7 @@ object LocalEdit : LocalAgent.Reader {
         t = t.replace(Regex("""(?<=\d),(?=\d{3}(?!\d))"""), "")
         t = t.replace(Regex("""(\d+(?:\.\d+)?)k(?![\p{L}])""")) { plain(it.groupValues[1].toDouble() * 1000) }
         t = t.replace(Regex("""(\d)(\p{L})"""), "$1 $2").replace(Regex("""(\p{L})(\d)"""), "$1 $2")
-        t = t.replace(Regex("""(?<![\p{L}\d.])(\d+(?:\.\d+)?)\s+(sau|hundred|hazar|hazaar|hajar|thousand|lakh|lac)(?![\p{L}])""")) { m ->
+        t = t.replace(Regex("""(?<![\p{L}\d.])(\d+(?:\.\d+)?)\s+(sau|hundred|h+a*[zj]+a*r+|thousand|lakh|lac)(?![\p{L}])""")) { m ->
             val times = when (m.groupValues[2]) { "sau", "hundred" -> 100.0; "lakh", "lac" -> 100_000.0; else -> 1000.0 }
             plain(m.groupValues[1].toDouble() * times)
         }
@@ -905,7 +905,7 @@ object LocalEdit : LocalAgent.Reader {
         "sorry", "oops", "actually", "asal", "asl", "balki", "correction", "mistake", "ghalti", "galti")
     private val doWords = setOf("kar", "karo", "kardo", "krdo", "kr", "kro", "karde", "kardein", "karden", "kardena", "kariye", "kijiye", "karein", "karen",
         "likho", "likh", "likhdo", "rakho", "rakh", "rakhdo", "set", "make", "change", "badal", "badlo", "badaldo", "update", "edit", "fix", "correct")
-    private val yesWords = setOf("haan", "han", "haa", "ha", "hn", "haanji", "ji", "jee", "jii", "yes", "yeah", "yep", "yup", "ok", "okay", "okk", "theek", "thik",
+    private val yesWords = setOf("haan", "han", "haa", "ha", "hn", "haanji", "ji", "jee", "jii", "g", "gi", "jj", "yes", "yeah", "yep", "yup", "ok", "okay", "okk", "theek", "thik",
         "sahi", "bilkul", "zaroor", "zarur", "done", "confirm", "sure", "go", "ahead", "do", "dein", "den", "de")
     private val politeWords = setOf("please", "plz", "pls", "bhai", "yaar", "yar", "jaldi", "abhi", "them", "all", "everything", "sab", "hi", "hai", "hain")
     private val bothWords = setOf("dono", "donon", "donoo", "both")

@@ -106,10 +106,13 @@ class SidesTest {
     fun aNewBookStartsWithTheEverydayExpenseAccounts() {
         val s = Sides.withCommon(SideSetup())
         val shown = Sides.books(Side.EXP, emptyList(), s).map { it.name }
-        assertTrue(shown.containsAll(listOf("Food", "Transport", "Bills", "Rent", "Mobile & Internet", "Health", "Shopping", "Sent home")))
+        assertEquals(listOf("Food", "Transport", "Bills", "Rent", "Mobile & Internet", "Shopping", "Health").sorted(), shown.sorted())
         // Food is the Food category's account: its entries show in it.
         assertEquals(Cat.KHANA, Sides.books(Side.EXP, emptyList(), s).first { it.name == "Food" }.cat)
         // Added once: an account the person already has is not added again.
         assertEquals(s.books.size, Sides.withCommon(s).books.size)
+        // The extra ones an earlier version added go; the basic ones and the person's own stay.
+        val old = SideSetup(books = s.books + listOf("Education", "Sent home", "Fees & Govt", "Tools").map { Book(Side.EXP, it, false) })
+        assertEquals(s.books.map { it.name } + "Tools", Sides.trimCommon(old).books.map { it.name })
     }
 }

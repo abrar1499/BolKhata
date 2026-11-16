@@ -1186,11 +1186,9 @@ fun App(
     fun postChat(text: String, isUser: Boolean, entryIds: List<String> = emptyList(), attachment: String = "", meta: String = "", listIds: List<String> = emptyList()) {
         // The answer to a translated message carries what it was read as, in its small line (option cards have none).
         val note = if (isUser || meta.startsWith("ask=")) "" else sayNote[0].also { sayNote[0] = "" }
-        val noted = when {
-            note.isBlank() -> meta
-            "usage=" in meta -> meta.replace(Regex("""usage=([^;]+)""")) { "usage=" + it.groupValues[1] + " · " + note }
-            else -> meta + (if (meta.isBlank()) "" else "; ") + "usage=" + note
-        }
+        // Every answer names who gave it on its small line (the APK shows it): the AI's carries its own; the rest are the app's.
+        val named = if (isUser || meta.startsWith("ask=") || "usage=" in meta) meta else meta + (if (meta.isBlank()) "" else "; ") + "usage=App engine"
+        val noted = if (note.isBlank()) named else named.replace(Regex("""usage=([^;]+)""")) { "usage=" + it.groupValues[1] + " · " + note }
         val message = ChatMessage(
             listIds = listIds,
             id = "chat-" + System.currentTimeMillis() + "-" + System.nanoTime(),
@@ -1296,6 +1294,8 @@ fun App(
 
     // The PDF maker is written further down; the AI's PDF tool reaches it through this.
     val aiPdf = remember { arrayOfNulls<(PdfDoc) -> Unit>(1) }
+    /** The side menu's settings changed from the chat (set further down, where the menu and the file saver are). */
+    val appSet = remember { arrayOfNulls<(String, String) -> String>(1) }
     // The recording of a voice message just heard: the chat shows it as a voice note in place of its words.
     val voiceNote = remember { arrayOfNulls<String>(1) }
     // True while a sentence of live voice is handed to the chat: its words are stored but not shown.
@@ -1317,7 +1317,8 @@ fun App(
         update = { changed -> save(entries.map { e -> changed.firstOrNull { it.id == e.id } ?: e }) },
         trash = { ids -> moveToTrash(ids) }, names = { names }, currency = currency,
         setup = { sides }, saveSetup = { s -> sides = s; store.saveSides(s) }, pdf = { doc -> aiPdf[0]?.invoke(doc) },
-        trashed = { trash }, restore = { ids -> val back = trash.filter { it.id in ids }; save(back + entries); saveTrash(trash.filter { it.id !in ids }) }
+        trashed = { trash }, restore = { ids -> val back = trash.filter { it.id in ids }; save(back + entries); saveTrash(trash.filter { it.id !in ids }) },
+        settings = { k, v -> appSet[0]?.invoke(k, v) ?: org.json.JSONObject().put("error", "not ready").toString() }
     )
 
     /**
@@ -1369,6 +1370,8 @@ fun App(
         scope.launch {
             // The message with its misspelt words put right, when the app did not understand it as written: it is read once more.
             var again: String? = null
+            // Why the AI did not answer a message read again after ✗, for the APK's small line.
+            var why = ""
             try {
                 // The app's own answer is ready at once; a short beat lets "Typing…" show, so the chat feels like a reply.
                 if (!retry) kotlinx.coroutines.delay(450)
@@ -1494,7 +1497,12 @@ fun App(
                         AiAgent.Answer(w.text, notes.added.toList(), notes.card.ifBlank { w.card }, notes.listIds, w.filter, w.lesson, w.shape, w.words, notes.ask.ifBlank { w.ask })
                     }
                     won?.let { Ai.failed.remove(Ai.provider(it.key)?.name.orEmpty()); Ai.answered = Ai.provider(it.key)?.name.orEmpty() }
-                    val usage = won?.let { Ai.takeUsage(System.currentTimeMillis() - started, it.key, it.model) }.orEmpty()
+                    val usage = won?.let { w ->
+                        val ms = System.currentTimeMillis() - started
+                        Ai.takeUsage(ms, w.key, w.model) ?: listOf(Ai.provider(w.key)?.name ?: "AI", Ai.modelOf(w.key, w.model).removePrefix("claude-"), String.format(java.util.Locale.US, "%.1fs", ms / 1000.0)).joinToString(" · ")
+                    }.orEmpty()
+                    // Every AI resting after an error: nobody was asked, and the APK's small line says why.
+                    if (jobs.isEmpty()) aiWhy = Ai.failed.entries.firstOrNull()?.let { (n, e) -> "$n resting after $e" } ?: "resting"
                     // No key answered (no credit, a limit reached, no internet): the app's own engine answers below.
                     if (answer == null) aiDown = true else {
                     // The AI could not tell what happened with a person and a number: the option card asks.
@@ -1527,6 +1535,7 @@ fun App(
                 // Asked again after ✗ and no AI answered: the app reads it once more with its spelling put right, else asks
                 // for other words (its first answer is not given a second time).
                 if (retry) {
+                    why = aiWhy
                     val fixed = offMain { Spell.fix(text, names0 + entries.map { it.item }) }
                     if (!fixed.equals(text, true)) again = fixed
                     else {
@@ -1662,7 +1671,7 @@ fun App(
                 postChat(safe, isUser = false, meta = "engine=NativeChatEngine; stage=interpret; failure=" + e.javaClass.simpleName)
             } finally {
                 chatLoading = false
-                again?.let { sayNote[0] = "Read as: $it"; chatInput(it, quiet = true, spelled = true) }
+                again?.let { sayNote[0] = "Read as: $it" + (if (why.isBlank() || BuildConfig.PLAY) "" else " · AI: " + why.take(60).replace(';', ',')); chatInput(it, quiet = true, spelled = true) }
             }
         }
     }
@@ -2055,7 +2064,27 @@ fun App(
         }
     }
 
+    // Google's listener beeps each time it starts and stops, which in a live talk is every few seconds. Its sound is
+    // muted for a moment around each beep: only streams the person had on, and always turned back on after.
+    val hushed = remember { mutableSetOf<Int>() }
+    val unhush = remember { arrayOfNulls<kotlinx.coroutines.Job>(1) }
+    /** Turns the sound back on at once (before the app speaks an answer). */
+    fun unhushNow() {
+        val am = context.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
+        hushed.toList().forEach { runCatching { am.adjustStreamVolume(it, android.media.AudioManager.ADJUST_UNMUTE, 0) } }
+        hushed.clear()
+    }
+    fun hushBeep() {
+        val am = context.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
+        listOf(android.media.AudioManager.STREAM_MUSIC, android.media.AudioManager.STREAM_NOTIFICATION, android.media.AudioManager.STREAM_SYSTEM)
+            .filter { it !in hushed && !am.isStreamMute(it) }
+            .forEach { runCatching { am.adjustStreamVolume(it, android.media.AudioManager.ADJUST_MUTE, 0); hushed += it } }
+        unhush[0]?.cancel()
+        unhush[0] = scope.launch { kotlinx.coroutines.delay(900); unhushNow() }
+    }
+
     fun stopVoice(message: String? = null) {
+        unhush[0]?.cancel(); unhushNow()
         voiceOn = false
         voiceAwaiting = false
         voiceStatus = ""
@@ -2102,6 +2131,7 @@ fun App(
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2500L)
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2000L)
         }
+        hushBeep()
         runCatching { r.cancel(); r.startListening(i) }
     }
 
@@ -2130,6 +2160,7 @@ fun App(
                 .maxByOrNull { it.quality }?.let { tts.voice = it }
         }
         voiceStatus = "Speaking…"
+        unhush[0]?.cancel(); unhushNow()
         tts.speak(text, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "reply-" + System.nanoTime())
     }
 
@@ -2307,7 +2338,7 @@ fun App(
             override fun onBeginningOfSpeech() {}
             override fun onRmsChanged(rmsdB: Float) { voiceLevel = (rmsdB + 2f) / 12f }
             override fun onBufferReceived(buffer: ByteArray?) {}
-            override fun onEndOfSpeech() { voiceStatus = "Thinking…" }
+            override fun onEndOfSpeech() { hushBeep(); voiceStatus = "Thinking…" }
             override fun onEvent(eventType: Int, params: Bundle?) {}
             override fun onPartialResults(partialResults: Bundle?) {
                 partialResults?.getStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
@@ -2503,6 +2534,47 @@ fun App(
         }.onFailure { toast("Couldn't use that photo") }
     }
     val drawer = rememberDrawerState(DrawerValue.Closed)
+    // The chat changes the side menu's settings too (the AI's app_setting tool and LocalSettings): the answer says what
+    // changed at once, the change itself is made on the main thread.
+    appSet[0] = { k, v ->
+        val name = v.trim()
+        var act: () -> Unit = {}
+        val said: String? = when (k) {
+            "clear_chat" -> { act = { chatMessages = emptyList(); store.saveChatMessages(emptyList()); Attachments.cleanUp(context, emptySet()) }; "Chat cleared." }
+            "currency" -> AppSettings.currency(name)?.let { c -> act = { currency = c; store.currency = c }; "Currency is $c now." }
+            "language" -> (AppSettings.language(name) ?: Lingo.all().firstOrNull { it.name.equals(name, true) }?.code)?.let { code ->
+                act = { setLanguage(code) }; "Language: " + name.replaceFirstChar { it.uppercase() } + "." }
+            "header" -> AppSettings.header(name, HEADER_THEMES.map { it.name })?.let { t -> act = { onTheme(t) }; "Header is $t now." }
+            "background" -> when (AppSettings.background(name)) {
+                "light:0" -> { act = { onPhoto(""); onDark(false); onPage(PAGE_COLORS[0]) }; "Background: warm grey." }
+                "light:1" -> { act = { onPhoto(""); onDark(false); onPage(PAGE_COLORS[1]) }; "Background: light slate." }
+                "dark:0" -> { act = { onPhoto(""); onDark(true); onPage(DARK_PAGES[0]) }; "Background: dark." }
+                "dark:1" -> { act = { onPhoto(""); onDark(true); onPage(DARK_PAGES[1]) }; "Background: dark navy." }
+                else -> null
+            }
+            "open" -> when (AppSettings.page(name)) {
+                "chat" -> { act = { tab = Tab.CHAT }; "Here you are." }
+                "cashbook" -> { act = { tab = Tab.CASHBOOK }; "Opened Cashbook." }
+                "party" -> { act = { tab = Tab.PARTIES }; "Opened Party." }
+                "expense" -> { act = { tab = Tab.EXPENSE }; "Opened Expense." }
+                "income" -> { act = { tab = Tab.INCOME }; "Opened Income." }
+                "report" -> { act = { profitOpen = true }; "Opened the report." }
+                "trash" -> { act = { tab = Tab.TRASH }; "Opened Trash." }
+                "menu" -> { act = { scope.launch { drawer.open() } }; "Opened the menu." }
+                else -> null
+            }
+            "business" -> store.businesses().let { all -> all.firstOrNull { it.second.equals(name, true) } ?: all.firstOrNull { name.isNotBlank() && it.second.contains(name, true) } }
+                ?.let { (id, n) -> act = { openBusiness(id); businessTick++ }; "Opened $n." }
+            "add_business" -> name.takeIf { it.isNotBlank() }?.let { n -> act = { openBusiness(store.addBusiness(n)); businessTick++ }; "Made and opened $n." }
+            "backup" -> {
+                act = { exportFile.launch("SmartExpense-backup-" + java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date()) + ".json") }
+                "Choose where to save the backup."
+            }
+            else -> null
+        }
+        if (said == null) org.json.JSONObject().put("error", if (name.isBlank()) "say what to change it to" else "\"$name\" is not one of the choices").toString()
+        else { scope.launch { act() }; org.json.JSONObject().put("done", said).toString() }
+    }
     fun openMenu() {
         scope.launch { drawer.open() }
     }
