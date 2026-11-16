@@ -59,6 +59,20 @@ class LocalAddTest {
         }
     }
 
+    @Test fun firstNameBeforeASavedLastNameIsSomeoneNew() {
+        saves("tariq javed ko 300 diya") { has(Type.DIYA, "Tariq Javed", 300.0) }
+        // Both words are saved names, but of two people: still one new person, not two entries.
+        saves("salim javed ko 300 diya") { has(Type.DIYA, "Salim Javed", 300.0) }
+        saves("mohsin javed ko 300 diya") { has(Type.DIYA, "Mohsin Javed", 300.0) }
+        saves("javed ko 300 diya") { has(Type.DIYA, "Mohsin Javed", 300.0) }
+    }
+
+    @Test fun putOnSomeonesNameIsGiven() {
+        saves("mohsin k nam 1000 likho") { has(Type.DIYA, "Mohsin Javed", 1000.0) }
+        saves("mohsin ke naam 1000 likh do") { has(Type.DIYA, "Mohsin Javed", 1000.0) }
+        saves("mohsin javed ke naam pe 500 likh dein") { has(Type.DIYA, "Mohsin Javed", 500.0) }
+    }
+
     private fun dayOf(ms: Long) = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date(ms))
 
     /** [text] saves exactly [count] entries, each matching one check, with no sentence over the Saved card. */

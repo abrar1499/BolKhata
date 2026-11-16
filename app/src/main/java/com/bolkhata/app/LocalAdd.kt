@@ -292,6 +292,7 @@ object LocalAdd : LocalAgent.Reader {
             for (k in i until end) c.fresh[w[k]] = name
             return Mention(name, i, end, wayAfter(w, end) ?: wayBefore(w, i))
         }
+        newBySurname(w, i, c)?.let { return it }
         saved(w, i, c)?.let { return it }
         if (!namePlace(w, i) || x.length < 3) return null
         // A word where a name must be: a saved name misheard ("motion" for Mohsin), a thing ("dhobi ko"), or a new person.
@@ -302,6 +303,22 @@ object LocalAdd : LocalAgent.Reader {
         val name = w.subList(from, i + 1).joinToString(" ") { it.replaceFirstChar { ch -> ch.uppercase() } }
         c.fresh[x] = name
         return Mention(name, i, i + 1, wayAfter(w, i + 1) ?: wayBefore(w, i))
+    }
+
+    /**
+     * "tariq javed ko": a first name said before the last name of a saved person, with nobody saved under both, is someone new
+     * ("Tariq Javed"), not the saved Mohsin Javed, and not two people.
+     */
+    private fun newBySurname(w: List<String>, i: Int, c: Ctx): Who? {
+        val first = w[i]
+        val last = w.getOrNull(i + 1) ?: return null
+        if (!(Understand.isCommonName(first) || c.names.any { (_, parts) -> first in parts }) || isThing(first, c) || last.length < 3 || last in stop || num(last) != null) return null
+        if (c.names.none { (_, parts) -> parts.size > 1 && last in parts && parts.first() != last }) return null
+        if (c.names.any { (_, parts) -> first in parts && last in parts }) return null
+        val name = listOf(first, last).joinToString(" ") { it.replaceFirstChar { ch -> ch.uppercase() } }
+        c.fresh[first] = name
+        c.fresh[last] = name
+        return Mention(name, i, i + 2, wayAfter(w, i + 2) ?: wayBefore(w, i))
     }
 
     /** A saved name at [i]: its words said ("salim khan"), one word of it, or a short or misspelt form; several fitting is [Unsure]. */
@@ -712,6 +729,10 @@ object LocalAdd : LocalAgent.Reader {
         }
         // "5000 kia suit": "kia" written for "ka" after the amount.
         t = t.replace(Regex("""(?<=\d)\s+kia(?![\p{L}])"""), " ka")
+        // "hamid ke naam 1000 likh do": put on his account, the same as given to him ("hamid ko 1000 diye"); before "do" is read as 2.
+        if (Regex("""(?<![\p{L}])(?:k|ke|kay|ki)\s+(?:naam|nam|name)(?![\p{L}])""").containsMatchIn(t) && Regex("""(?<![\p{L}])(?:likh\p{L}*|daal|dal|dalo|daalo|daldo|daaldo)(?![\p{L}])""").containsMatchIn(t))
+            t = t.replace(Regex("""(?<![\p{L}])(?:k|ke|kay|ki)\s+(?:naam|nam|name)(?:\s+(?:par|pe|pay|py|per))?(?![\p{L}])"""), "ko")
+                .replace(Regex("""(?<![\p{L}])(?:(?:likh|daal|dal)\s+(?:do|dou|den|dein|dain|dena|diya|di|de|lo|lein|len)|likh\p{L}*|dalo|daalo|daldo|daaldo)(?![\p{L}])"""), "diye")
         t = runCatching { NumberWords.convert(t) }.getOrDefault(t)
         // A lone number word before "ka" or a verb ("pachas diye", "bees ki chai"), which the number reader leaves.
         return t.replace(Regex("""(?<![\p{L}\d])(""" + numberWords.keys.joinToString("|") + """)\s+(?=(?:ka|ki|ke|rupay|rupaye|rs|riyal|diye|diya|di|mile|mila|mili|liye|liya|li|lagaye|lage|laga)(?![\p{L}]))""")) {

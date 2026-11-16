@@ -113,6 +113,9 @@ class EverydayTest {
         "hamid ko derh hazar diye" to "gave 1500 Hamid",
         "mohsin ko 1000 udhaar diya" to "gave 1000 Mohsin",
         "mohsin ko 1000 udhar diye" to "gave 1000 Mohsin",
+        "mohsin ke naam 1000 likh do" to "gave 1000 Mohsin",
+        "mohsin k nam 1000 likho" to "gave 1000 Mohsin",
+        "tariq javed ko 300 diya" to "gave 300 Tariq Javed",
         "farooq ko 1500 udhaar diya" to "gave 1500 Farooq",
         "ahmed ko 1000 diye" to "gave 1000 Ahmed",
         "gave ahmed 1000" to "gave 1000 Ahmed",
@@ -383,5 +386,5 @@ class EverydayTest {
     private fun plainAmount(v: Double) = if (v % 1.0 == 0.0) v.toLong().toString() else v.toString()
 
     /** How many of [cases] the app understood last time: it may only go up. */
-    private val floor = 563
+    private val floor = 566
 }
