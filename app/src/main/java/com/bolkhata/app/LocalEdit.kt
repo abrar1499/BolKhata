@@ -883,7 +883,7 @@ object LocalEdit : LocalAgent.Reader {
         t = t.replace(Regex("""(?<=\d),(?=\d{3}(?!\d))"""), "")
         t = t.replace(Regex("""(\d+(?:\.\d+)?)k(?![\p{L}])""")) { plain(it.groupValues[1].toDouble() * 1000) }
         t = t.replace(Regex("""(\d)(\p{L})"""), "$1 $2").replace(Regex("""(\p{L})(\d)"""), "$1 $2")
-        t = t.replace(Regex("""(?<![\p{L}\d.])(\d+(?:\.\d+)?)\s+(sau|hundred|hazar|hazaar|hajar|thousand|lakh|lac)(?![\p{L}])""")) { m ->
+        t = t.replace(Regex("""(?<![\p{L}\d.])(\d+(?:\.\d+)?)\s+(sau|hundred|h+a*[zj]+a*r+|thousand|lakh|lac)(?![\p{L}])""")) { m ->
             val times = when (m.groupValues[2]) { "sau", "hundred" -> 100.0; "lakh", "lac" -> 100_000.0; else -> 1000.0 }
             plain(m.groupValues[1].toDouble() * times)
         }

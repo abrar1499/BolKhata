@@ -115,11 +115,12 @@ object LocalAgent {
         previous: String = "", justSaved: List<String> = emptyList(), lastShown: String = "", recent: String = "",
         onTool: (name: String, input: JSONObject, result: String) -> Unit = { _, _, _ -> }
     ): AiAgent.Answer? = runCatching {
-        // "Rs.250": the amount is 250, not part of a word.
-        val rom = cashDot.replace(roman, "$1 ")
+        // "Rs.250": the amount is 250, not part of a word. Misspelt words are put right first ("waips kiye": wapis kiye);
+        // saved names and things are never changed.
+        val rom = Spell.fix(cashDot.replace(roman, "$1 "), host.names() + host.entries().map { it.item }.distinct())
         val counted = AiAgent.counted(rom)
         val notes = AiAgent.Notes(said = (AiAgent.numbers(rom) + AiAgent.numbers(counted)).distinct(), lastShown = lastShown)
-        val s = Said(cashDot.replace(said, "$1 "), rom, counted, host, now, previous, justSaved, lastShown, recent, notes, onTool)
+        val s = Said(if (said == roman) rom else cashDot.replace(said, "$1 "), rom, counted, host, now, previous, justSaved, lastShown, recent, notes, onTool)
         for (reader in readers) {
             val reply = reader.read(s) ?: continue
             // Only saved, all of it and nothing to ask: the Saved card says it, no sentence over it.

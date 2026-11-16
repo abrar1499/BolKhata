@@ -723,7 +723,9 @@ object LocalAdd : LocalAgent.Reader {
         t = t.replace(Regex("""(?<![\p{L}])(ek|aik|do|teen|char|chaar|panch|paanch|chhe|che|saat|aath|nau|das|dus|\d+)\s+(?:so|sow|sao)(?![\p{L}])"""), "$1 sau")
         // "hazar" written without its vowels or with others ("hazr", "hzar", "hzr", "hajar", "hazaar").
         t = t.replace(Regex("""(?<![\p{L}])h+a*[zj]+a*r+(?![\p{L}])"""), "hazar").replace(Regex("""(?<![\p{L}])(?:laakh|lak|lakh+)(?![\p{L}])"""), "lakh")
-        t = t.replace(Regex("""(?:(sadhe|saadhe|sarhe|saarhe|sawa|sava|paune|pone)\s+)?(\d+(?:\.\d+)?)\s*(sau|hundred|hazar|hazaar|hazzar|hajar|thousand|lakh|lac|lakhs|lacs|crore|karor|karod)(?![\p{L}])""")) { m ->
+        // "dahi hazar": dhai hazar (2500) typed with two letters swapped, not curd.
+        t = t.replace(Regex("""(?<![\p{L}])dahi(?=\s+(?:sau|hazar|hazaar|lakh)(?![\p{L}]))"""), "dhai")
+        t = t.replace(Regex("""(?:(sa+[dr]h(?:e|ay|ey|y|ai|ae)|sawa|sava|paune|pone)\s+)?(\d+(?:\.\d+)?)\s*(sau|hundred|hazar|hazaar|hazzar|hajar|thousand|lakh|lac|lakhs|lacs|crore|karor|karod)(?![\p{L}])""")) { m ->
             val part = when (m.groupValues[1]) { "" -> 0.0; "sawa", "sava" -> 0.25; "paune", "pone" -> -0.25; else -> 0.5 }
             val times = when (m.groupValues[3]) { "sau", "hundred" -> 100.0; "lakh", "lac", "lakhs", "lacs" -> 100_000.0; "crore", "karor", "karod" -> 10_000_000.0; else -> 1000.0 }
             val n = m.groupValues[2].toDouble()
@@ -919,7 +921,7 @@ object LocalAdd : LocalAgent.Reader {
     private val returnWords = setOf("wapis", "wapas", "waps", "wapsi", "vapis", "vapas", "vaapis", "waapis", "lautaye", "lotaye", "lautaya", "lotaya", "lautai",
         "lotai", "lota", "lotaa", "lauta", "return", "returned", "back", "repaid", "repay", "utaar", "utar", "utara", "utaara", "utari", "utare", "chuka",
         "chukaya", "chukaye", "chukai", "chukta", "ada")
-    private val loanWords = setOf("udhaar", "udhar", "udaar", "udhari", "udhaari", "udar", "qarz", "qarza", "karz", "karza", "qarze", "karze", "loan", "loans",
+    private val loanWords = setOf("udhaar", "udhar", "udaar", "udhari", "udhaari", "udar", "udhr", "udhaara", "qarz", "qarza", "karz", "karza", "qarze", "karze", "loan", "loans",
         "borrow", "borrowed", "lend", "lent")
     private val sellWords = setOf("becha", "bechi", "beche", "bechay", "bechy", "bech", "sold", "sell", "sells", "farokht")
     private val makeWords = setOf("dali", "daali", "dala", "dale", "daale", "dalwai", "banai", "banaye", "banaya", "banayi", "bani", "bane", "bnai", "kiya", "kiye",

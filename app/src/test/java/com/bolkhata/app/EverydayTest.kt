@@ -460,11 +460,43 @@ class EverydayTest {
         out.distinctBy { it.first }
     }
 
+    /**
+     * The random sentences again, each with one word mistyped the way people slip on a phone: a letter left out, doubled or
+     * swapped, or an a / e / i / y at the end changed. Names of people are left as they are (a new name mistyped is another
+     * name). Misses are in build/typos.txt.
+     */
+    private val typos: List<Pair<String, String>> = run {
+        val r = kotlin.random.Random(77)
+        val names = setOf("imran", "kashif", "naveed", "rizwan", "shahid", "waqas", "yasir", "faisal", "asif", "nadeem", "qureshi", "ahmed", "hamid",
+            "mohsin", "salim", "khan", "raza", "nargis", "zubair", "bhai", "sahab")
+        val vowels = "aeiouy"
+        fun slip(w: String): String {
+            val mid = (1 until w.length - 1).toList()
+            return when (r.nextInt(4)) {
+                0 -> mid.filter { w[it] in vowels }.takeIf { it.isNotEmpty() }?.random(r)?.let { k -> w.removeRange(k, k + 1) } ?: (w + w.last())
+                1 -> mid.random(r).let { k -> w.substring(0, k + 1) + w[k] + w.substring(k + 1) }
+                2 -> mid.filter { it + 1 < w.length - 1 }.takeIf { it.isNotEmpty() }?.random(r)?.let { k -> w.substring(0, k) + w[k + 1] + w[k] + w.substring(k + 2) } ?: (w + w.last())
+                else -> when (w.last()) { 'a' -> w.dropLast(1) + "e"; 'e' -> w.dropLast(1) + "y"; 'i' -> w.dropLast(1) + "y"; 'y' -> w.dropLast(1) + "i"; else -> w + "a" }
+            }
+        }
+        random.filter { it.second != "none" && it.first.all { ch -> ch.code < 128 } }.shuffled(r).take(500).mapNotNull { (said, spec) ->
+            val words = said.split(" ").toMutableList()
+            val can = words.indices.filter { i -> words[i].length >= 4 && words[i].all { it in 'a'..'z' } && words[i] !in names }
+            if (can.isEmpty()) null else { val i = can.random(r); words[i] = slip(words[i]); words.joinToString(" ") to spec }
+        }.distinctBy { it.first }
+    }
+
     @Test
-    fun randomMessages() {
+    fun mistypedMessages() = score("Mistyped", typos, "build/typos.txt", typoFloor)
+
+    @Test
+    fun randomMessages() = score("Random", random, "build/random.txt", randomFloor)
+
+    /** Runs [list] on fresh books and writes the score and every miss to [file]; fails below [floor]. */
+    private fun score(label: String, list: List<Pair<String, String>>, file: String, floor: Int) {
         val body = StringBuilder()
         var passed = 0
-        for ((said, spec) in random) {
+        for ((said, spec) in list) {
             val (host, entries, base) = books()
             val answer = runCatching { LocalAgent.run(said, host, now) }.getOrNull()
             val added = entries().filter { it.id !in base }
@@ -475,11 +507,11 @@ class EverydayTest {
                 .append("\n      got: ").append(added.joinToString("; ") { "${it.type} ${plainAmount(it.amount)} ${it.person.ifBlank { it.item }} (${it.category.label})" }.ifBlank { "nothing" })
                 .append(answer?.text?.takeIf { it.isNotBlank() }?.let { " | said: " + it.take(100).replace("\n", " ") }.orEmpty()).append('\n')
         }
-        val out = "Random messages: $passed of ${random.size} understood\n\n$body"
+        val out = "$label messages: $passed of ${list.size} understood\n\n$body"
         File("build").mkdirs()
-        File("build/random.txt").writeText(out)
+        File(file).writeText(out)
         println(out)
-        assertTrue("The app understood $passed of ${random.size} random messages; it understood $randomFloor before", passed >= randomFloor)
+        assertTrue("The app understood $passed of ${list.size} ${label.lowercase()} messages; it understood $floor before", passed >= floor)
     }
 
     /** Every way of saying yes answers the app's question: after "Move them all to Trash?" the entries go. */
@@ -501,4 +533,7 @@ class EverydayTest {
 
     /** How many of [random] the app understood last time: it may only go up. */
     private val randomFloor = 800
+
+    /** How many of [typos] the app understood last time: it may only go up. */
+    private val typoFloor = 498
 }
