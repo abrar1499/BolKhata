@@ -221,7 +221,9 @@ internal fun SideMenu(
     moreLang: String = "",
     onSignIn: () -> Unit = {}, onSyncNow: () -> Unit = {}, onSignOut: () -> Unit = {},
     /** 20 quick taps on the menu's empty space. */
-    onSecret: () -> Unit = {}
+    onSecret: () -> Unit = {},
+    /** Premium is on, and its row opens the Premium sheet. */
+    premium: Boolean = false, onPremium: () -> Unit = {}
 ) {
     // Taps on the empty space and when the last one was; a pause of over a second starts the count again.
     val secret = remember { longArrayOf(0, 0) }
@@ -310,6 +312,8 @@ internal fun SideMenu(
                 }
             }
             Spacer(Modifier.height(8.dp))
+            MenuCard { MenuRow(onClick = onPremium, last = true) { MenuLabel("⭐", "Premium"); MenuValue(if (premium) "Active ✓" else "No ads ›") } }
+            Spacer(Modifier.height(8.dp))
             MenuCard {
                 Box {
                     var open by remember { mutableStateOf(false) }
@@ -370,7 +374,8 @@ internal fun SideMenu(
                         DropdownMenuItem(text = { Text("Import data") }, onClick = { open = false; onImport() })
                     }
                 }
-                if (ai != null) MenuRow(onClick = { onAiOpen(); aiOpen = true }) { MenuLabel("🤖", "AI keys"); MenuValue(ai.live().firstOrNull()?.name ?: "Off") }
+                // Own AI keys are for the APK only; the Play build runs on the app's own key.
+                if (ai != null && !BuildConfig.PLAY) MenuRow(onClick = { onAiOpen(); aiOpen = true }) { MenuLabel("🤖", "AI keys"); MenuValue(ai.live().firstOrNull()?.name ?: "Off") }
                 MenuRow(onClick = onTrash) { MenuLabel("🗑", "Trash"); MenuValue("›") }
                 MenuRow(onClick = onVersion, last = true) { MenuLabel("⬆️", "Version"); MenuValue(version) }
             }

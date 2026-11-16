@@ -140,7 +140,7 @@ object Ads {
     /** The ad for [place], fetched once; [onReady] gets it when it arrives. [small]: from the pictures-only unit. */
     fun native(context: Context, place: String, small: Boolean = false, onReady: (NativeAd) -> Unit) {
         loaded[place]?.let { onReady(it); return }
-        if (!ready || resting || today(context, "loads") >= AD_LOADS_A_DAY) return
+        if (!ready || resting || Premium.active || today(context, "loads") >= AD_LOADS_A_DAY) return
         AdLoader.Builder(context, if (small) smallUnit else nativeUnit)
             .forNativeAd { ad -> loaded[place] = ad; count(context, "loads"); onReady(ad) }
             .withAdListener(taps(context))
@@ -168,7 +168,7 @@ fun NativeAdCard(place: String, modifier: Modifier = Modifier, video: Boolean = 
         Ads.native(context, place, small) { ad = it }
         onDispose { }
     }
-    val shown = ad?.takeIf { !Ads.resting } ?: return
+    val shown = ad?.takeIf { !Ads.resting && !Premium.active } ?: return
     AndroidView(factory = { ctx: Context -> (if (big) videoRow(ctx, wide = true) else if (video || shown.mediaContent?.hasVideoContent() == true) videoRow(ctx) else adRow(ctx)).also { if (!round) (it.getChildAt(0).background as? GradientDrawable)?.cornerRadius = 0f } }, modifier = modifier.fillMaxWidth(), update = { v: NativeAdView -> v.show(shown) })
 }
 
