@@ -393,21 +393,16 @@ private fun UserBubble(text: String, attachment: String = "") {
 }
 
 /**
- * "Right" and "Wrong" under each answer, in very small words: a muted grey pill (quieter than the answer's white card),
- * padding 3 × 9, the two words 7 apart with a hairline between; the picked one turns green or red. One tap saves the
- * rating; tapping the other changes it.
+ * A very small "Wrong" under each answer in a muted grey pill (quieter than the answer's white card), red once tapped:
+ * the app takes back what it saved and reads the message again. A right answer needs nothing, it is learnt by itself.
  */
 @Composable
 private fun AnswerActions(rating: Boolean?, onRate: (good: Boolean) -> Unit) {
-    val tint = Color(0xFF8F8982)
-    Row(Modifier.padding(start = 10.dp, top = 3.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFFDEDAD4))
-        .padding(horizontal = 9.dp, vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text("Right", fontSize = 9.sp, lineHeight = 10.sp, fontWeight = if (rating == true) FontWeight.SemiBold else FontWeight.Normal,
-            color = if (rating == true) GreenDeep else tint, modifier = Modifier.clickable(enabled = rating != true) { onRate(true) })
-        Box(Modifier.width(1.dp).height(9.dp).background(Color(0xFFCBC6BF)))
-        Text("Wrong", fontSize = 9.sp, lineHeight = 10.sp, fontWeight = if (rating == false) FontWeight.SemiBold else FontWeight.Normal,
-            color = if (rating == false) MaterialTheme.colorScheme.error else tint, modifier = Modifier.clickable(enabled = rating != false) { onRate(false) })
-    }
+    val wrong = rating == false
+    Text("Wrong", fontSize = 9.sp, lineHeight = 10.sp, fontWeight = if (wrong) FontWeight.SemiBold else FontWeight.Normal,
+        color = if (wrong) MaterialTheme.colorScheme.error else Color(0xFF8F8982),
+        modifier = Modifier.padding(start = 10.dp, top = 3.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFFDEDAD4))
+            .clickable(enabled = !wrong) { onRate(false) }.padding(horizontal = 9.dp, vertical = 3.dp))
 }
 
 /** Tappable names under a "which one?" question, so the person picks instead of typing. */

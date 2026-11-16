@@ -2892,7 +2892,7 @@ fun App(
                         },
                         onShareDiagnostics = { shareChatDiagnostics() },
                         ratings = chatRatings,
-                        onRate = rate@{ id, good ->
+                        onRate = { id, good ->
                             chatLog.rate(id, good)
                             // 👎 on an answer: forget what was learned for the question before it.
                             if (!good) chatMessages.indexOfFirst { it.id == id }.takeIf { it > 0 }?.let { i ->
@@ -2911,11 +2911,6 @@ fun App(
                             // 👎 on any answer (the app's, a learnt one or the AI's): what it saved goes to Trash and the AI reads the
                             // message again, told the last answer was wrong. A right answer needs no 👍: it is learnt by itself.
                             val rated = chatMessages.firstOrNull { it.id == id }
-                            // ✓ under the app's last question ("Move them all to Trash?") is the yes.
-                            if (good && rated != null && !rated.isUser && rated.text.trimEnd().endsWith("?") && chatMessages.lastOrNull()?.id == rated.id) {
-                                chatInput("yes")
-                                return@rate
-                            }
                             // Without an AI the app itself reads it once more (see chatInput's retry).
                             if (!good && rated != null && !rated.isUser) {
                                 chatMessages.take(chatMessages.indexOf(rated)).lastOrNull { it.isUser }?.let { q ->
