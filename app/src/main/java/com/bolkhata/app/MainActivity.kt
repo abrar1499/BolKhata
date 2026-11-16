@@ -1639,18 +1639,9 @@ fun App(
                     val fixed = offMain { Spell.fix(text, names0 + entries.map { it.item }) }
                     if (!fixed.equals(text, true)) again = fixed
                 }
-                // A full sentence the app could not read, clearly in another language: the chat offers that language's pack.
-                var offer = ""
-                if (again == null && lost && aiWhy.isBlank() && !live && text.length >= 12 && text.count { it == ' ' } >= 2) {
-                    val code = Lingo.guess(text)
-                    if (code.isNotBlank() && code != Lingo.code(lang)) {
-                        offer = "; offer=$code"
-                        reply = "This looks like ${Lingo.name(code)}. Download ${Lingo.name(code)} (30 MB) so I can read it?"
-                    }
-                }
                 if (again == null && !reply.isNullOrBlank() && !(live && lost)) {
                     lastSpeech = reply
-                    postChat(reply, isUser = false, meta = trace + offer, listIds = listedRows[0])
+                    postChat(reply, isUser = false, meta = trace, listIds = listedRows[0])
                 }
             } catch (e: Exception) {
                 // With an AI key the reason is shown, so a failure can be understood and fixed.
@@ -1693,22 +1684,6 @@ fun App(
         if (code.isBlank()) return
         moreLang = l; store.moreLanguage = l
         if (fetch) scope.launch { Lingo.fetch(code) }
-    }
-
-    /** The answer to the chat's offer of a language pack: [code] to bring it down and read the message again, "" for no. */
-    fun answerOffer(code: String) {
-        val asked = chatMessages.lastOrNull { it.isUser }?.text.orEmpty()
-        chatMessages.lastOrNull()?.takeIf { !it.isUser && "offer=" in it.meta }?.let { o -> chatMessages = chatMessages - o; store.saveChatMessages(chatMessages) }
-        if (code.isBlank() || asked.isBlank()) { postChat("Okay. Try 'tea 5' or 'food this month'.", isUser = false); return }
-        setLanguage(code, fetch = false)
-        chatLoading = true
-        loadingLabel = "Downloading " + Lingo.name(code) + " · 30 MB…"
-        scope.launch {
-            val english = if (Lingo.fetch(code)) Lingo.toEnglish(code, asked)?.trim().orEmpty() else ""
-            chatLoading = false
-            if (english.isBlank()) postChat("Could not get " + Lingo.name(code) + ". Check the internet and try again.", isUser = false)
-            else { sayNote[0] = (Lingo.name(code) + " → " + english).replace(';', ','); chatInput(english, quiet = true) }
-        }
     }
 
     /** Home is a second entry point to the same assistant and persisted conversation as the Chat screen. */
@@ -2816,7 +2791,6 @@ fun App(
                         onMenu = { openMenu() },
                         business = businessName,
                         onSend = { chatInput(it) },
-                        onLanguage = { answerOffer(it) },
                         onClear = {
                             chatMessages = emptyList()
                             store.saveChatMessages(emptyList())
