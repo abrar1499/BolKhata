@@ -15,4 +15,11 @@ class LingoTest {
         assertEquals("nl", Lingo.code("nl"))
         assertEquals("ar", Lingo.code("ar-SA"))
     }
+
+    @Test
+    fun romanLettersAreNeverALanguageWithAScriptOfItsOwn() {
+        assertEquals(false, Lingo.fits("ar", "ashraf ko cheni d"))
+        assertEquals(true, Lingo.fits("ar", "دفعت 40"))
+        assertEquals(true, Lingo.fits("nl", "ik heb 20 euro betaald"))
+    }
 }

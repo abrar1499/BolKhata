@@ -266,4 +266,16 @@ class LocalAddTest {
         assertTrue(c.has(Type.KHARCHA, amount = 50.0, item = "Chai") || c.has(Type.KHARCHA, amount = 50.0, item = "Tea"))
         assertTrue(c.has(Type.KHARCHA, amount = 200.0, item = "Petrol"))
     }
+
+    @Test
+    fun aThingGivenWithNoAmountAsksHowMuch() {
+        val b = Books()
+        val r = b.say("ashraf ko cheni d")
+        assertEquals("How much was it for Ashraf?", r?.text)
+        assertTrue(b.added.isEmpty())
+        b.say("500")
+        assertTrue(b.has(Type.DIYA, "Ashraf", 500.0))
+        // Telling someone something is not money.
+        assertNull(Books().say("hamid ko bata diya")?.text?.takeIf { it.startsWith("How much") })
+    }
 }

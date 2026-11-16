@@ -139,6 +139,9 @@ object LocalAdd : LocalAgent.Reader {
         val goods = goodsIn(w, used, nums, c, who, nums.rate > 0 || f.sell || (f.make && way != 'T'), business, selling)
         val content = w.indices.filter { it !in used && it !in goods.span && isContent(w[it]) }.map { w[it] }
         val money = nums.money.filter { it.first != goods.qtyAt }
+        // "ashraf ko cheeni di": a person and money or a thing given or taken, but no amount: the amount is asked.
+        if (people.size == 1 && w.none { num(it) != null } && (f.give || f.get || f.ret || w.lastOrNull() == "d") &&
+            content.all { x -> x in moneyNouns || x in extra || Parser.guessCategory(x) != null || Parser.nearThing(x) != null }) return Got.Ask(HOW_MUCH_FOR + people[0] + "?")
         if (people.isNotEmpty()) return withPeople(w, mentions, people, way, f, nums, goods, money, content, c).also { c.lastWay = way }
         // No one named: the work or money of the person before goes on ("..., 2000 bharai ki"), else an expense or income.
         val last = c.last
@@ -777,6 +780,7 @@ object LocalAdd : LocalAgent.Reader {
 
     private val COUNT = Regex("""How many did (.+) make, and of what\?""")
     private val RATE = Regex("""What rate for (.+)\?""")
+    private const val HOW_MUCH_FOR = "How much was it for "
     private val LAST_RATE = Regex("""\(last ([\d.]+) (per 1000|each)\)""")
     private val CARD_RATE = Regex("""([\d.]+) (per 1000|each)""")
     private val keepWords = setOf("ok", "okay", "oky", "haan", "han", "ha", "yes", "ji", "same", "wohi", "wahi", "theek", "thik", "sahi", "save", "hai")
@@ -795,6 +799,10 @@ object LocalAdd : LocalAgent.Reader {
             val name = m.groupValues[1]
             val usual = s.host.entries().filter { it.type == Type.PURCHASE && it.person.equals(name, true) && it.item.isNotBlank() }.maxByOrNull { it.date }?.item
             return "$name ne " + s.counted + if (usual != null && s.words.all { num(it) != null }) " $usual" else ""
+        }
+        if (asked.startsWith(HOW_MUCH_FOR)) {
+            val meant = asked(s)
+            return if (meant == null || !answer) null else meant + " " + s.counted
         }
         RATE.matchEntire(asked)?.let {
             val meant = asked(s)

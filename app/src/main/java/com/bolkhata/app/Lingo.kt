@@ -77,8 +77,15 @@ object Lingo {
         val tag = LanguageIdentification.getClient(LanguageIdentificationOptions.Builder().setConfidenceThreshold(0.7f).build())
             .identifyLanguage(text).result().orEmpty()
         val c = code(tag)
-        return if (tag == "und" || c.isBlank() || TranslateLanguage.fromLanguageTag(c) == null) "" else c
+        return if (tag == "und" || c.isBlank() || TranslateLanguage.fromLanguageTag(c) == null || !fits(c, text)) "" else c
     }
+
+    /** Languages written in a script of their own: Roman letters are never them (Roman Urdu read as Arabic). */
+    private val ownScript = setOf("ar", "ur", "fa", "ps", "hi", "bn", "mr", "ne", "gu", "pa", "ta", "te", "kn", "ml", "si", "th", "zh", "ja", "ko",
+        "ru", "uk", "bg", "be", "mk", "el", "he", "ka", "hy", "am", "my", "km", "lo")
+
+    /** Whether [text] can be in language [code]: one with a script of its own only when the text has letters beyond the Roman ones. */
+    fun fits(code: String, text: String): Boolean = code !in ownScript || text.any { it.isLetter() && it.code > 0x24F }
 
     private suspend fun <T> Task<T>.done(): Boolean = suspendCancellableCoroutine { c -> addOnCompleteListener { c.resume(it.isSuccessful) } }
 
