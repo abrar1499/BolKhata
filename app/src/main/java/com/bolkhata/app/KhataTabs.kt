@@ -706,8 +706,10 @@ fun CashBookScreen(
     val pdf = LocalPdf.current
     val cur = LocalCurrency.current.let { if (it.isBlank()) "" else " $it" }
     var picking by remember { mutableStateOf(false) }
-    var picked by remember { mutableStateOf<EntryTarget?>(null) }
     var sheet by remember { mutableStateOf<AddReq?>(null) }
+    // The picked one's kinds (Received | Given, Paid | Work, or one) and the sheet's title and line.
+    var kinds by remember { mutableStateOf(listOf<AddReq>()) }
+    var head by remember { mutableStateOf("" to "") }
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
             stickyHeader { TabHead {
@@ -741,11 +743,18 @@ fun CashBookScreen(
             )
         }
         UpButton(state, above = 10.dp)
-        AddRound(state) { picked = null; picking = true }
+        AddRound(state) { picking = true }
     }
-    if (picking) EntryPicker(entries, setup, onSetup, picked, onDismiss = { picking = false }) { r, t -> picked = t; picking = false; sheet = r }
-    // Back on the add sheet returns to the picked one's buttons.
-    sheet?.let { r -> AddSheet(r, entries, onDismiss = { sheet = null }, onBack = { sheet = null; picking = true }) { e -> onSave(e); sheet = null } }
+    if (picking) EntryPicker(entries, setup, onSetup, onDismiss = { picking = false }) { t ->
+        picking = false
+        kinds = addButtons(t.book, t.name, t.book.name == Sides.STAFF, "${t.book.name} › ${t.name}").map { it.second }
+        head = if (kinds.size > 1) t.name to t.path + (t.balance?.let { " · " + it.first } ?: "") else "+ " + kinds[0].label + " · " + t.name to t.path
+        sheet = kinds[0]
+    }
+    // Back on the add sheet returns to who or what.
+    sheet?.let { r ->
+        AddSheet(r, entries, onDismiss = { sheet = null }, onBack = { sheet = null; picking = true }, kinds = kinds, head = head, onKind = { sheet = it }) { e -> onSave(e); sheet = null }
+    }
 }
 
 // ---------------------------------------------------------------- + on the Cashbook
@@ -812,13 +821,12 @@ private fun RoundTap(mark: String, onClick: () -> Unit) = Box(
 
 /**
  * The +'s sheet. Who or what: search, the recent ones, or + New account (name, what it is and, for a thing, the account
- * it goes in). Then that one's own buttons, as inside it; [onPick] opens the add sheet. [start] opens at its buttons.
+ * it goes in). [onPick] then opens the add sheet straight away.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun EntryPicker(all: List<Entry>, setup: SideSetup, onSetup: (SideSetup) -> Unit, start: EntryTarget?, onDismiss: () -> Unit, onPick: (AddReq, EntryTarget) -> Unit) {
-    var target by remember { mutableStateOf(start) }
-    var step by remember { mutableStateOf(if (start != null) "buttons" else "who") }
+private fun EntryPicker(all: List<Entry>, setup: SideSetup, onSetup: (SideSetup) -> Unit, onDismiss: () -> Unit, onPick: (EntryTarget) -> Unit) {
+    var step by remember { mutableStateOf("who") }
     var q by remember { mutableStateOf("") }
     var name by remember { mutableStateOf("") }
     var kind by remember { mutableIntStateOf(-1) }
@@ -843,13 +851,13 @@ private fun EntryPicker(all: List<Entry>, setup: SideSetup, onSetup: (SideSetup)
                             if (q.isBlank()) Text("RECENT", fontSize = 10.5.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.4.sp, color = sub,
                                 modifier = Modifier.padding(start = 12.dp, top = 8.dp, bottom = 2.dp))
                             LazyColumn(Modifier.heightIn(max = 340.dp)) {
-                                items(shown.size) { i -> TargetRow(shown[i], i == 0) { target = shown[i]; step = "buttons" } }
+                                items(shown.size) { i -> TargetRow(shown[i], i == 0) { onPick(shown[i]) } }
                             }
                         }
                     }
                     DashedAdd("+ New account", inset = 0.dp) { name = q.trim(); kind = -1; group = null; step = "new" }
                 }
-                "new" -> {
+                else -> {
                     SheetHead("New account", "Name and what it is", { step = "who" }, onDismiss)
                     WellField(name, { name = it }, "Name")
                     newKinds.chunked(2).forEachIndexed { r, row ->
@@ -880,7 +888,7 @@ private fun EntryPicker(all: List<Entry>, setup: SideSetup, onSetup: (SideSetup)
                             .clickable(enabled = ready) {
                                 val n = name.trim()
                                 val party = k!!.party
-                                target = if (party != null) {
+                                onPick(if (party != null) {
                                     // One person, one account: this takes them out of any other.
                                     onSetup(setup.copy(people = setup.people.filterKeys { !it.trim().equals(n, true) } + (n to party)))
                                     EntryTarget(Book(k.side, party, true), n, "👤", party, null, 0L)
@@ -893,25 +901,10 @@ private fun EntryPicker(all: List<Entry>, setup: SideSetup, onSetup: (SideSetup)
                                     onSetup(setup.copy(books = if (have == null) setup.books + Book(k.side, g, false) else setup.books,
                                         kids = setup.kids + (book.name to (setup.kids[book.name].orEmpty().filterNot { it.equals(n, true) } + n))))
                                     EntryTarget(book, n, iconFor(n, k.side == Side.INC), thingPath(k.side, book.name), null, 0L)
-                                }
-                                step = "buttons"
+                                })
                             },
                         contentAlignment = Alignment.Center
                     ) { Text("Next", color = MaterialTheme.colorScheme.surface, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
-                }
-                else -> target?.let { t ->
-                    SheetHead(t.name, t.path + (t.balance?.let { " · " + it.first } ?: ""), { step = "who" }, onDismiss)
-                    val staff = t.book.name == Sides.STAFF
-                    val crumb = "${t.book.name} › ${t.name}"
-                    Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        addButtons(t.book, t.name, staff, crumb).forEachIndexed { i, (look, _) ->
-                            Box(
-                                Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(14.dp)).background(look.second)
-                                    .clickable { onPick(addButtons(t.book, t.name, staff, crumb)[i].second, t) },
-                                contentAlignment = Alignment.Center
-                            ) { Text(look.first, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
-                        }
-                    }
                 }
             }
         }
@@ -1834,7 +1827,9 @@ private val sheetTime = SimpleDateFormat("h:mm a", Locale.US)
  * note, date and time, and Save in the kind's colour. A rate "per 1000" (bricks) counts thousands.
  */
 @Composable
-private fun AddSheet(r: AddReq, all: List<Entry>, onDismiss: () -> Unit, onDelete: () -> Unit = {}, onBack: (() -> Unit)? = null, onSave: (Entry) -> Unit) {
+private fun AddSheet(r: AddReq, all: List<Entry>, onDismiss: () -> Unit, onDelete: () -> Unit = {}, onBack: (() -> Unit)? = null,
+    /** From the +: a person's two kinds as a switch on top ([onKind] picks one), and the title and line over it. */
+    kinds: List<AddReq> = emptyList(), head: Pair<String, String>? = null, onKind: (AddReq) -> Unit = {}, onSave: (Entry) -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val old = r.template.takeIf { r.edit }
     var amount by remember { mutableStateOf(old?.let { plain(it.amount) }.orEmpty()) }
@@ -1858,7 +1853,16 @@ private fun AddSheet(r: AddReq, all: List<Entry>, onDismiss: () -> Unit, onDelet
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = LocalPage.current, dragHandle = null,
         shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)) {
         Column(Modifier.padding(16.dp).navigationBarsPadding().imePadding()) {
-            SheetHead((if (r.edit) "" else "+ ") + r.label, r.crumb, onBack, onDismiss)
+            if (head != null) SheetHead(head.first, head.second, onBack, onDismiss) else SheetHead((if (r.edit) "" else "+ ") + r.label, r.crumb, onBack, onDismiss)
+            if (kinds.size > 1) Row(Modifier.padding(top = 12.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Well).padding(3.dp)) {
+                kinds.forEach { k ->
+                    val on = k.label == r.label
+                    Text(k.label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
+                        color = if (on) k.color else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(if (on) MaterialTheme.colorScheme.surface else Color.Transparent)
+                            .clickable { onKind(k) }.padding(vertical = 8.dp))
+                }
+            }
             if (r.money != null) Row(Modifier.padding(top = 12.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Well).padding(3.dp)) {
                 listOf((if (r.label == "Given") "Goods" else "Work") to false, "Money" to true).forEach { (label, v) ->
                     val on = cash == v
