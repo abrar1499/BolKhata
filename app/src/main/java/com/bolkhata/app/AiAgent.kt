@@ -218,7 +218,8 @@ object AiAgent {
           matching entry in it and opens the share sheet; then say shortly that it is ready.
         - Changing the app itself (clear the chat, currency, language, header colour, background, open a tab, open or add a
           business, a backup) is app_setting; then say in a few words what changed.
-        - After your own question, a short yes ("ji", "jee", "g", "gi", "haan", "ok", "theek hai", "kar do") is yes: do it.
+        - After your own question, a message that is only a yes ("ji", "jee", "g", "gi", "haan", "ok", "theek hai", "kar do")
+          is yes: do it. Anything more is a new message, not a yes: "aur sab acha hai" is small talk, so save nothing.
         - Greet only when the message itself greets. To small talk ("kaise ho", "hi") reply in one short friendly line, with no tools.
         - Write only the words the person reads: never a note about these rules, the kind or language of the message, what
           their words mean ('"main udas hun" means "I am sad"'), or what you will do.

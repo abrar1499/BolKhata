@@ -238,6 +238,9 @@ class AiEvalTest {
         case("school fees", "bete ki school fees 3000 di") { listOf("3000 in Education" to has(Type.KHARCHA, amount = 3_000.0, cat = Cat.EDU)) },
         case("advance to a worker", "hamid ko 300 advance de diya") { listOf("lent Hamid 300" to has(Type.DIYA, "Hamid Akram", 300.0), "one entry" to (added.size == 1)) },
         case("yes after the app's question", "sari entries delete kar do", "g") { listOf("everything in Trash" to world.entries.isEmpty()) },
+        case("small talk is not a yes", "agr mere pas 10000 hun ar 2000 ka suit le lu ar 300 hamid ko de du to kitna bachay ga? save kar dun?", "ar sab acha hai") {
+            listOf("nothing saved" to added.isEmpty())
+        },
         // ---- any question in the world
         case("feelings", "men udas hun") { listOf("nothing saved" to added.isEmpty(), "no note about its words" to !Regex("""(?i)means "|roman urdu|small talk|tool""").containsMatchIn(text)) },
         case("small talk", "kase ho") { listOf("nothing saved" to added.isEmpty(), "no note about its rules" to !Regex("(?i)small talk|tool|briefly").containsMatchIn(text)) },
