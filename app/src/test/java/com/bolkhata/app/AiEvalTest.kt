@@ -220,7 +220,11 @@ class AiEvalTest {
         },
         // ---- talk
         case("greeting", "assalam o alaikum") { listOf("nothing saved" to added.isEmpty(), "a short answer" to (text.isNotBlank() && text.split(' ').size <= 25)) },
-        case("thanks", "shukriya") { listOf("nothing saved" to added.isEmpty(), "a short answer" to (text.isNotBlank() && text.split(' ').size <= 25)) }
+        case("thanks", "shukriya") { listOf("nothing saved" to added.isEmpty(), "a short answer" to (text.isNotBlank() && text.split(' ').size <= 25)) },
+        // ---- any question in the world
+        case("general knowledge", "pakistan ka capital kya hai") { listOf("nothing saved" to added.isEmpty(), "answers Islamabad" to text.contains("islamabad", true)) },
+        case("how-to", "chai kaise banate hain") { listOf("nothing saved" to added.isEmpty(), "a real answer" to (text.split(' ').size in 8..90)) },
+        case("maths", "15 percent of 2400 kitna hota hai") { listOf("nothing saved" to added.isEmpty(), "says 360" to told.contains("360")) }
     )
 
     private fun brief(e: Entry) = e.type.name + " " + e.person.ifBlank { "-" } + " " + e.item + (if (e.qty > 0) " " + e.qty + "x" + e.rate + (if (e.unit == "1000") "/1000" else "") else "") +
