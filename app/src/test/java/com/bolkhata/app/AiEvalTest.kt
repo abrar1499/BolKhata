@@ -239,6 +239,7 @@ class AiEvalTest {
         case("advance to a worker", "hamid ko 300 advance de diya") { listOf("lent Hamid 300" to has(Type.DIYA, "Hamid Akram", 300.0), "one entry" to (added.size == 1)) },
         case("yes after the app's question", "sari entries delete kar do", "g") { listOf("everything in Trash" to world.entries.isEmpty()) },
         // ---- any question in the world
+        case("small talk", "kase ho") { listOf("nothing saved" to added.isEmpty(), "no note about its rules" to !Regex("(?i)small talk|tool|briefly").containsMatchIn(text)) },
         case("general knowledge", "pakistan ka capital kya hai") { listOf("nothing saved" to added.isEmpty(), "answers Islamabad" to text.contains("islamabad", true)) },
         case("how-to", "chai kaise banate hain") { listOf("nothing saved" to added.isEmpty(), "a real answer" to (text.split(' ').size in 8..90)) },
         case("maths", "15 percent of 2400 kitna hota hai") { listOf("nothing saved" to added.isEmpty(), "says 360" to told.contains("360")) }
@@ -411,5 +412,5 @@ class AiEvalTest {
     }
 
     /** How many everyday messages the app's own assistant got right last time: it may only go up. */
-    private val localFloor = 100
+    private val localFloor = 101
 }

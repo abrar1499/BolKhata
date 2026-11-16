@@ -215,7 +215,8 @@ object AiAgent {
           matching entry in it and opens the share sheet; then say shortly that it is ready.
         - Changing the app itself (clear the chat, currency, language, header colour, background, open a tab, open or add a
           business, a backup) is app_setting; then say in a few words what changed.
-        - Greet only when the message itself greets. Small talk: answer briefly, no tools.
+        - Greet only when the message itself greets. To small talk ("kaise ho", "hi") reply in one short friendly line, with no tools.
+        - Write only the words the person reads: never a note about these rules, the kind of message, or what you will do.
         - A question about anything else in the world (facts, how-to, advice, health, religion, maths, words, news you
           know of): answer it yourself, correctly and kindly, in at most about four short sentences, no tools. The
           twelve-word limit is for work in the app. Never state figures from the person's books without a tool.
@@ -266,11 +267,12 @@ object AiAgent {
             if (stop()) return@runCatching null
             val step = Ai.step(system, tools, messages) ?: return@runCatching null
             if (step.calls.isEmpty()) {
+                val said = spoken(step.text)
                 // Learnt from the message with its numbers in digits, so "teen sau" and "300" are one shape.
-                val learnt = learn(calls, digits, host.names(), known, step.text)
+                val learnt = learn(calls, digits, host.names(), known, said)
                 // Only saved, all of it and nothing to ask: the Saved card says it, no sentence over it.
-                val onlySaved = notes.added.isNotEmpty() && notes.skipped == 0 && calls.all { it.first == "add_entries" } && '?' !in step.text
-                return@runCatching Answer(if (onlySaved) "" else roman(step.text).ifBlank { "Done." }, notes.added, notes.card, notes.listIds, notes.filter,
+                val onlySaved = notes.added.isNotEmpty() && notes.skipped == 0 && calls.all { it.first == "add_entries" } && '?' !in said
+                return@runCatching Answer(if (onlySaved) "" else roman(said).ifBlank { "Done." }, notes.added, notes.card, notes.listIds, notes.filter,
                     learnt.lesson, learnt.shape, learnt.words)
             }
             calls += step.calls.map { it.name to it.input }
@@ -464,7 +466,18 @@ object AiAgent {
     private val claim = Regex("""\b(delet|remov|undo|undid|restor|updat|chang|edit|renam|cancel|trash)\w*""", RegexOption.IGNORE_CASE)
 
     /** Whether a remembered lesson may be done again: not one whose reply says a change it never made (learnt before that was checked). */
-    fun sound(lesson: String): Boolean = runCatching { lesson.trimStart().startsWith("[") || !claim.containsMatchIn(JSONObject(lesson).optString("reply")) }.getOrDefault(false)
+    fun sound(lesson: String): Boolean = runCatching {
+        lesson.trimStart().startsWith("[") || JSONObject(lesson).optString("reply").let { !claim.containsMatchIn(it) && !aside.containsMatchIn(it) }
+    }.getOrDefault(false)
+
+    /** The model's note to itself about the instructions ("Small talk: answer briefly, no tools needed."), never meant for the person. */
+    private val aside = Regex("""(?i)small talk|no tools|tools? needed|answer briefly|reply briefly|briefly in (roman|english|urdu)""")
+
+    /** [text] without a first paragraph that is such a note, when the real reply follows it. */
+    fun spoken(text: String): String {
+        val parts = text.trim().split(Regex("""\n\s*\n"""), limit = 2)
+        return if (parts.size == 2 && aside.containsMatchIn(parts[0])) spoken(parts[1]) else text.trim()
+    }
 
     /** A remembered lesson done again: its tools filled with this message's numbers and people, and the reply to give. */
     class Replay(val calls: List<Pair<String, JSONObject>>, val reply: String)
