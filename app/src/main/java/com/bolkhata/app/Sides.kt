@@ -75,6 +75,16 @@ object Sides {
         return (things + own).distinctBy { it.name.lowercase() }
     }
 
+    /** The everyday expense accounts every book starts with, in the order they show. */
+    val common = listOf(Cat.KHANA, Cat.TRANSPORT, Cat.BIJLI, Cat.RENT, Cat.MOBILE, Cat.SEHAT, Cat.SHOPPING, Cat.EDU, Cat.PERSONAL,
+        Cat.CHARITY, Cat.GHAR, Cat.FEES)
+
+    /** [s] with the everyday expense accounts ([common]) added, those it does not have yet. */
+    fun withCommon(s: SideSetup): SideSetup {
+        val have = s.books.filter { it.side == Side.EXP && !it.people }.map { it.name.lowercase() }.toSet()
+        return s.copy(books = s.books + common.filter { it.label.lowercase() !in have }.map { Book(Side.EXP, it.label, false) })
+    }
+
     /** Whether [book] is Purchases or Sales: people's work, goods and sales, read from their khatas. */
     fun isAuto(book: Book) = !book.people && book.cat == null &&
         (book.side == Side.EXP && book.name == PURCHASES || book.side == Side.INC && book.name == SALES)

@@ -524,8 +524,16 @@ class Store(context: Context) {
     /** Saves the entries of another business (an entry said for it while this one is open). */
     fun saveFor(id: String, list: List<Entry>) = write(scoped("entries", id), list)
 
-    /** The open book's own accounts, who sits in which people account, and extra things inside accounts (see [Sides]). */
-    fun loadSides(): SideSetup = try {
+    /**
+     * The open book's own accounts, who sits in which people account, and extra things inside accounts (see [Sides]).
+     * The first time a book is opened it gets the everyday expense accounts ([Sides.withCommon]); one deleted later stays gone.
+     */
+    fun loadSides(): SideSetup = readSides().let { s ->
+        if (prefs.getBoolean(scoped("commonAdded"), false)) s
+        else Sides.withCommon(s).also { saveSides(it); prefs.edit().putBoolean(scoped("commonAdded"), true).apply() }
+    }
+
+    private fun readSides(): SideSetup = try {
         val o = JSONObject(prefs.getString(scoped("sides"), "{}") ?: "{}")
         val books = o.optJSONArray("books") ?: JSONArray()
         val people = o.optJSONObject("people") ?: JSONObject()
