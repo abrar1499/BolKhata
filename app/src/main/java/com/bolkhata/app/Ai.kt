@@ -156,7 +156,7 @@ object Ai {
     private val usedMicro = java.util.concurrent.atomic.AtomicLong()
     private val usedStored = java.util.concurrent.atomic.AtomicInteger()
 
-    /** What the calls since the last ask used, as "Claude · 1.2s · 340 in · 120 out · $0.0038"; null when this key made none. */
+    /** What the calls since the last ask used, as "Claude · haiku-5-5 · 1.2s · 340 in · 120 out · $0.0038"; null when this key made none. */
     fun takeUsage(ms: Long, by: String = key, picked: String = model): String? {
         val m = modelOf(by, picked)
         val i = usedIn.getAndSet(0)
@@ -165,7 +165,7 @@ object Ai {
         val micro = usedMicro.getAndSet(0)
         val stored = usedStored.getAndSet(0)
         if (i == 0 && o == 0) return null
-        return (provider(by)?.name ?: "AI") + " · " + String.format(Locale.US, "%.1fs", ms / 1000.0) + " · " +
+        return (provider(by)?.name ?: "AI") + " · " + m.removePrefix("claude-") + " · " + String.format(Locale.US, "%.1fs", ms / 1000.0) + " · " +
             usageText(i.toLong(), o.toLong(), cached = cached.toLong(), dollars = if (price(m) == null) null else micro / 1_000_000.0, stored = stored.toLong())
     }
 

@@ -1186,11 +1186,9 @@ fun App(
     fun postChat(text: String, isUser: Boolean, entryIds: List<String> = emptyList(), attachment: String = "", meta: String = "", listIds: List<String> = emptyList()) {
         // The answer to a translated message carries what it was read as, in its small line (option cards have none).
         val note = if (isUser || meta.startsWith("ask=")) "" else sayNote[0].also { sayNote[0] = "" }
-        val noted = when {
-            note.isBlank() -> meta
-            "usage=" in meta -> meta.replace(Regex("""usage=([^;]+)""")) { "usage=" + it.groupValues[1] + " · " + note }
-            else -> meta + (if (meta.isBlank()) "" else "; ") + "usage=" + note
-        }
+        // Every answer names who gave it on its small line (the APK shows it): the AI's carries its own; the rest are the app's.
+        val named = if (isUser || meta.startsWith("ask=") || "usage=" in meta) meta else meta + (if (meta.isBlank()) "" else "; ") + "usage=App engine"
+        val noted = if (note.isBlank()) named else named.replace(Regex("""usage=([^;]+)""")) { "usage=" + it.groupValues[1] + " · " + note }
         val message = ChatMessage(
             listIds = listIds,
             id = "chat-" + System.currentTimeMillis() + "-" + System.nanoTime(),
@@ -1372,6 +1370,8 @@ fun App(
         scope.launch {
             // The message with its misspelt words put right, when the app did not understand it as written: it is read once more.
             var again: String? = null
+            // Why the AI did not answer a message read again after ✗, for the APK's small line.
+            var why = ""
             try {
                 // The app's own answer is ready at once; a short beat lets "Typing…" show, so the chat feels like a reply.
                 if (!retry) kotlinx.coroutines.delay(450)
@@ -1497,7 +1497,12 @@ fun App(
                         AiAgent.Answer(w.text, notes.added.toList(), notes.card.ifBlank { w.card }, notes.listIds, w.filter, w.lesson, w.shape, w.words, notes.ask.ifBlank { w.ask })
                     }
                     won?.let { Ai.failed.remove(Ai.provider(it.key)?.name.orEmpty()); Ai.answered = Ai.provider(it.key)?.name.orEmpty() }
-                    val usage = won?.let { Ai.takeUsage(System.currentTimeMillis() - started, it.key, it.model) }.orEmpty()
+                    val usage = won?.let { w ->
+                        val ms = System.currentTimeMillis() - started
+                        Ai.takeUsage(ms, w.key, w.model) ?: listOf(Ai.provider(w.key)?.name ?: "AI", Ai.modelOf(w.key, w.model).removePrefix("claude-"), String.format(java.util.Locale.US, "%.1fs", ms / 1000.0)).joinToString(" · ")
+                    }.orEmpty()
+                    // Every AI resting after an error: nobody was asked, and the APK's small line says why.
+                    if (jobs.isEmpty()) aiWhy = Ai.failed.entries.firstOrNull()?.let { (n, e) -> "$n resting after $e" } ?: "resting"
                     // No key answered (no credit, a limit reached, no internet): the app's own engine answers below.
                     if (answer == null) aiDown = true else {
                     // The AI could not tell what happened with a person and a number: the option card asks.
@@ -1530,6 +1535,7 @@ fun App(
                 // Asked again after ✗ and no AI answered: the app reads it once more with its spelling put right, else asks
                 // for other words (its first answer is not given a second time).
                 if (retry) {
+                    why = aiWhy
                     val fixed = offMain { Spell.fix(text, names0 + entries.map { it.item }) }
                     if (!fixed.equals(text, true)) again = fixed
                     else {
@@ -1665,7 +1671,7 @@ fun App(
                 postChat(safe, isUser = false, meta = "engine=NativeChatEngine; stage=interpret; failure=" + e.javaClass.simpleName)
             } finally {
                 chatLoading = false
-                again?.let { sayNote[0] = "Read as: $it"; chatInput(it, quiet = true, spelled = true) }
+                again?.let { sayNote[0] = "Read as: $it" + (if (why.isBlank() || BuildConfig.PLAY) "" else " · AI: " + why.take(60).replace(';', ',')); chatInput(it, quiet = true, spelled = true) }
             }
         }
     }
