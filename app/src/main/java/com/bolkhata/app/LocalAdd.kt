@@ -141,7 +141,8 @@ object LocalAdd : LocalAgent.Reader {
         val money = nums.money.filter { it.first != goods.qtyAt }
         // "ashraf ko cheeni di": a person and money or a thing given or taken, but no amount: the amount is asked.
         if (people.size == 1 && w.none { num(it) != null } && (f.give || f.get || f.ret || w.lastOrNull() == "d") &&
-            content.all { x -> x in moneyNouns || x in extra || Parser.guessCategory(x) != null || Parser.nearThing(x) != null }) return Got.Ask(HOW_MUCH_FOR + people[0] + "?")
+            content.all { x -> x in moneyNouns || x in extra || Parser.guessCategory(x) != null || Parser.nearThing(x) != null })
+            return Got.Ask(HOW_MUCH_FOR + people[0] + " (like 500, or 5 kg 500)?")
         if (people.isNotEmpty()) return withPeople(w, mentions, people, way, f, nums, goods, money, content, c).also { c.lastWay = way }
         // No one named: the work or money of the person before goes on ("..., 2000 bharai ki"), else an expense or income.
         val last = c.last
@@ -802,7 +803,14 @@ object LocalAdd : LocalAgent.Reader {
         }
         if (asked.startsWith(HOW_MUCH_FOR)) {
             val meant = asked(s)
-            return if (meant == null || !answer) null else meant + " " + s.counted
+            if (meant == null || !answer) return null
+            // "5 kg 500": the count goes in after the person ("ashraf ko 5 kg cheeni di"), the money at the end ("500 ki").
+            val w = s.counted.lowercase(Locale.ROOT).split(Regex("""\s+""")).filter { it.isNotBlank() }
+            val q = w.indices.firstOrNull { num(w[it]) != null && w.getOrNull(it + 1) in unitWords } ?: return meant + " " + s.counted
+            val money = w.indices.firstOrNull { num(w[it]) != null && it != q }?.let { " " + w[it] + " ki" }.orEmpty()
+            val count = w[q] + " " + w[q + 1]
+            val after = Regex("""\b(ko|ku|ne|se)\b""").find(meant.lowercase(Locale.ROOT))?.range?.last
+            return (if (after == null) "$count $meant" else meant.substring(0, after + 1) + " " + count + meant.substring(after + 1)) + money
         }
         RATE.matchEntire(asked)?.let {
             val meant = asked(s)
