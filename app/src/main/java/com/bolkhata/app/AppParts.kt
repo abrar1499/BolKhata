@@ -223,7 +223,9 @@ internal fun SideMenu(
     /** 20 quick taps on the menu's empty space. */
     onSecret: () -> Unit = {},
     /** Premium is on, and its row opens the Premium sheet. */
-    premium: Boolean = false, onPremium: () -> Unit = {}
+    premium: Boolean = false, onPremium: () -> Unit = {},
+    /** The language of the app's own words ("" Auto: the phone's), see I18n. */
+    appLang: String = "", onAppLang: (String) -> Unit = {}
 ) {
     // Taps on the empty space and when the last one was; a pause of over a second starts the count again.
     val secret = remember { longArrayOf(0, 0) }
@@ -334,7 +336,7 @@ internal fun SideMenu(
                     LaunchedEffect(ready) { if (ready) { kotlinx.coroutines.delay(1500); Lingo.seen() } }
                     MenuRow(onClick = { open = true }) {
                         Column(Modifier.weight(1f)) {
-                            Text("🌐 Language", fontSize = 13.sp, maxLines = 1)
+                            Text("🎤 Mic language", fontSize = 13.sp, maxLines = 1)
                             // Under it: the pack's size while it comes down, then Ready for a moment.
                             if (busy) Text("Downloading · 30 MB", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 22.dp))
                             else if (ready) Text("✓ Ready", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = GreenIn, modifier = Modifier.padding(start = 22.dp))
@@ -348,6 +350,18 @@ internal fun SideMenu(
                         if (picked == "More languages…") more = true else onLang(langs.first { it.second == picked }.first)
                     }
                     if (more) LanguageSheet("Language for the mic", base = false, current = lang, onClose = { more = false }) { more = false; onLang(it) }
+                }
+                Box {
+                    var open by remember { mutableStateOf(false) }
+                    // The app's own words: Auto follows the phone; each language by its own name.
+                    val apps = listOf("" to "Auto", "en" to "English") + listOf("ur" to "اردو", "hi" to "हिन्दी", "ar" to "العربية", "bn" to "বাংলা",
+                        "es" to "Español", "fr" to "Français", "de" to "Deutsch", "pt" to "Português", "tr" to "Türkçe").filter { it.first in I18n.CODES }
+                    val now = apps.firstOrNull { it.first == appLang }?.second ?: "Auto"
+                    MenuRow(onClick = { open = true }) { MenuLabel("🌐", "App language"); MenuValue("$now ▾") }
+                    CompactPicker(open, apps.map { it.second to "" }, now, search = false, onDismiss = { open = false }) { picked ->
+                        open = false
+                        onAppLang(apps.first { it.second == picked }.first)
+                    }
                 }
                 MenuRow(onClick = null) {
                     MenuLabel("🖌", "Header")

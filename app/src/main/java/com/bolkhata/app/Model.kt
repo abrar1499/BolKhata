@@ -609,6 +609,10 @@ class Store(context: Context) {
             return prefs.getString("lang", "") ?: ""
         }
         set(v) = prefs.edit().putString("lang", v).apply()
+    /** The language of the app's own words ("" Auto: the phone's; see I18n). The mic's language is [language]. */
+    var appLanguage: String
+        get() = prefs.getString("appLang", "") ?: ""
+        set(v) = prefs.edit().putString("appLang", v).apply()
     /** The other language picked last (an ML Kit code like "nl", see Lingo): it stays in the short Language list. */
     var moreLanguage: String
         get() = prefs.getString("moreLang", "") ?: ""

@@ -63,7 +63,7 @@ class MainActivity : ComponentActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         val store = Store(this)
         // The app's words in the chosen language (or the phone's), before the first screen is drawn.
-        I18n.use(this, store.language)
+        I18n.use(this, store.appLanguage)
         setContent {
             var dark by remember { mutableStateOf(store.dark) }
             var themeName by remember { mutableStateOf(store.theme) }
@@ -131,6 +131,8 @@ fun App(
     var currency by remember { mutableStateOf(store.currency) }
     var name by remember { mutableStateOf(store.name) }
     var lang by remember { mutableStateOf(store.language) }
+    // The app's own words (side menu › App language); Auto is the phone's language.
+    var appLang by remember { mutableStateOf(store.appLanguage) }
     var moreLang by remember { mutableStateOf(store.moreLanguage) }
     // The mic's first question: which language will be spoken.
     var askLang by remember { mutableStateOf(false) }
@@ -1724,7 +1726,6 @@ fun App(
     /** Picks the language to listen in. Another language than the app's own stays in the short list, and its pack comes down at once ([fetch]). */
     fun setLanguage(l: String, fetch: Boolean = true) {
         lang = l; store.language = l
-        I18n.use(context, l)
         val code = Lingo.code(l)
         if (code.isBlank()) return
         moreLang = l; store.moreLanguage = l
@@ -2641,6 +2642,7 @@ fun App(
                 onBusinessPage = { bizPage = true; close() },
                 onCurrency = { c -> currency = c; store.currency = c; toast("✓ Currency set to $c") },
                 onLang = { setLanguage(it) }, moreLang = moreLang,
+                appLang = appLang, onAppLang = { appLang = it; store.appLanguage = it; I18n.use(context, it) },
                 onTheme = onTheme,
                 page = page, onPage = { onPhoto(""); onDark(false); onPage(it) },
                 onDark = { c -> onPhoto(""); onDark(true); onPage(c) },
@@ -3055,7 +3057,7 @@ fun App(
                     version = BuildConfig.VERSION_NAME, checking = checking,
                     onName = { name = it; store.name = it; toast("✓ Name saved") },
                     onCurrency = { currency = it; store.currency = it },
-                    onLang = { lang = it; store.language = it; I18n.use(context, it) },
+                    onLang = { lang = it; store.language = it },
                     onDark = onDark,
                     onCheckUpdate = {
                         scope.launch {
