@@ -1925,7 +1925,7 @@ private fun AddSheet(r: AddReq, all: List<Entry>, onDismiss: () -> Unit, onDelet
 /** A saved entry opened to change, from anywhere in the app: the same sheet as adding, filled, with Delete. */
 @Composable
 internal fun EditSheet(e: Entry, all: List<Entry>, onDismiss: () -> Unit, onDelete: () -> Unit, onSave: (Entry) -> Unit) =
-    AddSheet(editReq(e, listOf(e.person.trim().ifBlank { e.category.label }, e.item.trim()).filter { it.isNotBlank() }.distinct().joinToString(" › ")), all, onDismiss, onDelete, onSave)
+    AddSheet(editReq(e, listOf(e.person.trim().ifBlank { e.category.label }, e.item.trim()).filter { it.isNotBlank() }.distinct().joinToString(" › ")), all, onDismiss, onDelete, onSave = onSave)
 
 /** A grey box showing a date or time; tap to change it. */
 @Composable
