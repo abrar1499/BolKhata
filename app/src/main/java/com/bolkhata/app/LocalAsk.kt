@@ -263,10 +263,18 @@ object LocalAsk : LocalAgent.Reader {
         return cap(parts.joinToString(", ")) + on + period(p, s.now) + "."
     }
 
-    /** "Nothing found for petrol this month.", "No entries today." */
+    /**
+     * "No expenses this year.", "No entries for Petrol this month.", "No entries today.": a question the app understood
+     * with nothing saved for it is answered here, never passed to the AI (only "Nothing found" for unknown words is).
+     */
     private fun nothing(p: Pick, now: Long): String {
         val subject = (p.persons + p.cats + p.words.map(::cap) + p.types.mapNotNull { nouns[it] }).joinToString(", ")
-        return if (subject.isBlank()) "No entries" + period(p, now) + "." else "Nothing found for $subject" + period(p, now) + "."
+        val kindOnly = p.persons.isEmpty() && p.cats.isEmpty() && p.words.isEmpty()
+        return when {
+            subject.isBlank() -> "No entries" + period(p, now) + "."
+            kindOnly -> "No $subject" + period(p, now) + "."
+            else -> "No entries for $subject" + period(p, now) + "."
+        }
     }
 
     private val nouns = mapOf("expense" to "expenses", "income" to "income", "lent" to "money given", "received_back" to "money received",
