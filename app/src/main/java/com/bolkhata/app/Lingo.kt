@@ -5,8 +5,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.google.android.gms.tasks.Task
 import com.google.mlkit.common.model.DownloadConditions
-import com.google.mlkit.nl.languageid.LanguageIdentification
-import com.google.mlkit.nl.languageid.LanguageIdentificationOptions
 import com.google.mlkit.nl.translate.TranslateLanguage
 import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.Translator
@@ -17,8 +15,7 @@ import kotlin.coroutines.resume
 
 /**
  * Languages other than the app's own (English, Urdu, Hindi and Roman Urdu): Google's ML Kit turns a message into
- * English on the phone itself (nothing is sent anywhere), once the language's pack (about 30 MB) has come down. The
- * same kit tells which language a message is written in, so the chat can offer its pack.
+ * English on the phone itself (nothing is sent anywhere), once the language's pack (about 30 MB) has come down.
  */
 object Lingo {
     /** What the app reads by itself; these never go through a translation. */
@@ -70,14 +67,6 @@ object Lingo {
         val t = translator(code) ?: return null
         if (!t.downloadModelIfNeeded(DownloadConditions.Builder().build()).done()) return null
         return t.translate(text).result()
-    }
-
-    /** The language [text] is written in, when that is clear and it can be translated; "" otherwise (also for the app's own). */
-    suspend fun guess(text: String): String {
-        val tag = LanguageIdentification.getClient(LanguageIdentificationOptions.Builder().setConfidenceThreshold(0.7f).build())
-            .identifyLanguage(text).result().orEmpty()
-        val c = code(tag)
-        return if (tag == "und" || c.isBlank() || TranslateLanguage.fromLanguageTag(c) == null) "" else c
     }
 
     private suspend fun <T> Task<T>.done(): Boolean = suspendCancellableCoroutine { c -> addOnCompleteListener { c.resume(it.isSuccessful) } }
