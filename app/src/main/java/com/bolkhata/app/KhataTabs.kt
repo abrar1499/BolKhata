@@ -512,6 +512,10 @@ internal fun LazyListScope.ledger(
         val last = i == rows.lastIndex || (cards && !sameDay(rows[i + 1].date, r.date))
         item(key = keyPrefix + r.key) { LedgerRow(r, cols, last, cards) }
     }
+    // At the end of the list: a slim picture ad, square and the width of the rows above it (a native ad earns more than a banner).
+    if (rows.isNotEmpty()) item(key = keyPrefix + "end-ad", contentType = "ad") {
+        NativeAdCard("ledger-end-$keyPrefix$title", Modifier.padding(horizontal = 10.dp, vertical = 10.dp), round = false, small = true)
+    }
 }
 
 /** What an empty list shows instead of a blank page: the app logo and how to add the first entry. */
