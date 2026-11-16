@@ -37,6 +37,12 @@ import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
 import com.google.android.ump.ConsentRequestParameters
 import com.google.android.ump.UserMessagingPlatform
 
+/** Most new ads one phone is shown in a day (chat, cashbook, lists); after that their places stay empty until the next day. */
+internal const val AD_LOADS_A_DAY = 20
+
+/** Most reward videos one phone is offered in a day; after that the app answers by itself until the next day. */
+internal const val REWARDS_A_DAY = 5
+
 /** Most taps on ads one phone may make in a day; after that its ads rest until the next day. */
 internal const val AD_TAPS_A_DAY = 3
 
@@ -81,7 +87,7 @@ object Ads {
             override fun onAdDismissedFullScreenContent() { done(earned); loadReward(activity) }
             override fun onAdFailedToShowFullScreenContent(error: AdError) { done(true); loadReward(activity) }
         }
-        ad.show(activity) { earned = true }
+        ad.show(activity) { earned = true; count(activity, "rewards") }
     }
 
     /** Loaded native ads by their place (e.g. "chat-12"), so an ad stays the same while it is on screen and is not fetched again. */
@@ -103,6 +109,13 @@ object Ads {
     private fun today() = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(java.util.Date())
     private fun saved(c: Context) = c.getSharedPreferences("ads", Context.MODE_PRIVATE)
     private fun tapsToday(c: Context) = saved(c).let { adTapsOn(today(), it.getString("day", "").orEmpty(), it.getInt("taps", 0)) }
+
+    /** How many of [what] ("loads", "rewards") came today, from what was saved (a new day starts at none). */
+    private fun today(c: Context, what: String) = saved(c).let { adTapsOn(today(), it.getString("$what-day", "").orEmpty(), it.getInt(what, 0)) }
+    private fun count(c: Context, what: String) = saved(c.applicationContext).edit().putString("$what-day", today()).putInt(what, today(c, what) + 1).apply()
+
+    /** Whether a reward video may still be offered today (at most [REWARDS_A_DAY]). */
+    fun rewardsLeft(c: Context) = today(c, "rewards") < REWARDS_A_DAY
 
     /** Counts each tap on the ad it is given to. */
     fun taps(context: Context): AdListener = object : AdListener() {
@@ -127,9 +140,9 @@ object Ads {
     /** The ad for [place], fetched once; [onReady] gets it when it arrives. [small]: from the pictures-only unit. */
     fun native(context: Context, place: String, small: Boolean = false, onReady: (NativeAd) -> Unit) {
         loaded[place]?.let { onReady(it); return }
-        if (!ready || resting) return
+        if (!ready || resting || today(context, "loads") >= AD_LOADS_A_DAY) return
         AdLoader.Builder(context, if (small) smallUnit else nativeUnit)
-            .forNativeAd { ad -> loaded[place] = ad; onReady(ad) }
+            .forNativeAd { ad -> loaded[place] = ad; count(context, "loads"); onReady(ad) }
             .withAdListener(taps(context))
             .withNativeAdOptions(NativeAdOptions.Builder().setAdChoicesPlacement(NativeAdOptions.ADCHOICES_TOP_RIGHT)
                 .setVideoOptions(VideoOptions.Builder().setStartMuted(true).build()).build())

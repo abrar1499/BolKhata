@@ -1451,15 +1451,17 @@ fun App(
                 // Test feature: with an AI key saved, the AI does the whole job itself through tools (see AiAgent).
                 var aiDown = false
                 var aiWhy = ""
-                // The app's own key: after 10 smart answers a short reward video is offered for 10 more (the message waits for it).
-                if (Ai.handles(groqKey) && !noAi && onOwnKey() && store.smartLeft <= 0) {
+                // The app's own key: after 10 smart answers a short reward video is offered for 10 more (the message waits for it);
+                // after 5 videos in a day the app answers by itself until the next day.
+                val outOfSmart = Ai.handles(groqKey) && !noAi && onOwnKey() && store.smartLeft <= 0
+                if (outOfSmart && Ads.rewardsLeft(context)) {
                     rewardFor[0] = text
                     Ads.loadReward(context)
                     lastSpeech = "Watch a short video to keep getting smart answers."
                     postChat("", isUser = false, meta = "reward")
                     return@launch
                 }
-                if (Ai.handles(groqKey) && !noAi) {
+                if (Ai.handles(groqKey) && !noAi && !outOfSmart) {
                     loadingLabel = "✦ Thinking…"
                     val started = System.currentTimeMillis()
                     val spoken = aiHeard[0] != null
