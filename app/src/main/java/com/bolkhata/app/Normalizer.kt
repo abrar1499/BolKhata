@@ -298,7 +298,8 @@ object Normalizer {
      * written in Roman letters), English or nothing typed yet is "" (the phone's own language).
      */
     fun voiceLanguage(picked: String, typed: List<String>): String {
-        if (picked.isNotBlank()) return picked
+        // Hindi is heard as India's Hindi (the same as Roman Urdu: its letters are turned into Roman ones).
+        if (picked.isNotBlank()) return if (picked == "hi") "hi-IN" else picked
         val styles = typed.takeLast(12).filter { it.isNotBlank() }.map { t ->
             when {
                 t.any { it in '\u0600'..'\u06FF' } -> "ur-PK"

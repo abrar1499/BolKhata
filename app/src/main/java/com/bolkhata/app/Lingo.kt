@@ -24,6 +24,9 @@ object Lingo {
     /** A language: its code, its English name and its name in its own writing. */
     data class Lang(val code: String, val name: String, val local: String)
 
+    /** Hindi: the app reads it itself (no pack), the mic hears it in Hindi letters. */
+    val HINDI = Lang("hi", "Hindi", "हिन्दी")
+
     /** The language to translate from for a Language setting ("nl", "ar-SA"); "" for Auto and the app's own languages. */
     fun code(setting: String): String = setting.substringBefore('-').lowercase(Locale.US).let { if (it in own) "" else it }
 

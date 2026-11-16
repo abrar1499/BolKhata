@@ -1544,7 +1544,8 @@ fun App(
                 var groqAsk: NativeChatEngine.Fixed? = null
                 // What Groq understood before is read by the app itself (no tokens); a 👎 makes it forget.
                 val learnKey = Groq.learnKey(roman)
-                val known = if (groqKey.isNotBlank()) store.learned[learnKey] else null
+                // Answers and commands learnt from Groq (switched off now) are not used: an old one could delete ("Entry deleted").
+                val known = if (groqKey.isNotBlank() && Groq.ENABLED) store.learned[learnKey] else null
                 var learnAs: String? = null
                 if (known != null && known.startsWith("R|")) {
                     lastSpeech = known.removePrefix("R|")
