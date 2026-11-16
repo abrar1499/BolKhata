@@ -826,9 +826,11 @@ private fun EntryPicker(all: List<Entry>, setup: SideSetup, onSetup: (SideSetup)
     var group by remember { mutableStateOf<String?>(null) }
     val list = remember(all, setup) { targets(all, setup) }
     val sub = MaterialTheme.colorScheme.onSurfaceVariant
+    // Opens all the way, not half: everything in it shows at once (and scrolls on a small phone).
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = LocalPage.current, dragHandle = null,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)) {
-        Column(Modifier.padding(14.dp).navigationBarsPadding().imePadding()) {
+        Column(Modifier.verticalScroll(rememberScrollState()).padding(14.dp).navigationBarsPadding().imePadding()) {
             when (step) {
                 "who" -> {
                     SheetHead("+ Entry", "Who or what?", null, onDismiss)
