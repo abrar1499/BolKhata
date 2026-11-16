@@ -42,13 +42,16 @@ class AiEvalTest {
         var bin = listOf<Entry>()
         var setup = SideSetup(people = mapOf("Hamid Akram" to Sides.STAFF, "Zubair Latif" to Sides.STAFF, "Nargis Salim Rashid" to Sides.CUSTOMERS))
         var pdf: PdfDoc? = null
+        /** The app settings the AI changed ("currency=PKR"). */
+        val changed = mutableListOf<String>()
         val host = AiAgent.Host(
             entries = { entries }, add = { entries = it + entries },
             update = { changed -> entries = entries.map { e -> changed.firstOrNull { it.id == e.id } ?: e } },
             trash = { ids -> trashed += ids; bin = entries.filter { it.id in ids } + bin; entries = entries.filter { it.id !in ids } },
             names = { (entries.map { it.person } + setup.people.keys).map { it.trim() }.filter { it.isNotBlank() }.distinct() },
             currency = "PKR", setup = { setup }, saveSetup = { setup = it }, pdf = { pdf = it },
-            trashed = { bin }, restore = { ids -> entries = bin.filter { it.id in ids } + entries; bin = bin.filter { it.id !in ids }; trashed -= ids }
+            trashed = { bin }, restore = { ids -> entries = bin.filter { it.id in ids } + entries; bin = bin.filter { it.id !in ids }; trashed -= ids },
+            settings = { k, v -> changed += "$k=$v"; JSONObject().put("done", "Changed.").toString() }
         )
         val added get() = entries.filter { it.id !in baseIds }
         fun byId(id: String) = entries.firstOrNull { it.id == id }
@@ -221,6 +224,20 @@ class AiEvalTest {
         // ---- talk
         case("greeting", "assalam o alaikum") { listOf("nothing saved" to added.isEmpty(), "a short answer" to (text.isNotBlank() && text.split(' ').size <= 25)) },
         case("thanks", "shukriya") { listOf("nothing saved" to added.isEmpty(), "a short answer" to (text.isNotBlank() && text.split(' ').size <= 25)) },
+        // ---- the app's own settings, said in the chat
+        case("clear the chat", "yaar ye chat saaf kar do") { listOf("chat cleared" to world.changed.any { it.startsWith("clear_chat") }, "nothing saved" to added.isEmpty()) },
+        case("currency", "meri currency pakistani rupay kar do") { listOf("currency PKR" to world.changed.any { it.equals("currency=PKR", true) }) },
+        case("header colour", "app ka upar wala rang green kar do") { listOf("header green" to world.changed.any { it.startsWith("header=") && "green" in it.lowercase() }) },
+        case("dark look", "raat ko aankhon ko chubta hai, dark kar do") { listOf("dark background" to world.changed.any { it.startsWith("background=") && "dark" in it.lowercase() }) },
+        case("open the report", "mujhe report wala page dikhao") { listOf("report opened" to world.changed.any { it.startsWith("open=") && "report" in it.lowercase() }) },
+        case("language", "app ki zaban urdu kar do") { listOf("language urdu" to world.changed.any { it.startsWith("language=") && "urdu" in it.lowercase() }) },
+        // ---- longer everyday sayings
+        case("dinner with friends", "kal raat dosto ke sath 300 ka khana khaya") { listOf("300 in Food" to has(Type.KHARCHA, amount = 300.0, cat = Cat.KHANA), "one entry" to (added.size == 1)) },
+        case("money sent home", "ammi ko ghar 5000 bheje") { listOf("5000 sent home" to has(Type.KHARCHA, amount = 5_000.0, cat = Cat.GHAR), "one entry" to (added.size == 1)) },
+        case("recharge", "500 ka recharge karwaya") { listOf("500 in Mobile" to has(Type.KHARCHA, amount = 500.0, cat = Cat.MOBILE)) },
+        case("school fees", "bete ki school fees 3000 di") { listOf("3000 in Education" to has(Type.KHARCHA, amount = 3_000.0, cat = Cat.EDU)) },
+        case("advance to a worker", "hamid ko 300 advance de diya") { listOf("lent Hamid 300" to has(Type.DIYA, "Hamid Akram", 300.0), "one entry" to (added.size == 1)) },
+        case("yes after the app's question", "sari entries delete kar do", "g") { listOf("everything in Trash" to world.entries.isEmpty()) },
         // ---- any question in the world
         case("general knowledge", "pakistan ka capital kya hai") { listOf("nothing saved" to added.isEmpty(), "answers Islamabad" to text.contains("islamabad", true)) },
         case("how-to", "chai kaise banate hain") { listOf("nothing saved" to added.isEmpty(), "a real answer" to (text.split(' ').size in 8..90)) },
@@ -394,5 +411,5 @@ class AiEvalTest {
     }
 
     /** How many everyday messages the app's own assistant got right last time: it may only go up. */
-    private val localFloor = 92
+    private val localFloor = 100
 }

@@ -276,6 +276,39 @@ class EverydayTest {
         "bola food food 500" to "out 500 Food",
     )
 
+    /**
+     * Many more, made from parts so every way of saying a thing meets every way of saying a number: things with
+     * their account, people with the ways money goes to them and comes from them, and the nods and small talk
+     * that must save nothing.
+     */
+    private val made: List<Pair<String, String>> = run {
+        val things = listOf("petrol" to "Transport", "chai" to "Food", "doodh" to "Food", "sabzi" to "Food", "bijli ka bill" to "Bills",
+            "kiraya" to "Rent", "mobile load" to "Mobile", "dawai" to "Health", "kapre" to "Shopping", "rickshaw" to "Transport",
+            "groceries" to "Food", "internet" to "Mobile", "roti" to "Food", "taxi" to "Transport", "joote" to "Shopping", "gas bill" to "Bills")
+        val amounts = listOf("500" to 500.0, "1500" to 1500.0, "1,500" to 1500.0, "2k" to 2000.0, "2 hazar" to 2000.0, "do hazar" to 2000.0,
+            "paanch sau" to 500.0, "5 sau" to 500.0, "derh hazar" to 1500.0, "250" to 250.0, "75" to 75.0, "1.5k" to 1500.0)
+        val spend = listOf("%t %a", "%a %t", "%a ka %t", "%t %a ka liya", "%t pe %a kharch kiye", "aaj %t %a", "kal %a ka %t", "spent %a on %t")
+        val out = mutableListOf<Pair<String, String>>()
+        var k = 0
+        for ((t, cat) in things) for (form in spend) {
+            val (a, n) = amounts[k++ % amounts.size]
+            out += form.replace("%t", t).replace("%a", a) to "out ${plainAmount(n)} $cat"
+        }
+        val people = listOf("hamid" to "Hamid", "mohsin" to "Mohsin", "ahmed" to "Ahmed", "bilal" to "Bilal", "usman" to "Usman", "kamran" to "Kamran",
+            "tariq" to "Tariq", "farooq" to "Farooq", "salim khan" to "Salim Khan", "salim raza" to "Salim Raza")
+        val give = listOf("%p ko %a diye", "%p ko %a de diye", "%p ko %a dy diye", "%p ko %a diya", "%p ko %a dia", "%p ko %a bheje", "%a %p ko diye",
+            "%p ko %a udhaar diye", "gave %p %a", "%p ko %a diey")
+        val get = listOf("%p se %a mile", "%p se %a mil gaye", "%p ne %a wapis kiye", "%p ne %a wapas kar diye", "%p ne %a lota diye", "got %a from %p")
+        for ((p, who) in people) {
+            for (form in give) { val (a, n) = amounts[k++ % amounts.size]; out += form.replace("%p", p).replace("%a", a) to "gave ${plainAmount(n)} $who" }
+            for (form in get) { val (a, n) = amounts[k++ % amounts.size]; out += form.replace("%p", p).replace("%a", a) to "got ${plainAmount(n)} $who" }
+        }
+        val nods = listOf("ji", "jee", "g", "gi", "haan", "han", "ha", "haa", "ok", "okay", "okk", "yes", "theek hai", "thik hai", "acha", "achha",
+            "shukriya", "thanks", "thank you", "hello", "hi", "salam", "assalam o alaikum", "kya hal hai", "kaise ho", "kese ho", "kase ho", "hru",
+            "good morning", "bye", "allah hafiz", "nahi", "no", "nhi", "kuch nahi", "bas")
+        out + nods.map { it to "none" }
+    }
+
     /** One expected entry: what kind, how much, and a word of its person, category or item. */
     private class Want(val kind: String, val amount: Double, val word: String)
 
@@ -315,7 +348,7 @@ class EverydayTest {
     fun everydayMessages() {
         val body = StringBuilder()
         var passed = 0
-        for ((said, spec) in cases) {
+        for ((said, spec) in cases + made) {
             val (host, entries, base) = books()
             val answer = runCatching { LocalAgent.run(said, host, now) }.getOrNull()
             val added = entries().filter { it.id !in base }
@@ -327,15 +360,28 @@ class EverydayTest {
                 .append("\n      got: ").append(added.joinToString("; ") { "${it.type} ${plainAmount(it.amount)} ${it.person.ifBlank { it.item }} (${it.category.label})" }.ifBlank { "nothing" })
                 .append(answer?.text?.takeIf { it.isNotBlank() }?.let { " | said: " + it.take(100).replace("\n", " ") }.orEmpty()).append('\n')
         }
-        val out = "Everyday messages: $passed of ${cases.size} understood\n\n$body"
+        val all = cases.size + made.size
+        val out = "Everyday messages: $passed of $all understood\n\n$body"
         File("build").mkdirs()
         File("build/everyday.txt").writeText(out)
         println(out)
-        assertTrue("The app understood $passed of ${cases.size} everyday messages; it understood $floor before", passed >= floor)
+        assertTrue("The app understood $passed of $all everyday messages; it understood $floor before", passed >= floor)
+    }
+
+    /** Every way of saying yes answers the app's question: after "Move them all to Trash?" the entries go. */
+    @Test
+    fun everyYesAnswersTheAppsQuestion() {
+        for (yes in listOf("ji", "jee", "g", "gi", "haan", "han", "ha", "haa", "ok", "okay", "yes", "theek hai", "kar do", "haan kar do", "ji kar do")) {
+            val (host, entries, _) = books()
+            val ask = LocalAgent.run("sari entries delete kar do", host, now)?.text.orEmpty()
+            assertTrue("asks first: $ask", ask.endsWith("?"))
+            LocalAgent.run(yes, host, now, lastShown = ask, recent = "Person: sari entries delete kar do\nApp: $ask")
+            assertTrue("\"$yes\" did the delete", entries().isEmpty())
+        }
     }
 
     private fun plainAmount(v: Double) = if (v % 1.0 == 0.0) v.toLong().toString() else v.toString()
 
     /** How many of [cases] the app understood last time: it may only go up. */
-    private val floor = 239
+    private val floor = 563
 }

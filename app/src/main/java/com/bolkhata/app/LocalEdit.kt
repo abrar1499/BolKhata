@@ -905,7 +905,7 @@ object LocalEdit : LocalAgent.Reader {
         "sorry", "oops", "actually", "asal", "asl", "balki", "correction", "mistake", "ghalti", "galti")
     private val doWords = setOf("kar", "karo", "kardo", "krdo", "kr", "kro", "karde", "kardein", "karden", "kardena", "kariye", "kijiye", "karein", "karen",
         "likho", "likh", "likhdo", "rakho", "rakh", "rakhdo", "set", "make", "change", "badal", "badlo", "badaldo", "update", "edit", "fix", "correct")
-    private val yesWords = setOf("haan", "han", "haa", "ha", "hn", "haanji", "ji", "jee", "jii", "yes", "yeah", "yep", "yup", "ok", "okay", "okk", "theek", "thik",
+    private val yesWords = setOf("haan", "han", "haa", "ha", "hn", "haanji", "ji", "jee", "jii", "g", "gi", "jj", "yes", "yeah", "yep", "yup", "ok", "okay", "okk", "theek", "thik",
         "sahi", "bilkul", "zaroor", "zarur", "done", "confirm", "sure", "go", "ahead", "do", "dein", "den", "de")
     private val politeWords = setOf("please", "plz", "pls", "bhai", "yaar", "yar", "jaldi", "abhi", "them", "all", "everything", "sab", "hi", "hai", "hain")
     private val bothWords = setOf("dono", "donon", "donoo", "both")

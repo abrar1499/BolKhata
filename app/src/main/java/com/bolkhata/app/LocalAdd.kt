@@ -884,7 +884,7 @@ object LocalAdd : LocalAgent.Reader {
         "uske" to '-', "uska" to '-', "uski" to '-', "iske" to '-', "iska" to '-', "iski" to '-', "unke" to '-', "unka" to '-', "unki" to '-', "his" to '-'
     )
     private val honorifics = setOf("bhai", "bhae", "sahab", "sahib", "saab", "sb", "ji", "jee", "bhaijan", "bhaijaan", "seth", "mian", "miyan")
-    private val giveWords = setOf("diye", "diya", "di", "dia", "diy", "diay", "dye", "de", "dey", "dee", "dii", "diyay", "diae", "diyey", "diyee", "dena", "dedo",
+    private val giveWords = setOf("diye", "diya", "di", "dia", "diy", "diay", "dye", "de", "dey", "dy", "dee", "dii", "diyay", "diae", "diyey", "diyee", "dena", "dedo",
         "dediye", "dediya", "dedi", "deye", "dein", "gave", "give", "given", "gives", "paid", "pay", "lent", "lend", "send", "sent", "bheje", "bheja", "bheji",
         "bhejay", "bhejy", "bhejo", "bhej", "transfer", "transferred", "diyea", "diey", "dya", "dyi", "diyye", "diyain")
     private val getWords = setOf("mile", "mila", "mili", "mil", "mily", "milay", "miley", "mle", "mla", "mli", "liye", "liya", "li", "le", "lia", "lie", "lea",
