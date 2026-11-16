@@ -139,8 +139,9 @@ object Ai {
      * What a call cost in dollars: [input] counts every token read, of which [cached] came from the cache (cheap) and
      * [written] were put into it (a quarter dearer than usual). Null when the model's price is not known here.
      */
-    fun cost(model: String, input: Long, output: Long, cached: Long = 0, written: Long = 0): Double? = price(model)?.let { (i, o, read) ->
-        ((input - cached - written) * i + written * i * 1.25 + cached * read + output * o) / 1_000_000
+    fun cost(model: String, input: Long, output: Long, cached: Long = 0, written: Long = 0, hour: Long = 0): Double? = price(model)?.let { (i, o, read) ->
+        // Put in the cache for 5 minutes at 1.25 times the price; [hour] of them for an hour, at twice the price.
+        ((input - cached - written) * i + (written - hour) * i * 1.25 + hour * i * 2 + cached * read + output * o) / 1_000_000
     }
 
     /** "7,687 in (6,100 cached) · 551 out · $0.0004" (no price part when it is not known). */
@@ -202,14 +203,17 @@ object Ai {
     fun opening(said: String): JSONArray = JSONArray().put(JSONObject().put("role", "user").put("content", said))
 
     /** Asks the model for its next step and adds its turn to [messages]; null when the provider failed or declined. */
-    fun step(system: String, tools: List<Tool>, messages: JSONArray): Step? {
+    fun step(system: String, tools: List<Tool>, messages: JSONArray, personal: String = ""): Step? {
         val p = provider(key) ?: return null
         val m = modelNow()
         if (p === CLAUDE) {
-            // A cache mark at the end of the instructions: the tools and instructions, the same for every message,
-            // are read back from the cache (a tenth of the price) by the next message too, not only by this one's later steps.
+            // A cache mark at the end of the shared instructions: the tools and instructions, the same for every phone, are
+            // read back from the cache (a tenth of the price) by every message of everyone for an hour; this phone's own
+            // part (currency, names) comes after the mark.
             val req = JSONObject().put("model", m).put("max_tokens", 4000).put("messages", messages)
-                .put("system", JSONArray().put(JSONObject().put("type", "text").put("text", system).put("cache_control", JSONObject().put("type", "ephemeral"))))
+                .put("system", JSONArray().put(JSONObject().put("type", "text").put("text", system)
+                    .put("cache_control", JSONObject().put("type", "ephemeral").put("ttl", "1h")))
+                    .apply { if (personal.isNotBlank()) put(JSONObject().put("type", "text").put("text", personal)) })
                 .put("tools", JSONArray().apply { tools.forEach { put(JSONObject().put("name", it.name).put("description", it.description).put("input_schema", it.schema)) } })
                 // And one at the end of the conversation so far, for the later steps of the same message.
                 .put("cache_control", JSONObject().put("type", "ephemeral"))
@@ -224,7 +228,8 @@ object Ai {
             val r = JSONObject(text)
             val usage = r.optJSONObject("usage") ?: JSONObject()
             count(usage.optInt("input_tokens") + usage.optInt("cache_creation_input_tokens") + usage.optInt("cache_read_input_tokens"), usage.optInt("output_tokens"),
-                usage.optInt("cache_read_input_tokens"), usage.optInt("cache_creation_input_tokens"))
+                usage.optInt("cache_read_input_tokens"), usage.optInt("cache_creation_input_tokens"),
+                usage.optJSONObject("cache_creation")?.optInt("ephemeral_1h_input_tokens") ?: 0)
             if (r.optString("stop_reason") == "refusal") { lastError = "declined"; return null }
             // The whole turn goes back unchanged (thinking blocks included), as the API asks.
             val blocks = r.optJSONArray("content") ?: JSONArray()
@@ -236,7 +241,7 @@ object Ai {
             )
         }
         val req = JSONObject().put("model", m)
-            .put("messages", JSONArray().put(JSONObject().put("role", "system").put("content", system)).apply { for (i in 0 until messages.length()) put(messages.get(i)) })
+            .put("messages", JSONArray().put(JSONObject().put("role", "system").put("content", if (personal.isBlank()) system else system + "\n" + personal)).apply { for (i in 0 until messages.length()) put(messages.get(i)) })
             .put("tools", JSONArray().apply { tools.forEach { put(JSONObject().put("type", "function").put("function", JSONObject().put("name", it.name).put("description", it.description).put("parameters", it.schema))) } })
             .put(if (p === OPENAI) "max_completion_tokens" else "max_tokens", 4000)
         var (code, text) = send(p.url, mapOf("Authorization" to "Bearer $key"), req.toString())
@@ -280,8 +285,8 @@ object Ai {
         JSONObject(text).optJSONObject("error")?.optString("message") ?: JSONArray(text).getJSONObject(0).getJSONObject("error").optString("message")
     }.getOrDefault("").take(120)
 
-    private fun count(input: Int, output: Int, cached: Int = 0, written: Int = 0) {
-        val micro = ((cost(modelNow(), input.toLong(), output.toLong(), cached.toLong(), written.toLong()) ?: 0.0) * 1_000_000).toLong()
+    private fun count(input: Int, output: Int, cached: Int = 0, written: Int = 0, hour: Int = 0) {
+        val micro = ((cost(modelNow(), input.toLong(), output.toLong(), cached.toLong(), written.toLong(), hour.toLong()) ?: 0.0) * 1_000_000).toLong()
         usedIn.addAndGet(input)
         usedOut.addAndGet(output)
         usedCached.addAndGet(cached)

@@ -144,9 +144,12 @@ object AiAgent {
                 required = listOf("setting")))
     )
 
-    /** The same from message to message (until a new name is saved), so the provider can cache it; the time goes with the message. */
-    fun system(currency: String, names: List<String>) = """
-        You run a ledger and expense app for its owner through the tools. Currency: ${currency.ifBlank { "none shown" }}.
+    /**
+     * The same for every phone and every message, so the provider caches it once for everyone; this phone's own part
+     * ([personal]) and the time go after it.
+     */
+    fun system() = """
+        You run a ledger and expense app for its owner through the tools.
         People write Roman Urdu, Urdu or Hindi script, or English, often misspelled or heard from voice.
         - Do what is asked with the tools, then answer in one short sentence of at most about twelve words, only about
           this message: never bring up earlier messages, other entries or what was or was not saved before unless
@@ -222,7 +225,11 @@ object AiAgent {
         - A question about anything else in the world (facts, how-to, advice, health, religion, maths, words, news you
           know of): answer it yourself, correctly and kindly, in at most about four short sentences, no tools. The
           twelve-word limit is for work in the app. Never state figures from the person's books without a tool.
-    """.trimIndent() + if (names.isEmpty()) "" else "\nSaved names: " + names.joinToString(", ")
+    """.trimIndent()
+
+    /** This phone's own part of the instructions: its currency and saved names. */
+    fun personal(currency: String, names: List<String>) =
+        "Currency: " + currency.ifBlank { "none shown" } + "." + if (names.isEmpty()) "" else "\nSaved names: " + names.joinToString(", ")
 
     /**
      * Lets the AI work until it answers (at most 8 rounds); null when the provider failed (see [Ai.lastError]).
@@ -264,10 +271,11 @@ object AiAgent {
                 (if (roman.trim().equals(said.trim(), true)) "" else "\nThe same message by sound, in Roman letters: " + roman.take(600)) +
                 (if (digits.trim().equals(roman.trim(), true)) "" else "\nIts numbers worked out by the app (use exactly these): " + digits.take(600))
         )
-        val system = system(host.currency, names)
+        val system = system()
+        val mine = personal(host.currency, names)
         for (round in 1..8) {
             if (stop()) return@runCatching null
-            val step = Ai.step(system, tools, messages) ?: return@runCatching null
+            val step = Ai.step(system, tools, messages, mine) ?: return@runCatching null
             if (step.calls.isEmpty()) {
                 val said = spoken(step.text)
                 // Learnt from the message with its numbers in digits, so "teen sau" and "300" are one shape.
