@@ -371,7 +371,7 @@ private fun Field(
 private fun Seg(label: String, selected: Boolean, color: Color, modifier: Modifier, onClick: () -> Unit) {
     val shape = RoundedCornerShape(9.dp)
     Box(
-        modifier.fillMaxHeight().then(if (selected) Modifier.shadow(1.dp, shape) else Modifier).clip(shape)
+        modifier.fillMaxHeight().then(if (selected) Modifier.lift(1.dp, shape) else Modifier).clip(shape)
             .background(if (selected) MaterialTheme.colorScheme.surface else Color.Transparent).clickable { onClick() },
         contentAlignment = Alignment.Center
     ) {

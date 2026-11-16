@@ -3240,9 +3240,9 @@ fun App(
                 shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.onSurface
             ) {
                 Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("${selection.ids.size} selected", color = MaterialTheme.colorScheme.surface, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                    TextButton(enabled = selection.ids.isNotEmpty(), onClick = { movingPicked = true }) { Text("Move", color = MaterialTheme.colorScheme.surface, fontWeight = FontWeight.Bold) }
-                    IconButton(onClick = { selection.clear() }) { Icon(Icons.Filled.Close, contentDescription = "Stop selecting", tint = MaterialTheme.colorScheme.surface) }
+                    Text("${selection.ids.size} selected", color = MaterialTheme.colorScheme.surfaceContainer, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    TextButton(enabled = selection.ids.isNotEmpty(), onClick = { movingPicked = true }) { Text("Move", color = MaterialTheme.colorScheme.surfaceContainer, fontWeight = FontWeight.Bold) }
+                    IconButton(onClick = { selection.clear() }) { Icon(Icons.Filled.Close, contentDescription = "Stop selecting", tint = MaterialTheme.colorScheme.surfaceContainer) }
                 }
             }
             menuFor?.let { e ->
@@ -3431,7 +3431,7 @@ fun App(
         ) {
             // Compact: icon and title on one row, then either the button or a slim progress line in its place.
             Surface(
-                shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 12.dp,
+                shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surfaceContainer, shadowElevation = 12.dp,
                 modifier = Modifier.fillMaxWidth(0.86f)
             ) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {

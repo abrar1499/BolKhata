@@ -37,7 +37,7 @@ fun AppAlert(
     shape: Shape = RoundedCornerShape(20.dp)
 ) {
     Dialog(onDismissRequest = onDismissRequest) {
-        Column(modifier.fillMaxWidth().shadow(12.dp, shape).clip(shape).background(LocalPage.current).padding(16.dp)) {
+        Column(modifier.fillMaxWidth().lift(12.dp, shape).clip(shape).background(LocalPage.current).padding(16.dp)) {
             val ink = MaterialTheme.colorScheme.onSurface
             title?.let { ProvideTextStyle(TextStyle(fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, color = ink)) { it() } }
             text?.let {
