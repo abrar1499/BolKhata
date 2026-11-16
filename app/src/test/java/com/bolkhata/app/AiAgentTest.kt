@@ -366,4 +366,22 @@ class AiAgentTest {
         org.junit.Assert.assertFalse(AiAgent.needsRate(calls("""{"type":"sale","qty":3500,"rate":12000,"per_1000":true,"item":"Pakki eent","person":"Nargis Salim Rashid"}""")))
         org.junit.Assert.assertFalse(AiAgent.needsRate(calls("""{"type":"lent","amount":500,"person":"Hamid Akram"}""")))
     }
+
+    /** The model's note about its rules before the reply is never shown, and a lesson that kept one is not used. */
+    @Test
+    fun aNoteAboutTheRulesIsLeftOut() {
+        assertEquals("Main theek hoon, shukriya. Aap kaise hain?", AiAgent.spoken("Small talk: answer briefly, no tools needed.\n\nMain theek hoon, shukriya. Aap kaise hain?"))
+        assertEquals("Islamabad is the capital.", AiAgent.spoken("Islamabad is the capital."))
+        assertFalse(AiAgent.sound("""{"calls":[],"reply":"Small talk: answer briefly, no tools needed.\n\nMain theek hoon."}"""))
+        assertTrue(AiAgent.sound("""{"calls":[],"reply":"Main theek hoon, shukriya."}"""))
+    }
+
+    /** A new worker's first work at "1100 ke hisab se", for a thing always counted per 1000: 5000 at 1100 per 1000 is 5500. */
+    @Test
+    fun aThingCountedPer1000KeepsItsRate() {
+        saved = saved + Entry("w1", Type.PURCHASE, 20_000.0, Cat.PRODUCTION, "Kachi eent", "Zubair Latif", "", now - 86_400_000L, now - 86_400_000L,
+            qty = 20_000.0, unit = "1000", rate = 1_000.0)
+        use("add_entries", """{"entries": [{"type": "work", "person": "Rashid", "item": "Kachi eent", "qty": 5000, "rate": 1100}]}""")
+        assertEquals(5_500.0, saved.first { it.person == "Rashid" }.amount, 0.01)
+    }
 }
