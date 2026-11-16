@@ -163,7 +163,7 @@ fun App(
         val boxes = store.aiBoxes
         Ai.saved = Ai.ALL.mapNotNull { p -> boxes[p.name]?.key?.trim()?.takeIf { it.isNotBlank() }?.let { it to p } }.toMap()
         Ai.chain = if (!store.aiShown) emptyList() else Ai.chainOf(Ai.ALL.mapNotNull { p -> boxes[p.name]?.takeIf { it.on && it.key.isNotBlank() }?.let { it.key.trim() to it.model } },
-            Brain.unhide(BuildConfig.CLAUDE_KEY))
+            Brain.unhide(BuildConfig.CLAUDE_KEY).takeIf { store.aiForAll }.orEmpty())
         Ai.key = Ai.chain.firstOrNull()?.first.orEmpty()
         Ai.model = Ai.chain.firstOrNull()?.second.orEmpty()
     }
@@ -300,7 +300,11 @@ fun App(
     LaunchedEffect(Unit) { (context as? android.app.Activity)?.let { Ads.start(it) } }
     // The shared brain, read each time the app opens: the app knows more without a new version.
     LaunchedEffect(Unit) {
-        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Brain.fetch() }?.let { store.brain = it }
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Brain.fetch() }?.let {
+            store.brain = it
+            // The owner's switch for the built-in AI, for everyone.
+            if (store.aiForAll != Brain.aiForAll) { store.aiForAll = Brain.aiForAll; aiChain(); groqKey = groqKeyNow(); aiTick++ }
+        }
     }
 
     // While a chat message is being handled, short messages go into the chat instead of a pop-up.
@@ -2584,11 +2588,18 @@ fun App(
                     store.aiBoxes[name]?.let { store.aiBoxes = store.aiBoxes + (name to it.copy(on = on)) }
                     aiChain(); groqKey = groqKeyNow(); aiTick++
                 },
-                // Hidden switch: shows the AI keys and turns the ones switched on back on, or hides them and turns every AI off (keys are kept).
+                // The owner's hidden switch (20 taps under the menu): the built-in AI on or off for everyone, in the shared file.
                 onSecret = {
-                    aiShown = !aiShown; store.aiShown = aiShown
-                    aiChain(); groqKey = groqKeyNow(); aiTick++
-                    driveToast(if (aiShown) "AI on" else "AI off")
+                    val on = !store.aiForAll
+                    scope.launch {
+                        val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Brain.setAiForAll(Brain.unhide(BuildConfig.BRAIN_TOKEN), on) }
+                        if (ok) {
+                            store.aiForAll = on
+                            if (on && !aiShown) { aiShown = true; store.aiShown = true }
+                            aiChain(); groqKey = groqKeyNow(); aiTick++
+                        }
+                        driveToast(if (!ok) "Could not reach GitHub. Try again." else if (on) "AI on for everyone" else "AI off for everyone")
+                    }
                 },
                 driveEmail = driveEmail, driveStatus = if (driveEmail.isBlank()) driveError else Drive.status, driveBusy = Drive.busy,
                 onSignIn = { driveSignIn() },

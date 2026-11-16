@@ -649,6 +649,10 @@ class Store(context: Context) {
     var aiShown: Boolean
         get() = prefs.getBoolean("aiShown", true)
         set(v) = prefs.edit().putBoolean("aiShown", v).apply()
+    /** The owner's switch for the built-in AI, as last read from the shared file (kept for opening without internet). */
+    var aiForAll: Boolean
+        get() = prefs.getBoolean("aiForAll", true)
+        set(v) = prefs.edit().putBoolean("aiForAll", v).apply()
     /** The tokens the AI used so far. */
     var llmIn: Long
         get() = prefs.getLong("llmIn", 0L)

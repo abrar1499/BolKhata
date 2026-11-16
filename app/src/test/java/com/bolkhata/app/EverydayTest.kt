@@ -270,6 +270,10 @@ class EverydayTest {
         "hamid ne kitna kaam kiya" to "none",
         "theek hai" to "none",
         "acha" to "none",
+        // ---- heard by the mic: how it was said, what it was like, a word twice
+        "1500 ke achcha kapde liye" to "out 1500 Kapde",
+        "juti 200 ki li" to "out 200 Shopping",
+        "bola food food 500" to "out 500 Food",
     )
 
     /** One expected entry: what kind, how much, and a word of its person, category or item. */
@@ -333,5 +337,5 @@ class EverydayTest {
     private fun plainAmount(v: Double) = if (v % 1.0 == 0.0) v.toLong().toString() else v.toString()
 
     /** How many of [cases] the app understood last time: it may only go up. */
-    private val floor = 236
+    private val floor = 239
 }
