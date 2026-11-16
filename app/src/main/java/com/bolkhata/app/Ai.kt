@@ -90,7 +90,9 @@ object Ai {
     @Volatile var sink: ((input: Int, output: Int, microDollars: Long) -> Unit)? = null
 
     fun handles(k: String) = key.isNotBlank() && k == key
-    fun modelNow(): String = model.ifBlank { provider(key)?.model.orEmpty() }
+    fun modelNow(): String = modelOf(key, model)
+    /** The model key [k] runs: [m] when one was picked, else the provider's usual one. */
+    fun modelOf(k: String, m: String): String = m.ifBlank { provider(k)?.model.orEmpty() }
     /** The key the mic's recording is sent with, or "" when the phone's own hearing is used. [k] is the chat's key. */
     fun voiceKeyFor(k: String): String = if (k.isNotBlank() && (!handles(k) || provider(k) === GROQ)) k else ""
 
@@ -155,7 +157,8 @@ object Ai {
     private val usedStored = java.util.concurrent.atomic.AtomicInteger()
 
     /** What the calls since the last ask used, as "Claude · 1.2s · 340 in · 120 out · $0.0038"; null when this key made none. */
-    fun takeUsage(ms: Long, by: String = key, m: String = modelNow()): String? {
+    fun takeUsage(ms: Long, by: String = key, picked: String = model): String? {
+        val m = modelOf(by, picked)
         val i = usedIn.getAndSet(0)
         val o = usedOut.getAndSet(0)
         val cached = usedCached.getAndSet(0)

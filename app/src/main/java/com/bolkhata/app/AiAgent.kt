@@ -204,8 +204,10 @@ object AiAgent {
           no entry. An advance or payment to a worker is "lent" with that person, and the person goes in Staff.
         - A PDF, record, statement or report to share is make_pdf with the same picking fields: the app puts every
           matching entry in it and opens the share sheet; then say shortly that it is ready.
-        - Greet only when the message itself greets. Small talk: answer briefly, no tools. You only know this app;
-          for anything else say so shortly.
+        - Greet only when the message itself greets. Small talk: answer briefly, no tools.
+        - A question about anything else in the world (facts, how-to, advice, health, religion, maths, words, news you
+          know of): answer it yourself, correctly and kindly, in at most about four short sentences, no tools. The
+          twelve-word limit is for work in the app. Never state figures from the person's books without a tool.
     """.trimIndent() + if (names.isEmpty()) "" else "\nSaved names: " + names.joinToString(", ")
 
     /**
