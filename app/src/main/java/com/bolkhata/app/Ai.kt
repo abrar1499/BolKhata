@@ -91,8 +91,8 @@ object Ai {
 
     fun handles(k: String) = key.isNotBlank() && k == key
     fun modelNow(): String = modelOf(key, model)
-    /** The model key [k] runs: [m] when one was picked, else the provider's usual one. */
-    fun modelOf(k: String, m: String): String = m.ifBlank { provider(k)?.model.orEmpty() }
+    /** The model key [k] runs: [m] when one was picked, else the provider's usual one. Claude runs only Haiku (the owner's choice: the cheapest). */
+    fun modelOf(k: String, m: String): String = provider(k).let { p -> if (p === CLAUDE && "haiku" !in m) CLAUDE.model else m.ifBlank { p?.model.orEmpty() } }
     /** The key the mic's recording is sent with, or "" when the phone's own hearing is used. [k] is the chat's key. */
     fun voiceKeyFor(k: String): String = if (k.isNotBlank() && (!handles(k) || provider(k) === GROQ)) k else ""
 
@@ -116,7 +116,7 @@ object Ai {
         if (code !in 200..299) return@runCatching emptyList<String>()
         val data = JSONObject(text).optJSONArray("data") ?: JSONArray()
         val ids = (0 until data.length()).map { data.getJSONObject(it).optString("id").removePrefix("models/") }
-            .filter { id -> id.isNotBlank() && notChat.none { it in id.lowercase() } }
+            .filter { id -> id.isNotBlank() && notChat.none { it in id.lowercase() } && (p !== CLAUDE || "haiku" in id) }
         // OpenRouter lists hundreds: its free ones first, then the well-known paid ones.
         if (p !== OPENROUTER) ids
         else (listOf(OPENROUTER.model) + ids.filter { it.endsWith(":free") } +

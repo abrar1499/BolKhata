@@ -27,7 +27,9 @@ class AiTest {
     fun aKeyWithNoModelPickedRunsItsProvidersUsualOne() {
         // The built-in key comes with no model picked: its cost is still known, so the price shows under the answer.
         assertEquals("claude-haiku-5-5", Ai.modelOf("sk-ant-app", ""))
-        assertEquals("claude-sonnet-5-5", Ai.modelOf("sk-ant-app", "claude-sonnet-5-5"))
+        // Claude runs only Haiku, whatever was picked.
+        assertEquals("claude-haiku-5-5", Ai.modelOf("sk-ant-app", "claude-sonnet-5-5"))
+        assertEquals("gpt-5-mini", Ai.modelOf("sk-proj-x", ""))
     }
 
     @Test
