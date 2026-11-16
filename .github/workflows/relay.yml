@@ -4,7 +4,7 @@ name: AI server
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, ccr-cf5f0ea4-ferqxw]
     paths: ["relay/**", ".github/workflows/relay.yml"]
 jobs:
   deploy:
