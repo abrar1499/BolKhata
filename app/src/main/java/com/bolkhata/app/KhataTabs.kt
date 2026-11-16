@@ -247,7 +247,10 @@ private fun SumCard(
     Surface(
         shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 1.dp
     ) {
-        Row(Modifier.solidCard().fillMaxWidth().height(IntrinsicSize.Min).padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+        // In the dark theme a shade deeper than the search box with a faint edge, so the two don't look alike.
+        val deep = LocalLook.current?.glow == true
+        Row(Modifier.then(if (deep) Modifier.background(Color(0xFF222A3E)).border(1.dp, Color.White.copy(alpha = 0.10f), RoundedCornerShape(14.dp)) else Modifier.solidCard())
+            .fillMaxWidth().height(IntrinsicSize.Min).padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
             listOfNotNull(a, b, c).forEachIndexed { i, (value, label, color) ->
                 if (i > 0) VerticalDivider(Modifier.fillMaxHeight(), color = MaterialTheme.colorScheme.outlineVariant)
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
