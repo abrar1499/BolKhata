@@ -1410,7 +1410,13 @@ fun App(
                             lastShown = history.lastOrNull { !it.isUser }?.text.orEmpty(),
                             recent = history.takeLast(6).joinToString("\n") { (if (it.isUser) "Person: " else "App: ") + it.text.take(200) })
                     }.getOrNull()
-                    if (mine != null) {
+                    // A question the app only half knows ("namaz ka time kya hai" read as a search that found nothing, "chai kaise
+                    // banate hain" as a greeting) goes to the AI when one can answer: it answers any question.
+                    val shown = mine?.card?.ifBlank { mine.text }.orEmpty()
+                    val weak = mine != null && mine.added.isEmpty() && (shown.startsWith("Nothing found") ||
+                        (shown in setOf("Good, you?", "Hi! How can I help?", "Great! How can I help?") && text.trim().split(Regex("""\s+""")).size > 3))
+                    val aiReady = Ai.chain.any { (k, _) -> (Ai.restUntil[Ai.provider(k)?.name.orEmpty()] ?: 0L) <= System.currentTimeMillis() }
+                    if (mine != null && !(weak && aiReady)) {
                         aiHeard[0] = null
                         if (mine.ask.isNotBlank()) {
                             val book = Sides.bookOf(mine.ask.substringBefore("|"), entries, sides)
