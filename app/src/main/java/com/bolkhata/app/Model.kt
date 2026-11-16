@@ -234,7 +234,7 @@ class Store(context: Context) {
         "driveEmail", "driveAt", "driveDirty", "deviceId", "llmKey", "llmModel", "llmIn", "llmOut", "llmMicro", "llmVoice", "llmOn", "aiShown", "aiBoxes", "brainToken")
 
     /** Also kept off Google Drive: the chat history and the background photo (a file on this phone). */
-    private val phoneOnly = setOf("chatMessages", "bgPhoto", "brain", "brainWords", "learnedSent")
+    private val phoneOnly = setOf("chatMessages", "bgPhoto", "brain", "brainWords", "learnedSent", "smartLeft")
 
     /** The Gmail whose Drive this phone syncs with; "" when not signed in. */
     var driveEmail: String
@@ -718,6 +718,10 @@ class Store(context: Context) {
             o.keys().asSequence().associateWith { o.getString(it) }
         }.getOrDefault(emptyMap())
         set(v) = prefs.edit().putString("brain", org.json.JSONObject(v).toString()).apply()
+    /** Smart (AI) answers left on the app's own key before a short reward video is offered (see Ads.showReward). */
+    var smartLeft: Int
+        get() = prefs.getInt("smartLeft", 10)
+        set(v) = prefs.edit().putInt("smartLeft", v).apply()
     /** The shared brain's words (see [Lexicon]), as last read. */
     var brainWords: String
         get() = prefs.getString("brainWords", "").orEmpty()

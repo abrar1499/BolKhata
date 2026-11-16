@@ -170,6 +170,10 @@ fun App(
     remember {
         aiChain(); Ai.sink = { i, o, micro -> store.llmIn += i; store.llmOut += o; store.llmMicro += micro }
     }
+    /** True while the chat runs on the app's own built-in key (no key of the person's own), the one the reward video pays for. */
+    fun onOwnKey() = Ai.chain.isNotEmpty() && Ai.chain.all { it.first == Brain.unhide(BuildConfig.CLAUDE_KEY) }
+    /** The message waiting behind the reward card, answered once the video is watched (or by the app itself on "Not now"). */
+    val rewardFor = remember { arrayOfNulls<String>(1) }
     fun groqKeyNow() = Ai.key.ifBlank { if (!Groq.ENABLED || !store.aiShown) "" else store.groqKey.ifBlank { if (Groq.sharedReady && !store.groqOff) Groq.SHARED else "" } }
     var groqKey by remember { mutableStateOf(groqKeyNow()) }
     var aiTick by remember { mutableIntStateOf(0) }
@@ -1188,9 +1192,10 @@ fun App(
     /** Adds a message to the chat and keeps it on the phone. */
     fun postChat(text: String, isUser: Boolean, entryIds: List<String> = emptyList(), attachment: String = "", meta: String = "", listIds: List<String> = emptyList()) {
         // The answer to a translated message carries what it was read as, in its small line (option cards have none).
-        val note = if (isUser || meta.startsWith("ask=")) "" else sayNote[0].also { sayNote[0] = "" }
+        val card = meta.startsWith("ask=") || meta.startsWith("reward")
+        val note = if (isUser || card) "" else sayNote[0].also { sayNote[0] = "" }
         // Every answer names who gave it on its small line (the APK shows it): the AI's carries its own; the rest are the app's.
-        val named = if (isUser || meta.startsWith("ask=") || "usage=" in meta) meta else meta + (if (meta.isBlank()) "" else "; ") + "usage=App engine"
+        val named = if (isUser || card || "usage=" in meta) meta else meta + (if (meta.isBlank()) "" else "; ") + "usage=App engine"
         val noted = if (note.isBlank()) named else named.replace(Regex("""usage=([^;]+)""")) { "usage=" + it.groupValues[1] + " · " + note }
         val message = ChatMessage(
             listIds = listIds,
@@ -1330,7 +1335,7 @@ fun App(
      * [said]: the person's own words when [raw] is their translation (see chatSay); [quiet]: their words are in the
      * chat already. [spelled]: this is the message read again with its misspelt words put right (see Spell).
      */
-    fun chatInput(raw: String, retry: Boolean = false, said: String = "", quiet: Boolean = false, spelled: Boolean = false) {
+    fun chatInput(raw: String, retry: Boolean = false, said: String = "", quiet: Boolean = false, spelled: Boolean = false, noAi: Boolean = false) {
         if (chatMessages.isEmpty()) lastGroqQuery = ""
         val text = raw.trim()
         if (text.isEmpty() || chatLoading) return
@@ -1425,7 +1430,7 @@ fun App(
                     val shown = mine?.card?.ifBlank { mine.text }.orEmpty()
                     val weak = mine != null && mine.added.isEmpty() && (shown.startsWith("Nothing found") ||
                         (shown in setOf("Good, you?", "Hi! How can I help?", "Great! How can I help?") && text.trim().split(Regex("""\s+""")).size > 3))
-                    val aiReady = Ai.chain.any { (k, _) -> (Ai.restUntil[Ai.provider(k)?.name.orEmpty()] ?: 0L) <= System.currentTimeMillis() }
+                    val aiReady = !noAi && Ai.chain.any { (k, _) -> (Ai.restUntil[Ai.provider(k)?.name.orEmpty()] ?: 0L) <= System.currentTimeMillis() }
                     if (mine != null && !(weak && aiReady)) {
                         aiHeard[0] = null
                         if (mine.ask.isNotBlank()) {
@@ -1446,7 +1451,17 @@ fun App(
                 // Test feature: with an AI key saved, the AI does the whole job itself through tools (see AiAgent).
                 var aiDown = false
                 var aiWhy = ""
-                if (Ai.handles(groqKey)) {
+                // The app's own key: after 10 smart answers a short reward video is offered for 10 more (the message waits for it);
+                // after 5 videos in a day the app answers by itself until the next day.
+                val outOfSmart = Ai.handles(groqKey) && !noAi && onOwnKey() && store.smartLeft <= 0
+                if (outOfSmart && Ads.rewardsLeft(context)) {
+                    rewardFor[0] = text
+                    Ads.loadReward(context)
+                    lastSpeech = "Watch a short video to keep getting smart answers."
+                    postChat("", isUser = false, meta = "reward")
+                    return@launch
+                }
+                if (Ai.handles(groqKey) && !noAi && !outOfSmart) {
                     loadingLabel = "✦ Thinking…"
                     val started = System.currentTimeMillis()
                     val spoken = aiHeard[0] != null
@@ -1506,6 +1521,7 @@ fun App(
                     }.orEmpty()
                     // Every AI resting after an error: nobody was asked, and the APK's small line says why.
                     if (jobs.isEmpty()) aiWhy = Ai.failed.entries.firstOrNull()?.let { (n, e) -> "$n resting after $e" } ?: "resting"
+                    if (answer != null && onOwnKey()) store.smartLeft = (store.smartLeft - 1).also { if (it <= 2) Ads.loadReward(context) }
                     // No key answered (no credit, a limit reached, no internet): the app's own engine answers below.
                     if (answer == null) aiDown = true else {
                     // The AI could not tell what happened with a person and a number: the option card asks.
@@ -2884,6 +2900,25 @@ fun App(
                         onMenu = { openMenu() },
                         business = businessName,
                         onSend = { chatInput(it) },
+                        onWatch = { id ->
+                            val waiting = rewardFor[0]
+                            fun go(watched: Boolean) {
+                                if (!watched) return
+                                store.smartLeft = 10
+                                rewardFor[0] = null
+                                chatMessages = chatMessages.map { if (it.id == id) it.copy(text = "✓ Smart answers are on again", meta = "reward-done") else it }
+                                store.saveChatMessages(chatMessages)
+                                waiting?.let { chatInput(it, quiet = true) }
+                            }
+                            (context as? android.app.Activity)?.let { Ads.showReward(it) { watched -> go(watched) } } ?: go(true)
+                        },
+                        onLater = { id ->
+                            val waiting = rewardFor[0]
+                            rewardFor[0] = null
+                            chatMessages = chatMessages.filter { it.id != id }
+                            store.saveChatMessages(chatMessages)
+                            waiting?.let { chatInput(it, quiet = true, noAi = true) }
+                        },
                         onClear = {
                             chatMessages = emptyList()
                             store.saveChatMessages(emptyList())

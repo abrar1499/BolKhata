@@ -20,17 +20,28 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
+import com.google.android.gms.ads.AdError
 import com.google.android.gms.ads.AdListener
 import com.google.android.gms.ads.AdLoader
 import com.google.android.gms.ads.AdRequest
+import com.google.android.gms.ads.FullScreenContentCallback
+import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.MobileAds
 import com.google.android.gms.ads.VideoOptions
 import com.google.android.gms.ads.nativead.MediaView
 import com.google.android.gms.ads.nativead.NativeAd
 import com.google.android.gms.ads.nativead.NativeAdOptions
 import com.google.android.gms.ads.nativead.NativeAdView
+import com.google.android.gms.ads.rewarded.RewardedAd
+import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
 import com.google.android.ump.ConsentRequestParameters
 import com.google.android.ump.UserMessagingPlatform
+
+/** Most new ads one phone is shown in a day (chat, cashbook, lists); after that their places stay empty until the next day. */
+internal const val AD_LOADS_A_DAY = 20
+
+/** Most reward videos one phone is offered in a day; after that the app answers by itself until the next day. */
+internal const val REWARDS_A_DAY = 5
 
 /** Most taps on ads one phone may make in a day; after that its ads rest until the next day. */
 internal const val AD_TAPS_A_DAY = 3
@@ -48,6 +59,36 @@ object Ads {
     val nativeUnit = if (play) "ca-app-pub-2130743939844876/8559275509" else "ca-app-pub-3940256099942544/2247696110"
     /** Pictures only (no video), for the slim row between accounts: a video would need the tall card there. */
     val smallUnit = if (play) "ca-app-pub-2130743939844876/4019539897" else "ca-app-pub-3940256099942544/2247696110"
+
+    /** The short video watched for more smart answers (AdMob "Chat AI answers", reward 10 Smart answers). */
+    val rewardUnit = if (play) "ca-app-pub-2130743939844876/5436011037" else "ca-app-pub-3940256099942544/5224354917"
+    private var reward: RewardedAd? = null
+    private var rewardLoading = false
+
+    /** Fetches the next reward video ahead of time, so it starts at once when asked for. */
+    fun loadReward(context: Context) {
+        if (!ready || reward != null || rewardLoading) return
+        rewardLoading = true
+        RewardedAd.load(context, rewardUnit, AdRequest.Builder().build(), object : RewardedAdLoadCallback() {
+            override fun onAdLoaded(ad: RewardedAd) { reward = ad; rewardLoading = false }
+            override fun onAdFailedToLoad(error: LoadAdError) { rewardLoading = false }
+        })
+    }
+
+    /**
+     * Shows the reward video; [done] gets whether it was watched to the end. With no video to show (none came, or ads
+     * are not allowed here) it is true at once: the person is never stopped by a missing ad.
+     */
+    fun showReward(activity: Activity, done: (Boolean) -> Unit) {
+        val ad = reward ?: run { loadReward(activity); done(true); return }
+        reward = null
+        var earned = false
+        ad.fullScreenContentCallback = object : FullScreenContentCallback() {
+            override fun onAdDismissedFullScreenContent() { done(earned); loadReward(activity) }
+            override fun onAdFailedToShowFullScreenContent(error: AdError) { done(true); loadReward(activity) }
+        }
+        ad.show(activity) { earned = true; count(activity, "rewards") }
+    }
 
     /** Loaded native ads by their place (e.g. "chat-12"), so an ad stays the same while it is on screen and is not fetched again. */
     private val loaded = HashMap<String, NativeAd>()
@@ -68,6 +109,13 @@ object Ads {
     private fun today() = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(java.util.Date())
     private fun saved(c: Context) = c.getSharedPreferences("ads", Context.MODE_PRIVATE)
     private fun tapsToday(c: Context) = saved(c).let { adTapsOn(today(), it.getString("day", "").orEmpty(), it.getInt("taps", 0)) }
+
+    /** How many of [what] ("loads", "rewards") came today, from what was saved (a new day starts at none). */
+    private fun today(c: Context, what: String) = saved(c).let { adTapsOn(today(), it.getString("$what-day", "").orEmpty(), it.getInt(what, 0)) }
+    private fun count(c: Context, what: String) = saved(c.applicationContext).edit().putString("$what-day", today()).putInt(what, today(c, what) + 1).apply()
+
+    /** Whether a reward video may still be offered today (at most [REWARDS_A_DAY]). */
+    fun rewardsLeft(c: Context) = today(c, "rewards") < REWARDS_A_DAY
 
     /** Counts each tap on the ad it is given to. */
     fun taps(context: Context): AdListener = object : AdListener() {
@@ -92,9 +140,9 @@ object Ads {
     /** The ad for [place], fetched once; [onReady] gets it when it arrives. [small]: from the pictures-only unit. */
     fun native(context: Context, place: String, small: Boolean = false, onReady: (NativeAd) -> Unit) {
         loaded[place]?.let { onReady(it); return }
-        if (!ready || resting) return
+        if (!ready || resting || today(context, "loads") >= AD_LOADS_A_DAY) return
         AdLoader.Builder(context, if (small) smallUnit else nativeUnit)
-            .forNativeAd { ad -> loaded[place] = ad; onReady(ad) }
+            .forNativeAd { ad -> loaded[place] = ad; count(context, "loads"); onReady(ad) }
             .withAdListener(taps(context))
             .withNativeAdOptions(NativeAdOptions.Builder().setAdChoicesPlacement(NativeAdOptions.ADCHOICES_TOP_RIGHT)
                 .setVideoOptions(VideoOptions.Builder().setStartMuted(true).build()).build())
