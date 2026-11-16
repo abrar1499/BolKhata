@@ -84,8 +84,8 @@ object Premium {
 
     private fun prices(billing: BillingClient) {
         val product = QueryProductDetailsParams.Product.newBuilder().setProductId(PRODUCT).setProductType(BillingClient.ProductType.SUBS).build()
-        billing.queryProductDetailsAsync(QueryProductDetailsParams.newBuilder().setProductList(listOf(product)).build()) { r, list ->
-            val d = list.firstOrNull()?.takeIf { r.responseCode == BillingClient.BillingResponseCode.OK } ?: return@queryProductDetailsAsync
+        billing.queryProductDetailsAsync(QueryProductDetailsParams.newBuilder().setProductList(listOf(product)).build()) { r, found ->
+            val d = found.productDetailsList.firstOrNull()?.takeIf { r.responseCode == BillingClient.BillingResponseCode.OK } ?: return@queryProductDetailsAsync
             details = d
             plan(d, "monthly")?.let { monthly = it.formattedPrice }
             plan(d, "yearly")?.let { y ->
