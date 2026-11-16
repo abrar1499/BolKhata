@@ -64,6 +64,8 @@ fun ChatScreen(
     /** "Watch ad" and "Not now" on the reward card (by its message id). */
     onWatch: (id: String) -> Unit = {},
     onLater: (id: String) -> Unit = {},
+    /** "Go Premium" under the reward card. */
+    onPremium: () -> Unit = {},
     onUndo: (List<String>) -> Unit,
     onEditEntry: (Entry) -> Unit,
     /** An option card was answered: the entry to save for that message, or null when it was closed. */
@@ -171,7 +173,7 @@ fun ChatScreen(
                     // Level with the answer card's top, as the mock.
                     GlassLogo(22.dp, Modifier.padding(top = 2.dp))
                     Column(Modifier.weight(1f)) {
-                        if (message.meta == "reward") RewardCard({ onWatch(message.id) }, { onLater(message.id) })
+                        if (message.meta == "reward") RewardCard({ onWatch(message.id) }, { onLater(message.id) }, onPremium)
                         else if (message.entryIds.isEmpty() && message.meta.startsWith("ask=")) OptionCard(message, byId.values) { onAsked(message.id, it) }
                         else if (message.entryIds.isNotEmpty()) SavedCard(message, byId, currency, onUndo, onEditEntry)
                         // The AI's own sentences ("plain") are never read as a report.
@@ -426,10 +428,10 @@ private fun AnswerActions(rating: Boolean?, onRate: (good: Boolean) -> Unit) {
 
 /**
  * After 10 smart answers on the app's own key, as the mock: a card from white to a light blue, a white play circle
- * with a blue edge, two lines, a blue "Watch ad" button and a quiet "Not now". No shadows.
+ * with a blue edge, two lines, a blue "Watch ad" button, a quiet "Not now" and "Go Premium". No shadows.
  */
 @Composable
-private fun RewardCard(onWatch: () -> Unit, onLater: () -> Unit) {
+private fun RewardCard(onWatch: () -> Unit, onLater: () -> Unit, onPremium: () -> Unit) {
     val blue = Color(0xFF2F6BE0)
     Column(Modifier.fillMaxWidth().padding(start = 8.dp, top = 2.dp, end = 2.dp).clip(RoundedCornerShape(18.dp))
         .background(Brush.linearGradient(listOf(Color.White, Color(0xFFE3ECFB)))).padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -450,6 +452,8 @@ private fun RewardCard(onWatch: () -> Unit, onLater: () -> Unit) {
         }
         Text("Not now", fontSize = 12.sp, color = Color(0xFF8A8580), modifier = Modifier.align(Alignment.CenterHorizontally)
             .clip(RoundedCornerShape(8.dp)).clickable(onClick = onLater).padding(horizontal = 8.dp, vertical = 2.dp))
+        Text("Go Premium: no ads, no videos", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = blue, modifier = Modifier.align(Alignment.CenterHorizontally)
+            .clip(RoundedCornerShape(8.dp)).clickable(onClick = onPremium).padding(horizontal = 8.dp, vertical = 2.dp))
     }
 }
 

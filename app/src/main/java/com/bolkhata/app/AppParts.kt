@@ -221,7 +221,9 @@ internal fun SideMenu(
     moreLang: String = "",
     onSignIn: () -> Unit = {}, onSyncNow: () -> Unit = {}, onSignOut: () -> Unit = {},
     /** 20 quick taps on the menu's empty space. */
-    onSecret: () -> Unit = {}
+    onSecret: () -> Unit = {},
+    /** Premium is on, and its row opens the Premium sheet. */
+    premium: Boolean = false, onPremium: () -> Unit = {}
 ) {
     // Taps on the empty space and when the last one was; a pause of over a second starts the count again.
     val secret = remember { longArrayOf(0, 0) }
@@ -309,6 +311,8 @@ internal fun SideMenu(
                     MenuValue("›")
                 }
             }
+            Spacer(Modifier.height(8.dp))
+            MenuCard { MenuRow(onClick = onPremium, last = true) { MenuLabel("⭐", "Premium"); MenuValue(if (premium) "Active ✓" else "No ads ›") } }
             Spacer(Modifier.height(8.dp))
             MenuCard {
                 Box {

@@ -301,7 +301,10 @@ fun App(
     var checking by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { newVersion = Updater.check() }
-    LaunchedEffect(Unit) { (context as? android.app.Activity)?.let { Ads.start(it) } }
+    LaunchedEffect(Unit) { (context as? android.app.Activity)?.let { Ads.start(it); Premium.start(it) } }
+    // The Premium sheet (side menu ⭐ Premium, or "Go Premium" under the reward card).
+    var premiumOpen by remember { mutableStateOf(false) }
+    if (premiumOpen) PremiumSheet { premiumOpen = false }
     // The shared brain, read each time the app opens: the app knows more without a new version.
     LaunchedEffect(Unit) {
         // The brain's words as last read, at once (also without internet); the fresh ones replace them below.
@@ -1453,7 +1456,7 @@ fun App(
                 var aiWhy = ""
                 // The app's own key: after 10 smart answers a short reward video is offered for 10 more (the message waits for it);
                 // after 5 videos in a day the app answers by itself until the next day.
-                val outOfSmart = Ai.handles(groqKey) && !noAi && onOwnKey() && store.smartLeft <= 0
+                val outOfSmart = Ai.handles(groqKey) && !noAi && onOwnKey() && !Premium.active && store.smartLeft <= 0
                 if (outOfSmart && Ads.rewardsLeft(context)) {
                     rewardFor[0] = text
                     Ads.loadReward(context)
@@ -1521,7 +1524,7 @@ fun App(
                     }.orEmpty()
                     // Every AI resting after an error: nobody was asked, and the APK's small line says why.
                     if (jobs.isEmpty()) aiWhy = Ai.failed.entries.firstOrNull()?.let { (n, e) -> "$n resting after $e" } ?: "resting"
-                    if (answer != null && onOwnKey()) store.smartLeft = (store.smartLeft - 1).also { if (it <= 2) Ads.loadReward(context) }
+                    if (answer != null && onOwnKey() && !Premium.active) store.smartLeft = (store.smartLeft - 1).also { if (it <= 2) Ads.loadReward(context) }
                     // No key answered (no credit, a limit reached, no internet): the app's own engine answers below.
                     if (answer == null) aiDown = true else {
                     // The AI could not tell what happened with a person and a number: the option card asks.
@@ -2681,6 +2684,7 @@ fun App(
                     aiChain(); groqKey = groqKeyNow(); aiTick++
                 },
                 // The owner's hidden switch (20 taps under the menu): the built-in AI on or off for everyone, in the shared file.
+                premium = Premium.active, onPremium = { close(); premiumOpen = true },
                 onSecret = {
                     val on = !store.aiForAll
                     scope.launch {
@@ -2912,6 +2916,7 @@ fun App(
                             }
                             (context as? android.app.Activity)?.let { Ads.showReward(it) { watched -> go(watched) } } ?: go(true)
                         },
+                        onPremium = { premiumOpen = true },
                         onLater = { id ->
                             val waiting = rewardFor[0]
                             rewardFor[0] = null
