@@ -392,30 +392,21 @@ private fun UserBubble(text: String, attachment: String = "") {
     }
 }
 
-/** A thin line mark on a 24 grid, stroke 2, rounded (green or red once rated): ✓ for a right answer, ✗ for a wrong one. */
-private fun thinMark(name: String, path: String) = androidx.compose.ui.graphics.vector.ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f).addPath(
-    androidx.compose.ui.graphics.vector.addPathNodes(path),
-    stroke = androidx.compose.ui.graphics.SolidColor(Color.Black), strokeLineWidth = 2.5f,
-    strokeLineCap = androidx.compose.ui.graphics.StrokeCap.Round, strokeLineJoin = androidx.compose.ui.graphics.StrokeJoin.Round
-).build()
-
-private val ThinTick by lazy { thinMark("tick", "M5 12.5l4.5 4.5L19 7.5") }
-private val ThinCross by lazy { thinMark("cross", "M6.5 6.5l11 11M17.5 6.5l-11 11") }
-
 /**
- * ✓ and ✗ under each answer: a muted grey pill (quieter than the answer's white card), padding 3 × 9, 12 thin line marks
- * 7 apart with a hairline between. One tap saves the rating; tapping the other changes it.
+ * "Right" and "Wrong" under each answer, in very small words: a muted grey pill (quieter than the answer's white card),
+ * padding 3 × 9, the two words 7 apart with a hairline between; the picked one turns green or red. One tap saves the
+ * rating; tapping the other changes it.
  */
 @Composable
 private fun AnswerActions(rating: Boolean?, onRate: (good: Boolean) -> Unit) {
     val tint = Color(0xFF8F8982)
     Row(Modifier.padding(start = 10.dp, top = 3.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFFDEDAD4))
         .padding(horizontal = 9.dp, vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(ThinTick, contentDescription = if (rating == true) "Marked right" else "Right answer",
-            tint = if (rating == true) GreenDeep else tint, modifier = Modifier.size(12.dp).clickable(enabled = rating != true) { onRate(true) })
-        Box(Modifier.width(1.dp).height(10.dp).background(Color(0xFFCBC6BF)))
-        Icon(ThinCross, contentDescription = if (rating == false) "Marked wrong" else "Wrong answer",
-            tint = if (rating == false) MaterialTheme.colorScheme.error else tint, modifier = Modifier.size(12.dp).clickable(enabled = rating != false) { onRate(false) })
+        Text("Right", fontSize = 9.sp, lineHeight = 10.sp, fontWeight = if (rating == true) FontWeight.SemiBold else FontWeight.Normal,
+            color = if (rating == true) GreenDeep else tint, modifier = Modifier.clickable(enabled = rating != true) { onRate(true) })
+        Box(Modifier.width(1.dp).height(9.dp).background(Color(0xFFCBC6BF)))
+        Text("Wrong", fontSize = 9.sp, lineHeight = 10.sp, fontWeight = if (rating == false) FontWeight.SemiBold else FontWeight.Normal,
+            color = if (rating == false) MaterialTheme.colorScheme.error else tint, modifier = Modifier.clickable(enabled = rating != false) { onRate(false) })
     }
 }
 
