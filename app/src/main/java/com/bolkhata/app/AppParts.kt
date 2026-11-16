@@ -11,6 +11,7 @@ import androidx.compose.foundation.background
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.border
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.combinedClickable
@@ -58,9 +59,11 @@ import androidx.compose.ui.unit.sp
  * The message bar above the tabs on Chat (as in the mock-up): one 38-high rounded field on the page, the text and a
  * white round mic that sends what is typed (or starts speaking when empty) and shows a spinner while the app is answering.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun InputBar(
     onSend: (String) -> Unit,
+    /** The app's own listening: a long press on the mic (a tap opens the phone's keyboard, whose own mic writes best). */
     onMic: () -> Unit,
     placeholder: String = "Type here…",
     busy: Boolean = false,
@@ -69,10 +72,15 @@ internal fun InputBar(
     navPad: Boolean = true
 ) {
     var text by rememberSaveable { mutableStateOf("") }
+    // A tap on the mic opens the keyboard on the bar: its own mic (Gboard) hears best and puts it right as it goes.
+    val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    var viaMic by remember { mutableStateOf(false) }
     fun send() {
         val t = text.trim()
         if (t.isNotEmpty() && !busy) {
             text = ""
+            viaMic = false
             onSend(t)
         }
     }
@@ -99,7 +107,7 @@ internal fun InputBar(
                     ) else BasicTextField(
                         value = text,
                         onValueChange = { text = it },
-                        modifier = Modifier.weight(1f).padding(horizontal = 4.dp, vertical = 7.dp),
+                        modifier = Modifier.weight(1f).padding(horizontal = 4.dp, vertical = 7.dp).focusRequester(focus),
                         maxLines = 4,
                         textStyle = LocalTextStyle.current.copy(fontSize = 13.sp, color = ink),
                         cursorBrush = SolidColor(GreenDeep),
@@ -107,7 +115,7 @@ internal fun InputBar(
                         keyboardActions = KeyboardActions(onSend = { send() }),
                         decorationBox = { field ->
                             Box(contentAlignment = Alignment.CenterStart) {
-                                if (text.isEmpty()) Text(placeholder, fontSize = 13.sp, color = hint, maxLines = 1)
+                                if (text.isEmpty()) Text(if (viaMic) "Tap 🎤 on your keyboard and speak" else placeholder, fontSize = 13.sp, color = hint, maxLines = 1)
                                 field()
                             }
                         }
@@ -123,11 +131,11 @@ internal fun InputBar(
                             .shadow(1.dp, CircleShape)
                             .clip(CircleShape)
                             .background(if (talking && !voice!!.live) RedSpend else MaterialTheme.colorScheme.surface)
-                            .clickable(enabled = talking || !busy) {
+                            .combinedClickable(enabled = talking || !busy, onLongClick = { if (!talking && text.isBlank()) onMic() }) {
                                 when {
                                     talking -> voice!!.toggle()
                                     text.isNotBlank() -> send()
-                                    else -> onMic()
+                                    else -> { viaMic = true; focus.requestFocus(); keyboard?.show() }
                                 }
                             },
                         contentAlignment = Alignment.Center
