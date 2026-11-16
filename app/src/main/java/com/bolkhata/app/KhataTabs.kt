@@ -658,11 +658,11 @@ private fun adUnder(state: LazyListState, low: Dp, high: Dp): Boolean {
     return under
 }
 
-/** Round ↑ button that appears once the list is scrolled down ([above] lifts it over the Cashbook's +). It steps aside while an ad is under it. */
+/** Round ↑ button that appears once the list is scrolled down (over the Cashbook's +). It steps aside while an ad is under it. */
 @Composable
-private fun BoxScope.UpButton(state: LazyListState, above: Dp = 0.dp) {
+private fun BoxScope.UpButton(state: LazyListState) {
     val scope = rememberCoroutineScope()
-    val bottom = LocalBarSpace.current + 60.dp + above
+    val bottom = LocalBarSpace.current + 60.dp
     val down by remember { derivedStateOf { state.firstVisibleItemIndex > 4 } }
     // The button's lower and upper edge above the list's end, with a little room around it.
     val clear = !adUnder(state, bottom - 6.dp, bottom + 46.dp)
@@ -742,7 +742,7 @@ fun CashBookScreen(
                 cards = true
             )
         }
-        UpButton(state, above = 10.dp)
+        UpButton(state)
         AddRound(state) { picking = true }
     }
     if (picking) EntryPicker(entries, setup, onSetup, onDismiss = { picking = false }) { t ->
@@ -759,15 +759,23 @@ fun CashBookScreen(
 
 // ---------------------------------------------------------------- + on the Cashbook
 
-/** The round + on the Cashbook, white like the mic. Like ↑, it steps aside while an ad is under it. */
+/** The round + on the Cashbook: small, in the header's red with a white +. Like ↑, it steps aside while an ad is under it. */
 @Composable
 private fun BoxScope.AddRound(state: LazyListState, onClick: () -> Unit) {
     val bottom = LocalBarSpace.current + 8.dp
-    if (!adUnder(state, bottom - 6.dp, bottom + 58.dp)) Box(
-        Modifier.align(Alignment.BottomEnd).padding(end = 10.dp, bottom = bottom).size(52.dp)
-            .shadow(4.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.surface).clickable { onClick() },
-        contentAlignment = Alignment.Center
-    ) { Text("+", fontSize = 26.sp, fontWeight = FontWeight.Light, color = MaterialTheme.colorScheme.onSurface) }
+    val red = Color(0xFFE3342F)
+    if (!adUnder(state, bottom - 6.dp, bottom + 50.dp)) Box(
+        Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = bottom).size(44.dp)
+            .shadow(6.dp, CircleShape, ambientColor = red, spotColor = red).clip(CircleShape)
+            .background(Brush.linearGradient(listOf(Color(0xFFFF7A45), red, Color(0xFFB91C3C))))
+            .clickable { onClick() }
+            .drawBehind {
+                val arm = 7.dp.toPx()
+                val width = 2.2.dp.toPx()
+                drawLine(Color.White, center.copy(y = center.y - arm), center.copy(y = center.y + arm), width, androidx.compose.ui.graphics.StrokeCap.Round)
+                drawLine(Color.White, center.copy(x = center.x - arm), center.copy(x = center.x + arm), width, androidx.compose.ui.graphics.StrokeCap.Round)
+            }
+    )
 }
 
 /** A person or thing an entry can go to: its account, picture, where it sits, its balance (people), and when last used. */

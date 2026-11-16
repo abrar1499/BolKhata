@@ -397,30 +397,30 @@ private fun UserBubble(text: String, attachment: String = "") {
     }
 }
 
-/** The mock's thin thumb: a line drawing on a 24 grid, stroke 2, rounded (filled in green or red once rated). */
-private val ThinThumb: androidx.compose.ui.graphics.vector.ImageVector by lazy {
-    androidx.compose.ui.graphics.vector.ImageVector.Builder("thumb", 24.dp, 24.dp, 24f, 24f).addPath(
-        androidx.compose.ui.graphics.vector.addPathNodes("M7 11v9H4v-9h3zm0 0 4-7a2 2 0 0 1 3 2l-1 4h5a2 2 0 0 1 2 2l-2 7a2 2 0 0 1-2 1H7"),
-        stroke = androidx.compose.ui.graphics.SolidColor(Color.Black), strokeLineWidth = 2f,
-        strokeLineCap = androidx.compose.ui.graphics.StrokeCap.Round, strokeLineJoin = androidx.compose.ui.graphics.StrokeJoin.Round
-    ).build()
-}
+/** A thin line mark on a 24 grid, stroke 2, rounded (green or red once rated): ✓ for a right answer, ✗ for a wrong one. */
+private fun thinMark(name: String, path: String) = androidx.compose.ui.graphics.vector.ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f).addPath(
+    androidx.compose.ui.graphics.vector.addPathNodes(path),
+    stroke = androidx.compose.ui.graphics.SolidColor(Color.Black), strokeLineWidth = 2.5f,
+    strokeLineCap = androidx.compose.ui.graphics.StrokeCap.Round, strokeLineJoin = androidx.compose.ui.graphics.StrokeJoin.Round
+).build()
+
+private val ThinTick by lazy { thinMark("tick", "M5 12.5l4.5 4.5L19 7.5") }
+private val ThinCross by lazy { thinMark("cross", "M6.5 6.5l11 11M17.5 6.5l-11 11") }
 
 /**
- * 👍 and 👎 under each answer, as the mock: a muted grey pill (quieter than the answer's white card), padding 3 × 9,
- * 12 thin line thumbs 7 apart with a hairline between. One tap saves the rating; tapping the other changes it.
+ * ✓ and ✗ under each answer: a muted grey pill (quieter than the answer's white card), padding 3 × 9, 12 thin line marks
+ * 7 apart with a hairline between. One tap saves the rating; tapping the other changes it.
  */
 @Composable
 private fun AnswerActions(rating: Boolean?, onRate: (good: Boolean) -> Unit) {
     val tint = Color(0xFF8F8982)
     Row(Modifier.padding(start = 10.dp, top = 3.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFFDEDAD4))
         .padding(horizontal = 9.dp, vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(ThinThumb, contentDescription = if (rating == true) "Marked good" else "Good answer",
+        Icon(ThinTick, contentDescription = if (rating == true) "Marked right" else "Right answer",
             tint = if (rating == true) GreenDeep else tint, modifier = Modifier.size(12.dp).clickable(enabled = rating != true) { onRate(true) })
         Box(Modifier.width(1.dp).height(10.dp).background(Color(0xFFCBC6BF)))
-        Icon(ThinThumb, contentDescription = if (rating == false) "Marked wrong" else "Wrong answer",
-            tint = if (rating == false) MaterialTheme.colorScheme.error else tint,
-            modifier = Modifier.size(12.dp).graphicsLayer { scaleY = -1f }.clickable(enabled = rating != false) { onRate(false) })
+        Icon(ThinCross, contentDescription = if (rating == false) "Marked wrong" else "Wrong answer",
+            tint = if (rating == false) MaterialTheme.colorScheme.error else tint, modifier = Modifier.size(12.dp).clickable(enabled = rating != false) { onRate(false) })
     }
 }
 
