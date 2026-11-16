@@ -107,7 +107,8 @@ def translate(client, lang, todo):
             # The values must all still be there, or the line stays in English.
             if sorted(re.findall(r"\{\d\}", en)) != sorted(re.findall(r"\{\d\}", t)):
                 continue
-            out[en] = t
+            # A piece of a longer line keeps its spaces at the ends.
+            out[en] = re.match(r"\s*", en).group() + t + re.search(r"\s*$", en).group()
     return out, used
 
 
