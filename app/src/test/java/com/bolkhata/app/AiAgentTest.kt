@@ -387,4 +387,13 @@ class AiAgentTest {
         use("add_entries", """{"entries": [{"type": "work", "person": "Rashid", "item": "Kachi eent", "qty": 5000, "rate": 1100}]}""")
         assertEquals(5_500.0, saved.first { it.person == "Rashid" }.amount, 0.01)
     }
+
+    /** A plain answer of any length is learnt (a wrong one is marked ✗); talk about today, the time or the news is not. */
+    @Test
+    fun aLongAnswerIsLearntButNotOneAboutToday() {
+        val names = listOf("Hamid Akram")
+        val long = "Main samajh sakta hoon, udaas hona mushkil hota hai. Aap kuch baat karna chahein to main sun raha hoon, aaram se bataiye."
+        assertTrue(AiAgent.learn(emptyList(), "men udas hun", names, emptyMap(), long).lesson.contains("udaas"))
+        assertEquals("", AiAgent.learn(emptyList(), "aaj kya din hai", names, emptyMap(), "Aaj Monday hai.").lesson)
+    }
 }

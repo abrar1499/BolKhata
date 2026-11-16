@@ -215,6 +215,7 @@ object AiAgent {
           matching entry in it and opens the share sheet; then say shortly that it is ready.
         - Changing the app itself (clear the chat, currency, language, header colour, background, open a tab, open or add a
           business, a backup) is app_setting; then say in a few words what changed.
+        - After your own question, a short yes ("ji", "jee", "g", "gi", "haan", "ok", "theek hai", "kar do") is yes: do it.
         - Greet only when the message itself greets. To small talk ("kaise ho", "hi") reply in one short friendly line, with no tools.
         - Write only the words the person reads: never a note about these rules, the kind or language of the message, what
           their words mean ('"main udas hun" means "I am sad"'), or what you will do.
@@ -454,14 +455,19 @@ object AiAgent {
         for ((n, i) in done) out.put(JSONObject().put("name", n).put("input", mark(i, "", nums, people, usedP) ?: return null))
         // A question back after work was the AI unsure (which one? how much?); a question in plain chat ("kya chahiye?") is just talk.
         if (usedP.size != people.size || ('?' in reply && (done.isNotEmpty() || people.isNotEmpty()))) return null
-        // A sentence with figures of its own was worked out for that day's books: only the card is done again.
-        var text = if (reply.any { it.isDigit() } || reply.split(Regex("""\s+""")).size > 15) "" else reply.trim()
+        // A sentence with figures of its own was worked out for that day's books: only the card is done again. A reply of
+        // any length is learnt (the owner marks a wrong one ✗); only talk about today, the time or the news is not, as it changes.
+        if (calls.isEmpty() && timely.containsMatchIn(said)) return null
+        var text = if (reply.any { it.isDigit() }) "" else reply.trim()
         people.forEachIndexed { at, p -> text = text.replace(p, "@$at", ignoreCase = true) }
         if (done.isEmpty() && (text.isBlank() || nums.isNotEmpty())) return null
         // "Entry deleted" after only a look: a reply saying a change the tools did not make is never done again.
         if (claim.containsMatchIn(text)) return null
         return JSONObject().put("calls", out).put("reply", text).toString()
     }
+
+    /** Words of a question whose answer changes from day to day ("aaj kya din hai", "mausam kaisa hai"). */
+    private val timely = Regex("""(?i)\b(aaj|aj|today|abhi|now|date|tareekh|tarikh|time|waqt|baje|mausam|weather|news|khabar|kal|tomorrow|yesterday|parso)\b""")
 
     /** A reply that says entries were changed, deleted or put back: no tool a lesson keeps does that. */
     private val claim = Regex("""\b(delet|remov|undo|undid|restor|updat|chang|edit|renam|cancel|trash)\w*""", RegexOption.IGNORE_CASE)
