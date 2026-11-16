@@ -825,6 +825,11 @@ class Store(context: Context) {
         }
         set(v) = prefs.edit().putString("theme", v).apply()
 
+    /** The header picked for the dark theme, kept apart from the light one's; Navy until another is picked. */
+    var darkHeader: String
+        get() = prefs.getString("darkHeader", "Navy") ?: "Navy"
+        set(v) = prefs.edit().putString("darkHeader", v).apply()
+
     var dark: Boolean
         get() = prefs.getBoolean("dark", false)
         set(v) = prefs.edit().putBoolean("dark", v).apply()

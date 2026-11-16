@@ -69,10 +69,12 @@ class MainActivity : ComponentActivity() {
         setContent {
             var dark by remember { mutableStateOf(store.dark) }
             var themeName by remember { mutableStateOf(store.theme) }
+            // The dark theme has its own header (Navy until another is picked); the side menu's dots change the one in use.
+            var darkHeader by remember { mutableStateOf(store.darkHeader) }
             var photo by remember { mutableStateOf(store.bgPhoto) }
             var page by remember { mutableLongStateOf(store.page) }
             val bg = remember(photo) { photo.takeIf { it.isNotBlank() }?.let { android.graphics.BitmapFactory.decodeFile(it)?.asImageBitmap() } }
-            val header = headerTheme(themeName, dark)
+            val header = headerTheme(if (dark) darkHeader else themeName, dark)
             // Every phone shows the design 1:1: the screen is 350 units wide (the 390 mock-up, everything a bit bigger) and the phone's
             // font-size and display-size settings don't blow the compact ledgers up.
             val m = resources.displayMetrics
@@ -84,7 +86,8 @@ class MainActivity : ComponentActivity() {
                         if (bg != null) androidx.compose.foundation.Image(bg, null, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
                         App(
                             store, dark, { dark = it; store.dark = it },
-                            themeName = themeName, onTheme = { themeName = it; store.theme = it },
+                            themeName = if (dark) darkHeader else themeName,
+                            onTheme = { if (dark) { darkHeader = it; store.darkHeader = it } else { themeName = it; store.theme = it } },
                             photo = bg != null, onPhoto = { photo = it; store.bgPhoto = it },
                             page = page, onPage = { page = it; store.page = it }
                         )

@@ -135,8 +135,6 @@ val HEADER_THEMES = listOf(
 
 /** The header theme to show; "Clean" follows dark mode so its text stays readable. */
 fun headerTheme(name: String, dark: Boolean = false): HeaderTheme {
-    // The dark theme always wears the Navy band (the header dots are for the light look).
-    if (dark) HEADER_THEMES.firstOrNull { it.name == "Navy" }?.let { return it }
     val theme = HEADER_THEMES.firstOrNull { it.name == name } ?: HEADER_THEMES.first()
     return if (theme.name == "Clean" && dark) h("Clean", 0xFF0F0F0F, 0xFF0F0F0F, 0xFF0F0F0F, false) else theme
 }
@@ -768,9 +766,9 @@ fun DrawScope.drawGlass(colors: List<Color>, h: Float) {
  * band of the same colours, so it gets a white edge and a deeper shadow to stand apart.
  */
 @Composable
-fun GlassLogo(size: Dp, modifier: Modifier = Modifier, onBand: Boolean = false) {
-    // In the dark theme the logo keeps its own red, whatever the band.
-    val c = if (LocalLook.current != null) BrandGlass else glassColors(LocalHeader.current)
+fun GlassLogo(size: Dp, modifier: Modifier = Modifier, onBand: Boolean = false, brand: Boolean = false) {
+    // [brand]: the app's own red whatever the header (the side menu's app logo in the dark theme).
+    val c = if (brand) BrandGlass else glassColors(LocalHeader.current)
     val shape = RoundedCornerShape(size * 0.26f)
     Canvas(
         modifier.size(size)

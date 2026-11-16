@@ -281,7 +281,8 @@ internal fun SideMenu(
         }) {
         Column(Modifier.verticalScroll(rememberScrollState()).statusBarsPadding().padding(bottom = 16.dp)) {
             Row(Modifier.padding(start = 14.dp, end = 14.dp, top = 16.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                GlassLogo(34.dp)
+                // The app's logo keeps its own red in the dark theme; the business logos wear the header's colours.
+                GlassLogo(34.dp, brand = LocalLook.current != null)
                 Spacer(Modifier.width(10.dp))
                 Column {
                     Text("Smart Expense", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
@@ -363,14 +364,14 @@ internal fun SideMenu(
                         onAppLang(apps.first { it.second == picked }.first)
                     }
                 }
-                // The header dots are for the light look; the dark theme always wears Navy.
-                if (!dark) MenuRow(onClick = null) {
+                // The header dots; the dark theme keeps its own pick (Navy at first).
+                MenuRow(onClick = null) {
                     MenuLabel("🖌", "Header")
                     MENU_THEMES.mapNotNull { n -> HEADER_THEMES.firstOrNull { it.name == n } }.forEach { t ->
                         Dot(Brush.linearGradient(listOf(t.c1, t.c2, t.c3)), themeName == t.name) { onTheme(t.name) }
                     }
                 }
-                // Dark theme: on is Navy glow (soft lights, glass cards, the Navy band); off is the warm grey page, the default.
+                // Dark theme: on is Navy glow (soft lights, glass cards, its own header); off is the warm grey page, the default.
                 val darkOn = dark && !photo
                 MenuRow(onClick = { if (darkOn) onPage(PAGE_COLORS[0]) else onDark(DARK_PAGES[1]) }, last = true) {
                     MenuLabel("🌙", "Dark theme")
