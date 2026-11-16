@@ -72,6 +72,22 @@ object Brain {
         else -> emptyList()
     }
 
+    /** Takes the lessons for [shapes] out of the shared file: an answer marked ✗ is not given to anyone again. False when GitHub could not be reached. */
+    fun forget(token: String, shapes: Collection<String>): Boolean = runCatching {
+        val (code, text) = call("GET", "$API?ref=main", token, null)
+        if (code != 200) return@runCatching false
+        val now = JSONObject(text)
+        val file = JSONObject(String(android.util.Base64.decode(now.getString("content"), android.util.Base64.DEFAULT)))
+        val lessons = file.optJSONObject("lessons") ?: return@runCatching true
+        val gone = shapes.filter { lessons.has(it) }
+        if (gone.isEmpty()) return@runCatching true
+        gone.forEach { lessons.remove(it) }
+        file.put("version", file.optInt("version") + 1)
+        val body = JSONObject().put("message", "Brain: ${gone.size} lesson(s) marked wrong").put("branch", "main").put("sha", now.getString("sha"))
+            .put("content", android.util.Base64.encodeToString(file.toString(1).toByteArray(), android.util.Base64.NO_WRAP))
+        call("PUT", API, token, body.toString()).first in 200..201
+    }.getOrDefault(false)
+
     /**
      * Whether a lesson may go to everyone: only tools that show, save or make a PDF (not ones that name an account or
      * reach into Trash), every person an open place, and no word that is part of a saved name ([names]), a common name

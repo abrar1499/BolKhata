@@ -2902,6 +2902,8 @@ fun App(
                                     val shapes = setOf(AiAgent.shape(said), AiAgent.shape(said, AiAgent.who(contactNames(), store.known())))
                                     store.aiLearned = store.aiLearned - shapes
                                     store.brainOff = store.brainOff + shapes.filter { it in store.brain }
+                                    // Out of the shared brain too, so no phone gives that answer again.
+                                    scope.launch(kotlinx.coroutines.Dispatchers.IO) { Brain.forget(Brain.unhide(BuildConfig.BRAIN_TOKEN), shapes) }
                                 }
                             }
                             chatRatings = chatRatings + (id to good)

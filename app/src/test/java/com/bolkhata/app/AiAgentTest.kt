@@ -372,6 +372,9 @@ class AiAgentTest {
     fun aNoteAboutTheRulesIsLeftOut() {
         assertEquals("Main theek hoon, shukriya. Aap kaise hain?", AiAgent.spoken("Small talk: answer briefly, no tools needed.\n\nMain theek hoon, shukriya. Aap kaise hain?"))
         assertEquals("Islamabad is the capital.", AiAgent.spoken("Islamabad is the capital."))
+        assertEquals("I'm sorry you're feeling this way.", AiAgent.spoken("Roman Urdu: \"main udas hun\" means \"I am sad.\" I'm sorry you're feeling this way."))
+        assertEquals("Main theek hoon.", AiAgent.spoken("Small talk: answer briefly, no tools needed. Main theek hoon."))
+        assertEquals("Chai = tea in English.", AiAgent.spoken("Chai = tea in English."))
         assertFalse(AiAgent.sound("""{"calls":[],"reply":"Small talk: answer briefly, no tools needed.\n\nMain theek hoon."}"""))
         assertTrue(AiAgent.sound("""{"calls":[],"reply":"Main theek hoon, shukriya."}"""))
     }
@@ -383,5 +386,14 @@ class AiAgentTest {
             qty = 20_000.0, unit = "1000", rate = 1_000.0)
         use("add_entries", """{"entries": [{"type": "work", "person": "Rashid", "item": "Kachi eent", "qty": 5000, "rate": 1100}]}""")
         assertEquals(5_500.0, saved.first { it.person == "Rashid" }.amount, 0.01)
+    }
+
+    /** A plain answer of any length is learnt (a wrong one is marked ✗); talk about today, the time or the news is not. */
+    @Test
+    fun aLongAnswerIsLearntButNotOneAboutToday() {
+        val names = listOf("Hamid Akram")
+        val long = "Main samajh sakta hoon, udaas hona mushkil hota hai. Aap kuch baat karna chahein to main sun raha hoon, aaram se bataiye."
+        assertTrue(AiAgent.learn(emptyList(), "men udas hun", names, emptyMap(), long).lesson.contains("udaas"))
+        assertEquals("", AiAgent.learn(emptyList(), "aaj kya din hai", names, emptyMap(), "Aaj Monday hai.").lesson)
     }
 }
