@@ -22,7 +22,8 @@ object Brain {
 
     /** The lessons in the shared file ({"lessons": {shape: lesson}, "ai": true}); null when it could not be read. Reads [aiForAll] and the words (see [Lexicon]) too. */
     fun fetch(): Map<String, String>? = runCatching {
-        val conn = URL(URL).openConnection() as HttpURLConnection
+        // GitHub keeps a copy of the file for 5 minutes; asking with the minute in the address gets one at most a minute old.
+        val conn = URL(URL + "?m=" + System.currentTimeMillis() / 60_000).openConnection() as HttpURLConnection
         conn.connectTimeout = 8_000
         conn.readTimeout = 15_000
         if (conn.responseCode != 200) return@runCatching null
