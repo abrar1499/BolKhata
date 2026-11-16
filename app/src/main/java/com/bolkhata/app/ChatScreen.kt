@@ -393,13 +393,13 @@ private fun UserBubble(text: String, attachment: String = "") {
 }
 
 /**
- * A very small "Wrong" under each answer in a muted grey pill (quieter than the answer's white card), red once tapped:
+ * A very small "Fix" under each answer in a muted grey pill (quieter than the answer's white card), red once tapped:
  * the app takes back what it saved and reads the message again. A right answer needs nothing, it is learnt by itself.
  */
 @Composable
 private fun AnswerActions(rating: Boolean?, onRate: (good: Boolean) -> Unit) {
     val wrong = rating == false
-    Text("Wrong", fontSize = 9.sp, lineHeight = 10.sp, fontWeight = if (wrong) FontWeight.SemiBold else FontWeight.Normal,
+    Text("Fix", fontSize = 9.sp, lineHeight = 10.sp, fontWeight = if (wrong) FontWeight.SemiBold else FontWeight.Normal,
         color = if (wrong) MaterialTheme.colorScheme.error else Color(0xFF8F8982),
         modifier = Modifier.padding(start = 10.dp, top = 3.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFFDEDAD4))
             .clickable(enabled = !wrong) { onRate(false) }.padding(horizontal = 9.dp, vertical = 3.dp))
