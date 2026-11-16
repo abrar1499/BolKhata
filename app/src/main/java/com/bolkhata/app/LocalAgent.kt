@@ -67,7 +67,7 @@ object LocalAgent {
     }
 
     /** Asked in this order: small talk, changes to what is saved, questions, then new entries. */
-    private val readers: List<Reader> get() = listOf(LocalTalk, LocalEdit, LocalAsk, LocalAdd)
+    private val readers: List<Reader> get() = listOf(LocalSettings, LocalTalk, LocalEdit, LocalAsk, LocalAdd)
 
     /** How every reader asks when a name fits several people. */
     private val WHICH = Regex("""^Which (\S+) do you mean: (.+)\?$""")

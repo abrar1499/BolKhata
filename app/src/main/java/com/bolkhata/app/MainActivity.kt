@@ -1296,6 +1296,8 @@ fun App(
 
     // The PDF maker is written further down; the AI's PDF tool reaches it through this.
     val aiPdf = remember { arrayOfNulls<(PdfDoc) -> Unit>(1) }
+    /** The side menu's settings changed from the chat (set further down, where the menu and the file saver are). */
+    val appSet = remember { arrayOfNulls<(String, String) -> String>(1) }
     // The recording of a voice message just heard: the chat shows it as a voice note in place of its words.
     val voiceNote = remember { arrayOfNulls<String>(1) }
     // True while a sentence of live voice is handed to the chat: its words are stored but not shown.
@@ -1317,7 +1319,8 @@ fun App(
         update = { changed -> save(entries.map { e -> changed.firstOrNull { it.id == e.id } ?: e }) },
         trash = { ids -> moveToTrash(ids) }, names = { names }, currency = currency,
         setup = { sides }, saveSetup = { s -> sides = s; store.saveSides(s) }, pdf = { doc -> aiPdf[0]?.invoke(doc) },
-        trashed = { trash }, restore = { ids -> val back = trash.filter { it.id in ids }; save(back + entries); saveTrash(trash.filter { it.id !in ids }) }
+        trashed = { trash }, restore = { ids -> val back = trash.filter { it.id in ids }; save(back + entries); saveTrash(trash.filter { it.id !in ids }) },
+        settings = { k, v -> appSet[0]?.invoke(k, v) ?: org.json.JSONObject().put("error", "not ready").toString() }
     )
 
     /**
@@ -2503,6 +2506,47 @@ fun App(
         }.onFailure { toast("Couldn't use that photo") }
     }
     val drawer = rememberDrawerState(DrawerValue.Closed)
+    // The chat changes the side menu's settings too (the AI's app_setting tool and LocalSettings): the answer says what
+    // changed at once, the change itself is made on the main thread.
+    appSet[0] = { k, v ->
+        val name = v.trim()
+        var act: () -> Unit = {}
+        val said: String? = when (k) {
+            "clear_chat" -> { act = { chatMessages = emptyList(); store.saveChatMessages(emptyList()); Attachments.cleanUp(context, emptySet()) }; "Chat cleared." }
+            "currency" -> AppSettings.currency(name)?.let { c -> act = { currency = c; store.currency = c }; "Currency is $c now." }
+            "language" -> (AppSettings.language(name) ?: Lingo.all().firstOrNull { it.name.equals(name, true) }?.code)?.let { code ->
+                act = { setLanguage(code) }; "Language: " + name.replaceFirstChar { it.uppercase() } + "." }
+            "header" -> AppSettings.header(name, HEADER_THEMES.map { it.name })?.let { t -> act = { onTheme(t) }; "Header is $t now." }
+            "background" -> when (AppSettings.background(name)) {
+                "light:0" -> { act = { onPhoto(""); onDark(false); onPage(PAGE_COLORS[0]) }; "Background: warm grey." }
+                "light:1" -> { act = { onPhoto(""); onDark(false); onPage(PAGE_COLORS[1]) }; "Background: light slate." }
+                "dark:0" -> { act = { onPhoto(""); onDark(true); onPage(DARK_PAGES[0]) }; "Background: dark." }
+                "dark:1" -> { act = { onPhoto(""); onDark(true); onPage(DARK_PAGES[1]) }; "Background: dark navy." }
+                else -> null
+            }
+            "open" -> when (AppSettings.page(name)) {
+                "chat" -> { act = { tab = Tab.CHAT }; "Here you are." }
+                "cashbook" -> { act = { tab = Tab.CASHBOOK }; "Opened Cashbook." }
+                "party" -> { act = { tab = Tab.PARTIES }; "Opened Party." }
+                "expense" -> { act = { tab = Tab.EXPENSE }; "Opened Expense." }
+                "income" -> { act = { tab = Tab.INCOME }; "Opened Income." }
+                "report" -> { act = { profitOpen = true }; "Opened the report." }
+                "trash" -> { act = { tab = Tab.TRASH }; "Opened Trash." }
+                "menu" -> { act = { scope.launch { drawer.open() } }; "Opened the menu." }
+                else -> null
+            }
+            "business" -> store.businesses().let { all -> all.firstOrNull { it.second.equals(name, true) } ?: all.firstOrNull { name.isNotBlank() && it.second.contains(name, true) } }
+                ?.let { (id, n) -> act = { openBusiness(id); businessTick++ }; "Opened $n." }
+            "add_business" -> name.takeIf { it.isNotBlank() }?.let { n -> act = { openBusiness(store.addBusiness(n)); businessTick++ }; "Made and opened $n." }
+            "backup" -> {
+                act = { exportFile.launch("SmartExpense-backup-" + java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date()) + ".json") }
+                "Choose where to save the backup."
+            }
+            else -> null
+        }
+        if (said == null) org.json.JSONObject().put("error", if (name.isBlank()) "say what to change it to" else "\"$name\" is not one of the choices").toString()
+        else { scope.launch { act() }; org.json.JSONObject().put("done", said).toString() }
+    }
     fun openMenu() {
         scope.launch { drawer.open() }
     }
