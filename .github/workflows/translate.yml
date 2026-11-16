@@ -1,0 +1,43 @@
+# The app's words in other languages: on a work-branch commit with [translate] in its message, tools/i18n.py lists the
+# English lines and has Claude translate the new ones (secret ANTHROPIC_API_KEY); the tables are committed back.
+name: Translate
+
+on:
+  push:
+    branches-ignore: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  translate:
+    if: contains(github.event.head_commit.message, '[translate]')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -q anthropic
+      - name: Translate
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python tools/i18n.py
+      # Kept for a week even if the commit below fails, so a paid run is never lost.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: i18n
+          path: |
+            app/src/main/assets/i18n
+            tools/i18n
+      - name: Commit the tables
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/assets/i18n tools/i18n
+          git diff --cached --quiet && exit 0
+          git commit -m "Translations: the app's words in every language"
+          # The branch may have moved while translating: put this commit on top and try again.
+          for i in 1 2 3 4; do git pull -q --rebase origin "$GITHUB_REF_NAME" && git push && exit 0; sleep 10; done
+          exit 1

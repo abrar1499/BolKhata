@@ -40,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
@@ -62,6 +63,9 @@ class MainActivity : ComponentActivity() {
         // The app draws under the status bar, so the theme band runs to the very top of the screen in one piece.
         WindowCompat.setDecorFitsSystemWindows(window, false)
         val store = Store(this)
+        store.pickCurrencyOnce(this)
+        // The app's words in the chosen language (or the phone's), before the first screen is drawn.
+        I18n.use(this, store.appLanguage)
         setContent {
             var dark by remember { mutableStateOf(store.dark) }
             var themeName by remember { mutableStateOf(store.theme) }
@@ -74,7 +78,8 @@ class MainActivity : ComponentActivity() {
             val m = resources.displayMetrics
             CompositionLocalProvider(LocalHeader provides header, LocalDensity provides Density(minOf(m.widthPixels, m.heightPixels) / 350f, 1f)) {
                 BolTheme(dark, clear = bg != null, page = page) {
-                    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    // The page colour, or the glow look's lights (pageGround); screens and the Scaffold stay see-through over it.
+                    Surface(Modifier.fillMaxSize().pageGround(), color = Color.Transparent, contentColor = MaterialTheme.colorScheme.onBackground) {
                         // A picked photo sits behind every screen; the plain colour otherwise.
                         if (bg != null) androidx.compose.foundation.Image(bg, null, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
                         App(
@@ -129,6 +134,8 @@ fun App(
     var currency by remember { mutableStateOf(store.currency) }
     var name by remember { mutableStateOf(store.name) }
     var lang by remember { mutableStateOf(store.language) }
+    // The app's own words (side menu › App language); Auto is the phone's language.
+    var appLang by remember { mutableStateOf(store.appLanguage) }
     var moreLang by remember { mutableStateOf(store.moreLanguage) }
     // The mic's first question: which language will be spoken.
     var askLang by remember { mutableStateOf(false) }
@@ -2621,6 +2628,9 @@ fun App(
         }
     }
 
+    // The 🌐 pill on every tab changes the money and the app's language the same way the side menu does.
+    LangMoney.onCurrency = { c -> currency = c; store.currency = c }
+    LangMoney.onAppLang = { l -> appLang = l; store.appLanguage = l; I18n.use(context, l) }
     ModalNavigationDrawer(
         drawerState = drawer,
         // The side menu opens from the business pill only; a swipe moves between the tabs instead (it still closes it).
@@ -2638,6 +2648,7 @@ fun App(
                 onBusinessPage = { bizPage = true; close() },
                 onCurrency = { c -> currency = c; store.currency = c; toast("✓ Currency set to $c") },
                 onLang = { setLanguage(it) }, moreLang = moreLang,
+                appLang = appLang, onAppLang = { appLang = it; store.appLanguage = it; I18n.use(context, it) },
                 onTheme = onTheme,
                 page = page, onPage = { onPhoto(""); onDark(false); onPage(it) },
                 onDark = { c -> onPhoto(""); onDark(true); onPage(c) },
@@ -2743,7 +2754,7 @@ fun App(
                 }
             }
         },
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = Color.Transparent,
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { pad ->
         // Like ChatGPT, screens run underneath the floating message bar; lists add LocalBarSpace at their end.
@@ -2892,14 +2903,13 @@ fun App(
                         set(java.util.Calendar.MILLISECOND, 0)
                     }.timeInMillis
                     val monthSpent = entries.filter { it.date >= monthStart && it.type == Type.KHARCHA }.sumOf { it.amount }
-                    val monthName = java.text.SimpleDateFormat("MMM", java.util.Locale.US).format(java.util.Date())
                     ChatScreen(
                         messages = chatMessages,
                         loading = chatLoading,
                         loadingLabel = loadingLabel,
                         entries = entries,
                         currency = currency,
-                        subtitle = "$monthName · ${fmt(monthSpent)} $currency spent",
+                        subtitle = "${fmt(monthSpent)} $currency spent",
                         suggestions = suggestions,
                         onMenu = { openMenu() },
                         business = businessName,
@@ -3119,7 +3129,7 @@ fun App(
             // Main accounts open over the list, so going back returns to the same place in the list.
             ledger?.let { start ->
                 Box(
-                    Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
+                    Modifier.fillMaxSize().pageGround()
                         .pointerInput(Unit) { detectTapGestures { } }
                 ) {
                     CompositionLocalProvider(LocalEntryMenu provides { e: Entry -> menuFor = e }) {
@@ -3319,7 +3329,7 @@ fun App(
             // The account opens over the list, so going back returns to the same place in the list.
             if (acct != null) {
                 Box(
-                    Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
+                    Modifier.fillMaxSize().pageGround()
                         .pointerInput(Unit) { detectTapGestures { } }
                 ) {
                     // Comes before the khata's own Back, which would otherwise step the khata underneath.

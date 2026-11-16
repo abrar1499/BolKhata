@@ -50,6 +50,14 @@ val CURRENCIES: List<String> = run {
 }
 
 /** A currency's English name ("Saudi Riyal"), or the code. */
+/** The money of the country the phone is in: the SIM's country, else the network's, else the phone's region. */
+fun localCurrency(context: Context): String? = runCatching {
+    val tm = context.getSystemService(Context.TELEPHONY_SERVICE) as? android.telephony.TelephonyManager
+    val country = listOfNotNull(tm?.simCountryIso, tm?.networkCountryIso, java.util.Locale.getDefault().country)
+        .map { it.trim().uppercase(java.util.Locale.ROOT) }.firstOrNull { it.length == 2 } ?: return@runCatching null
+    java.util.Currency.getInstance(java.util.Locale("", country)).currencyCode.takeIf { it in CURRENCIES }
+}.getOrNull()
+
 fun currencyName(code: String): String = runCatching { java.util.Currency.getInstance(code).getDisplayName(java.util.Locale.ENGLISH) }.getOrDefault(code)
 
 /** "SAR · Saudi Riyal": the code with its English name, for the currency menus. */
@@ -609,6 +617,10 @@ class Store(context: Context) {
             return prefs.getString("lang", "") ?: ""
         }
         set(v) = prefs.edit().putString("lang", v).apply()
+    /** The language of the app's own words ("" Auto: the phone's; see I18n). The mic's language is [language]. */
+    var appLanguage: String
+        get() = prefs.getString("appLang", "") ?: ""
+        set(v) = prefs.edit().putString("appLang", v).apply()
     /** The other language picked last (an ML Kit code like "nl", see Lingo): it stays in the short Language list. */
     var moreLanguage: String
         get() = prefs.getString("moreLang", "") ?: ""
@@ -621,6 +633,15 @@ class Store(context: Context) {
     var currency: String
         get() = prefs.getString("currency", "SAR") ?: "SAR"
         set(v) = prefs.edit().putString("currency", v).apply()
+
+    /**
+     * On a new phone, the money of the country it is in (from the SIM or the network, else the phone's region), picked
+     * once; a phone that already has entries keeps what it showed before (SAR).
+     */
+    fun pickCurrencyOnce(context: Context) {
+        if (prefs.contains("currency")) return
+        currency = if (load().isNotEmpty()) "SAR" else localCurrency(context) ?: "SAR"
+    }
 
     var name: String
         get() = prefs.getString("name", "") ?: ""

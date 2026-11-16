@@ -16,7 +16,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -132,39 +135,41 @@ object Premium {
 }
 
 /**
- * The Premium sheet, as the mock: a star, the name and one line, what it gives, the two plans (yearly picked, "Save
- * 25%"), one blue button with the price, and how to cancel. Once on, it says so and where to manage it.
+ * The Premium sheet, as the mock: on white turning light blue (Mist), a star, the name and one line, what it gives,
+ * the two plans (yearly picked, "Save 25%"), one blue button with the price, and how to cancel. The cards are white,
+ * a little raised, with a light blue edge (in a dark look, glass on its page). Once on, it says so and where to manage it.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PremiumSheet(onDismiss: () -> Unit) {
     val context = LocalContext.current
-    val blue = Color(0xFF2F6BE0)
-    val blueSoft = Color(0xFFEAF0FD)
-    val sub = Color(0xFF8A8580)
-    val line = Color(0xFFE2DED8)
+    val t = tone()
+    val blue = t.blue
+    val sub = t.sub
     var yearly by remember { mutableStateOf(true) }
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = LocalPage.current, dragHandle = null,
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = t.ground.last(), contentColor = t.ink, dragHandle = null,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)) {
-        Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 16.dp).navigationBarsPadding(),
+        Column(Modifier.background(Brush.linearGradient(t.ground)).verticalScroll(rememberScrollState())
+            .padding(horizontal = 14.dp, vertical = 16.dp).navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(46.dp).clip(RoundedCornerShape(14.dp)).background(Color.White).border(1.5.dp, blue.copy(alpha = 0.35f), RoundedCornerShape(14.dp)),
+                Box(Modifier.size(46.dp).clip(RoundedCornerShape(14.dp)).background(t.card).border(1.5.dp, blue.copy(alpha = 0.35f), RoundedCornerShape(14.dp)),
                     contentAlignment = Alignment.Center) { Text("⭐", fontSize = 22.sp) }
                 Spacer(Modifier.weight(1f))
-                Box(Modifier.size(28.dp).clip(CircleShape).background(Color.White).clickable(onClick = onDismiss), contentAlignment = Alignment.Center) { Text("✕", fontSize = 12.sp) }
+                Box(Modifier.size(28.dp).clip(CircleShape).background(t.card).clickable(onClick = onDismiss), contentAlignment = Alignment.Center) { Text("✕", fontSize = 12.sp) }
             }
             Column {
                 Text("Smart Expense Premium", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
                 Text("Your accounts, without ads or limits.", fontSize = 12.5.sp, color = sub)
             }
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.White).padding(horizontal = 12.dp, vertical = 4.dp)) {
-                Give("🚫", "No ads", "Not in the chat, the cashbook or any list", blueSoft, sub)
-                HorizontalDivider(color = line)
-                Give("✦", "Smart assistant, no limits", "Ask as much as you like, no videos", blueSoft, sub)
+            Column(Modifier.fillMaxWidth().raised(t).clip(RoundedCornerShape(16.dp)).background(t.card)
+                .border(1.dp, t.edge, RoundedCornerShape(16.dp)).padding(horizontal = 12.dp, vertical = 4.dp)) {
+                Give("🚫", "No ads", "Not in the chat, the cashbook or any list", t)
+                HorizontalDivider(color = t.line)
+                Give("✦", "Smart assistant, no limits", "Ask as much as you like, no videos", t)
             }
             if (Premium.active) {
-                Text("✓ Premium is on", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = GreenDeep, modifier = Modifier.align(Alignment.CenterHorizontally))
+                Text("✓ Premium is on", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = if (t.dark) Color(0xFF5BE08F) else GreenDeep, modifier = Modifier.align(Alignment.CenterHorizontally))
                 Text("Manage or cancel it in Google Play › Subscriptions", fontSize = 12.sp, color = blue, textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth().clickable {
                         runCatching {
@@ -174,9 +179,9 @@ fun PremiumSheet(onDismiss: () -> Unit) {
                     })
             } else {
                 Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PlanCard("Monthly", Premium.monthly, "a month", null, !yearly, blue, line, sub, Modifier.weight(1f).fillMaxHeight()) { yearly = false }
+                    PlanCard("Monthly", Premium.monthly, "a month", null, !yearly, t, Modifier.weight(1f).fillMaxHeight()) { yearly = false }
                     PlanCard("Yearly", Premium.yearly, "a year" + if (Premium.yearlyMonth.isBlank()) "" else " · ${Premium.yearlyMonth} a month", "Save 25%",
-                        yearly, blue, line, sub, Modifier.weight(1f).fillMaxHeight()) { yearly = true }
+                        yearly, t, Modifier.weight(1f).fillMaxHeight()) { yearly = true }
                 }
                 val price = if (yearly) Premium.yearly else Premium.monthly
                 val ready = price.isNotBlank()
@@ -193,23 +198,46 @@ fun PremiumSheet(onDismiss: () -> Unit) {
     }
 }
 
+/** Premium's colours: Mist with white cards in the light look; in a dark one its page with see-through glass cards. */
+internal class Tone(val blue: Color, val soft: Color, val ink: Color, val sub: Color, val card: Color, val edge: Color, val line: Color,
+    val ground: List<Color>, val dark: Boolean)
+
+@Composable
+internal fun tone(): Tone = if (LocalLook.current != null) {
+    val blue = Color(0xFF5B9BFF)
+    val page = LocalPage.current
+    Tone(blue, blue.copy(alpha = 0.18f), Color(0xFFF2F4F8), Color(0xFFA9B0BE), Color.White.copy(alpha = 0.10f), Color.White.copy(alpha = 0.16f),
+        Color.White.copy(alpha = 0.09f), listOf(Color.White.copy(alpha = 0.08f).compositeOver(page), page), true)
+} else {
+    val blue = Color(0xFF2F6BE0)
+    Tone(blue, Color(0xFFEAF0FD), Color(0xFF1D1D1F), Color(0xFF8A8580), Color.White, blue.copy(alpha = 0.18f), blue.copy(alpha = 0.12f),
+        listOf(Color.White, Color(0xFFE3ECFB)), false)
+}
+
+/** A card lifted a little off the Mist with a soft blue shadow; glass cards in the dark stay flat. */
+private fun Modifier.raised(t: Tone) = if (t.dark) this
+    else shadow(4.dp, RoundedCornerShape(16.dp), ambientColor = t.blue.copy(alpha = 0.3f), spotColor = t.blue.copy(alpha = 0.3f))
+
 /** One thing Premium gives: a round soft-blue mark, the name and a line. */
 @Composable
-private fun Give(mark: String, title: String, line: String, ring: Color, sub: Color) {
+private fun Give(mark: String, title: String, line: String, t: Tone) {
     Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(30.dp).clip(CircleShape).background(ring), contentAlignment = Alignment.Center) { Text(mark, fontSize = 14.sp) }
+        Box(Modifier.size(30.dp).clip(CircleShape).background(t.soft), contentAlignment = Alignment.Center) { Text(mark, fontSize = 14.sp) }
         Column {
             Text(title, fontSize = 13.5.sp, fontWeight = FontWeight.Bold)
-            Text(line, fontSize = 11.5.sp, color = sub)
+            Text(line, fontSize = 11.5.sp, color = t.sub)
         }
     }
 }
 
 /** A plan to pick: its name, Play's price ("…" until it comes), a line, and a small blue [tag] above its corner. */
 @Composable
-private fun PlanCard(name: String, price: String, per: String, tag: String?, on: Boolean, blue: Color, line: Color, sub: Color, modifier: Modifier, onClick: () -> Unit) {
+private fun PlanCard(name: String, price: String, per: String, tag: String?, on: Boolean, t: Tone, modifier: Modifier, onClick: () -> Unit) {
+    val blue = t.blue
+    val sub = t.sub
     Box(modifier.padding(top = 9.dp)) {
-        Column(Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp)).background(Color.White).border(1.5.dp, if (on) blue else line, RoundedCornerShape(16.dp))
+        Column(Modifier.fillMaxSize().raised(t).clip(RoundedCornerShape(16.dp)).background(if (on && t.dark) blue.copy(alpha = 0.14f) else t.card)
+            .border(1.5.dp, if (on) blue else t.edge, RoundedCornerShape(16.dp))
             .clickable(onClick = onClick).padding(start = 12.dp, end = 12.dp, top = 14.dp, bottom = 12.dp)) {
             Text(name, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = sub)
             Text(price.ifBlank { "…" }, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(top = 2.dp))
