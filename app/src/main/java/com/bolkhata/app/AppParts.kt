@@ -311,8 +311,8 @@ internal fun SideMenu(
                 Box {
                     var open by remember { mutableStateOf(false) }
                     var more by remember { mutableStateOf(false) }
-                    // The four the app reads itself, the other language picked last (see Lingo), then the way to all the rest.
-                    val langs = listOf("" to "Auto", "hi-IN" to "Roman Urdu", "en-US" to "English", "ur-PK" to "Urdu") +
+                    // The ones the app reads itself, the other language picked last (see Lingo), then the way to all the rest.
+                    val langs = listOf("" to "Auto", "hi-IN" to "Roman Urdu", "en-US" to "English", "ur-PK" to "Urdu", Lingo.HINDI.code to Lingo.HINDI.name) +
                         (if (moreLang.isBlank()) emptyList() else listOf(moreLang to Lingo.name(moreLang)))
                     val now = langs.firstOrNull { it.first == lang }?.second ?: "Auto"
                     val code = Lingo.code(lang)
@@ -440,7 +440,7 @@ private fun AiKeysSheet(ai: AiKeys, models: (String) -> List<String>, onSave: (S
 internal fun LanguageSheet(title: String, base: Boolean, current: String, onClose: () -> Unit, onPick: (String) -> Unit) {
     val all = remember(base) {
         (if (base) listOf(Lingo.Lang("", "Auto", "your phone's language"), Lingo.Lang("hi-IN", "Roman Urdu", ""),
-            Lingo.Lang("en-US", "English", ""), Lingo.Lang("ur-PK", "Urdu", "اردو")) else emptyList()) + Lingo.all()
+            Lingo.Lang("en-US", "English", ""), Lingo.Lang("ur-PK", "Urdu", "اردو")) else emptyList()) + (Lingo.all() + Lingo.HINDI).sortedBy { it.name }
     }
     var q by remember { mutableStateOf("") }
     val shown = all.filter { q.isBlank() || it.name.contains(q.trim(), true) || it.local.contains(q.trim(), true) }
