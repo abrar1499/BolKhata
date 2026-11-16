@@ -107,15 +107,19 @@ object LocalAgent {
      * Reads one message and does it. The same answer as [AiAgent.run] gives: no sentence over a plain save, the card of a
      * look-up, the option card to ask. Null when the message was not understood (the chat then answers by its older rules).
      */
+    private val cashDot = Regex("""(?i)(?<![\p{L}])(rs|pkr|sar|inr|aed)\.(?=\d)""")
+
     fun run(
         said: String, host: AiAgent.Host, now: Long = System.currentTimeMillis(),
         roman: String = runCatching { Translit.toRoman(said) }.getOrDefault(said),
         previous: String = "", justSaved: List<String> = emptyList(), lastShown: String = "", recent: String = "",
         onTool: (name: String, input: JSONObject, result: String) -> Unit = { _, _, _ -> }
     ): AiAgent.Answer? = runCatching {
-        val counted = AiAgent.counted(roman)
-        val notes = AiAgent.Notes(said = (AiAgent.numbers(roman) + AiAgent.numbers(counted)).distinct(), lastShown = lastShown)
-        val s = Said(said, roman, counted, host, now, previous, justSaved, lastShown, recent, notes, onTool)
+        // "Rs.250": the amount is 250, not part of a word.
+        val rom = cashDot.replace(roman, "$1 ")
+        val counted = AiAgent.counted(rom)
+        val notes = AiAgent.Notes(said = (AiAgent.numbers(rom) + AiAgent.numbers(counted)).distinct(), lastShown = lastShown)
+        val s = Said(cashDot.replace(said, "$1 "), rom, counted, host, now, previous, justSaved, lastShown, recent, notes, onTool)
         for (reader in readers) {
             val reply = reader.read(s) ?: continue
             // Only saved, all of it and nothing to ask: the Saved card says it, no sentence over it.

@@ -294,15 +294,18 @@ object LocalAdd : LocalAgent.Reader {
         }
         newBySurname(w, i, c)?.let { return it }
         saved(w, i, c)?.let { return it }
-        if (!namePlace(w, i) || x.length < 3) return null
+        if (!namePlace(w, i) || x.length < 3 || !isContent(x)) return null
         // A word where a name must be: a saved name misheard ("motion" for Mohsin), a thing ("dhobi ko"), or a new person.
         misheard(x, c)?.let { return Mention(it, i, i + 1, wayAfter(w, i + 1) ?: wayBefore(w, i)) }
         if (isThing(x, c)) return null
         val two = i > 0 && w[i - 1] !in stop && num(w[i - 1]) == null && Understand.isCommonName(w[i - 1]) && !isThing(w[i - 1], c)
         val from = if (two) i - 1 else i
-        val name = w.subList(from, i + 1).joinToString(" ") { it.replaceFirstChar { ch -> ch.uppercase() } }
-        c.fresh[x] = name
-        return Mention(name, i, i + 1, wayAfter(w, i + 1) ?: wayBefore(w, i))
+        // "sent 500 to rizwan ahmed": a last word after the new name is its last name.
+        val end = if (w.getOrNull(i - 1) in setOf("to", "from") && i + 1 < w.size && (i + 2 == w.size || w[i + 2] == ",") &&
+            w[i + 1].length >= 3 && isContent(w[i + 1]) && !isThing(w[i + 1], c)) i + 2 else i + 1
+        val name = w.subList(from, end).joinToString(" ") { it.replaceFirstChar { ch -> ch.uppercase() } }
+        for (k in i until end) c.fresh[w[k]] = name
+        return Mention(name, i, end, wayAfter(w, end) ?: wayBefore(w, i))
     }
 
     /**
@@ -914,7 +917,8 @@ object LocalAdd : LocalAgent.Reader {
     private val inWords = setOf("mile", "mila", "mili", "mil", "mily", "milay", "miley", "aaye", "aaya", "aayi", "aye", "aya", "ayi", "aai", "received",
         "recieved", "got", "earned", "wasool", "wasul", "vasool", "kamaye", "kamaya")
     private val returnWords = setOf("wapis", "wapas", "waps", "wapsi", "vapis", "vapas", "vaapis", "waapis", "lautaye", "lotaye", "lautaya", "lotaya", "lautai",
-        "lotai", "lota", "lotaa", "lauta", "return", "returned", "back", "repaid", "repay")
+        "lotai", "lota", "lotaa", "lauta", "return", "returned", "back", "repaid", "repay", "utaar", "utar", "utara", "utaara", "utari", "utare", "chuka",
+        "chukaya", "chukaye", "chukai", "chukta", "ada")
     private val loanWords = setOf("udhaar", "udhar", "udaar", "udhari", "udhaari", "udar", "qarz", "qarza", "karz", "karza", "qarze", "karze", "loan", "loans",
         "borrow", "borrowed", "lend", "lent")
     private val sellWords = setOf("becha", "bechi", "beche", "bechay", "bechy", "bech", "sold", "sell", "sells", "farokht")
@@ -930,7 +934,8 @@ object LocalAdd : LocalAgent.Reader {
         "wages", "earning", "earnings", "freelance", "freelancing", "fiverr", "upwork")
     private val moneyNouns = setOf("advance", "edvance", "adv", "paise", "pese", "paisay", "pesay", "paisa", "pesa", "rupay", "rupaye", "rupees", "rupee", "rs",
         "riyal", "riyals", "rial", "sar", "pkr", "dollar", "dollars", "dirham", "rupy", "rupe", "rupaiye", "rupaya", "rupya", "rupiya", "rakam", "raqam", "amount", "cash", "naqad", "naqd", "payment", "total", "kul",
-        "money", "price", "keemat", "qeemat", "jama", "jamaa", "baqi", "baki", "baaqi", "bakaya", "balance", "remaining", "due")
+        "money", "price", "keemat", "qeemat", "jama", "jamaa", "baqi", "baki", "baaqi", "bakaya", "balance", "remaining", "due", "easypaisa", "easypesa",
+        "jazzcash", "jazcash", "online", "bank", "nayapay", "sadapay", "stcpay", "upi", "gpay", "paytm")
     private val unitWords = setOf("pcs", "pc", "piece", "pieces", "nag", "adad", "bori", "boriyan", "bag", "bags", "kg", "kilo", "kilos", "dozen", "darjan",
         "maund", "mann", "ton", "tons", "trolley", "trolly", "truck", "feet", "ft", "foot", "meter", "metre", "gaz", "litre", "liter", "ltr", "packet", "packets",
         "carton", "cartons", "box", "boxes", "than", "thaan", "jora", "joray", "suit", "suits")

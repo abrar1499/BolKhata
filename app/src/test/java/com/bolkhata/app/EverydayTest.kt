@@ -116,6 +116,11 @@ class EverydayTest {
         "mohsin ke naam 1000 likh do" to "gave 1000 Mohsin",
         "mohsin k nam 1000 likho" to "gave 1000 Mohsin",
         "tariq javed ko 300 diya" to "gave 300 Tariq Javed",
+        "imran ko 2000 transfer kiye" to "gave 2000 Imran",
+        "sent 500 to rizwan ahmed" to "gave 500 Rizwan Ahmed",
+        "zubair ka 500 qarz utaar diya" to "back 500 Zubair",
+        "hamid ko 2000 easypaisa kiye" to "gave 2000 Hamid",
+        "recharge ki payment Rs.250" to "out 250",
         "farooq ko 1500 udhaar diya" to "gave 1500 Farooq",
         "ahmed ko 1000 diye" to "gave 1000 Ahmed",
         "gave ahmed 1000" to "gave 1000 Ahmed",
@@ -371,6 +376,112 @@ class EverydayTest {
         assertTrue("The app understood $passed of $all everyday messages; it understood $floor before", passed >= floor)
     }
 
+    /**
+     * Random sentences made from parts, the way people really type them: a day said or not, a filler word, the amount in
+     * digits or words, any order, a common misspelling of the verb, a new person with or without "bhai", two entries in one
+     * sentence. The same seed gives the same sentences each run, so the score can be compared; misses are in build/random.txt.
+     */
+    private val random: List<Pair<String, String>> = run {
+        val r = kotlin.random.Random(1116)
+        fun <T> List<T>.any1() = this[r.nextInt(size)]
+        val amounts = listOf("500" to 500.0, "1500" to 1500.0, "1,200" to 1200.0, "2k" to 2000.0, "3 hazar" to 3000.0, "teen hazar" to 3000.0,
+            "paanch sau" to 500.0, "dedh sau" to 150.0, "dhai hazar" to 2500.0, "350" to 350.0, "80" to 80.0, "Rs 700" to 700.0, "700 rupay" to 700.0,
+            "45" to 45.0, "12000" to 12000.0, "1.5k" to 1500.0, "4 sau" to 400.0, "sadhe 3 sau" to 350.0, "PKR 900" to 900.0, "900/-" to 900.0,
+            "Rs.250" to 250.0, "ek hazar" to 1000.0, "do sau" to 200.0, "50 hazar" to 50000.0, "1 lakh" to 100000.0, "2 hazaar" to 2000.0, "1000 riyal" to 1000.0)
+        val things = listOf("petrol" to "Transport", "chai" to "Food", "doodh" to "Food", "sabzi" to "Food", "bijli ka bill" to "Bills", "kiraya" to "Rent",
+            "mobile load" to "Mobile", "dawai" to "Health", "kapre" to "Shopping", "rickshaw" to "Transport", "taxi" to "Transport", "roti" to "Food",
+            "nashta" to "", "khana" to "Food", "biryani" to "", "ande" to "", "atta" to "", "cheeni" to "", "pizza" to "", "diesel" to "", "parking" to "",
+            "pani ka bill" to "Bills", "gas ka bill" to "Bills", "recharge" to "", "doctor" to "", "medicine" to "", "joote" to "Shopping", "sabun" to "",
+            "bus ka kiraya" to "", "uber" to "", "chawal" to "", "fruit" to "")
+        val days = listOf("", "", "aaj ", "kal ", "parso ", "abhi ", "subah ", "shaam ko ", "raat ")
+        val fill = listOf("", "", "", " likh lo", " add karo", " note karo", " yaar", " bhai", " please")
+        val spent = listOf("", "", "liya", "li", "liye", "kharch kiye", "kharcha", "lage", "lag gaye", "ka liya", "kharach kiye", "liyay", "khareeda",
+            "kharida", "kharide", "lagaye")
+        val spend = listOf("%d%t %a %v%f", "%d%a ka %t %v%f", "%d%t pe %a kharch kiye%f", "%d%t me %a lag gaye%f", "%d%a %t%f", "%t %a", "paid %a for %t",
+            "bought %t for %a", "%d%t ke %a diye%f", "%d%a ke %t%f", "%d%t %a me liya%f", "%d%t ki payment %a%f", "%d%t par %a lagaye%f",
+            "%d%a ka %t khareeda%f")
+        val newPeople = listOf("imran" to "Imran", "kashif" to "Kashif", "naveed" to "Naveed", "rizwan" to "Rizwan", "shahid" to "Shahid", "waqas" to "Waqas",
+            "yasir" to "Yasir", "faisal" to "Faisal", "asif" to "Asif", "nadeem" to "Nadeem", "imran bhai" to "Imran", "kashif sahab" to "Kashif",
+            "naveed qureshi" to "Naveed Qureshi", "rizwan ahmed" to "Rizwan Ahmed")
+        val saved = listOf("hamid" to "Hamid", "mohsin" to "Mohsin", "salim khan" to "Salim Khan", "salim raza" to "Salim Raza", "nargis" to "Nargis")
+        val give = listOf("%d%p ko %a diye%f", "%d%p ko %a diya%f", "%d%p ko %a de diye%f", "%d%p ko %a dy diye%f", "%d%p ko %a dia%f", "%d%p ko %a bheje%f",
+            "%d%p ko %a bhej diye%f", "%d%p ko %a udhaar diye%f", "%d%p ko %a udhar de diye%f", "%d%p ke naam %a likho", "%d%a %p ko diye%f", "gave %a to %p",
+            "sent %a to %p", "%d%p ko %a diey%f", "%d%p ko %a transfer kiye%f", "%d%p ko %a easypaisa kiye%f", "%d%p ko %a jazzcash kiye%f",
+            "%d%p ko %a online bheje%f", "%d%p ko %a cash diye%f")
+        val get = listOf("%d%p se %a mile%f", "%d%p se %a mil gaye%f", "%d%p se %a aaye%f", "%d%p ne %a wapis kiye%f", "%d%p ne %a wapas kar diye%f",
+            "%d%p ne %a lota diye%f", "got %a from %p", "received %a from %p", "%d%p se %a wapis mile%f", "%d%p ne %a bheje%f", "%d%p se %a wasool kiye%f")
+        val took = listOf("%d%p se %a udhaar liye%f", "%d%p se %a udhar liya%f", "%d%p se %a qarz liya%f", "borrowed %a from %p")
+        val income = listOf("%dsalary %a aayi%f" to "Salary", "%dtankhwa %a mili%f" to "", "%d%a salary mili%f" to "Salary", "%dbonus %a mila%f" to "",
+            "%dfreelance se %a aaye%f" to "", "%dfiverr se %a aaye%f" to "", "%dsalary aa gayi %a%f" to "Salary", "%dmonthly salary %a%f" to "Salary")
+        // Questions and talk: nothing is saved.
+        val asks = listOf("%t ka kharcha kitna hua", "%t pe kitna laga", "%p ka hisaab dikhao", "%p ko kitne diye", "%p se kitne lene hain",
+            "is mahine ka kharcha", "aaj kitna kharch hua", "%p ka balance kya hai", "%t kitne ka liya tha")
+        fun fillIn(form: String, a: String, t: String = "", p: String = "") = form.replace("%d", days.any1()).replace("%f", fill.any1())
+            .replace("%v", spent.any1()).replace("%a", a).replace("%t", t).replace("%p", p).replace(Regex("""\s+"""), " ").trim()
+        val out = mutableListOf<Pair<String, String>>()
+        repeat(800) {
+            val (a, n) = amounts.any1()
+            val v = plainAmount(n)
+            when (r.nextInt(22)) {
+                in 0..6 -> { val (t, cat) = things.any1(); out += fillIn(spend.any1(), a, t = t) to "out $v $cat".trim() }
+                in 7..9 -> { val (p, who) = newPeople.any1(); out += fillIn(give.any1(), a, p = p) to "gave $v $who" }
+                10 -> { val (p, who) = saved.any1(); out += fillIn(give.any1(), a, p = p) to "gave $v $who" }
+                11, 12 -> { val (p, who) = (saved.take(4) + newPeople).any1(); out += fillIn(get.any1(), a, p = p) to "got $v $who" }
+                13 -> { val (p, who) = newPeople.any1(); out += fillIn(took.any1(), a, p = p) to "took $v $who" }
+                14 -> { out += fillIn(listOf("%dzubair ko %a wapis kiye%f", "%dzubair ko %a wapas kar diye%f", "%dzubair ka %a qarz utaar diya%f").any1(), a) to "back $v Zubair" }
+                15 -> { val (form, word) = income.any1(); out += fillIn(form, a) to "in $v $word".trim() }
+                16, 17 -> {
+                    val (t1, c1) = things.any1(); val (t2, c2) = things.filter { it.first != t1 }.any1()
+                    val (a2, n2) = amounts.filter { it.second != n }.any1()
+                    val join = listOf(" aur ", ", ", " or ", " and ").any1()
+                    out += (days.any1() + "$t1 $a$join$t2 $a2").trim() to "out $v $c1".trim() + "; " + "out ${plainAmount(n2)} $c2".trim()
+                }
+                18 -> {
+                    val (p, _) = (saved + newPeople).any1()
+                    out += asks.any1().replace("%t", things.any1().first).replace("%p", p) to "none"
+                }
+                19 -> {
+                    val picked = things.shuffled(r).take(3)
+                    val sums = amounts.shuffled(r).distinctBy { it.second }.take(3)
+                    out += picked.zip(sums).joinToString(", ") { (t, a2) -> t.first + " " + a2.first }.replaceAfterLast(", ", "").removeSuffix(", ").let { head ->
+                        head + " aur " + picked[2].first + " " + sums[2].first
+                    } to picked.zip(sums).joinToString("; ") { (t, a2) -> "out ${plainAmount(a2.second)} ${t.second}".trim() }
+                }
+                else -> {
+                    val (p1, w1) = newPeople.any1(); val (p2, w2) = newPeople.filter { it.second != w1 }.any1()
+                    val (a2, n2) = amounts.filter { it.second != n }.any1()
+                    out += (days.any1() + "$p1 ko $a aur $p2 ko $a2 diye").trim() to "gave $v $w1; gave ${plainAmount(n2)} $w2"
+                }
+            }
+        }
+        // In Urdu and Hindi letters, as some keyboards and the mic write them.
+        out += listOf("چائے 50" to "out 50", "پیٹرول 500 کا ڈلوایا" to "out 500 Transport", "حامد کو 500 دیے" to "gave 500 Hamid",
+            "चाय 50" to "out 50", "पेट्रोल 500" to "out 500 Transport", "हामिद को 500 दिए" to "gave 500 Hamid")
+        out.distinctBy { it.first }
+    }
+
+    @Test
+    fun randomMessages() {
+        val body = StringBuilder()
+        var passed = 0
+        for ((said, spec) in random) {
+            val (host, entries, base) = books()
+            val answer = runCatching { LocalAgent.run(said, host, now) }.getOrNull()
+            val added = entries().filter { it.id !in base }
+            val want = wants(spec)
+            val left = added.toMutableList()
+            val ok = want.all { w -> left.firstOrNull { fits(it, w) }?.also { left.remove(it) } != null } && left.isEmpty()
+            if (ok) passed++ else body.append("MISS  ").append(said).append("\n      wanted: ").append(spec)
+                .append("\n      got: ").append(added.joinToString("; ") { "${it.type} ${plainAmount(it.amount)} ${it.person.ifBlank { it.item }} (${it.category.label})" }.ifBlank { "nothing" })
+                .append(answer?.text?.takeIf { it.isNotBlank() }?.let { " | said: " + it.take(100).replace("\n", " ") }.orEmpty()).append('\n')
+        }
+        val out = "Random messages: $passed of ${random.size} understood\n\n$body"
+        File("build").mkdirs()
+        File("build/random.txt").writeText(out)
+        println(out)
+        assertTrue("The app understood $passed of ${random.size} random messages; it understood $randomFloor before", passed >= randomFloor)
+    }
+
     /** Every way of saying yes answers the app's question: after "Move them all to Trash?" the entries go. */
     @Test
     fun everyYesAnswersTheAppsQuestion() {
@@ -386,5 +497,8 @@ class EverydayTest {
     private fun plainAmount(v: Double) = if (v % 1.0 == 0.0) v.toLong().toString() else v.toString()
 
     /** How many of [cases] the app understood last time: it may only go up. */
-    private val floor = 566
+    private val floor = 571
+
+    /** How many of [random] the app understood last time: it may only go up. */
+    private val randomFloor = 800
 }
