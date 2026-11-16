@@ -3,6 +3,7 @@ package com.bolkhata.app
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -337,6 +338,17 @@ class AiAgentTest {
         assertEquals("", AiAgent.learn(emptyList(), "kitna bacha", names, emptyMap(), "You have 300 left.").lesson)
         assertEquals("All good, what do you need?", AiAgent.replay(AiAgent.learn(emptyList(), "kya ho raha hai", names, emptyMap(), "All good, what do you need?").lesson, "kya ho raha hai")!!.reply)
         assertEquals("Great!", AiAgent.replay(AiAgent.learn(emptyList(), "zabardast", names, emptyMap(), "Great!").lesson, "zabardast")!!.reply)
+    }
+
+    @Test
+    fun aReplySayingAChangeTheToolsDidNotMakeIsNeverDoneAgain() {
+        // The AI only looked, then said it deleted: "petrol 60" later answered "Entry deleted" and saved nothing.
+        val looked = listOf("find_entries" to JSONObject().put("words", JSONArray().put("petrol")).put("min_amount", 60).put("max_amount", 60))
+        assertEquals("", AiAgent.learn(looked, "petrol 60", emptyList(), emptyMap(), "Entry deleted").lesson)
+        // One already kept from before is not used.
+        assertFalse(AiAgent.sound("""{"calls":[{"name":"show","input":{"words":["petrol"]}}],"reply":"Entry deleted"}"""))
+        assertTrue(AiAgent.sound("""{"calls":[{"name":"show","input":{"words":["petrol"]}}],"reply":"Here they are."}"""))
+        assertTrue(AiAgent.sound("""[{"type":"expense","item":"Petrol","amount":"#0"}]"""))
     }
 
     @Test

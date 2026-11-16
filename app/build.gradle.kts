@@ -28,6 +28,9 @@ android {
         // The token of the shared brain repository only, from the BRAIN_TOKEN repository secret (CI only), written backwards
         // in Base64 so it is not plain in the app (see Brain.unhide). Blank: only a phone with its own token adds lessons.
         buildConfigField("String", "BRAIN_TOKEN", "\"" + Base64.getEncoder().encodeToString((System.getenv("BRAIN_TOKEN") ?: "").trim().reversed().toByteArray()) + "\"")
+        // The owner's Claude key for everyone without a key of their own, from the ANTHROPIC_API_KEY repository secret (CI
+        // only), hidden like BRAIN_TOKEN. The owner keeps only a small balance on it. Blank: no built-in AI.
+        buildConfigField("String", "CLAUDE_KEY", "\"" + Base64.getEncoder().encodeToString((System.getenv("CLAUDE_KEY") ?: "").trim().reversed().toByteArray()) + "\"")
         ndk {
             // Real phones only: the x86 copies of the OCR library are for PC emulators and added ~23 MB.
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")

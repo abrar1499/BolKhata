@@ -27,6 +27,10 @@ object Ai {
     /** Every provider with a box in the side menu, best first: the ones turned on answer in this order. */
     val ALL = listOf(CLAUDE, OPENAI, GEMINI, GROQ, OPENROUTER)
 
+    /** The keys that answer: the person's own turned on, else the app's built-in Claude key (the owner's), else none. */
+    fun chainOf(own: List<Pair<String, String>>, builtIn: String): List<Pair<String, String>> =
+        own.ifEmpty { if (builtIn.isBlank()) emptyList() else listOf(builtIn.trim() to "") }
+
     /** The keys saved in the side menu and whose they are. */
     @Volatile var saved: Map<String, Provider> = emptyMap()
     /** The keys turned on, best first, each with its model (blank: the usual one): when one does not answer, the next one does. */

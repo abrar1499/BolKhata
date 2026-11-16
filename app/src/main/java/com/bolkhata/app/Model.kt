@@ -708,8 +708,8 @@ class Store(context: Context) {
     var brainOff: Set<String>
         get() = prefs.getStringSet("brainOff", emptySet()).orEmpty().toSet()
         set(v) = prefs.edit().putStringSet("brainOff", v).apply()
-    /** Everything the app knows: the shared brain (less what was turned off here), with this phone's own lessons over it. */
-    fun known(): Map<String, String> = brain - brainOff + aiLearned
+    /** Everything the app knows: the shared brain (less what was turned off here), with this phone's own lessons over it; never a lesson that is not sound. */
+    fun known(): Map<String, String> = (brain - brainOff + aiLearned).filterValues(AiAgent::sound)
 
     /** What the app learnt from the AI: a message's shape to the entries the AI made of it (see AiAgent.lesson). */
     var aiLearned: Map<String, String>

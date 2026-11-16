@@ -442,8 +442,16 @@ object AiAgent {
         var text = if (reply.any { it.isDigit() } || reply.split(Regex("""\s+""")).size > 15) "" else reply.trim()
         people.forEachIndexed { at, p -> text = text.replace(p, "@$at", ignoreCase = true) }
         if (done.isEmpty() && (text.isBlank() || nums.isNotEmpty())) return null
+        // "Entry deleted" after only a look: a reply saying a change the tools did not make is never done again.
+        if (claim.containsMatchIn(text)) return null
         return JSONObject().put("calls", out).put("reply", text).toString()
     }
+
+    /** A reply that says entries were changed, deleted or put back: no tool a lesson keeps does that. */
+    private val claim = Regex("""\b(delet|remov|undo|undid|restor|updat|chang|edit|renam|cancel|trash)\w*""", RegexOption.IGNORE_CASE)
+
+    /** Whether a remembered lesson may be done again: not one whose reply says a change it never made (learnt before that was checked). */
+    fun sound(lesson: String): Boolean = runCatching { lesson.trimStart().startsWith("[") || !claim.containsMatchIn(JSONObject(lesson).optString("reply")) }.getOrDefault(false)
 
     /** A remembered lesson done again: its tools filled with this message's numbers and people, and the reply to give. */
     class Replay(val calls: List<Pair<String, JSONObject>>, val reply: String)

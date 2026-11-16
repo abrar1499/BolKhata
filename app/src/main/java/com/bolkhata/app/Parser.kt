@@ -51,15 +51,15 @@ object Parser {
 
         r(Cat.RENT, "Rent", "rent", "kiraya", "kiraaya", "kraya", "کرایہ"),
 
-        r(Cat.BIJLI, "Electricity", "bijli", "electricity", "بجلی"),
-        r(Cat.BIJLI, "Water bill", "paani ka bill", "pani ka bill", "water bill"),
+        r(Cat.BIJLI, "Electricity", "bijli", "electricity", "light ka bill", "light bill", "بجلی"),
+        r(Cat.BIJLI, "Water bill", "paani ka bill", "pani ka bill", "pani bill", "paani bill", "water bill"),
         r(Cat.BIJLI, "Gas", "gas", "cylinder"),
 
         r(Cat.MOBILE, "Mobile recharge", "recharge", "sawa", "stc", "mobily", "zain", "package", "balance", "ریچارج"),
         r(Cat.MOBILE, "Internet", "internet", "wifi", "net"),
 
         r(Cat.SEHAT, "Medicine", "dawai", "dawa", "medicine", "pharmacy", "tablet", "tablets", "nahdi", "aldawaa", "dawaa", "صيدلية", "دوائی", "دوا"),
-        r(Cat.SEHAT, "Doctor", "doctor", "hospital", "clinic", "checkup", "ڈاکٹر"),
+        r(Cat.SEHAT, "Doctor", "doctor", "hospital", "clinic", "checkup", "dentist", "daant", "ڈاکٹر"),
 
         r(Cat.PERSONAL, "Haircut", "haircut", "barber", "nai", "hajam", "baal", "حجام"),
         r(Cat.PERSONAL, "Laundry", "laundry", "dhobi", "dhulai"),
@@ -77,7 +77,7 @@ object Parser {
         r(Cat.KHANA, "Tea & Coffee", "chai", "tea", "coffee", "qahwa", "karak", "چائے"),
         r(Cat.KHANA, "Meat & Chicken", "chicken", "murgi", "murga", "gosht", "meat", "mutton", "beef", "fish", "machli", "گوشت", "مرغی"),
         r(Cat.KHANA, "Fruit & Vegetables", "sabzi", "sabji", "vegetable", "fruit", "phal", "tamatar", "aloo", "piaz", "pyaz", "kela", "apple", "سبزی", "پھل"),
-        r(Cat.KHANA, "Groceries", "grocery", "groceries", "atta", "aata", "chawal", "rice", "daal", "dal", "oil", "ghee", "cheeni", "sugar", "anday", "ande", "anda", "egg", "eggs", "masala", "namak", "baqala", "bakala", "panda", "lulu", "danube", "othaim", "carrefour", "tamimi", "bindawood", "nesto", "supermarket", "hypermarket", "آٹا", "چاول"),
+        r(Cat.KHANA, "Groceries", "grocery", "groceries", "rashan", "raashan", "ration", "atta", "aata", "chawal", "rice", "daal", "dal", "oil", "ghee", "cheeni", "sugar", "anday", "ande", "anda", "egg", "eggs", "masala", "namak", "baqala", "bakala", "panda", "lulu", "danube", "othaim", "carrefour", "tamimi", "bindawood", "nesto", "supermarket", "hypermarket", "آٹا", "چاول"),
         r(Cat.KHANA, "Eating out", "restaurant", "hotel", "biryani", "kabsa", "shawarma", "broast", "pizza", "burger", "mandi", "albaik", "starbucks", "mcdonald", "mcdonalds", "kfc", "kudu", "herfy", "dunkin", "hungerstation", "jahez", "talabat", "mrsool", "toyou", "cafe", "مطعم"),
         r(Cat.KHANA, "Drinks", "bottle", "botel", "botal", "botl", "juice", "cold drink", "pepsi", "coke", "cola", "sprite", "7up", "drink", "drinks", "soda", "water", "paani", "pani", "پانی", "بوتل"),
         r(Cat.KHANA, "Snacks", "biscuit", "chips", "snacks", "mithai", "sweets", "chocolate", "ice cream", "icecream"),
@@ -575,11 +575,20 @@ object Parser {
         if (w.length < 4 || !w.all { it in 'a'..'z' }) return null
         val edits = if (w.length <= 5) 1 else 2
         val bones = Spell.bones(w)
-        val near = rules.flatMap { r -> r.keys.filter { ' ' !in it && it.length >= 4 && Spell.bones(it) == bones }.map { Triple(it, Normalizer.distance(w, it), r) } }
+        // Two letters typed the wrong way round ("pertol") count as one slip.
+        val near = rules.flatMap { r -> r.keys.filter { ' ' !in it && it.length >= 4 && (Spell.bones(it) == bones || swapped(w, it)) }
+            .map { Triple(it, if (swapped(w, it)) 1 else Normalizer.distance(w, it), r) } }
             .filter { it.second <= edits }
         val best = near.minOfOrNull { it.second } ?: return null
         val top = near.filter { it.second == best }
         return if (top.map { it.third }.toSet().size == 1) top.first().first else null
+    }
+
+    /** Whether [a] is [b] with two letters side by side swapped. */
+    private fun swapped(a: String, b: String): Boolean {
+        if (a.length != b.length) return false
+        val d = a.indices.filter { a[it] != b[it] }
+        return d.size == 2 && d[1] == d[0] + 1 && a[d[0]] == b[d[1]] && a[d[1]] == b[d[0]]
     }
 
     /** Category for a shop or item name, e.g. "PANDA RETAIL" -> Groceries. Null if unknown. */
