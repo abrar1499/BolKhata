@@ -212,7 +212,8 @@ object LocalAdd : LocalAgent.Reader {
                 ?: g.indices.singleOrNull { num(g[it]) != null }?.takeIf { g.getOrNull(it + 1) in possessives }?.let { num(g[it]) } ?: continue
             val gf = if (groups.size == 1) f else Flags(g)
             // A word that also counts things ("suit", "jora") is the thing bought when nothing else is named.
-            val named = g.filter { isContent(it) }.map { expand(it) }.ifEmpty { g.filter { it in extra } }
+            // A word said twice ("food food" from the mic) is the name once.
+            val named = g.filter { isContent(it) }.map { expand(it) }.distinct().ifEmpty { g.filter { it in extra } }
             fun known(x: String) = Parser.guessCategory(x) != null || x in extra || Parser.nearThing(x) != null
             // "bilal k kapre laye", "dukan ka kiraya": whose it was goes to the note; the thing is what was bought.
             val whose = g.indices.firstOrNull { i ->
@@ -676,7 +677,11 @@ object LocalAdd : LocalAgent.Reader {
 
     private fun isContent(x: String) = num(x) == null && x !in stop && x !in dayWords && x !in moneyNouns && x !in unitWords && x !in honorifics &&
         x !in giveWords && x !in getWords && x !in returnWords && x !in loanWords && x !in sellWords && x !in makeWords && x !in workWords &&
-        x !in spendWords && x !in inWords && x !in pronouns && x !in bookWords && x !in newWords && x !in perWords && x !in eachWords && x.length >= 2
+        x !in spendWords && x !in inWords && x !in pronouns && x !in bookWords && x !in newWords && x !in perWords && x !in eachWords && x !in sayingWords && x.length >= 2
+
+    /** Words around what was bought that are not its name: how it was said ("bola", "kaha") or what it was like ("achcha kapde"). */
+    private val sayingWords = setOf("bola", "boli", "bole", "bolo", "kaha", "kahi", "kahe", "suno", "dekho", "achcha", "acha", "accha", "achha", "acchha",
+        "bohat", "bahut", "bht", "zyada", "ziada", "naya", "nayi", "naye", "purana", "purani", "achi", "achhi", "acchi", "good", "nice")
 
     // ---------- the text ----------
 

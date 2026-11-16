@@ -67,7 +67,7 @@ object Parser {
             "toothpaste", "manjan", "perfume", "itar", "attar", "lotion", "facewash", "razor"),
 
         r(Cat.SHOPPING, "Clothes", "kapre", "kapray", "kapde", "kapry", "clothes", "shirt", "pant", "kurta", "کپڑے"),
-        r(Cat.SHOPPING, "Shoes", "joote", "jootay", "joota", "shoes", "chappal", "جوتے"),
+        r(Cat.SHOPPING, "Shoes", "joote", "jootay", "joota", "jooti", "juti", "jutti", "jooty", "shoes", "chappal", "جوتے"),
         r(Cat.SHOPPING, "Electronics", "charger", "headphone", "earphone", "laptop", "jarir", "extra", "ehsan"),
         r(Cat.SHOPPING, "Online shopping", "amazon", "noon", "shein", "namshi", "aliexpress", "temu"),
         r(Cat.SHOPPING, "Stores", "ikea", "centrepoint", "centerpoint", "redtag", "homecentre"),
