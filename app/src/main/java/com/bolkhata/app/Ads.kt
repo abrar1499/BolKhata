@@ -20,15 +20,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
+import com.google.android.gms.ads.AdError
 import com.google.android.gms.ads.AdListener
 import com.google.android.gms.ads.AdLoader
 import com.google.android.gms.ads.AdRequest
+import com.google.android.gms.ads.FullScreenContentCallback
+import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.MobileAds
 import com.google.android.gms.ads.VideoOptions
 import com.google.android.gms.ads.nativead.MediaView
 import com.google.android.gms.ads.nativead.NativeAd
 import com.google.android.gms.ads.nativead.NativeAdOptions
 import com.google.android.gms.ads.nativead.NativeAdView
+import com.google.android.gms.ads.rewarded.RewardedAd
+import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
 import com.google.android.ump.ConsentRequestParameters
 import com.google.android.ump.UserMessagingPlatform
 
@@ -48,6 +53,36 @@ object Ads {
     val nativeUnit = if (play) "ca-app-pub-2130743939844876/8559275509" else "ca-app-pub-3940256099942544/2247696110"
     /** Pictures only (no video), for the slim row between accounts: a video would need the tall card there. */
     val smallUnit = if (play) "ca-app-pub-2130743939844876/4019539897" else "ca-app-pub-3940256099942544/2247696110"
+
+    /** The short video watched for more smart answers (AdMob "Chat AI answers", reward 10 Smart answers). */
+    val rewardUnit = if (play) "ca-app-pub-2130743939844876/5436011037" else "ca-app-pub-3940256099942544/5224354917"
+    private var reward: RewardedAd? = null
+    private var rewardLoading = false
+
+    /** Fetches the next reward video ahead of time, so it starts at once when asked for. */
+    fun loadReward(context: Context) {
+        if (!ready || reward != null || rewardLoading) return
+        rewardLoading = true
+        RewardedAd.load(context, rewardUnit, AdRequest.Builder().build(), object : RewardedAdLoadCallback() {
+            override fun onAdLoaded(ad: RewardedAd) { reward = ad; rewardLoading = false }
+            override fun onAdFailedToLoad(error: LoadAdError) { rewardLoading = false }
+        })
+    }
+
+    /**
+     * Shows the reward video; [done] gets whether it was watched to the end. With no video to show (none came, or ads
+     * are not allowed here) it is true at once: the person is never stopped by a missing ad.
+     */
+    fun showReward(activity: Activity, done: (Boolean) -> Unit) {
+        val ad = reward ?: run { loadReward(activity); done(true); return }
+        reward = null
+        var earned = false
+        ad.fullScreenContentCallback = object : FullScreenContentCallback() {
+            override fun onAdDismissedFullScreenContent() { done(earned); loadReward(activity) }
+            override fun onAdFailedToShowFullScreenContent(error: AdError) { done(true); loadReward(activity) }
+        }
+        ad.show(activity) { earned = true }
+    }
 
     /** Loaded native ads by their place (e.g. "chat-12"), so an ad stays the same while it is on screen and is not fetched again. */
     private val loaded = HashMap<String, NativeAd>()

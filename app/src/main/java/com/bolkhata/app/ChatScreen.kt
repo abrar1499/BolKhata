@@ -27,6 +27,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.SpanStyle
@@ -60,6 +61,9 @@ fun ChatScreen(
     /** 👍 (true) or 👎 (false) given to answers, by message id. */
     ratings: Map<String, Boolean> = emptyMap(),
     onRate: (id: String, good: Boolean) -> Unit = { _, _ -> },
+    /** "Watch ad" and "Not now" on the reward card (by its message id). */
+    onWatch: (id: String) -> Unit = {},
+    onLater: (id: String) -> Unit = {},
     onUndo: (List<String>) -> Unit,
     onEditEntry: (Entry) -> Unit,
     /** An option card was answered: the entry to save for that message, or null when it was closed. */
@@ -167,7 +171,8 @@ fun ChatScreen(
                     // Level with the answer card's top, as the mock.
                     GlassLogo(22.dp, Modifier.padding(top = 2.dp))
                     Column(Modifier.weight(1f)) {
-                        if (message.entryIds.isEmpty() && message.meta.startsWith("ask=")) OptionCard(message, byId.values) { onAsked(message.id, it) }
+                        if (message.meta == "reward") RewardCard({ onWatch(message.id) }, { onLater(message.id) })
+                        else if (message.entryIds.isEmpty() && message.meta.startsWith("ask=")) OptionCard(message, byId.values) { onAsked(message.id, it) }
                         else if (message.entryIds.isNotEmpty()) SavedCard(message, byId, currency, onUndo, onEditEntry)
                         // The AI's own sentences ("plain") are never read as a report.
                         else remember(message.text, currency) { if (message.meta.contains("; plain")) null else Report.parse(message.text, currency) }
@@ -192,7 +197,7 @@ fun ChatScreen(
                             }
                             if (names.isEmpty() && asks.isNotEmpty()) FollowChips(asks, onSend)
                         }
-                        AnswerActions(ratings[message.id]) { good -> onRate(message.id, good) }
+                        if (!message.meta.startsWith("reward")) AnswerActions(ratings[message.id]) { good -> onRate(message.id, good) }
                         // "Claude · 1.2s · 340 tokens" under an answer: the APK only; the Play build shows no such detail.
                         if (!BuildConfig.PLAY) Regex("""usage=([^;]+)""").find(message.meta)?.let {
                             Text(it.groupValues[1], fontSize = 8.sp, lineHeight = 8.sp, color = Color(0xFFA39E98),
@@ -392,17 +397,60 @@ private fun UserBubble(text: String, attachment: String = "") {
     }
 }
 
+/** A small line mark on a 24 grid (stroke 2.2, rounded) or a filled shape on a 16 grid: the pencil of "Fix", the play of the reward card. */
+private fun mark(name: String, path: String, size: Float, filled: Boolean) = androidx.compose.ui.graphics.vector.ImageVector.Builder(name, size.dp, size.dp, size, size)
+    .addPath(androidx.compose.ui.graphics.vector.addPathNodes(path),
+        fill = if (filled) androidx.compose.ui.graphics.SolidColor(Color.Black) else null,
+        stroke = if (filled) null else androidx.compose.ui.graphics.SolidColor(Color.Black), strokeLineWidth = 2.2f,
+        strokeLineCap = androidx.compose.ui.graphics.StrokeCap.Round, strokeLineJoin = androidx.compose.ui.graphics.StrokeJoin.Round)
+    .build()
+
+private val Pencil by lazy { mark("pencil", "M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4", 24f, filled = false) }
+private val PlayMark by lazy { mark("play", "M4 2.5v11l9-5.5z", 16f, filled = true) }
+
 /**
- * A very small "Fix" under each answer in a muted grey pill (quieter than the answer's white card), red once tapped:
+ * "Fix" under each answer, as the mock: a small grey pill (no shadow) with a pencil, padding 4 9 4 7, red once tapped:
  * the app takes back what it saved and reads the message again. A right answer needs nothing, it is learnt by itself.
  */
 @Composable
 private fun AnswerActions(rating: Boolean?, onRate: (good: Boolean) -> Unit) {
     val wrong = rating == false
-    Text("Fix", fontSize = 9.sp, lineHeight = 10.sp, fontWeight = if (wrong) FontWeight.SemiBold else FontWeight.Normal,
-        color = if (wrong) MaterialTheme.colorScheme.error else Color(0xFF8F8982),
-        modifier = Modifier.padding(start = 10.dp, top = 3.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFFDEDAD4))
-            .clickable(enabled = !wrong) { onRate(false) }.padding(horizontal = 9.dp, vertical = 3.dp))
+    val ink = if (wrong) MaterialTheme.colorScheme.error else Color(0xFF6F6A64)
+    Row(Modifier.padding(start = 8.dp, top = 3.dp).clip(RoundedCornerShape(12.dp)).background(if (wrong) Color(0xFFF6DEDC) else Color(0xFFDEDAD4))
+        .clickable(enabled = !wrong) { onRate(false) }.padding(start = 7.dp, end = 9.dp, top = 4.dp, bottom = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(Pencil, contentDescription = null, tint = ink, modifier = Modifier.size(11.dp))
+        Text("Fix", fontSize = 10.sp, lineHeight = 11.sp, fontWeight = FontWeight.Medium, color = ink)
+    }
+}
+
+/**
+ * After 10 smart answers on the app's own key, as the mock: a card from white to a light blue, a white play circle
+ * with a blue edge, two lines, a blue "Watch ad" button and a quiet "Not now". No shadows.
+ */
+@Composable
+private fun RewardCard(onWatch: () -> Unit, onLater: () -> Unit) {
+    val blue = Color(0xFF2F6BE0)
+    Column(Modifier.fillMaxWidth().padding(start = 8.dp, top = 2.dp, end = 2.dp).clip(RoundedCornerShape(18.dp))
+        .background(Brush.linearGradient(listOf(Color.White, Color(0xFFE3ECFB)))).padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(11.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(38.dp).clip(CircleShape).background(Color.White).border(1.5.dp, blue.copy(alpha = 0.45f), CircleShape), contentAlignment = Alignment.Center) {
+                Icon(PlayMark, contentDescription = null, tint = blue, modifier = Modifier.padding(start = 2.dp).size(14.dp))
+            }
+            Column {
+                Text("Keep getting smart answers", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1D1D1F))
+                Text("Watch a short video. Saving entries is always free.", fontSize = 11.5.sp, lineHeight = 15.sp, color = Color(0xFF8A8580))
+            }
+        }
+        Row(Modifier.fillMaxWidth().height(40.dp).clip(RoundedCornerShape(14.dp)).background(blue).clickable(onClick = onWatch),
+            horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+            Icon(PlayMark, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
+            Spacer(Modifier.width(7.dp))
+            Text("Watch ad", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+        }
+        Text("Not now", fontSize = 12.sp, color = Color(0xFF8A8580), modifier = Modifier.align(Alignment.CenterHorizontally)
+            .clip(RoundedCornerShape(8.dp)).clickable(onClick = onLater).padding(horizontal = 8.dp, vertical = 2.dp))
+    }
 }
 
 /** Tappable names under a "which one?" question, so the person picks instead of typing. */
