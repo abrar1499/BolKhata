@@ -2062,6 +2062,12 @@ fun App(
     // muted for a moment around each beep: only streams the person had on, and always turned back on after.
     val hushed = remember { mutableSetOf<Int>() }
     val unhush = remember { arrayOfNulls<kotlinx.coroutines.Job>(1) }
+    /** Turns the sound back on at once (before the app speaks an answer). */
+    fun unhushNow() {
+        val am = context.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
+        hushed.toList().forEach { runCatching { am.adjustStreamVolume(it, android.media.AudioManager.ADJUST_UNMUTE, 0) } }
+        hushed.clear()
+    }
     fun hushBeep() {
         val am = context.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
         listOf(android.media.AudioManager.STREAM_MUSIC, android.media.AudioManager.STREAM_NOTIFICATION, android.media.AudioManager.STREAM_SYSTEM)
@@ -2069,12 +2075,6 @@ fun App(
             .forEach { runCatching { am.adjustStreamVolume(it, android.media.AudioManager.ADJUST_MUTE, 0); hushed += it } }
         unhush[0]?.cancel()
         unhush[0] = scope.launch { kotlinx.coroutines.delay(900); unhushNow() }
-    }
-    /** Turns the sound back on at once (before the app speaks an answer). */
-    fun unhushNow() {
-        val am = context.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
-        hushed.toList().forEach { runCatching { am.adjustStreamVolume(it, android.media.AudioManager.ADJUST_UNMUTE, 0) } }
-        hushed.clear()
     }
 
     fun stopVoice(message: String? = null) {
