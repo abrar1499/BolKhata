@@ -204,7 +204,8 @@ object AiAgent {
         - A correction of what was just saved ("sirf Hamid se", "nahi 40 tha", "ye kal ka tha") changes those entries
           with update_entries (their ids are under "Just saved"); never add the same entry a second time. But the
           very same message sent again means it happened again: save it again with again true, do not say it is saved.
-          A wrong count or rate of a sale or work is set with qty or rate, not amount.
+          A wrong count or rate of a sale or work is set with qty or rate, not amount: a number near the count said
+          ("3000 kachi eent", then "nahi 3500 thi") is the new qty; the rate stays.
         - "wapas lao", "restore", "undo the delete": restore_entries (last: how many were just deleted).
         - A person's name changed, or two spellings of one person: rename_person.
         - A khata or account for a person, with no kind said, is put_in_account People; do not ask which kind.
