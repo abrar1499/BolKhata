@@ -16,6 +16,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -132,8 +134,9 @@ object Premium {
 }
 
 /**
- * The Premium sheet, as the mock: a star, the name and one line, what it gives, the two plans (yearly picked, "Save
- * 25%"), one blue button with the price, and how to cancel. Once on, it says so and where to manage it.
+ * The Premium sheet, as the mock: on white turning light blue (Mist), a star, the name and one line, what it gives,
+ * the two plans (yearly picked, "Save 25%"), one blue button with the price, and how to cancel. The cards are white,
+ * a little raised, with a light blue edge. Once on, it says so and where to manage it.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -142,11 +145,11 @@ fun PremiumSheet(onDismiss: () -> Unit) {
     val blue = Color(0xFF2F6BE0)
     val blueSoft = Color(0xFFEAF0FD)
     val sub = Color(0xFF8A8580)
-    val line = Color(0xFFE2DED8)
     var yearly by remember { mutableStateOf(true) }
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = LocalPage.current, dragHandle = null,
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Color.White, dragHandle = null,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)) {
-        Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 16.dp).navigationBarsPadding(),
+        Column(Modifier.background(Brush.linearGradient(listOf(Color.White, Color(0xFFE3ECFB)))).verticalScroll(rememberScrollState())
+            .padding(horizontal = 14.dp, vertical = 16.dp).navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(46.dp).clip(RoundedCornerShape(14.dp)).background(Color.White).border(1.5.dp, blue.copy(alpha = 0.35f), RoundedCornerShape(14.dp)),
@@ -158,9 +161,10 @@ fun PremiumSheet(onDismiss: () -> Unit) {
                 Text("Smart Expense Premium", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
                 Text("Your accounts, without ads or limits.", fontSize = 12.5.sp, color = sub)
             }
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.White).padding(horizontal = 12.dp, vertical = 4.dp)) {
+            Column(Modifier.fillMaxWidth().raised(blue).clip(RoundedCornerShape(16.dp)).background(Color.White)
+                .border(1.dp, blue.copy(alpha = 0.18f), RoundedCornerShape(16.dp)).padding(horizontal = 12.dp, vertical = 4.dp)) {
                 Give("🚫", "No ads", "Not in the chat, the cashbook or any list", blueSoft, sub)
-                HorizontalDivider(color = line)
+                HorizontalDivider(color = blue.copy(alpha = 0.12f))
                 Give("✦", "Smart assistant, no limits", "Ask as much as you like, no videos", blueSoft, sub)
             }
             if (Premium.active) {
@@ -174,9 +178,9 @@ fun PremiumSheet(onDismiss: () -> Unit) {
                     })
             } else {
                 Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PlanCard("Monthly", Premium.monthly, "a month", null, !yearly, blue, line, sub, Modifier.weight(1f).fillMaxHeight()) { yearly = false }
+                    PlanCard("Monthly", Premium.monthly, "a month", null, !yearly, blue, sub, Modifier.weight(1f).fillMaxHeight()) { yearly = false }
                     PlanCard("Yearly", Premium.yearly, "a year" + if (Premium.yearlyMonth.isBlank()) "" else " · ${Premium.yearlyMonth} a month", "Save 25%",
-                        yearly, blue, line, sub, Modifier.weight(1f).fillMaxHeight()) { yearly = true }
+                        yearly, blue, sub, Modifier.weight(1f).fillMaxHeight()) { yearly = true }
                 }
                 val price = if (yearly) Premium.yearly else Premium.monthly
                 val ready = price.isNotBlank()
@@ -193,6 +197,9 @@ fun PremiumSheet(onDismiss: () -> Unit) {
     }
 }
 
+/** A card lifted a little off the Mist with a soft blue shadow. */
+private fun Modifier.raised(blue: Color) = shadow(4.dp, RoundedCornerShape(16.dp), ambientColor = blue.copy(alpha = 0.3f), spotColor = blue.copy(alpha = 0.3f))
+
 /** One thing Premium gives: a round soft-blue mark, the name and a line. */
 @Composable
 private fun Give(mark: String, title: String, line: String, ring: Color, sub: Color) {
@@ -207,9 +214,10 @@ private fun Give(mark: String, title: String, line: String, ring: Color, sub: Co
 
 /** A plan to pick: its name, Play's price ("…" until it comes), a line, and a small blue [tag] above its corner. */
 @Composable
-private fun PlanCard(name: String, price: String, per: String, tag: String?, on: Boolean, blue: Color, line: Color, sub: Color, modifier: Modifier, onClick: () -> Unit) {
+private fun PlanCard(name: String, price: String, per: String, tag: String?, on: Boolean, blue: Color, sub: Color, modifier: Modifier, onClick: () -> Unit) {
     Box(modifier.padding(top = 9.dp)) {
-        Column(Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp)).background(Color.White).border(1.5.dp, if (on) blue else line, RoundedCornerShape(16.dp))
+        Column(Modifier.fillMaxSize().raised(blue).clip(RoundedCornerShape(16.dp)).background(Color.White)
+            .border(1.5.dp, if (on) blue else blue.copy(alpha = 0.18f), RoundedCornerShape(16.dp))
             .clickable(onClick = onClick).padding(start = 12.dp, end = 12.dp, top = 14.dp, bottom = 12.dp)) {
             Text(name, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = sub)
             Text(price.ifBlank { "…" }, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(top = 2.dp))
