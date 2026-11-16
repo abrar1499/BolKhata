@@ -95,11 +95,12 @@ fun ChatScreen(
     }
 
     Column(Modifier.fillMaxSize()) {
-        // One slim line with the business pill on the theme's band, as on the other tabs.
+        // One slim line with the business pill on the theme's band, as tall as on the other tabs: it runs on past the line
+        // by half a summary card, under the first messages.
         val theme = LocalHeader.current
         val banded = theme.name != "Clean"
         val ink = if (banded) theme.on.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant
-        Box(Modifier.fillMaxWidth().then(if (banded) Modifier.drawBehind { drawBand(theme, size.height) } else Modifier)) {
+        Box(Modifier.fillMaxWidth().then(if (banded) Modifier.drawBehind { drawBand(theme, size.height + 22.dp.toPx()) } else Modifier)) {
             Column(Modifier.statusBarsPadding().padding(horizontal = 12.dp).padding(bottom = 10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     BusinessPill(business.ifBlank { "Chat" }, onMenu)
