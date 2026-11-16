@@ -888,6 +888,22 @@ private fun EntryPicker(all: List<Entry>, setup: SideSetup, onSetup: (SideSetup)
                             groups.forEach { (g, icon) -> PickChip("$icon $g", group == g) { group = g } }
                             PickChip("+ New", group == "") { group = "" }
                         }
+                        // The things inside the picked account, on the same page: a tap is the name; else it is typed above.
+                        val g = group
+                        val things = remember(g, k, all, setup) {
+                            if (g.isNullOrBlank()) emptyList() else {
+                                val book = Sides.books(k.side, all, setup).firstOrNull { it.name.equals(g, true) }
+                                val cat = book?.cat ?: Cat.values().firstOrNull { it.label.equals(g, true) && k.side == Side.EXP }
+                                (book?.let { b -> Sides.kids(b, all, setup).map { it.name } }.orEmpty() + cat?.let { defaultSubs[it] }.orEmpty())
+                                    .distinctBy { it.lowercase() }
+                            }
+                        }
+                        if (things.isNotEmpty()) {
+                            Text("Inside $g", fontSize = 11.sp, color = sub, modifier = Modifier.padding(start = 2.dp, top = 12.dp))
+                            FlowRow(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                things.forEach { n -> PickChip("${iconFor(n, k.side == Side.INC)} $n", name.trim().equals(n, true)) { name = n } }
+                            }
+                        }
                     }
                     val ready = name.isNotBlank() && k != null && (k.party != null || group != null)
                     Box(
