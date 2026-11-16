@@ -2058,7 +2058,27 @@ fun App(
         }
     }
 
+    // Google's listener beeps each time it starts and stops, which in a live talk is every few seconds. Its sound is
+    // muted for a moment around each beep: only streams the person had on, and always turned back on after.
+    val hushed = remember { mutableSetOf<Int>() }
+    val unhush = remember { arrayOfNulls<kotlinx.coroutines.Job>(1) }
+    fun hushBeep() {
+        val am = context.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
+        listOf(android.media.AudioManager.STREAM_MUSIC, android.media.AudioManager.STREAM_NOTIFICATION, android.media.AudioManager.STREAM_SYSTEM)
+            .filter { it !in hushed && !am.isStreamMute(it) }
+            .forEach { runCatching { am.adjustStreamVolume(it, android.media.AudioManager.ADJUST_MUTE, 0); hushed += it } }
+        unhush[0]?.cancel()
+        unhush[0] = scope.launch { kotlinx.coroutines.delay(900); unhushNow() }
+    }
+    /** Turns the sound back on at once (before the app speaks an answer). */
+    fun unhushNow() {
+        val am = context.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
+        hushed.toList().forEach { runCatching { am.adjustStreamVolume(it, android.media.AudioManager.ADJUST_UNMUTE, 0) } }
+        hushed.clear()
+    }
+
     fun stopVoice(message: String? = null) {
+        unhush[0]?.cancel(); unhushNow()
         voiceOn = false
         voiceAwaiting = false
         voiceStatus = ""
@@ -2105,6 +2125,7 @@ fun App(
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2500L)
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2000L)
         }
+        hushBeep()
         runCatching { r.cancel(); r.startListening(i) }
     }
 
@@ -2133,6 +2154,7 @@ fun App(
                 .maxByOrNull { it.quality }?.let { tts.voice = it }
         }
         voiceStatus = "Speaking…"
+        unhush[0]?.cancel(); unhushNow()
         tts.speak(text, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "reply-" + System.nanoTime())
     }
 
@@ -2310,7 +2332,7 @@ fun App(
             override fun onBeginningOfSpeech() {}
             override fun onRmsChanged(rmsdB: Float) { voiceLevel = (rmsdB + 2f) / 12f }
             override fun onBufferReceived(buffer: ByteArray?) {}
-            override fun onEndOfSpeech() { voiceStatus = "Thinking…" }
+            override fun onEndOfSpeech() { hushBeep(); voiceStatus = "Thinking…" }
             override fun onEvent(eventType: Int, params: Bundle?) {}
             override fun onPartialResults(partialResults: Bundle?) {
                 partialResults?.getStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
