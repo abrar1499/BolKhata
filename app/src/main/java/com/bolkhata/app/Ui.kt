@@ -12,6 +12,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.foundation.clickable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
@@ -198,13 +201,19 @@ val AppTypography: Typography = Typography().run {
 /** Light page colours offered in the side menu (Background): warm grey (the default on every new install), light slate. */
 val PAGE_COLORS = listOf(0xFFE9E6E1, 0xFFE6E8EB)
 
-/** One dark look; it changes the whole app: page, cards, wells, edges, the ledger's day strip and the search / chat field. */
-class DarkLook(val page: Long, val card: Long, val well: Long, val edge: Long, val day: Long, val field: Long)
+/**
+ * One dark look; it changes the whole app: page, cards, wells, edges, the ledger's day strip and the search / chat field.
+ * [menu]: menus and buttons that float over a list, always solid. [glow]: soft lights on the page (see [pageGround]).
+ */
+class DarkLook(val page: Long, val card: Long, val well: Long, val edge: Long, val day: Long, val field: Long, val menu: Long = card, val glow: Boolean = false)
 
-/** Dark looks, dull rather than pure black: Graphite (the default), Navy. */
+/**
+ * Dark looks, dull rather than pure black: Graphite (the default); Navy glow, like the phone's notification shade:
+ * soft blue and teal lights on navy, and cards, wells and the day strip as see-through glass on them.
+ */
 val DARK_LOOKS = listOf(
     DarkLook(0xFF3A3D42, 0xFF2A2C30, 0xFF34373C, 0xFF4A4E54, 0xFF33373E, 0xFF45484D),
-    DarkLook(0xFF1B2230, 0xFF121826, 0xFF1D2535, 0xFF2C3648, 0xFF222B3C, 0xFF252D3D)
+    DarkLook(0xFF1B2230, 0x1AFFFFFF, 0x14FFFFFF, 0x29FFFFFF, 0x12FFFFFF, 0xFF2C3550, menu = 0xFF27304A, glow = true)
 )
 val DARK_PAGES = DARK_LOOKS.map { it.page }
 
@@ -238,7 +247,7 @@ fun BolTheme(dark: Boolean, clear: Boolean = false, page: Long = PAGE_COLORS[0],
         outline = Color(look.edge),
         outlineVariant = Color(look.well),
         // Menus white-ish (the card), dialogs and sheets the page: no system purple tint anywhere.
-        surfaceContainerLowest = Color(look.card), surfaceContainerLow = bg, surfaceContainer = Color(look.card),
+        surfaceContainerLowest = Color(look.menu), surfaceContainerLow = bg, surfaceContainer = Color(look.menu),
         surfaceContainerHigh = bg, surfaceContainerHighest = Color(look.well), surfaceTint = Color.Transparent
     ) else lightColorScheme(
         primary = Color(0xFF059669),
@@ -686,7 +695,7 @@ fun BoxScope.PickMenu(open: Boolean, onDismiss: () -> Unit, content: @Composable
     Box(Modifier.align(Alignment.BottomEnd).padding(end = 16.dp)) {
         DropdownMenu(
             expanded = open, onDismissRequest = onDismiss, shape = RoundedCornerShape(16.dp),
-            containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp, shadowElevation = 6.dp,
+            containerColor = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 0.dp, shadowElevation = 6.dp,
             content = content
         )
     }
@@ -706,7 +715,7 @@ fun BoxScope.CompactPicker(open: Boolean, items: List<Pair<String, String>>, sel
             properties = androidx.compose.ui.window.PopupProperties(focusable = true)
         ) {
             val shape = RoundedCornerShape(14.dp)
-            Column(Modifier.width(270.dp).shadow(8.dp, shape).clip(shape).background(MaterialTheme.colorScheme.surface).padding(vertical = 6.dp)) {
+            Column(Modifier.width(270.dp).shadow(8.dp, shape).clip(shape).solidCard().padding(vertical = 6.dp)) {
                 if (search) androidx.compose.foundation.text.BasicTextField(
                     q, { q = it }, singleLine = true,
                     textStyle = TextStyle(fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface),
@@ -815,6 +824,34 @@ fun FitText(
 }
 
 /**
+ * The page under everything: its plain colour, or in the glow look navy with soft lights placed by screen position, so a
+ * sticky band or a page opened over another is solid yet joins the glow behind it without a seam.
+ */
+@Composable
+fun Modifier.pageGround(): Modifier {
+    val look = LocalLook.current
+    if (look?.glow != true) return background(MaterialTheme.colorScheme.background)
+    val screen = androidx.compose.ui.platform.LocalContext.current.resources.displayMetrics
+    val w = screen.widthPixels.toFloat()
+    val h = screen.heightPixels.toFloat()
+    var at by remember { mutableStateOf(Offset.Zero) }
+    return onGloballyPositioned { at = it.positionInWindow() }.drawBehind {
+        drawRect(Color(look.page))
+        // A light at (x, y) of the screen, fading out over r screen widths.
+        fun light(x: Float, y: Float, r: Float, c: Long) = Color(c).let {
+            drawRect(Brush.radialGradient(listOf(it, it.copy(alpha = 0f)), Offset(x * w - at.x, y * h - at.y), r * w))
+        }
+        light(0.08f, 0.22f, 0.55f, 0x734670C8)
+        light(0.95f, 0.75f, 0.6f, 0x4D28A0B4)
+        light(0.5f, 1.05f, 0.65f, 0xE60E1426)
+    }
+}
+
+/** A solid card for things that float over a list (tabs, menus, the + button): in the glow look frosted glass on the glow. */
+@Composable
+fun Modifier.solidCard(): Modifier = pageGround().background(MaterialTheme.colorScheme.surface)
+
+/**
  * The chat field and search box, as in the Claude app: white (in dark, a shade lighter than the page), a soft
  * see-through edge and a faint shadow.
  */
@@ -823,6 +860,6 @@ fun Modifier.fieldEdge(shape: androidx.compose.ui.graphics.Shape): Modifier {
     val look = LocalLook.current
     val fill = look?.let { Color(it.field) } ?: Color.White
     val edge = if (look != null) Color(0x26DEDCD1) else Color(0x261F1E1D)
-    return this.shadow(3.dp, shape, ambientColor = Color.Black.copy(alpha = 0.05f), spotColor = Color.Black.copy(alpha = 0.05f))
-        .clip(shape).background(fill, shape).border(1.dp, edge, shape)
+    val base = this.shadow(3.dp, shape, ambientColor = Color.Black.copy(alpha = 0.05f), spotColor = Color.Black.copy(alpha = 0.05f)).clip(shape)
+    return (if (look?.glow == true) base.solidCard() else base.background(fill, shape)).border(1.dp, edge, shape)
 }

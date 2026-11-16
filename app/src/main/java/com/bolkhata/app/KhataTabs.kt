@@ -114,7 +114,7 @@ val KHATA_TABS = listOf(Tab.CHAT, Tab.CASHBOOK, Tab.PARTIES, Tab.EXPENSE, Tab.IN
 @Composable
 fun KhataNav(tab: Tab, onTab: (Tab) -> Unit) {
     // No shadow: it joins the white chat strip above into one bottom panel.
-    Surface(color = MaterialTheme.colorScheme.surface) {
+    Surface(Modifier.solidCard(), color = Color.Transparent, contentColor = MaterialTheme.colorScheme.onSurface) {
         Row(Modifier.fillMaxWidth().navigationBarsPadding().height(58.dp)) {
             KHATA_TABS.forEach { t ->
                 val (label, icon) = navItem(t)
@@ -192,7 +192,7 @@ private fun KhataTop(
  */
 @Composable
 private fun TabHead(content: @Composable ColumnScope.() -> Unit) =
-    Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).padding(bottom = 4.dp), content = content)
+    Column(Modifier.fillMaxWidth().pageGround().padding(bottom = 4.dp), content = content)
 
 /** The theme band in the app icon's glass look, with a thin light bottom edge. */
 private fun DrawScope.drawBand(theme: HeaderTheme, h: Float) {
@@ -398,7 +398,7 @@ internal fun PeriodChips(newest: List<Entry>, period: Period, onPick: (Period) -
                 ) {
                     val shape = RoundedCornerShape(12.dp)
                     Column(
-                        Modifier.widthIn(min = 110.dp).shadow(8.dp, shape).clip(shape).background(MaterialTheme.colorScheme.surface)
+                        Modifier.widthIn(min = 110.dp).shadow(8.dp, shape).clip(shape).solidCard()
                             .border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape).padding(vertical = 4.dp)
                     ) {
                         (listOf("All") + years.map { it.toString() } + "Dates…").forEach { v ->
@@ -641,7 +641,7 @@ private fun BoxScope.PlusButton(onClick: () -> Unit) {
     val shape = RoundedCornerShape(14.dp)
     Row(
         Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = LocalBarSpace.current + 6.dp)
-            .height(46.dp).shadow(2.dp, shape).clip(shape).background(MaterialTheme.colorScheme.surface)
+            .height(46.dp).shadow(2.dp, shape).clip(shape).solidCard()
             .clickable { onClick() }.padding(start = 10.dp, end = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

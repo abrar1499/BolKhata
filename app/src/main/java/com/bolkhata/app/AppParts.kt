@@ -267,8 +267,9 @@ internal fun SideMenu(
         )
     }
     ModalDrawerSheet(
-        modifier = Modifier.width(252.dp),
-        drawerContainerColor = MaterialTheme.colorScheme.background,
+        modifier = Modifier.width(252.dp).pageGround(),
+        drawerContainerColor = Color.Transparent,
+        drawerContentColor = MaterialTheme.colorScheme.onBackground,
         drawerShape = RoundedCornerShape(0.dp),
         windowInsets = WindowInsets(0, 0, 0, 0)
     ) {

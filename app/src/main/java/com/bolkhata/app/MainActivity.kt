@@ -40,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
@@ -77,7 +78,8 @@ class MainActivity : ComponentActivity() {
             val m = resources.displayMetrics
             CompositionLocalProvider(LocalHeader provides header, LocalDensity provides Density(minOf(m.widthPixels, m.heightPixels) / 350f, 1f)) {
                 BolTheme(dark, clear = bg != null, page = page) {
-                    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    // The page colour, or the glow look's lights (pageGround); screens and the Scaffold stay see-through over it.
+                    Surface(Modifier.fillMaxSize().pageGround(), color = Color.Transparent, contentColor = MaterialTheme.colorScheme.onBackground) {
                         // A picked photo sits behind every screen; the plain colour otherwise.
                         if (bg != null) androidx.compose.foundation.Image(bg, null, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
                         App(
@@ -2752,7 +2754,7 @@ fun App(
                 }
             }
         },
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = Color.Transparent,
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { pad ->
         // Like ChatGPT, screens run underneath the floating message bar; lists add LocalBarSpace at their end.
@@ -3127,7 +3129,7 @@ fun App(
             // Main accounts open over the list, so going back returns to the same place in the list.
             ledger?.let { start ->
                 Box(
-                    Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
+                    Modifier.fillMaxSize().pageGround()
                         .pointerInput(Unit) { detectTapGestures { } }
                 ) {
                     CompositionLocalProvider(LocalEntryMenu provides { e: Entry -> menuFor = e }) {
@@ -3327,7 +3329,7 @@ fun App(
             // The account opens over the list, so going back returns to the same place in the list.
             if (acct != null) {
                 Box(
-                    Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
+                    Modifier.fillMaxSize().pageGround()
                         .pointerInput(Unit) { detectTapGestures { } }
                 ) {
                     // Comes before the khata's own Back, which would otherwise step the khata underneath.

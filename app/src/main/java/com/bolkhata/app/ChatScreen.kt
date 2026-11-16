@@ -428,21 +428,24 @@ private fun AnswerActions(rating: Boolean?, onRate: (good: Boolean) -> Unit) {
 }
 
 /**
- * After 10 smart answers on the app's own key, as the mock: a card from white to a light blue, a white play circle
+ * After 10 smart answers on the app's own key, as the mock: a card from white to a light blue (glass in the dark), a play circle
  * with a blue edge, two lines, a blue "Watch ad" button, a quiet "Not now" and "Go Premium". No shadows.
  */
 @Composable
 private fun RewardCard(onWatch: () -> Unit, onLater: () -> Unit, onPremium: () -> Unit) {
-    val blue = Color(0xFF2F6BE0)
-    Column(Modifier.fillMaxWidth().padding(start = 8.dp, top = 2.dp, end = 2.dp).clip(RoundedCornerShape(18.dp))
-        .background(Brush.linearGradient(listOf(Color.White, Color(0xFFE3ECFB)))).padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    val t = tone()
+    val blue = t.blue
+    val shape = RoundedCornerShape(18.dp)
+    Column(Modifier.fillMaxWidth().padding(start = 8.dp, top = 2.dp, end = 2.dp).clip(shape)
+        .then(if (t.dark) Modifier.background(t.card).border(1.dp, t.edge, shape) else Modifier.background(Brush.linearGradient(t.ground)))
+        .padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(11.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(38.dp).clip(CircleShape).background(Color.White).border(1.5.dp, blue.copy(alpha = 0.45f), CircleShape), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(38.dp).clip(CircleShape).background(t.card).border(1.5.dp, blue.copy(alpha = 0.45f), CircleShape), contentAlignment = Alignment.Center) {
                 Icon(PlayMark, contentDescription = null, tint = blue, modifier = Modifier.padding(start = 2.dp).size(14.dp))
             }
             Column {
-                Text("Keep getting smart answers", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1D1D1F))
-                Text("Watch a short video. Saving entries is always free.", fontSize = 11.5.sp, lineHeight = 15.sp, color = Color(0xFF8A8580))
+                Text("Keep getting smart answers", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = t.ink)
+                Text("Watch a short video. Saving entries is always free.", fontSize = 11.5.sp, lineHeight = 15.sp, color = t.sub)
             }
         }
         Row(Modifier.fillMaxWidth().height(40.dp).clip(RoundedCornerShape(14.dp)).background(blue).clickable(onClick = onWatch),
@@ -451,7 +454,7 @@ private fun RewardCard(onWatch: () -> Unit, onLater: () -> Unit, onPremium: () -
             Spacer(Modifier.width(7.dp))
             Text("Watch ad", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
         }
-        Text("Not now", fontSize = 12.sp, color = Color(0xFF8A8580), modifier = Modifier.align(Alignment.CenterHorizontally)
+        Text("Not now", fontSize = 12.sp, color = t.sub, modifier = Modifier.align(Alignment.CenterHorizontally)
             .clip(RoundedCornerShape(8.dp)).clickable(onClick = onLater).padding(horizontal = 8.dp, vertical = 2.dp))
         Text("Go Premium: no ads, no videos", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = blue, modifier = Modifier.align(Alignment.CenterHorizontally)
             .clip(RoundedCornerShape(8.dp)).clickable(onClick = onPremium).padding(horizontal = 8.dp, vertical = 2.dp))
