@@ -153,6 +153,10 @@ object Query {
     fun shown(list: List<Entry>): List<Entry> = list.take(SHOWN)
 
     /** The answer, worked out by the app: a total, a count or a short list. */
+    /** How much of a thing and at what rate, for a row of goods: " · 5 kg × 80", " · 10,000 × 900 per 1000"; "" for money alone. */
+    fun goods(e: Entry): String = if (e.qty <= 0 || e.rate <= 0) "" else
+        " · " + fmt(e.qty) + (if (e.unit.isNotBlank() && e.unit != "1000") " " + e.unit else "") + " × " + fmt(e.rate) + (if (e.unit == "1000") " per 1000" else "")
+
     fun answer(list: List<Entry>, what: String, f: Filter, currency: String, rows: Int = SHOWN): String {
         val head = label(f)
         if (list.isEmpty()) return "Nothing found ($head)."
@@ -161,7 +165,7 @@ object Query {
             "list" -> {
                 val dateFmt = java.text.SimpleDateFormat("d MMM", java.util.Locale.US)
                 val lines = list.take(rows).joinToString("\n") { e ->
-                    dateFmt.format(java.util.Date(e.date)) + " · " + (e.item.ifBlank { e.category.label }) +
+                    dateFmt.format(java.util.Date(e.date)) + " · " + (e.item.ifBlank { e.category.label }) + goods(e) +
                         (if (e.person.isNotBlank()) " · " + e.person else "") + " · " + fmt(e.amount) + " " + currency
                 } + if (list.size > rows) "\n+${list.size - rows} more" else ""
                 lines + "\nTotal: " + totals(list, head, currency)
