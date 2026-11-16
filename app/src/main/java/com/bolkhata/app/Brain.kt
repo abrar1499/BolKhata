@@ -102,7 +102,7 @@ object Brain {
         if (people(json).any { !Regex("""@\d+""").matches(it.trim()) }) return@runCatching false
         val nameParts = names.flatMap { words(it) }.filter { it.length >= 3 }.toSet()
         (words(shape) + texts(json).flatMap { words(it) }).none { w ->
-            w in nameParts || Understand.isCommonName(w) || (w.any { it.isDigit() } && !Regex("""[#@]\d+""").matches(w))
+            w in nameParts || Understand.isCommonName(w) || (w.any { it.isDigit() } && !Regex("""[#@]\d+|\d{1,2}""").matches(w))
         }
     }.getOrDefault(false)
 

@@ -471,7 +471,8 @@ object AiAgent {
         // A sentence with figures of its own was worked out for that day's books: only the card is done again. A reply of
         // any length is learnt (the owner marks a wrong one ✗); only talk about today, the time or the news is not, as it changes.
         if (calls.isEmpty() && timely.containsMatchIn(said)) return null
-        var text = if (reply.any { it.isDigit() }) "" else reply.trim()
+        // Plain talk may keep small numbers of the world ("24 ghante", "50-60%"), never one of 3 digits or more (someone's amount).
+        var text = if ((done.isNotEmpty() && reply.any { it.isDigit() }) || Regex("""\d[\d,.]{2,}""").containsMatchIn(reply)) "" else reply.trim()
         people.forEachIndexed { at, p -> text = text.replace(p, "@$at", ignoreCase = true) }
         if (done.isEmpty() && (text.isBlank() || nums.isNotEmpty())) return null
         // "Entry deleted" after only a look: a reply saying a change the tools did not make is never done again.

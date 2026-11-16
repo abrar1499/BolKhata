@@ -396,4 +396,14 @@ class AiAgentTest {
         assertTrue(AiAgent.learn(emptyList(), "men udas hun", names, emptyMap(), long).lesson.contains("udaas"))
         assertEquals("", AiAgent.learn(emptyList(), "aaj kya din hai", names, emptyMap(), "Aaj Monday hai.").lesson)
     }
+
+    /** Talk with small numbers of the world is learnt and may be shared; a reply with an amount (3 digits or more) is not. */
+    @Test
+    fun talkWithSmallNumbersIsLearnt() {
+        val names = listOf("Hamid Akram")
+        val day = AiAgent.learn(emptyList(), "din me kitne ghante hote hain", names, emptyMap(), "Din mein 24 ghante hote hain, aur har ghante mein 60 minute.")
+        assertTrue(day.lesson.contains("24 ghante"))
+        assertTrue(Brain.safe(day.shape, day.lesson))
+        assertEquals("", AiAgent.learn(emptyList(), "mera kharcha kitna hai", names, emptyMap(), "Aap ka kharcha 3,500 hai.").lesson)
+    }
 }
