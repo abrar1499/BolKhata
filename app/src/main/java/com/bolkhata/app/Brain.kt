@@ -17,14 +17,33 @@ object Brain {
     const val URL = "https://raw.githubusercontent.com/$REPO/main/brain.json"
     private const val API = "https://api.github.com/repos/$REPO/contents/brain.json"
 
-    /** The lessons in the shared file ({"lessons": {shape: lesson}}); null when it could not be read. */
+    /** Whether the owner's built-in AI key answers for everyone ("ai" in the shared file; on unless the owner turned it off). */
+    @Volatile var aiForAll = true
+
+    /** The lessons in the shared file ({"lessons": {shape: lesson}, "ai": true}); null when it could not be read. Reads [aiForAll] too. */
     fun fetch(): Map<String, String>? = runCatching {
         val conn = URL(URL).openConnection() as HttpURLConnection
         conn.connectTimeout = 8_000
         conn.readTimeout = 15_000
         if (conn.responseCode != 200) return@runCatching null
-        clean(lessonsOf(JSONObject(conn.inputStream.bufferedReader().use { it.readText() })))
+        val o = JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
+        aiForAll = o.optBoolean("ai", true)
+        clean(lessonsOf(o))
     }.getOrNull()
+
+    /** Turns the owner's built-in AI on or off for every install (they read it when they open); false when GitHub could not be reached. */
+    fun setAiForAll(token: String, on: Boolean): Boolean = runCatching {
+        val (code, text) = call("GET", "$API?ref=main", token, null)
+        if (code != 200) return@runCatching false
+        val now = JSONObject(text)
+        val file = JSONObject(String(android.util.Base64.decode(now.getString("content"), android.util.Base64.DEFAULT)))
+        file.put("ai", on).put("version", file.optInt("version") + 1)
+        val body = JSONObject().put("message", "AI for everyone: " + if (on) "on" else "off").put("branch", "main").put("sha", now.getString("sha"))
+            .put("content", android.util.Base64.encodeToString(file.toString(1).toByteArray(), android.util.Base64.NO_WRAP))
+        val ok = call("PUT", API, token, body.toString()).first in 200..201
+        if (ok) aiForAll = on
+        ok
+    }.getOrDefault(false)
 
     /** Only the lessons of the shared file that are [safe]: anyone's bad line in it is left out. */
     fun clean(lessons: Map<String, String>): Map<String, String> = lessons.filter { (shape, lesson) -> safe(shape, lesson) }
@@ -80,7 +99,7 @@ object Brain {
         val have = file?.let { lessonsOf(it) }.orEmpty()
         val add = learnt.filter { (s, l) -> have[s] != l && safe(s, l, names) }
         if (add.isEmpty()) return@runCatching 0
-        val next = JSONObject().put("version", (file?.optInt("version") ?: 0) + 1).put("lessons", JSONObject(have + add))
+        val next = (file ?: JSONObject()).put("version", (file?.optInt("version") ?: 0) + 1).put("lessons", JSONObject(have + add))
         val body = JSONObject().put("message", "Brain: ${add.size} new lessons").put("branch", "main")
             .put("content", android.util.Base64.encodeToString(next.toString(1).toByteArray(), android.util.Base64.NO_WRAP))
             .apply { now?.optString("sha")?.takeIf { it.isNotBlank() }?.let { put("sha", it) } }
