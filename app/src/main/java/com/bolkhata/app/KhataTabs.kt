@@ -195,7 +195,7 @@ private fun TabHead(content: @Composable ColumnScope.() -> Unit) =
     Column(Modifier.fillMaxWidth().pageGround().padding(bottom = 4.dp), content = content)
 
 /** The theme band in the app icon's glass look, with a thin light bottom edge. */
-private fun DrawScope.drawBand(theme: HeaderTheme, h: Float) {
+internal fun DrawScope.drawBand(theme: HeaderTheme, h: Float) {
     drawGlass(bandColors(theme), h)
     drawRect(Color.White.copy(alpha = 0.35f), topLeft = Offset(0f, h - 1.dp.toPx()), size = Size(size.width, 1.dp.toPx()))
 }

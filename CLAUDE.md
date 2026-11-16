@@ -121,6 +121,7 @@ Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Packa
   Version. No separate Settings page.
 - 🌐 pill (`LangMoneyPill`) top right on every tab: App language (10, Auto = phone; tables in assets/i18n, `tools/i18n.py`)
   and Currency. Premium (`Premium.kt`, side menu ⭐): no ads + smart assistant without limits. Grey Fix pill under answers.
+- The band runs on Chat too (behind its slim top line), as on the other tabs.
 - Bottom tabs Chat · Cashbook · Party · Expense · Income (emoji icons 💬 📒 👥 🧾 💵). Chat bar only on Chat: a 38-high
   field on the page (no white strip, no +), 13sp, white round mic with a soft shadow.
   No Entry button on lists: entries are added inside a person or thing (solid + Paid / + Work, + Received / + Given, + Out).
