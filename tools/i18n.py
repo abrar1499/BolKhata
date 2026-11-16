@@ -8,6 +8,7 @@ import json
 import pathlib
 import re
 import sys
+from concurrent.futures import ThreadPoolExecutor
 
 import anthropic
 
@@ -116,20 +117,26 @@ def main():
     LIST.write_text(json.dumps(keys, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     print(f"{len(keys)} English lines")
     OUT.mkdir(parents=True, exist_ok=True)
-    client = anthropic.Anthropic()
-    total = [0, 0]
-    for lang in (sys.argv[1:] or LANGS):
+    client = anthropic.Anthropic(max_retries=8)
+
+    def one(lang):
+        """Translates [lang]'s missing lines and writes its table; returns the tokens used."""
         path = OUT / f"{lang}.json"
         have = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
         todo = [k for k in keys if k not in have]
+        used = [0, 0]
         if todo:
             got, used = translate(client, lang, todo)
             have.update(got)
-            total[0] += used[0]
-            total[1] += used[1]
-            print(f"{lang}: {len(got)} of {len(todo)} new lines")
+            print(f"{lang}: {len(got)} of {len(todo)} new lines", flush=True)
         kept = {k: have[k] for k in keys if k in have}
         path.write_text(json.dumps(kept, ensure_ascii=False, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+        return used
+
+    # The languages side by side, so a full run takes minutes, not half an hour.
+    with ThreadPoolExecutor(max_workers=9) as pool:
+        used = list(pool.map(one, sys.argv[1:] or list(LANGS)))
+    total = [sum(u[0] for u in used), sum(u[1] for u in used)]
     # Claude Opus 5.5: $4 a million tokens in, $20 out.
     print(f"Tokens: {total[0]} in, {total[1]} out, about ${(total[0] * 4 + total[1] * 20) / 1e6:.2f}")
 

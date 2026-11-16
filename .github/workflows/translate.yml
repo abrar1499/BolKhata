@@ -23,6 +23,14 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: python tools/i18n.py
+      # Kept for a week even if the commit below fails, so a paid run is never lost.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: i18n
+          path: |
+            app/src/main/assets/i18n
+            tools/i18n
       - name: Commit the tables
         run: |
           git config user.name "github-actions[bot]"
@@ -30,4 +38,6 @@ jobs:
           git add app/src/main/assets/i18n tools/i18n
           git diff --cached --quiet && exit 0
           git commit -m "Translations: the app's words in every language"
-          git push
+          # The branch may have moved while translating: put this commit on top and try again.
+          for i in 1 2 3 4; do git pull -q --rebase origin "$GITHUB_REF_NAME" && git push && exit 0; sleep 10; done
+          exit 1
