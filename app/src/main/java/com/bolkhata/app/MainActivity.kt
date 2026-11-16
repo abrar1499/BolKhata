@@ -1514,10 +1514,16 @@ fun App(
                     return@launch
                     }
                 }
-                // Asked again after 👎 and no AI answered: said plainly, the app's own answer is not given a second time.
+                // Asked again after ✗ and no AI answered: the app reads it once more with its spelling put right, else asks
+                // for other words (its first answer is not given a second time).
                 if (retry) {
-                    lastSpeech = "The AI could not answer now" + (if (aiWhy.isBlank() || BuildConfig.PLAY) "." else " ($aiWhy).")
-                    postChat(lastSpeech, isUser = false, meta = "plain")
+                    val fixed = offMain { Spell.fix(text, names0 + entries.map { it.item }) }
+                    if (!fixed.equals(text, true)) again = fixed
+                    else {
+                        lastSpeech = "I could not read it another way. Please say it in other words, like 'petrol 60' or 'hamid ko 500 diye'." +
+                            (if (aiWhy.isBlank() || BuildConfig.PLAY) "" else " (AI: $aiWhy)")
+                        postChat(lastSpeech, isUser = false, meta = "plain")
+                    }
                     return@launch
                 }
                 // With Groq on, Groq reads every message first: money and app requests become a clear command that the
@@ -1654,8 +1660,8 @@ fun App(
                 postChat(safe, isUser = false, meta = "engine=NativeChatEngine; stage=interpret; failure=" + e.javaClass.simpleName)
             } finally {
                 chatLoading = false
+                again?.let { sayNote[0] = "Read as: $it"; chatInput(it, quiet = true, spelled = true) }
             }
-            again?.let { sayNote[0] = "Read as: $it"; chatInput(it, quiet = true, spelled = true) }
         }
     }
 
@@ -2836,8 +2842,13 @@ fun App(
                             // 👎 on any answer (the app's, a learnt one or the AI's): what it saved goes to Trash and the AI reads the
                             // message again, told the last answer was wrong. A right answer needs no 👍: it is learnt by itself.
                             val rated = chatMessages.firstOrNull { it.id == id }
+                            // ✓ under the app's last question ("Move them all to Trash?") is the yes.
+                            if (good && rated != null && !rated.isUser && rated.text.trimEnd().endsWith("?") && chatMessages.lastOrNull()?.id == rated.id) {
+                                chatInput("yes")
+                                return@rate
+                            }
+                            // Without an AI the app itself reads it once more (see chatInput's retry).
                             if (!good && rated != null && !rated.isUser) {
-                                if (!Ai.handles(groqKey)) { driveToast("Turn on an AI key to ask the AI"); return@rate }
                                 chatMessages.take(chatMessages.indexOf(rated)).lastOrNull { it.isUser }?.let { q ->
                                     if (rated.entryIds.isNotEmpty()) moveToTrash(rated.entryIds.toSet())
                                     aiSaved = emptyList(); aiPicked = ""
