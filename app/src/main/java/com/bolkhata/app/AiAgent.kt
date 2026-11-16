@@ -194,7 +194,7 @@ object AiAgent {
           saved name that joins two people ("A & B", "A and B") is its own account: a message naming only one of them
           means a separate, single person. A new name keeps the spelling that reads most like a real name.
         - A person and a number with no way to tell what happened (paid, received, work, goods): call choose_kind, the
-          app shows buttons to tap. Do not ask that in words.
+          app shows buttons to tap. Do not ask that in words. A verb tells: "hamid ko 500 diye" is lent, also to a worker.
         - A voice message may be misheard: read it with its other hearings and take the words that make sense for a
           ledger. A person's name is kept as heard: change it to a saved name only when the two sound almost the same
           (Hamid / Hameed); a different name (Ahmed is not Ashraf) is a new person. But an ordinary word that is no
