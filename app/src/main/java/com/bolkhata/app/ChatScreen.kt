@@ -103,6 +103,7 @@ fun ChatScreen(
                     BusinessPill(business.ifBlank { "Chat" }, onMenu)
                     Text(subtitle, color = ink, fontSize = 11.sp, maxLines = 1,
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 10.dp, top = 10.dp))
+                    Box(Modifier.padding(top = 6.dp)) { LangMoneyPill() }
                     Box {
                         var more by remember { mutableStateOf(false) }
                         IconButton(onClick = { more = true }) {

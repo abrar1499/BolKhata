@@ -17,6 +17,17 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.draw.clip
 import org.json.JSONObject
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
@@ -107,4 +118,82 @@ fun Text(
         lineHeight = lineHeight, overflow = overflow, softWrap = softWrap, maxLines = maxLines, minLines = minLines,
         onTextLayout = onTextLayout, style = style
     )
+}
+
+/** The app's languages as the person picks them: "" Auto (the phone's), then each by its own name. */
+val APP_LANGS = listOf("" to "Auto", "en" to "English", "ur" to "اردو", "hi" to "हिन्दी", "ar" to "العربية", "bn" to "বাংলা",
+    "es" to "Español", "fr" to "Français", "de" to "Deutsch", "pt" to "Português", "tr" to "Türkçe")
+
+/** How the 🌐 pill changes the money and the app's language; MainActivity hands these over. */
+object LangMoney {
+    var onCurrency: (String) -> Unit = {}
+    var onAppLang: (String) -> Unit = {}
+}
+
+/**
+ * The small white "🌐 SAR" pill at the top right of every tab, as the mock: a compact list opens under it, over the
+ * page, with Language and Currency at its top; picking one closes it.
+ */
+@Composable
+fun LangMoneyPill() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val currency = LocalCurrency.current
+    var open by androidx.compose.runtime.remember { mutableStateOf(false) }
+    var tab by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    var q by androidx.compose.runtime.remember { mutableStateOf("") }
+    val sub = Color(0xFF8A8580)
+    val red = Color(0xFFE3342F)
+    androidx.compose.foundation.layout.Box {
+        androidx.compose.foundation.layout.Row(
+            Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(16.dp)).background(androidx.compose.material3.MaterialTheme.colorScheme.surface)
+                .clickable { open = true; q = "" }.padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+        ) {
+            Text("🌐", fontSize = 11.5.sp)
+            androidx.compose.foundation.layout.Spacer(Modifier.width(4.dp))
+            Text(currency.ifBlank { "Money" }, fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+        }
+        androidx.compose.material3.DropdownMenu(open, { open = false }, Modifier.width(196.dp).heightIn(max = 330.dp),
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp), containerColor = Color.White) {
+            androidx.compose.foundation.layout.Row(Modifier.padding(horizontal = 8.dp, vertical = 4.dp).fillMaxWidth()
+                .clip(androidx.compose.foundation.shape.RoundedCornerShape(10.dp)).background(Color(0xFFF1EEEA)).padding(3.dp)) {
+                listOf("🌐 Language", "💱 Currency").forEachIndexed { i, label ->
+                    Text(label, fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, color = if (tab == i) Color(0xFF1D1D1F) else sub,
+                        textAlign = TextAlign.Center, maxLines = 1,
+                        modifier = Modifier.weight(1f).clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                            .background(if (tab == i) Color.White else Color.Transparent).clickable { tab = i }.padding(vertical = 5.dp))
+                }
+            }
+            if (tab == 0) {
+                val now = androidx.compose.runtime.remember(open) { Store(context).appLanguage }
+                APP_LANGS.forEach { (code, name) -> PillItem(name, null, code == now, red) { LangMoney.onAppLang(code); open = false } }
+            } else {
+                androidx.compose.foundation.text.BasicTextField(q, { q = it }, singleLine = true,
+                    textStyle = TextStyle(fontSize = 12.5.sp, color = Color(0xFF1D1D1F)),
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp).fillMaxWidth().height(30.dp)
+                        .border(1.dp, Color(0xFFE2DED8), androidx.compose.foundation.shape.RoundedCornerShape(10.dp)).padding(horizontal = 10.dp),
+                    decorationBox = { field ->
+                        androidx.compose.foundation.layout.Box(contentAlignment = androidx.compose.ui.Alignment.CenterStart) {
+                            if (q.isEmpty()) Text("Search: riyal, PKR…", fontSize = 12.5.sp, color = sub)
+                            field()
+                        }
+                    })
+                CURRENCIES.map { it to currencyName(it) }.filter { (c, n) -> q.isBlank() || "$c $n".contains(q.trim(), true) }.forEach { (c, n) ->
+                    PillItem(c, n, c == currency, red) { LangMoney.onCurrency(c); open = false }
+                }
+            }
+        }
+    }
+}
+
+/** One compact row of the 🌐 list: the name (and a grey line), red with a ✓ when it is the one in use. */
+@Composable
+private fun PillItem(name: String, line: String?, on: Boolean, red: Color, onClick: () -> Unit) {
+    androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        Text(name, fontSize = 12.5.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Normal, color = if (on) red else Color(0xFF1D1D1F))
+        if (line != null) Text("  $line", fontSize = 11.sp, color = Color(0xFF8A8580), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        else androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
+        if (on) Text("✓", fontSize = 12.sp, color = red)
+    }
 }

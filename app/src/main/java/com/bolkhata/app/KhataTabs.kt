@@ -167,6 +167,8 @@ private fun KhataTop(
         Column(Modifier.statusBarsPadding().padding(horizontal = 12.dp)) {
             if (business != null) Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.weight(1f)) { BusinessPill(business, onMenu) }
+                LangMoneyPill()
+                Spacer(Modifier.width(6.dp))
                 onPdf?.let { PdfButton(it) }
             } else
             Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {

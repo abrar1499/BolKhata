@@ -2625,6 +2625,9 @@ fun App(
         }
     }
 
+    // The 🌐 pill on every tab changes the money and the app's language the same way the side menu does.
+    LangMoney.onCurrency = { c -> currency = c; store.currency = c }
+    LangMoney.onAppLang = { l -> appLang = l; store.appLanguage = l; I18n.use(context, l) }
     ModalNavigationDrawer(
         drawerState = drawer,
         // The side menu opens from the business pill only; a swipe moves between the tabs instead (it still closes it).
@@ -2897,14 +2900,13 @@ fun App(
                         set(java.util.Calendar.MILLISECOND, 0)
                     }.timeInMillis
                     val monthSpent = entries.filter { it.date >= monthStart && it.type == Type.KHARCHA }.sumOf { it.amount }
-                    val monthName = java.text.SimpleDateFormat("MMM", java.util.Locale.US).format(java.util.Date())
                     ChatScreen(
                         messages = chatMessages,
                         loading = chatLoading,
                         loadingLabel = loadingLabel,
                         entries = entries,
                         currency = currency,
-                        subtitle = "$monthName · ${fmt(monthSpent)} $currency spent",
+                        subtitle = "${fmt(monthSpent)} $currency spent",
                         suggestions = suggestions,
                         onMenu = { openMenu() },
                         business = businessName,

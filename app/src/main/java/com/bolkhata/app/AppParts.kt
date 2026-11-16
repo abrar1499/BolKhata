@@ -354,8 +354,7 @@ internal fun SideMenu(
                 Box {
                     var open by remember { mutableStateOf(false) }
                     // The app's own words: Auto follows the phone; each language by its own name.
-                    val apps = listOf("" to "Auto", "en" to "English") + listOf("ur" to "اردو", "hi" to "हिन्दी", "ar" to "العربية", "bn" to "বাংলা",
-                        "es" to "Español", "fr" to "Français", "de" to "Deutsch", "pt" to "Português", "tr" to "Türkçe").filter { it.first in I18n.CODES }
+                    val apps = APP_LANGS
                     val now = apps.firstOrNull { it.first == appLang }?.second ?: "Auto"
                     MenuRow(onClick = { open = true }) { MenuLabel("🌐", "App language"); MenuValue("$now ▾") }
                     CompactPicker(open, apps.map { it.second to "" }, now, search = false, onDismiss = { open = false }) { picked ->
