@@ -375,4 +375,13 @@ class AiAgentTest {
         assertFalse(AiAgent.sound("""{"calls":[],"reply":"Small talk: answer briefly, no tools needed.\n\nMain theek hoon."}"""))
         assertTrue(AiAgent.sound("""{"calls":[],"reply":"Main theek hoon, shukriya."}"""))
     }
+
+    /** A new worker's first work at "1100 ke hisab se", for a thing always counted per 1000: 5000 at 1100 per 1000 is 5500. */
+    @Test
+    fun aThingCountedPer1000KeepsItsRate() {
+        saved = saved + Entry("w1", Type.PURCHASE, 20_000.0, Cat.PRODUCTION, "Kachi eent", "Zubair Latif", "", now - 86_400_000L, now - 86_400_000L,
+            qty = 20_000.0, unit = "1000", rate = 1_000.0)
+        use("add_entries", """{"entries": [{"type": "work", "person": "Rashid", "item": "Kachi eent", "qty": 5000, "rate": 1100}]}""")
+        assertEquals(5_500.0, saved.first { it.person == "Rashid" }.amount, 0.01)
+    }
 }

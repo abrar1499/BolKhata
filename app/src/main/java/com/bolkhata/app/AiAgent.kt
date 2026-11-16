@@ -780,7 +780,9 @@ object AiAgent {
             else Goods.lastRate(o.optString("item"), person, type == Type.PURCHASE, host.entries())
                 ?: host.entries().filter { it.type == type && it.rate > 0 && person.isNotBlank() && it.person.equals(person, true) }.maxByOrNull { it.date }
         val rate = before?.rate ?: said
-        val per1000 = goods && (before?.let { it.unit == "1000" } ?: o.optBoolean("per_1000", false))
+        // A rate said without saying per 1000, for a thing always counted per 1000 before (bricks): per 1000 again.
+        val usual = host.entries().filter { it.rate > 0 && it.item.equals(o.optString("item").trim(), true) }.maxByOrNull { it.date }
+        val per1000 = goods && (before?.let { it.unit == "1000" } ?: if (o.has("per_1000")) o.optBoolean("per_1000") else usual?.unit == "1000")
         val amount = if (goods && qty > 0 && rate > 0) (if (per1000) qty / 1000 * rate else qty * rate) else o.optDouble("amount", 0.0)
         if (amount.isNaN() || amount <= 0.0) error(if (goods && qty > 0) "no rate is known for this yet: ask the person for the rate" else "amount (or qty and rate) is needed")
         if (type != Type.KHARCHA && type != Type.AAMDANI && person.isBlank() && !(goods && o.optBoolean("paid_now", false))) error("person is needed for " + o.optString("type"))
