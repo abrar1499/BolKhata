@@ -198,8 +198,8 @@ fun ChatScreen(
                             if (names.isEmpty() && asks.isNotEmpty()) FollowChips(asks, onSend)
                         }
                         AnswerActions(ratings[message.id]) { good -> onRate(message.id, good) }
-                        // "Groq · 1.2s · 340 tokens" under an answer Groq helped with.
-                        Regex("""usage=([^;]+)""").find(message.meta)?.let {
+                        // "Claude · 1.2s · 340 tokens" under an answer: the APK only; the Play build shows no such detail.
+                        if (!BuildConfig.PLAY) Regex("""usage=([^;]+)""").find(message.meta)?.let {
                             Text(it.groupValues[1], fontSize = 8.sp, lineHeight = 8.sp, color = Color(0xFFA39E98),
                                 modifier = Modifier.padding(start = 14.dp, top = 3.dp))
                         }

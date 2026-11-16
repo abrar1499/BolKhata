@@ -1516,7 +1516,7 @@ fun App(
                 }
                 // Asked again after 👎 and no AI answered: said plainly, the app's own answer is not given a second time.
                 if (retry) {
-                    lastSpeech = "The AI could not answer now" + (if (aiWhy.isBlank()) "." else " ($aiWhy).")
+                    lastSpeech = "The AI could not answer now" + (if (aiWhy.isBlank() || BuildConfig.PLAY) "." else " ($aiWhy).")
                     postChat(lastSpeech, isUser = false, meta = "plain")
                     return@launch
                 }
@@ -1625,10 +1625,11 @@ fun App(
                     Groq.localize(groqKey, reply!!, text)?.let { reply = it }
                 // Live voice hears every sentence around the phone: one the app could not read is passed over quietly.
                 val lost = reply?.startsWith("Sorry, I didn't get that") == true
-                // Both AI keys failed and the app alone could not read it: the reason is said, so it can be fixed.
-                if (lost && aiWhy.isNotBlank()) reply = "The AI did not answer ($aiWhy)."
+                // The AI failed (no credit, no internet): the app's own answer stays; the APK notes why on the small line under it.
                 if (lost && spelled) sayNote[0] = ""
-                if (lost && aiWhy.isBlank() && !spelled && !retry) {
+                if (aiWhy.isNotBlank() && !BuildConfig.PLAY && sayNote[0].isBlank())
+                    sayNote[0] = "AI: " + (if ("credit" in aiWhy.lowercase()) aiWhy.substringBefore(' ') + " has no credit" else aiWhy.take(60)).replace(';', ',')
+                if (lost && !spelled && !retry) {
                     val fixed = offMain { Spell.fix(text, names0 + entries.map { it.item }) }
                     if (!fixed.equals(text, true)) again = fixed
                 }
@@ -1641,13 +1642,13 @@ fun App(
                         reply = "This looks like ${Lingo.name(code)}. Download ${Lingo.name(code)} (30 MB) so I can read it?"
                     }
                 }
-                if (again == null && !reply.isNullOrBlank() && !(live && lost && aiWhy.isBlank())) {
+                if (again == null && !reply.isNullOrBlank() && !(live && lost)) {
                     lastSpeech = reply
                     postChat(reply, isUser = false, meta = trace + offer, listIds = listedRows[0])
                 }
             } catch (e: Exception) {
                 // With an AI key the reason is shown, so a failure can be understood and fixed.
-                val safe = if (Ai.handles(groqKey)) "The AI could not finish (" + e.javaClass.simpleName + (e.message?.let { ": " + it.take(80) } ?: "") + "). Try again."
+                val safe = if (Ai.handles(groqKey) && !BuildConfig.PLAY) "The AI could not finish (" + e.javaClass.simpleName + (e.message?.let { ": " + it.take(80) } ?: "") + "). Try again."
                     else "Sorry, I didn't get that. Try 'tea 5' or 'food this month'."
                 lastSpeech = safe
                 postChat(safe, isUser = false, meta = "engine=NativeChatEngine; stage=interpret; failure=" + e.javaClass.simpleName)
