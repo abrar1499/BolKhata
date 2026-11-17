@@ -1706,7 +1706,13 @@ fun SideScreen(
             // Things: the category's usual sub-accounts not made yet, as chips.
             val have = book?.let { b -> Sides.kids(b, entries, setup).map { it.name.lowercase() }.toSet() }.orEmpty()
             val picks = book?.takeIf { !it.people }?.cat?.let { defaultSubs[it] }.orEmpty().filter { it.lowercase() !in have }
-            NamePopup("Add in ${book?.name}", if (book?.people == true) "Name" else "Name (e.g. Groceries)", onDismiss = { adding = null }, picks = picks, onSave = done)
+            // The example fits the account: one of its usual things (Transport: Petrol), a payer for income.
+            val example = when {
+                book == null || book.people -> null
+                book.side == Side.INC -> "Company name"
+                else -> book.cat?.let { defaultSubs[it]?.firstOrNull() }
+            }
+            NamePopup("Add in ${book?.name}", example?.let { "Name (e.g. $it)" } ?: "Name", onDismiss = { adding = null }, picks = picks, onSave = done)
         }
     }
     sheet?.let { r ->
