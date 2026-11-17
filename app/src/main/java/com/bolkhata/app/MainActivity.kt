@@ -73,10 +73,10 @@ class MainActivity : ComponentActivity() {
             val bg = remember(photo) { photo.takeIf { it.isNotBlank() }?.let { android.graphics.BitmapFactory.decodeFile(it)?.asImageBitmap() } }
             // The header is fixed: the red band on the light page, Navy in the dark theme.
             val header = headerTheme(if (dark) "Navy" else "Red", dark)
-            // Every phone shows the design 1:1: the screen is 350 units wide (the 390 mock-up, everything a bit bigger) and the phone's
+            // Every phone shows the design 1:1 with the mock: the screen is 390 units wide, as the mock's phone, and the phone's
             // font-size and display-size settings don't blow the compact ledgers up.
             val m = resources.displayMetrics
-            CompositionLocalProvider(LocalHeader provides header, LocalDensity provides Density(minOf(m.widthPixels, m.heightPixels) / 350f, 1f)) {
+            CompositionLocalProvider(LocalHeader provides header, LocalDensity provides Density(minOf(m.widthPixels, m.heightPixels) / 390f, 1f)) {
                 BolTheme(dark, clear = bg != null, page = page) {
                     // The page colour, or the glow look's lights (pageGround); screens and the Scaffold stay see-through over it.
                     Surface(Modifier.fillMaxSize().pageGround(), color = Color.Transparent, contentColor = MaterialTheme.colorScheme.onBackground) {
@@ -304,7 +304,6 @@ fun App(
     var progress by remember { mutableIntStateOf(-1) }
     var checking by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) { newVersion = Updater.check() }
     LaunchedEffect(Unit) { (context as? android.app.Activity)?.let { Ads.start(it); Premium.start(it) } }
     // The Premium sheet (side menu ⭐ Premium, or "Go Premium" under the reward card).
     var premiumOpen by remember { mutableStateOf(false) }
@@ -3400,11 +3399,12 @@ fun App(
         }
     }
 
-    // A new version must be installed before the app can be used. No skip.
+    // A new version, found only when the person checks (side menu › Version); Back or a tap outside closes it until
+    // the download starts.
     newVersion?.let { info ->
         Dialog(
-            onDismissRequest = {},
-            properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false, usePlatformDefaultWidth = false)
+            onDismissRequest = { if (progress < 0) newVersion = null },
+            properties = DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = true, usePlatformDefaultWidth = false)
         ) {
             // Compact: icon and title on one row, then either the button or a slim progress line in its place.
             Surface(
