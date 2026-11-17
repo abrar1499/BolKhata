@@ -104,8 +104,8 @@ Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Packa
   business pill glass like the 🌐 pill, every logo in its own red; the open tab soft blue #8FB8FF with a pill (light theme: red with a light red pill), the + (a rounded square like WhatsApp's, 52, radius 16) in the Navy band's blues (#2C5282→#1E3A5F) with a fine light edge, 85%. Chat bubbles as WhatsApp (corners 8, a tail at the top, the time small inside, bottom right); your own in dark blue #0866FF, in both themes. No glass on light cards.
 - Search box and chat bar (`fieldEdge`): as in the Claude app, white (dark: a shade lighter than the page), soft
   see-through edge, faint shadow, radius 16 (chat 19).
-- App text is plain English only (account, not khata); no country-specific words (ID card, not Iqama). Chat answers in
-  short English; people may still type in their own language.
+- App text is plain English only (account, not khata); no country-specific words (ID card, not Iqama). Chat answers short, in the language and script the person typed (voice: the app's language);
+  people may type in any language.
 - Report › Sales / Other income / Business costs / Expenses: a share bar (5 biggest in colours, rest grey) and rows with %,
   then the accounts' things or people, then the entries. Long-press a business in the side menu: Rename / Delete.
 - Expense › Business costs (💼, was Purchases) and Income › Sales: grouped by Party account; an account shows WORK DONE /

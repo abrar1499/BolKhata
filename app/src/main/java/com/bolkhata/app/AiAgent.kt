@@ -158,9 +158,10 @@ object AiAgent {
         People write Roman Urdu, Urdu or Hindi script, or English, often misspelled or heard from voice.
         - Do what is asked with the tools, then answer in one short sentence of at most about twelve words, only about
           this message: never bring up earlier messages, other entries or what was or was not saved before unless
-          asked. Answer in the app's language, named in "Answer in" at the end, whatever language or script the
-          message is in and whatever language earlier answers in this chat were in (the app's language may have
-          just changed). Plain text only: no tables, no markdown.
+          asked. Answer in the language and script the person typed this message in: Roman Urdu in Roman Urdu, Urdu
+          script in Urdu script, English in English, French in French, a mix in the same mix; never the language of
+          earlier answers. A message by voice, or with no words to go by (only numbers), is answered in the app's
+          language, named at the end. Plain text only: no tables, no markdown.
         - Every amount, total, count or balance you state must come from a tool result of this turn. Never add up or
           guess money yourself: ask the totals tool.
         - When the person wants to see entries, a detail, a list or where the money went, call show: the app draws
@@ -241,7 +242,7 @@ object AiAgent {
     /** This phone's own part of the instructions: its currency, saved names and the language to answer in. */
     fun personal(currency: String, names: List<String>, language: String = "English") =
         "Currency: " + currency.ifBlank { "none shown" } + "." + (if (names.isEmpty()) "" else "\nSaved names: " + names.joinToString(", ")) +
-            "\nAnswer in: " + language + if (language == "English") "." else ", in its own script."
+            "\nApp language (for a message by voice or with no words): " + language + if (language == "English") "." else ", in its own script."
 
     /**
      * Lets the AI work until it answers (at most 8 rounds); null when the provider failed (see [Ai.lastError]).
@@ -257,6 +258,8 @@ object AiAgent {
         /** True once another key has answered the same message: this one stops before its next step. */
         stop: () -> Boolean = { false }
     ): Answer? = runCatching {
+        // A message typed in its own script (Urdu, Hindi, Arabic…) is answered in that script, so it is not put in Roman letters.
+        val typedScript = !spoken && Regex("""[\p{IsArabic}\p{IsDevanagari}\p{IsBengali}]""").containsMatchIn(said)
         // Numbers said in words are worked out by the app ("dhai lakh" is 250000), never left to the AI.
         val digits = counted(roman)
         val notes = Notes(said = (numbers(roman) + numbers(digits)).distinct(), lastShown = lastShown)
@@ -278,6 +281,7 @@ object AiAgent {
                 Goods.known(host.entries()).take(15).let { if (it.isEmpty()) "" else "Work and goods names in use: " + it.joinToString(", ") + "\n" } +
                 (if (!spoken) "" else "The message came by voice and may be misheard." +
                     (if (heardAlso.isEmpty()) "" else " It was also heard as: " + heardAlso.joinToString(" | ") { it.take(200) }) + "\n") +
+                (if (typedScript) "Write the answer in this message's own script, as typed (not in Roman letters).\n" else "") +
                 "Message: " + said.take(600) +
                 // Urdu or Hindi script also goes in Roman letters by its sound, so a word is not swapped for another.
                 (if (roman.trim().equals(said.trim(), true)) "" else "\nThe same message by sound, in Roman letters: " + roman.take(600)) +
@@ -294,8 +298,8 @@ object AiAgent {
                 val learnt = learn(calls, digits, host.names(), known, said, host.language)
                 // Only saved, all of it and nothing to ask: the Saved card says it, no sentence over it.
                 val onlySaved = notes.added.isNotEmpty() && notes.skipped == 0 && calls.all { it.first == "add_entries" } && '?' !in said
-                // Answers stay in Roman letters, unless the app itself is in a language with its own script.
-                val text = if (host.language in SCRIPTS) said else roman(said)
+                // Answers stay in Roman letters, unless typed in a script or the app itself is in a language with its own script.
+                val text = if (typedScript || host.language in SCRIPTS) said else roman(said)
                 return@runCatching Answer(if (onlySaved) "" else text.ifBlank { "Done." }, notes.added, notes.card, notes.listIds, notes.filter,
                     learnt.lesson, learnt.shape, learnt.words)
             }
