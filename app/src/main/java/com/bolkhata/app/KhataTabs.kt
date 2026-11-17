@@ -273,7 +273,7 @@ private fun SumCard(
 private fun SearchBox(q: String, hint: String, onChange: (String) -> Unit) {
     val sub = MaterialTheme.colorScheme.onSurfaceVariant
     Row(
-        Modifier.padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 4.dp).fillMaxWidth()
+        Modifier.padding(start = 12.dp, end = 12.dp, top = 10.dp).fillMaxWidth()
             .fieldEdge(RoundedCornerShape(16.dp))
             .padding(horizontal = 12.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -338,7 +338,8 @@ private fun MonthChips(months: List<Pair<Int, Long>>, current: Int, onPick: (Int
     // No background of its own: the header behind it already has one, and a fill here would cut the card's shadow above.
     LazyRow(
         Modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)
+        // 10 above (from the card or the search) and 10 to the list (the head's 4 and the first row's 6), as everywhere.
+        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         item(key = ALL_MONTHS) { SmallChip("All", current == ALL_MONTHS) { onPick(ALL_MONTHS) } }
         items(months, key = { it.first }) { (k, ms) -> SmallChip(monthFmt.format(Date(ms)), k == current) { onPick(k) } }
@@ -391,7 +392,8 @@ internal fun PeriodChips(newest: List<Entry>, period: Period, onPick: (Period) -
     val row = rememberLazyListState(initialFirstVisibleItemIndex = months.indexOfFirst { it.first == period.month }.coerceAtLeast(0))
     LazyRow(
         Modifier.fillMaxWidth(), state = row,
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)
+        // 10 above (from the card or the search) and 10 to the list (the head's 4 and the first row's 6), as everywhere.
+        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         item(key = "first") {
             Box {
