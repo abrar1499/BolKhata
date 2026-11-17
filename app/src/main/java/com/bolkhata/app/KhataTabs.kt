@@ -953,7 +953,7 @@ private fun EntryPicker(all: List<Entry>, setup: SideSetup, onSetup: (SideSetup)
                     Text("Who or what?", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = sub)
                 } else PickHead(if (book == null) "Accounts ›" else "Accounts › ${sideName(s)} ›", book?.name ?: sideName(s), { if (book != null) bookName = null else side = null })
                 WellField(q, { q = it }, "Search name or thing")
-                LazyColumn(Modifier.padding(top = 10.dp).fillMaxWidth().height(318.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surface)) {
+                LazyColumn(Modifier.padding(top = 10.dp).fillMaxWidth().heightIn(max = 318.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surface)) {
                     when {
                         q.isNotBlank() -> {
                             val found = list.filter { (it.name + " " + it.path).contains(q.trim(), true) }
