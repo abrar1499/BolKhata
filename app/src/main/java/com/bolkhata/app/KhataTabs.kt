@@ -921,7 +921,8 @@ private fun EntryPicker(all: List<Entry>, setup: SideSetup, onSetup: (SideSetup)
         // Income received is always there to pick, even before any income is saved.
         else if (s == Side.INC) (listOf(Book(Side.INC, Sides.INCOME, false)) + Sides.books(s, all, setup).filterNot(Sides::isAuto)).distinctBy { it.name.lowercase() }
         // Every expense category is here (not only the tab's basic ones), so any entry has its place in two taps.
-        else (Sides.books(s, all, setup).filterNot(Sides::isAuto) + expenseCats.map { Book(Side.EXP, it.label, false, it) }).distinctBy { it.name.lowercase() }
+        else (Sides.books(s, all, setup).filterNot(Sides::isAuto) +
+            Cat.values().filter { it !in setOf(Cat.TANKHWAH, Cat.UDHAAR, Cat.SALES, Cat.STOCK) }.map { Book(Side.EXP, it.label, false, it) }).distinctBy { it.name.lowercase() }
     fun spent(s: Side) = if (s == Side.INC) "received" else "spent"
     fun ink(s: Side) = if (s == Side.INC) GreenIn else RedSpend
     val s = side
