@@ -166,7 +166,7 @@ fun ChatScreen(
                         else if (message.entryIds.isNotEmpty()) SavedCard(message, byId, currency, onUndo, onEditEntry)
                         // The AI's own sentences ("plain") are never read as a report.
                         else remember(message.text, currency) { if (message.meta.contains("; plain")) null else Report.parse(message.text, currency) }
-                            ?.let { ReportCard(it, message.text) }
+                            ?.let { ReportCard(it, message.text, message.timestamp) }
                             // "What rate for 15000 Kachi eent?" on the last answer: the rate is typed right in the chat.
                             ?: if (message == messages.lastOrNull() && RateAsk.matches(message.text)) RateCard(message.text, onSend) else AssistantBubble(message.text, message.timestamp)
                         // "Which A or B do you mean?": one tap on a name opens that khata.
@@ -194,7 +194,7 @@ fun ChatScreen(
                                 modifier = Modifier.padding(start = 14.dp, top = 3.dp))
                         }
                         // Now and then (every eighth answer) a quiet ad under the answer: always the same card, picture or video.
-                        adAfter[message.id]?.let { video -> NativeAdCard("chat-" + message.id, Modifier.padding(top = 6.dp), video = video, small = !video) }
+                        adAfter[message.id]?.let { video -> NativeAdCard("chat-" + message.id, Modifier.fillMaxWidth(0.92f).padding(start = 8.dp, end = 8.dp, top = 6.dp), video = video, small = !video) }
                     }
                     }
                 }
@@ -416,13 +416,16 @@ private class TailShape(private val right: Boolean) : androidx.compose.ui.graphi
 private val MeTail = TailShape(right = true)
 private val BotTail = TailShape(right = false)
 
+/** A message's time as the bubbles show it: "4:44 pm". */
+private fun stampOf(time: Long) = java.text.SimpleDateFormat("h:mm a", java.util.Locale.US).format(java.util.Date(time)).lowercase()
+
 /**
  * The words with the time small in the bubble's bottom right, as WhatsApp: the time is also written (unseen) at the end
  * of the words, so the last line keeps room for it.
  */
 @Composable
 private fun TimedText(text: String, time: Long, color: Color) {
-    val stamp = remember(time) { java.text.SimpleDateFormat("h:mm a", java.util.Locale.US).format(java.util.Date(time)).lowercase() }
+    val stamp = remember(time) { stampOf(time) }
     Box {
         Text(buildAnnotatedString {
             append(text)
@@ -541,71 +544,90 @@ private fun AssistantBubble(text: String, time: Long) {
     ) { TimedText(text, time, MaterialTheme.colorScheme.onSurface) }
 }
 
-/** A khata, report or list answer as a card: the main amount big, every other amount on its own line. */
+/**
+ * A khata, report or list answer as the mock's "App rows": a message bubble (WhatsApp's tail, the time small at the
+ * bottom right) with the title small and the total big on top, then each row as the app's lists draw theirs (icon,
+ * name and date, the amount); a long list shows its newest five and "Show all".
+ */
 @Composable
-private fun ReportCard(r: Report, text: String) {
-    // Like the Yaad mock-up: a small headline amount, then the detail rows in one bordered box.
+private fun ReportCard(r: Report, text: String, time: Long) {
     val grey = MaterialTheme.colorScheme.onSurfaceVariant
-    val line = grey.copy(alpha = 0.14f)
+    val line = grey.copy(alpha = 0.12f)
+    val well = LocalLook.current?.let { Color(it.well) } ?: Color(0xFFEFECE8)
     fun color(tone: Int) = when (tone) { 1 -> GreenIn; -1 -> RedSpend; else -> Color.Unspecified }
     val hero = r.hero
+    val sum = r.total.lastOrNull()
+    val big = sum ?: hero
+    // "Biggest", "Daily average" and "Saved" are facts about the whole answer: shown under the rows, not as rows.
+    val facts = r.rows.filter { it.title.startsWith("Biggest") || it.title == "Daily average" || it.title == "Saved" }
+    val rows = r.rows - facts.toSet()
+    var all by remember(text) { mutableStateOf(false) }
+    val shown = if (all || rows.size <= 6) rows else rows.take(5)
+    val ink = color(hero?.tone ?: sum?.tone ?: 0)
     Column(
         Modifier
             .fillMaxWidth(0.92f)
-            .padding(horizontal = 8.dp, vertical = 4.dp)
-            .clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp, bottomEnd = 14.dp, bottomStart = 4.dp))
+            .padding(start = 1.dp, end = 8.dp, top = 4.dp, bottom = 4.dp)
+            .lift(1.dp, BotTail)
+            .clip(BotTail)
             .copyable(text)
             .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, line, RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp, bottomEnd = 14.dp, bottomStart = 4.dp))
-            .padding(horizontal = 10.dp, vertical = 9.dp),
-        verticalArrangement = Arrangement.spacedBy(3.dp)
+            .padding(start = TAIL)
     ) {
-        if (r.title.isNotBlank() && r.title != hero?.label) Text(r.title, fontWeight = FontWeight.SemiBold, fontSize = 11.sp)
-        if (hero != null) {
-            Text(hero.label, fontSize = 10.sp, color = grey)
-            Text(hero.amount, fontSize = 15.sp, fontWeight = FontWeight.Black, color = color(hero.tone))
+        Row(Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 6.dp), verticalAlignment = Alignment.Bottom) {
+            Column(Modifier.weight(1f)) {
+                if (r.title.isNotBlank()) Text(r.title.uppercase(), fontSize = 9.5.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp, color = grey,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (big != null) Text(money(big.amount, 16.sp), fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = color(big.tone))
+            }
+            big?.label?.takeIf { it.isNotBlank() && it != "Total" }?.let { Text(it.removePrefix("Total · "), fontSize = 11.sp, color = grey) }
         }
-        r.stats.filter { it !== hero }.forEach { s ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(s.label, Modifier.weight(1f), fontSize = 10.5.sp, color = MaterialTheme.colorScheme.onSurface)
-                Text(s.amount, fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold, color = color(s.tone))
+        r.stats.filter { it !== big }.forEach { st ->
+            Row(Modifier.padding(horizontal = 12.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(st.label, Modifier.weight(1f), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface)
+                Text(money(st.amount, 11.sp), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = color(st.tone))
             }
         }
-        if (r.notes.isNotEmpty()) Text(r.notes.joinToString(" · "), fontSize = 9.5.sp, color = grey, lineHeight = 12.sp)
-        // "Biggest", "Daily average" and "Saved" are facts about the whole answer: shown under the box, not in it.
-        val facts = r.rows.filter { it.title.startsWith("Biggest") || it.title == "Daily average" || it.title == "Saved" }
-        val rows = r.rows - facts.toSet()
-        if (rows.isNotEmpty() || r.total.isNotEmpty()) Column(
-            Modifier.padding(top = 4.dp).fillMaxWidth().clip(RoundedCornerShape(10.dp)).border(1.dp, line, RoundedCornerShape(10.dp))
-        ) {
-            rows.forEachIndexed { i, l ->
-                if (i > 0) HorizontalDivider(color = line)
-                // One line per row: name, its note (count · share, a date) in small grey, the amount.
-                Row(Modifier.padding(horizontal = 8.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(l.title, Modifier.weight(1f), fontSize = 9.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (r.notes.isNotEmpty()) Text(r.notes.joinToString(" · "), fontSize = 9.5.sp, color = grey, lineHeight = 12.sp, modifier = Modifier.padding(horizontal = 12.dp))
+        shown.forEach { l ->
+            HorizontalDivider(color = line)
+            Row(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(22.dp).clip(RoundedCornerShape(7.dp)).background(well), contentAlignment = Alignment.Center) {
+                    Text(NameIcon.of(l.title, ink == GreenIn), fontSize = 11.sp)
+                }
+                Spacer(Modifier.width(8.dp))
+                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                    Text(l.title, Modifier.weight(1f, fill = false), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     val note = listOf(l.date, l.sub).filter { it.isNotBlank() }.joinToString(" · ")
-                    if (note.isNotBlank()) Text(note, Modifier.padding(horizontal = 6.dp), fontSize = 8.5.sp, color = grey, maxLines = 1)
-                    Text(l.amount, fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = color(hero?.tone ?: 0))
+                    if (note.isNotBlank()) Text(note, Modifier.padding(start = 6.dp), fontSize = 9.5.sp, color = grey, maxLines = 1)
                 }
+                Text(money(l.amount, 12.sp), Modifier.padding(start = 8.dp), fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = ink)
             }
-            r.total.forEach { s ->
-                HorizontalDivider(color = line)
-                Row(Modifier.background(grey.copy(alpha = 0.06f)).padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (s.label == "Total") "Total" else "Total · " + s.label, Modifier.weight(1f), fontWeight = FontWeight.Bold, fontSize = 10.sp)
-                    Text(s.amount, fontWeight = FontWeight.Bold, fontSize = 10.5.sp, color = color(s.tone))
-                }
-            }
+        }
+        if (rows.size > 6) {
+            HorizontalDivider(color = line)
+            Text(if (all) "Show less" else "Show all ${rows.size} ›", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE8590C),
+                modifier = Modifier.fillMaxWidth().clickable { all = !all }.padding(horizontal = 12.dp, vertical = 6.dp))
         }
         facts.forEach { l ->
-            Row(Modifier.padding(start = 2.dp, top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.padding(start = 12.dp, end = 12.dp, top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(l.title.removePrefix("Biggest: ").let { if (l.title.startsWith("Biggest")) "Biggest · $it" else it },
                     Modifier.weight(1f), fontSize = 9.5.sp, color = grey, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                val note = listOf(l.date, l.sub).filter { it.isNotBlank() }.joinToString(" · ")
-                if (note.isNotBlank()) Text(note, Modifier.padding(horizontal = 6.dp), fontSize = 8.5.sp, color = grey)
-                Text(l.amount, fontSize = 9.5.sp, fontWeight = FontWeight.SemiBold)
+                Text(money(l.amount, 9.5.sp), fontSize = 9.5.sp, fontWeight = FontWeight.SemiBold)
             }
         }
+        Text(stampOf(time), fontSize = 8.sp, lineHeight = 8.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            modifier = Modifier.align(Alignment.End).padding(end = 10.dp, top = 2.dp, bottom = 5.dp))
     }
+}
+
+/** "168 SAR" with the currency small after the number, as the app's amounts. */
+private fun money(amount: String, size: androidx.compose.ui.unit.TextUnit) = buildAnnotatedString {
+    val cur = amount.trim().substringAfterLast(' ', "")
+    if (cur.isNotEmpty() && cur.all { it.isLetter() }) {
+        append(amount.trim().substringBeforeLast(' '))
+        withStyle(SpanStyle(fontSize = size * 0.6f, fontWeight = FontWeight.SemiBold, color = Color(0xFF8A8580))) { append(" $cur") }
+    } else append(amount)
 }
 
 /** Next questions under the last answer, one tap each ("Income kya thi?", "Detail dikhao"). */
