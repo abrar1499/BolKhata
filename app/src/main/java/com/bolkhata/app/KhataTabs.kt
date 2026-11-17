@@ -919,7 +919,9 @@ private fun EntryPicker(all: List<Entry>, setup: SideSetup, onSetup: (SideSetup)
     fun booksOf(s: Side) = if (s == Side.PARTY) (listOf(Book(Side.INC, Sides.CUSTOMERS, true), Book(Side.EXP, Sides.SUPPLIERS, true),
         Book(Side.EXP, Sides.STAFF, true), Book(Side.EXP, Sides.PEOPLE, true)) + Sides.books(s, all, setup)).distinctBy { it.name.lowercase() }
         // Income received is always there to pick, even before any income is saved.
-        else if (s == Side.INC) (listOf(Book(Side.INC, Sides.INCOME, false)) + Sides.books(s, all, setup).filterNot(Sides::isAuto)).distinctBy { it.name.lowercase() }
+        // Income: the usual ones too (Business, Commission…), not only the tab's basic ones.
+        else if (s == Side.INC) (listOf(Book(Side.INC, Sides.INCOME, false)) + Sides.books(s, all, setup).filterNot(Sides::isAuto) +
+            listOf("Business", "Commission", "Bonus", "Rent received", "Gift").map { Book(Side.INC, it, false) }).distinctBy { it.name.lowercase() }
         // Every expense category is here (not only the tab's basic ones), so any entry has its place in two taps.
         else (Sides.books(s, all, setup).filterNot(Sides::isAuto) +
             Cat.values().filter { it !in setOf(Cat.TANKHWAH, Cat.UDHAAR, Cat.SALES, Cat.STOCK) }.map { Book(Side.EXP, it.label, false, it) }).distinctBy { it.name.lowercase() }
@@ -961,7 +963,10 @@ private fun EntryPicker(all: List<Entry>, setup: SideSetup, onSetup: (SideSetup)
                                     onPick(EntryTarget(book, n, "👤", book.name, null, 0L))
                                 }
                                 else -> {
-                                    onSetup(setup.copy(kids = setup.kids + (book.name to (setup.kids[book.name].orEmpty().filterNot { it.equals(n, true) } + n))))
+                                    // An account picked here that the tab does not hold yet (Business, Education…) becomes one.
+                                    val have = Sides.books(book.side, all, setup).any { it.name.equals(book.name, true) }
+                                    onSetup(setup.copy(books = if (have) setup.books else setup.books + Book(book.side, book.name, false),
+                                        kids = setup.kids + (book.name to (setup.kids[book.name].orEmpty().filterNot { it.equals(n, true) } + n))))
                                     onPick(EntryTarget(book, n, iconFor(n, s == Side.INC), thingPath(s, book.name), null, 0L))
                                 }
                             }
