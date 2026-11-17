@@ -589,7 +589,7 @@ private fun DayLine(date: Long, cols: List<LCol>, day: List<LRow>) = Tight {
     val totals = cols.indices.map { k -> day.sumOf { it.amounts.getOrElse(k) { 0.0 } } }
     // One light keyboard-grey strip for the whole day: date, then the day's totals in their colours (no + / −).
     Row(
-        Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(IntrinsicSize.Min).background(DayStrip)
+        Modifier.padding(start = 10.dp, end = 10.dp, top = 1.dp).fillMaxWidth().height(IntrinsicSize.Min).background(DayStrip)
     ) {
         Text(dayLineFmt.format(Date(date)), fontSize = 11.sp, fontWeight = FontWeight.Bold,
             modifier = Modifier.weight(1f).padding(start = 12.dp, top = 4.dp, bottom = 4.dp))
