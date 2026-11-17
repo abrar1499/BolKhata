@@ -834,7 +834,8 @@ fun Modifier.solidCard(): Modifier = pageGround().background(MaterialTheme.color
 @Composable
 fun Modifier.fieldEdge(shape: androidx.compose.ui.graphics.Shape): Modifier {
     val look = LocalLook.current
-    val fill = look?.let { Color(it.field) } ?: Color.White
+    // Light: a soft off-white, a touch warmer than the white cards, so the field does not glare.
+    val fill = look?.let { Color(it.field) } ?: Color(0xFFF8F6F3)
     val edge = if (look != null) Color(0x26DEDCD1) else Color(0x261F1E1D)
     val base = this.lift(3.dp, shape, ambientColor = Color.Black.copy(alpha = 0.05f), spotColor = Color.Black.copy(alpha = 0.05f)).clip(shape)
     return base.background(fill, shape).border(1.dp, edge, shape)
