@@ -314,14 +314,23 @@ internal fun SideMenu(
                 }
             }
             Spacer(Modifier.height(8.dp))
-            MenuCard { MenuRow(onClick = onPremium, last = true) { MenuLabel("⭐", "Premium"); MenuValue(if (premium) "Active ✓" else "No ads ›") } }
-            Spacer(Modifier.height(8.dp))
             MenuCard {
                 Box {
                     var open by remember { mutableStateOf(false) }
                     MenuRow(onClick = { open = true }) { MenuLabel("💱", "Currency"); MenuValue("$currency ▾") }
                     val all = remember { CURRENCIES.map { it to currencyName(it) } }
                     CompactPicker(open, all, currency, search = true, onDismiss = { open = false }) { onCurrency(it); open = false }
+                }
+                Box {
+                    var open by remember { mutableStateOf(false) }
+                    // The app's own words: Auto follows the phone; each language by its own name.
+                    val apps = APP_LANGS
+                    val now = apps.firstOrNull { it.first == appLang }?.second ?: "Auto"
+                    MenuRow(onClick = { open = true }) { MenuLabel("🌐", "App language"); MenuValue("$now ▾") }
+                    CompactPicker(open, apps.map { it.second to "" }, now, search = false, onDismiss = { open = false }) { picked ->
+                        open = false
+                        onAppLang(apps.first { it.second == picked }.first)
+                    }
                 }
                 Box {
                     var open by remember { mutableStateOf(false) }
@@ -351,17 +360,6 @@ internal fun SideMenu(
                     }
                     if (more) LanguageSheet("Language for the mic", base = false, current = lang, onClose = { more = false }) { more = false; onLang(it) }
                 }
-                Box {
-                    var open by remember { mutableStateOf(false) }
-                    // The app's own words: Auto follows the phone; each language by its own name.
-                    val apps = APP_LANGS
-                    val now = apps.firstOrNull { it.first == appLang }?.second ?: "Auto"
-                    MenuRow(onClick = { open = true }) { MenuLabel("🌐", "App language"); MenuValue("$now ▾") }
-                    CompactPicker(open, apps.map { it.second to "" }, now, search = false, onDismiss = { open = false }) { picked ->
-                        open = false
-                        onAppLang(apps.first { it.second == picked }.first)
-                    }
-                }
                 // Dark theme: on is Navy glow (soft lights, glass cards, the Navy band); off is the warm grey page with the red band, the default.
                 val darkOn = dark && !photo
                 MenuRow(onClick = { if (darkOn) onPage(PAGE_COLORS[0]) else onDark(DARK_PAGES[1]) }, last = true) {
@@ -371,6 +369,11 @@ internal fun SideMenu(
             }
             Spacer(Modifier.height(8.dp))
             MenuCard {
+                // Premium heads the last card, as the mock: orange until it is on, then green.
+                MenuRow(onClick = onPremium) {
+                    MenuLabel("⭐", "Premium")
+                    Text(if (premium) "Active ✓" else "No ads ›", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (premium) GreenIn else EmberTop, maxLines = 1)
+                }
                 Box {
                     var open by remember { mutableStateOf(false) }
                     MenuRow(onClick = { open = true }) { MenuLabel("💾", "Backup"); MenuValue("Export · Import") }
