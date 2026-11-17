@@ -1540,8 +1540,9 @@ fun SideScreen(
                                 SumCard(Triple(fmt(total), (if (income) "Income · " else "Spent · ") + per.label(), ink), null, "Report ›", onReport)
                             }
                         }
-                        PeriodChips(newest, per) { period = it.encode() }
+                        // Search first, then the period chips, as on the Cashbook (10 apart each).
                         SearchBox(q, "Search") { q = it }
+                        PeriodChips(newest, per) { period = it.encode() }
                     } }
                     val shown = books.filter { q.isBlank() || it.name.contains(q.trim(), true) ||
                         Sides.kids(it, entries, setup).any { k -> k.name.contains(q.trim(), true) } }
