@@ -1682,8 +1682,8 @@ fun SideScreen(
                     }
                     if (shown.isEmpty()) emptyNote("Nothing found")
                     item(key = "addbook") { DashedAdd("+ Add account") { adding = "book" } }
-                    // Under the accounts: the wide white card.
-                    if (shown.isNotEmpty()) item(key = "banner", contentType = "ad") {
+                    // Under three or more accounts: the wide white card (a near-empty page gets no ad bigger than itself).
+                    if (shown.size >= 3) item(key = "banner", contentType = "ad") {
                         NativeAdCard("accounts-big-$side", Modifier.padding(start = 10.dp, end = 10.dp, top = 10.dp), big = true)
                     }
                 }
