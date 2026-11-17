@@ -327,14 +327,17 @@ internal fun SideMenu(
                     var open by remember { mutableStateOf(false) }
                     MenuRow(onClick = { open = true }) { MenuLabel("💾", "Backup"); MenuValue("Export · Import") }
                     // Right under "Export · Import", inside the side menu (the shared PickMenu would spill past its edge).
-                    Box(Modifier.align(Alignment.BottomEnd).padding(end = 12.dp).width(150.dp)) {
+                    // A small card (as the ⋮ menus) whose right edge lines up with the words, opening just under them.
+                    Box(Modifier.align(Alignment.BottomEnd).padding(end = 12.dp).width(124.dp)) {
                         DropdownMenu(
-                            expanded = open, onDismissRequest = { open = false }, shape = RoundedCornerShape(16.dp),
+                            expanded = open, onDismissRequest = { open = false }, shape = RoundedCornerShape(8.dp),
                             containerColor = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 0.dp, shadowElevation = 6.dp,
-                            modifier = Modifier.width(150.dp)
+                            offset = androidx.compose.ui.unit.DpOffset(0.dp, (-6).dp), modifier = Modifier.width(124.dp)
                         ) {
-                            DropdownMenuItem(text = { Text("Export data") }, onClick = { open = false; onExport() })
-                            DropdownMenuItem(text = { Text("Import data") }, onClick = { open = false; onImport() })
+                            listOf("Export data" to onExport, "Import data" to onImport).forEach { (label, act) ->
+                                DropdownMenuItem(text = { Text(label, fontSize = 13.5.sp) }, onClick = { open = false; act() },
+                                    modifier = Modifier.height(38.dp), contentPadding = PaddingValues(horizontal = 14.dp))
+                            }
                         }
                     }
                 }
