@@ -1014,8 +1014,10 @@ private fun EntryPicker(all: List<Entry>, setup: SideSetup, onSetup: (SideSetup)
                             }
                         }
                         else -> {
+                            // Every usual thing of an expense account, not only the few its page starts with.
                             val kids = Sides.kids(book, all, setup).let { l ->
                                 if (book.people) l.sortedByDescending { kotlin.math.abs(it.balance) } else l.sortedByDescending { it.total } }
+                                .let { l -> l + book.cat?.let { defaultSubs[it] }.orEmpty().filter { n -> l.none { it.name.equals(n, true) } }.map { Kid(it, emptyList()) } }
                             if (kids.isEmpty()) item { Text("Nothing in ${book.name} yet.", fontSize = 13.sp, color = sub, modifier = Modifier.padding(12.dp)) }
                             items(kids.size) { i ->
                                 val k = kids[i]
