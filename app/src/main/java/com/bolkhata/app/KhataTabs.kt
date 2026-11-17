@@ -499,7 +499,8 @@ private fun signed(k: LKind, v: Double) = if (v == 0.0) "" else (when (k) { LKin
  * line per entry. Lines are faint grey; amounts sit in the middle of their column.
  */
 internal fun LazyListScope.ledger(
-    title: String, cols: List<LCol>, rows: List<LRow>, keyPrefix: String = "", cards: Boolean = true, onHold: (() -> Unit)? = null
+    title: String, cols: List<LCol>, rows: List<LRow>, keyPrefix: String = "", cards: Boolean = true, onHold: (() -> Unit)? = null,
+    cash: Boolean = false
 ) {
     item(key = keyPrefix + "lh") { LedgerHead(title, entryCount(rows.size), cols, rows.isEmpty(), ids = rows.mapNotNull { it.entry?.id }, onHold = onHold) }
     if (rows.isEmpty()) item(key = keyPrefix + "empty") { EmptyHint() }
@@ -508,23 +509,27 @@ internal fun LazyListScope.ledger(
     var days = 0
     rows.forEachIndexed { i, r ->
         if (i == 0 || !sameDay(rows[i - 1].date, r.date)) {
-            // An ad between days, every third day: a video card and a slim picture in turn.
-            if (days > 0 && days % 3 == 0) {
+            // The Cashbook keeps its ads near the top, where they are seen: a video card after the 3rd day, a slim picture
+            // after the 6th. Other ledgers: an ad every third day, a video card and a slim picture in turn.
+            if (cash && (days == 3 || days == 6)) {
+                val n = days
+                item(key = keyPrefix + "ad" + n, contentType = "ad") { NativeAdCard("ledger-$keyPrefix$title-$n", Modifier.padding(start = 10.dp, end = 10.dp, top = 1.dp), video = n == 3, round = false, small = n != 3) }
+            } else if (!cash && days > 0 && days % 3 == 0) {
                 val n = days
                 val video = videoTurn(n / 3)
-                item(key = keyPrefix + "ad" + n, contentType = "ad") { NativeAdCard("ledger-$keyPrefix$title-$n", Modifier.padding(horizontal = 10.dp, vertical = 6.dp), video = video, round = false, small = !video) }
+                item(key = keyPrefix + "ad" + n, contentType = "ad") { NativeAdCard("ledger-$keyPrefix$title-$n", Modifier.padding(start = 10.dp, end = 10.dp, top = 1.dp), video = video, round = false, small = !video) }
             }
             days++
             val day = byDay[dayNumber(r.date)].orEmpty()
-            item(key = keyPrefix + "d" + r.key) { DayLine(r.date, cols, day, cards) }
+            item(key = keyPrefix + "d" + r.key) { DayLine(r.date, cols, day) }
         }
         // As cards, each day is one card: its day line and entries, the last entry closing it.
         val last = i == rows.lastIndex || (cards && !sameDay(rows[i + 1].date, r.date))
         item(key = keyPrefix + r.key) { LedgerRow(r, cols, last, cards) }
     }
-    // At the end of the list: a slim picture ad, square and the width of the rows above it (a native ad earns more than a banner).
-    if (rows.isNotEmpty()) item(key = keyPrefix + "end-ad", contentType = "ad") {
-        NativeAdCard("ledger-end-$keyPrefix$title", Modifier.padding(horizontal = 10.dp, vertical = 10.dp), round = false, small = true)
+    // At the end of the Cashbook: the banner strip, square and joined to the rows above it as a day strip is.
+    if (cash && rows.isNotEmpty()) item(key = keyPrefix + "end-ad", contentType = "ad") {
+        NativeAdCard("ledger-end-$keyPrefix$title", Modifier.padding(start = 10.dp, end = 10.dp, top = 1.dp), round = false, small = true, banner = true)
     }
 }
 
@@ -584,12 +589,12 @@ private fun LedgerHead(
 
 /** The slim line above each day: the day's name and its totals in their columns. */
 @Composable
-private fun DayLine(date: Long, cols: List<LCol>, day: List<LRow>, card: Boolean = false) = Tight {
+private fun DayLine(date: Long, cols: List<LCol>, day: List<LRow>) = Tight {
     val w = colW(cols)
     val totals = cols.indices.map { k -> day.sumOf { it.amounts.getOrElse(k) { 0.0 } } }
     // One light keyboard-grey strip for the whole day: date, then the day's totals in their colours (no + / −).
     Row(
-        Modifier.padding(start = 10.dp, end = 10.dp, top = if (card) 6.dp else 0.dp).fillMaxWidth().height(IntrinsicSize.Min).background(DayStrip)
+        Modifier.padding(start = 10.dp, end = 10.dp, top = 1.dp).fillMaxWidth().height(IntrinsicSize.Min).background(DayStrip)
     ) {
         Text(dayLineFmt.format(Date(date)), fontSize = 11.sp, fontWeight = FontWeight.Bold,
             modifier = Modifier.weight(1f).padding(start = 12.dp, top = 4.dp, bottom = 4.dp))
@@ -753,7 +758,7 @@ fun CashBookScreen(
                     LRow(e.id, e.date, title(e), e.note, listOf(if (cashOut(e)) e.amount else 0.0, if (cashIn(e)) e.amount else 0.0), e,
                         khata = e.person.trim().ifBlank { e.category.label }) { onEdit(e) }
                 },
-                cards = true
+                cards = true, cash = true
             )
         }
         UpButton(state)
@@ -1125,6 +1130,28 @@ private fun sheetRow(i: Int, n: Int) = RoundedCornerShape(
     topStart = if (i == 0) 16.dp else 0.dp, topEnd = if (i == 0) 16.dp else 0.dp,
     bottomStart = if (i == n - 1) 16.dp else 0.dp, bottomEnd = if (i == n - 1) 16.dp else 0.dp
 )
+
+/**
+ * Where a list's one slim picture ad sits inside its card: after the 5th row when there are more than five, under the
+ * last row with four or five, none with three or fewer (-1).
+ */
+private fun cardAdAfter(rows: Int) = if (rows > 5) 4 else if (rows > 3) rows - 1 else -1
+
+/** A list row's place in its card ([i] of [n]) once the ad at [place] sits after row [adAfter], if it has come. */
+@Composable
+private fun cardSlot(at: Int, rows: Int, adAfter: Int, place: String): Pair<Int, Int> {
+    val ad = adAfter >= 0 && Ads.showing(place)
+    return (if (ad && at > adAfter) at + 1 else at) to rows + (if (ad) 1 else 0)
+}
+
+/** The slim picture ad as a row of the card ([i] of [n]): square, on the card's white. */
+@Composable
+private fun CardAd(place: String, i: Int, n: Int) {
+    val shape = sheetRow(i, n)
+    Box(Modifier.padding(start = 10.dp, end = 10.dp).fillMaxWidth().lift(1.dp, shape).clip(shape).background(MaterialTheme.colorScheme.surface)) {
+        NativeAdCard(place, round = false, small = true)
+    }
+}
 
 /** One row of an account list: icon square, name and a small line, the amount with its word under it, and ›. */
 @Composable
@@ -1504,12 +1531,12 @@ fun SideScreen(
                         }
                         if (!book.people) PeriodChips(newest, per) { period = it.encode() }
                     } }
+                    // The things in one card, a slim picture ad inside it (cardAdAfter).
+                    val adAfter = cardAdAfter(kids.size)
+                    val adPlace = "kids-${book.name}"
                     kids.forEachIndexed { i, k ->
-                        // Things in cards of five with a quiet ad between them.
-                        val at = i % 5
-                        val group = minOf(5, kids.size - i / 5 * 5)
-                        if (i > 0 && at == 0) item(key = "kad$i", contentType = "ad") { NativeAdCard("kids-${book.name}-$i", Modifier.padding(horizontal = 12.dp, vertical = 6.dp), small = true) }
                         item(key = "k" + k.name.lowercase()) {
+                            val (at, group) = cardSlot(i, kids.size, adAfter, adPlace)
                             val (amt, what) = if (book.people) Sides.balanceText(book, k.balance) else fmt(k.total) to word(book, true)
                             ItRow(
                                 if (auto) "👥" else if (book.people) "👤" else iconFor(k.name, income), k.name,
@@ -1521,6 +1548,7 @@ fun SideScreen(
                                 onLong = if (auto) null else ({ menu = book to allKids[i] })
                             ) { kidName = k.name }
                         }
+                        if (i == adAfter) item(key = "kad", contentType = "ad") { CardAd(adPlace, adAfter + 1, kids.size + 1) }
                     }
                     if (auto) item(key = "autonote") {
                         Text(
@@ -1528,10 +1556,9 @@ fun SideScreen(
                             fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
                         )
                     } else item(key = "addkid") { DashedAdd("+ Add in ${book.name}") { adding = "kid" } }
-                    // Under the things, as under the accounts: the wider white card with three or fewer, else a video card.
-                    if (kids.isNotEmpty()) item(key = "kend", contentType = "ad") {
-                        if (kids.size <= 3) NativeAdCard("kids-big-${book.name}", Modifier.padding(horizontal = 10.dp, vertical = 10.dp), big = true)
-                        else NativeAdCard("kids-end-${book.name}", Modifier.padding(horizontal = 12.dp, vertical = 10.dp), video = true)
+                    // Under five or more things: the wide white card, as under the accounts.
+                    if (kids.size >= 5) item(key = "kend", contentType = "ad") {
+                        NativeAdCard("kids-big-${book.name}", Modifier.padding(start = 10.dp, end = 10.dp, top = 10.dp), big = true)
                     }
                 }
                 else -> {
@@ -1570,12 +1597,12 @@ fun SideScreen(
                     } }
                     val shown = books.filter { q.isBlank() || it.name.contains(q.trim(), true) ||
                         Sides.kids(it, entries, setup).any { k -> k.name.contains(q.trim(), true) } }
+                    // The accounts in one card, a slim picture ad inside it (cardAdAfter).
+                    val adAfter = cardAdAfter(shown.size)
+                    val adPlace = "accounts-$side"
                     shown.forEachIndexed { at, b ->
-                        // Accounts in cards of five with a quiet ad between them.
-                        val i = at % 5
-                        val size = minOf(5, shown.size - at / 5 * 5)
-                        if (at > 0 && i == 0) item(key = "ad$at", contentType = "ad") { NativeAdCard("accounts-$side-$at", Modifier.padding(horizontal = 12.dp, vertical = 6.dp), small = true) }
                         item(key = "b" + b.name) {
+                            val (i, size) = cardSlot(at, shown.size, adAfter, adPlace)
                             val kids = Sides.kids(b, entries, setup)
                             if (b.people) {
                                 // The period's net on the row; what is owed all time in the small line, as the account shows inside.
@@ -1594,13 +1621,13 @@ fun SideScreen(
                                     onLong = if (Sides.isAuto(b)) null else ({ menu = b to null })) { bookName = b.name; q = "" }
                             }
                         }
+                        if (at == adAfter) item(key = "ad", contentType = "ad") { CardAd(adPlace, adAfter + 1, shown.size + 1) }
                     }
                     if (shown.isEmpty()) emptyNote("Nothing found")
                     item(key = "addbook") { DashedAdd("+ Add account") { adding = "book" } }
-                    // Under the accounts: with three or fewer the wider white card; else a video card.
+                    // Under the accounts: the wide white card.
                     if (shown.isNotEmpty()) item(key = "banner", contentType = "ad") {
-                        if (shown.size <= 3) NativeAdCard("accounts-big-$side", Modifier.padding(horizontal = 10.dp, vertical = 10.dp), big = true)
-                        else NativeAdCard("accounts-end-$side", Modifier.padding(horizontal = 12.dp, vertical = 10.dp), video = true)
+                        NativeAdCard("accounts-big-$side", Modifier.padding(start = 10.dp, end = 10.dp, top = 10.dp), big = true)
                     }
                 }
             }
@@ -2256,7 +2283,9 @@ fun ProfitScreen(entries: List<Entry>, currency: String, setup: SideSetup, onBac
                 item(key = "n4") { ReportRow("Assets", "laptop, car, machines… at cost", withSign(worth.assets, "+"), GreenIn) { open = "Assets" } }
                 item(key = "n5") { ReportRow("To pay", "money you owe", withSign(worth.toPay, "−"), RedSpend) { open = "To pay" } }
                 item(key = "n6") { ReportRow("Net worth", "what you are worth today", plusMinus(worth.net).trimStart('+'), if (worth.net < 0) RedSpend else GreenIn, null) }
-                item(key = "ad", contentType = "ad") { NativeAdCard("report", Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) }
+                // At the end: a slim picture ad, then the banner strip.
+                item(key = "ad", contentType = "ad") { NativeAdCard("report", Modifier.padding(start = 12.dp, end = 12.dp, top = 10.dp), small = true) }
+                item(key = "banner", contentType = "ad") { NativeAdCard("report-banner", Modifier.padding(start = 10.dp, end = 10.dp, top = 10.dp), small = true, banner = true) }
             }
         }
     }
