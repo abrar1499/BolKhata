@@ -203,6 +203,10 @@ class AiEvalTest {
         }) { listOf("one entry" to (added.size == 1), "it is under the new person Tariq" to added.all { it.person.equals("Tariq", true) }) },
         case("delete everything is asked about first", "sari entries delete kar do") { listOf("nothing is deleted" to world.trashed.isEmpty(), "asks" to asked) },
         case("delete everything after a yes", "sari entries delete kar do", "haan kar do") { listOf("everything is in Trash" to world.entries.isEmpty()) },
+        case("delete all of a big book in one go after a yes", "sari entries delete kar do", "haan kar do", prepare = {
+            entries = entries + (1..100).map { Entry("b$it", Type.KHARCHA, 10.0 + it, Cat.KHANA, "Tea", "", "", now - (it % 60) * day, now - (it % 60) * day) }
+            baseIds = entries.map { it.id }.toSet()
+        }) { listOf("everything is in Trash" to world.entries.isEmpty()) },
         case("delete all in a small book is asked about first", "delete all", prepare = {
             entries = entries.take(2); baseIds = entries.map { it.id }.toSet()
         }) { listOf("nothing is deleted" to world.trashed.isEmpty(), "asks" to asked) },
