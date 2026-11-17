@@ -196,8 +196,8 @@ fun ChatScreen(
                     }
                     }
                     // Now and then (every fifth answer) a quiet ad under the answer, from the logo's left edge to your bubbles'
-                    // right one (room for the wide 192 × 120 video), a little apart from the Fix pill so it is not tapped by mistake.
-                    adAfter[message.id]?.let { video -> NativeAdCard("chat-" + message.id, Modifier.padding(end = TAIL, top = 12.dp), big = video, small = !video) }
+                    // right one (room for the wide 192 × 120 video), corners as the bubbles, a little apart from the Fix pill so it is not tapped by mistake.
+                    adAfter[message.id]?.let { video -> NativeAdCard("chat-" + message.id, Modifier.padding(end = TAIL, top = 12.dp), big = video, small = !video, corner = 8) }
                 }
             } }
             if (loading) {

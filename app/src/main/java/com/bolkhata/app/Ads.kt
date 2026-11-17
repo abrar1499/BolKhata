@@ -165,10 +165,11 @@ fun videoTurn(nth: Int) = nth % 2 == 1
  * nothing when no ad came; [round] false gives it square corners, like the cashbook sheet. [video], or an ad that is a video: a 120 × 120 picture or video (playing without sound) on
  * the left instead (Google asks for the ad's picture in its own MediaView, and a video no smaller than that). [small]:
  * an ad of pictures only, so the row stays slim between accounts. [big]: the white card under a short list, its picture
- * or video wider (192 × 120). [banner]: the strip at the end of the Cashbook and the Report.
+ * or video wider (192 × 120). [banner]: the strip at the end of the Cashbook and the Report. [corner]: its corner
+ * radius in dp, as the chat's bubbles (8).
  */
 @Composable
-fun NativeAdCard(place: String, modifier: Modifier = Modifier, video: Boolean = false, round: Boolean = true, small: Boolean = false, big: Boolean = false, banner: Boolean = false) {
+fun NativeAdCard(place: String, modifier: Modifier = Modifier, video: Boolean = false, round: Boolean = true, small: Boolean = false, big: Boolean = false, banner: Boolean = false, corner: Int? = null) {
     val context = LocalContext.current
     var ad by remember(place) { mutableStateOf<NativeAd?>(null) }
     DisposableEffect(place, Ads.ready) {
@@ -176,7 +177,7 @@ fun NativeAdCard(place: String, modifier: Modifier = Modifier, video: Boolean = 
         onDispose { }
     }
     val shown = ad?.takeIf { !Ads.resting && !Premium.active } ?: return
-    AndroidView(factory = { ctx: Context -> (if (banner) bannerRow(ctx) else if (big) videoRow(ctx, wide = true) else if (video || shown.mediaContent?.hasVideoContent() == true) videoRow(ctx) else adRow(ctx)).also { if (!round) (it.getChildAt(0).background as? GradientDrawable)?.cornerRadius = 0f } }, modifier = modifier.fillMaxWidth(), update = { v: NativeAdView -> v.show(shown) })
+    AndroidView(factory = { ctx: Context -> (if (banner) bannerRow(ctx) else if (big) videoRow(ctx, wide = true) else if (video || shown.mediaContent?.hasVideoContent() == true) videoRow(ctx) else adRow(ctx)).also { v -> (v.getChildAt(0).background as? GradientDrawable)?.let { if (!round) it.cornerRadius = 0f else if (corner != null) it.cornerRadius = ctx.dp(corner).toFloat() } } }, modifier = modifier.fillMaxWidth(), update = { v: NativeAdView -> v.show(shown) })
 }
 
 private fun Context.dp(v: Int) = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), resources.displayMetrics).toInt()
