@@ -90,6 +90,13 @@ object Ai {
     @Volatile var sink: ((input: Int, output: Int, microDollars: Long) -> Unit)? = null
 
     fun handles(k: String) = key.isNotBlank() && k == key
+
+    /**
+     * Whether the AI reads a message before the app's own rules: whenever one [ready] can answer. On the app's own key
+     * without Premium, once the smart answers and today's reward videos are used up, the app answers by itself.
+     */
+    fun first(ready: Boolean, ownKey: Boolean, premium: Boolean, smartLeft: Int, rewardsLeft: Boolean) =
+        ready && !(ownKey && !premium && smartLeft <= 0 && !rewardsLeft)
     fun modelNow(): String = modelOf(key, model)
     /** The model key [k] runs: [m] when one was picked, else the provider's usual one. Claude runs only Haiku (the owner's choice: the cheapest). */
     fun modelOf(k: String, m: String): String = provider(k).let { p -> if (p === CLAUDE && "haiku" !in m) CLAUDE.model else m.ifBlank { p?.model.orEmpty() } }
