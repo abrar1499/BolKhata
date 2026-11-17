@@ -918,6 +918,8 @@ private fun EntryPicker(all: List<Entry>, setup: SideSetup, onSetup: (SideSetup)
     // Party shows its four people accounts even while empty, so a person can be added in any of them.
     fun booksOf(s: Side) = if (s == Side.PARTY) (listOf(Book(Side.INC, Sides.CUSTOMERS, true), Book(Side.EXP, Sides.SUPPLIERS, true),
         Book(Side.EXP, Sides.STAFF, true), Book(Side.EXP, Sides.PEOPLE, true)) + Sides.books(s, all, setup)).distinctBy { it.name.lowercase() }
+        // Income received is always there to pick, even before any income is saved.
+        else if (s == Side.INC) (listOf(Book(Side.INC, Sides.INCOME, false)) + Sides.books(s, all, setup).filterNot(Sides::isAuto)).distinctBy { it.name.lowercase() }
         else Sides.books(s, all, setup).filterNot(Sides::isAuto)
     fun spent(s: Side) = if (s == Side.INC) "received" else "spent"
     fun ink(s: Side) = if (s == Side.INC) GreenIn else RedSpend
@@ -1005,8 +1007,10 @@ private fun EntryPicker(all: List<Entry>, setup: SideSetup, onSetup: (SideSetup)
                             }
                         }
                         else -> {
+                            // An expense account's usual things (Transport: Petrol, Car repair…) show too, before anything is saved in them.
                             val kids = Sides.kids(book, all, setup).let { l ->
                                 if (book.people) l.sortedByDescending { kotlin.math.abs(it.balance) } else l.sortedByDescending { it.total } }
+                                .let { l -> l + book.cat?.let { defaultSubs[it] }.orEmpty().filter { n -> l.none { it.name.equals(n, true) } }.map { Kid(it, emptyList()) } }
                             if (kids.isEmpty()) item { Text("Nothing in ${book.name} yet.", fontSize = 13.sp, color = sub, modifier = Modifier.padding(12.dp)) }
                             items(kids.size) { i ->
                                 val k = kids[i]
