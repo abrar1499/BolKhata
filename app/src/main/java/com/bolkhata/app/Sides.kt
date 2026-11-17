@@ -52,10 +52,9 @@ object Sides {
      */
     fun books(side: Side, all: List<Entry>, setup: SideSetup): List<Book> {
         if (side == Side.PARTY) {
-            val used = all.filter(::withPerson).map { it.person }.distinctBy { it.trim().lowercase() }.map { bookOf(it, all, setup) }.toSet()
-            fun hasPeople(name: String) = setup.people.values.any { it.equals(name, true) } || name in used
+            // The four main people accounts are always there, before anyone is put in them.
             val ready = listOf(CUSTOMERS to Side.INC, SUPPLIERS to Side.EXP, STAFF to Side.EXP, PEOPLE to Side.EXP)
-                .filter { hasPeople(it.first) }.map { (n, s) -> Book(s, n, true) }
+                .map { (n, s) -> Book(s, n, true) }
             return (ready + setup.books.filter { it.people }).distinctBy { it.name.lowercase() }
         }
         val own = setup.books.filter { it.side == side && !it.people }.map { b ->

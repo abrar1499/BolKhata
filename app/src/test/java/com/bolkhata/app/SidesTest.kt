@@ -89,7 +89,9 @@ class SidesTest {
         val moved = SideSetup(people = mapOf("hamid akram" to Sides.CUSTOMERS))
         val cust = Sides.books(Side.PARTY, all, moved).first { it.name == Sides.CUSTOMERS }
         assertEquals(2, Sides.kids(cust, all, moved).first { it.name == "Hamid Akram" }.entries.size)
-        assertEquals(false, Sides.books(Side.PARTY, all, moved).any { it.name == Sides.STAFF })
+        // Staff stays as a main account, now with nobody in it.
+        val staff = Sides.books(Side.PARTY, all, moved).first { it.name == Sides.STAFF }
+        assertEquals(0, Sides.kids(staff, all, moved).size)
     }
 
     @Test fun assetsAreNotAnExpenseButCountInNetWorth() {
