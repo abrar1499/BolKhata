@@ -774,14 +774,15 @@ fun CashBookScreen(
 @Composable
 private fun BoxScope.AddRound(state: LazyListState, onClick: () -> Unit) {
     val bottom = LocalBarSpace.current + 8.dp
-    // Dark: the theme's blue (red is for money out there); light: the header's red.
+    // Dark: the Navy band's own blues with a fine light edge (red is for money out there); light: the header's red.
     val glow = LocalLook.current?.glow == true
-    val red = if (glow) Color(0xFF3B6FD8) else Color(0xFFE3342F)
+    val red = if (glow) Color(0xFF1E3A5F) else Color(0xFFE3342F)
     if (!adUnder(state, bottom - 6.dp, bottom + 50.dp)) Box(
         Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = bottom).size(44.dp)
             .lift(6.dp, CircleShape, ambientColor = red, spotColor = red).clip(CircleShape)
+            .then(if (glow) Modifier.border(1.dp, Color(0x24FFFFFF), CircleShape) else Modifier)
             // A little see-through (85%), so the page shows faintly under it.
-            .background(Brush.linearGradient((if (glow) listOf(Color(0xFF6EA8FF), red) else listOf(Color(0xFFFF7A45), red, Color(0xFFB91C3C))).map { it.copy(alpha = 0.85f) }))
+            .background(Brush.linearGradient((if (glow) listOf(Color(0xFF2C5282), red) else listOf(Color(0xFFFF7A45), red, Color(0xFFB91C3C))).map { it.copy(alpha = 0.85f) }))
             .clickable { onClick() }
             .drawBehind {
                 val arm = 7.dp.toPx()
