@@ -2289,8 +2289,12 @@ internal fun BusinessPage(
     val h = LocalHeader.current
     val colors = Triple(h.c1.toArgb(), h.c2.toArgb(), h.c3.toArgb())
     val logo = remember { runCatching { context.packageManager.getApplicationIcon(context.packageName).toBitmap(160, 160) }.getOrNull() }
-    val cards = remember(n, i.owner, i.phone, i.address, colors) { CardArt.STYLES.associateWith { CardArt.draw(it, n, i, colors, logo) } }
+    // The cards on screen show sample words where nothing is typed yet; each is replaced as it is typed. The saved and
+    // shared card has only what was typed.
+    val sample = i.copy(owner = i.owner.ifBlank { "Your name" }, phone = i.phone.ifBlank { "Phone number" }, address = i.address.ifBlank { "Shop address" })
+    val cards = remember(n, sample, colors) { CardArt.STYLES.associateWith { CardArt.draw(it, n, sample, colors, logo) } }
     val card = cards[i.card] ?: cards.getValue(CardArt.STYLES.first())
+    val real = remember(n, i, colors) { CardArt.draw(i.card.takeIf { it in CardArt.STYLES } ?: CardArt.STYLES.first(), n, i, colors, logo) }
     LaunchedEffect(i) { if (!isNew) onInfo(i) }
     fun leave() { if (!isNew && n.isNotBlank() && n.trim() != name) onName(n.trim()); onBack() }
     BackHandler { leave() }
@@ -2335,7 +2339,7 @@ internal fun BusinessPage(
                     .border(1.dp, MaterialTheme.colorScheme.outline, shape).clickable {
                         if (isNew) onBack()
                         else {
-                            val ok = saveImage(context, card, (n.ifBlank { "Business" }) + " card")
+                            val ok = saveImage(context, real, (n.ifBlank { "Business" }) + " card")
                             android.widget.Toast.makeText(context, if (ok) "✓ Saved to Pictures" else "Couldn't save the picture", android.widget.Toast.LENGTH_SHORT).show()
                         }
                     }, contentAlignment = Alignment.Center) { Text(if (isNew) "Cancel" else "Save image", fontSize = 14.sp, fontWeight = FontWeight.Bold) }
@@ -2344,7 +2348,7 @@ internal fun BusinessPage(
                         if (n.isBlank()) android.widget.Toast.makeText(context, "Type the business name", android.widget.Toast.LENGTH_SHORT).show()
                         else onAdd(n.trim(), i)
                     } else shareFile(context, (n.ifBlank { "Business" }) + " card.png", "image/png") { f ->
-                        f.outputStream().use { card.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+                        f.outputStream().use { real.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
                     }
                 }, contentAlignment = Alignment.Center) { Text(if (isNew) "Add business" else "Share card", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White) }
             }
