@@ -755,7 +755,10 @@ object AiAgent {
         }
         "delete_entries" -> {
             // "Delete all": every match at once, not only the 40 a look-up shows.
-            val ids = if (input.optBoolean("all_matching", false)) pick(input, host, now).map { it.id }.toSet()
+            // Filters with no ids mean the same, even when all_matching was left out.
+            val byFilter = input.optBoolean("all_matching", false) ||
+                (strings(input, "ids").isEmpty() && picking.any { (key, _) -> input.has(key) })
+            val ids = if (byFilter) pick(input, host, now).map { it.id }.toSet()
                 else strings(input, "ids").toSet().intersect(host.entries().map { it.id }.toSet())
             if (ids.isEmpty()) error("no entries match: give ids, or all_matching with filters")
             // A slip of the tongue must not empty the books: a big delete, or nearly everything, is asked about first.
