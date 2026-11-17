@@ -794,6 +794,7 @@
  "Petrol 60 (12 Nov)": "Gasolina 60 (12 nov)",
  "Petrol – 70 – Today 7:00 AM": "Gasolina – 70 – Hoy 7:00 AM",
  "Phone (optional)": "Teléfono (opcional)",
+ "Phone number": "Número de teléfono",
  "Phone repair": "Reparación de móvil",
  "Photo": "Foto",
  "Pictures/Smart Expense": "Pictures/Smart Expense",
@@ -839,6 +840,7 @@
  "Recording": "Grabando",
  "Red": "Rojo",
  "Remembered": "Recordado",
+ "Remove": "Quitar",
  "Removed the matching note from this phone.": "Se quitó la nota correspondiente de este móvil.",
  "Rename": "Renombrar",
  "Rename account": "Renombrar cuenta",
@@ -916,6 +918,7 @@
  "Share diagnostics with ChatGPT or save the report": "Comparte el diagnóstico con ChatGPT o guarda el informe",
  "Shared bill": "Cuenta compartida",
  "Shoes": "Zapatos",
+ "Shop address": "Dirección de la tienda",
  "Shopping": "Compras",
  "Shops and places": "Tiendas y lugares",
  "Show": "Mostrar",
@@ -1279,5 +1282,6 @@
  "✦ Thinking…": "✦ Pensando…",
  "⤓ PDF": "⤓ PDF",
  "📊 Report ›": "📊 Informe ›",
+ "🖼  Change logo": "🖼  Cambiar logo",
  "🛠 Chat review": "🛠 Revisión del chat"
 }

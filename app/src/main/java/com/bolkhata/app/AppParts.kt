@@ -319,7 +319,7 @@ internal fun SideMenu(
                 // Dark mode: on is Navy glow (soft lights, glass cards, the Navy band); off is the warm grey page with the red band, the default.
                 val darkOn = dark && !photo
                 MenuRow(onClick = { if (darkOn) onPage(PAGE_COLORS[0]) else onDark(DARK_PAGES[1]) }) {
-                    MenuLabel("🌙", "Dark mode")
+                    MenuLabel("🌑", "Dark mode")
                     // Blue when on, the night look's colour.
                     OnOff(darkOn, onColor = Color(0xFF5B9BFF))
                 }
@@ -497,14 +497,18 @@ private fun MenuCard(content: @Composable ColumnScope.() -> Unit) =
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
 private fun MenuRow(onClick: (() -> Unit)?, last: Boolean = false, onLong: (() -> Unit)? = null, content: @Composable RowScope.() -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().then(
-            if (onLong != null) Modifier.combinedClickable(onLongClick = onLong) { onClick?.invoke() }
-            else if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
-        ).padding(horizontal = 12.dp, vertical = 9.dp),
-        verticalAlignment = Alignment.CenterVertically, content = content
-    )
-    if (!last) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+    // One height for every one-line row (44: a switch never makes one taller) and its line right under it, also when the
+    // row sits in a Box with a menu.
+    Column {
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 44.dp).then(
+                if (onLong != null) Modifier.combinedClickable(onLongClick = onLong) { onClick?.invoke() }
+                else if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
+            ).padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically, content = content
+        )
+        if (!last) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+    }
 }
 
 @Composable

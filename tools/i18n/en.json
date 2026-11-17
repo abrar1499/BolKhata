@@ -794,6 +794,7 @@
  "Petrol 60 (12 Nov)",
  "Petrol – 70 – Today 7:00 AM",
  "Phone (optional)",
+ "Phone number",
  "Phone repair",
  "Photo",
  "Pictures/Smart Expense",
@@ -839,6 +840,7 @@
  "Recording",
  "Red",
  "Remembered",
+ "Remove",
  "Removed the matching note from this phone.",
  "Rename",
  "Rename account",
@@ -916,6 +918,7 @@
  "Share diagnostics with ChatGPT or save the report",
  "Shared bill",
  "Shoes",
+ "Shop address",
  "Shopping",
  "Shops and places",
  "Show",
@@ -1279,5 +1282,6 @@
  "✦ Thinking…",
  "⤓ PDF",
  "📊 Report ›",
+ "🖼  Change logo",
  "🛠 Chat review"
 ]

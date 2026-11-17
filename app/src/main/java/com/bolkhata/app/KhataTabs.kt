@@ -2288,9 +2288,21 @@ internal fun BusinessPage(
     var i by remember(info) { mutableStateOf(info) }
     val h = LocalHeader.current
     val colors = Triple(h.c1.toArgb(), h.c2.toArgb(), h.c3.toArgb())
-    val logo = remember { runCatching { context.packageManager.getApplicationIcon(context.packageName).toBitmap(160, 160) }.getOrNull() }
-    val cards = remember(n, i.owner, i.phone, i.address, colors) { CardArt.STYLES.associateWith { CardArt.draw(it, n, i, colors, logo) } }
+    val appLogo = remember { runCatching { context.packageManager.getApplicationIcon(context.packageName).toBitmap(160, 160) }.getOrNull() }
+    // The business's own logo when one was picked (Change logo), else the app icon.
+    val logo = remember(i.logo) { i.logo.takeIf { it.isNotBlank() }?.let { runCatching { android.graphics.BitmapFactory.decodeFile(it) }.getOrNull() } ?: appLogo }
+    val pickLogo = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.GetContent()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val f = java.io.File(context.filesDir, "logo-${System.currentTimeMillis()}.png")
+        runCatching { context.contentResolver.openInputStream(uri)?.use { input -> f.outputStream().use { input.copyTo(it) } } }
+            .onSuccess { i.logo.takeIf { it.isNotBlank() }?.let { java.io.File(it).delete() }; i = i.copy(logo = f.absolutePath) }
+    }
+    // The cards on screen show sample words where nothing is typed yet; each is replaced as it is typed. The saved and
+    // shared card has only what was typed.
+    val sample = i.copy(owner = i.owner.ifBlank { "Your name" }, phone = i.phone.ifBlank { "Phone number" }, address = i.address.ifBlank { "Shop address" })
+    val cards = remember(n, sample, colors, logo) { CardArt.STYLES.associateWith { CardArt.draw(it, n, sample, colors, logo) } }
     val card = cards[i.card] ?: cards.getValue(CardArt.STYLES.first())
+    val real = remember(n, i, colors, logo) { CardArt.draw(i.card.takeIf { it in CardArt.STYLES } ?: CardArt.STYLES.first(), n, i, colors, logo) }
     LaunchedEffect(i) { if (!isNew) onInfo(i) }
     fun leave() { if (!isNew && n.isNotBlank() && n.trim() != name) onName(n.trim()); onBack() }
     BackHandler { leave() }
@@ -2335,7 +2347,7 @@ internal fun BusinessPage(
                     .border(1.dp, MaterialTheme.colorScheme.outline, shape).clickable {
                         if (isNew) onBack()
                         else {
-                            val ok = saveImage(context, card, (n.ifBlank { "Business" }) + " card")
+                            val ok = saveImage(context, real, (n.ifBlank { "Business" }) + " card")
                             android.widget.Toast.makeText(context, if (ok) "✓ Saved to Pictures" else "Couldn't save the picture", android.widget.Toast.LENGTH_SHORT).show()
                         }
                     }, contentAlignment = Alignment.Center) { Text(if (isNew) "Cancel" else "Save image", fontSize = 14.sp, fontWeight = FontWeight.Bold) }
@@ -2344,9 +2356,19 @@ internal fun BusinessPage(
                         if (n.isBlank()) android.widget.Toast.makeText(context, "Type the business name", android.widget.Toast.LENGTH_SHORT).show()
                         else onAdd(n.trim(), i)
                     } else shareFile(context, (n.ifBlank { "Business" }) + " card.png", "image/png") { f ->
-                        f.outputStream().use { card.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+                        f.outputStream().use { real.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
                     }
                 }, contentAlignment = Alignment.Center) { Text(if (isNew) "Add business" else "Share card", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White) }
+            }
+        }
+        // Under the buttons: the business's own logo for its card (the app icon until one is picked).
+        item(key = "logo") {
+            Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
+                val shape = RoundedCornerShape(12.dp)
+                Box(Modifier.height(36.dp).clip(shape).background(MaterialTheme.colorScheme.surface).clickable { pickLogo.launch("image/*") }
+                    .padding(horizontal = 16.dp), contentAlignment = Alignment.Center) { Text("🖼  Change logo", fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
+                if (i.logo.isNotBlank()) Box(Modifier.height(36.dp).clip(shape).clickable { java.io.File(i.logo).delete(); i = i.copy(logo = "") }
+                    .padding(horizontal = 12.dp), contentAlignment = Alignment.Center) { Text("Remove", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
         }
     }

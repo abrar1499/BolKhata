@@ -217,13 +217,13 @@ class Store(context: Context) {
     /** A business's owner, phone, address and card style (empty when never set). */
     fun bizInfo(id: String = business): BizInfo = try {
         JSONObject(prefs.getString(scoped("bizInfo", id), null) ?: "{}").let {
-            BizInfo(it.optString("owner"), it.optString("phone"), it.optString("address"), it.optString("card", "Classic"))
+            BizInfo(it.optString("owner"), it.optString("phone"), it.optString("address"), it.optString("card", "Classic"), it.optString("logo"))
         }
     } catch (_: Exception) { BizInfo() }
 
     fun saveBizInfo(info: BizInfo, id: String = business) {
         prefs.edit().putString(scoped("bizInfo", id), JSONObject().put("owner", info.owner.trim()).put("phone", info.phone.trim())
-            .put("address", info.address.trim()).put("card", info.card).toString()).apply()
+            .put("address", info.address.trim()).put("card", info.card).put("logo", info.logo).toString()).apply()
     }
 
     /** Deletes a business and its data. The first business can't be deleted. */

@@ -794,6 +794,7 @@
  "Petrol 60 (12 Nov)": "Benzin 60 (12 Kas)",
  "Petrol – 70 – Today 7:00 AM": "Benzin – 70 – Bugün 7:00",
  "Phone (optional)": "Telefon (isteğe bağlı)",
+ "Phone number": "Telefon numarası",
  "Phone repair": "Telefon tamiri",
  "Photo": "Fotoğraf",
  "Pictures/Smart Expense": "Pictures/Smart Expense",
@@ -839,6 +840,7 @@
  "Recording": "Kaydediliyor",
  "Red": "Kırmızı",
  "Remembered": "Hatırlandı",
+ "Remove": "Kaldır",
  "Removed the matching note from this phone.": "Eşleşen not bu telefondan kaldırıldı.",
  "Rename": "Yeniden adlandır",
  "Rename account": "Hesabı yeniden adlandır",
@@ -916,6 +918,7 @@
  "Share diagnostics with ChatGPT or save the report": "Tanılamayı ChatGPT ile paylaş veya raporu kaydet",
  "Shared bill": "Ortak fatura",
  "Shoes": "Ayakkabı",
+ "Shop address": "Dükkan adresi",
  "Shopping": "Alışveriş",
  "Shops and places": "Dükkanlar ve yerler",
  "Show": "Göster",
@@ -1279,5 +1282,6 @@
  "✦ Thinking…": "✦ Düşünüyor…",
  "⤓ PDF": "⤓ PDF",
  "📊 Report ›": "📊 Rapor ›",
+ "🖼  Change logo": "🖼  Logoyu değiştir",
  "🛠 Chat review": "🛠 Sohbet incelemesi"
 }

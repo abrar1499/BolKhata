@@ -794,6 +794,7 @@
  "Petrol 60 (12 Nov)": "पेट्रोल 60 (12 नवं)",
  "Petrol – 70 – Today 7:00 AM": "पेट्रोल – 70 – आज सुबह 7:00",
  "Phone (optional)": "फ़ोन (वैकल्पिक)",
+ "Phone number": "फ़ोन नंबर",
  "Phone repair": "फ़ोन रिपेयर",
  "Photo": "फ़ोटो",
  "Pictures/Smart Expense": "Pictures/Smart Expense",
@@ -839,6 +840,7 @@
  "Recording": "रिकॉर्डिंग",
  "Red": "लाल",
  "Remembered": "याद रखा",
+ "Remove": "हटाएँ",
  "Removed the matching note from this phone.": "इस फ़ोन से मिलता नोट हटा दिया।",
  "Rename": "नाम बदलें",
  "Rename account": "खाते का नाम बदलें",
@@ -916,6 +918,7 @@
  "Share diagnostics with ChatGPT or save the report": "जांच रिपोर्ट ChatGPT से शेयर करें या सेव करें",
  "Shared bill": "साझा बिल",
  "Shoes": "जूते",
+ "Shop address": "दुकान का पता",
  "Shopping": "खरीदारी",
  "Shops and places": "दुकानें और जगहें",
  "Show": "दिखाएं",
@@ -1279,5 +1282,6 @@
  "✦ Thinking…": "✦ सोच रहा है…",
  "⤓ PDF": "⤓ PDF",
  "📊 Report ›": "📊 रिपोर्ट ›",
+ "🖼  Change logo": "🖼  लोगो बदलें",
  "🛠 Chat review": "🛠 चैट समीक्षा"
 }
