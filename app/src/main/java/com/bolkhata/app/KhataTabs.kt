@@ -516,7 +516,7 @@ internal fun LazyListScope.ledger(
             }
             days++
             val day = byDay[dayNumber(r.date)].orEmpty()
-            item(key = keyPrefix + "d" + r.key) { DayLine(r.date, cols, day, cards) }
+            item(key = keyPrefix + "d" + r.key) { DayLine(r.date, cols, day) }
         }
         // As cards, each day is one card: its day line and entries, the last entry closing it.
         val last = i == rows.lastIndex || (cards && !sameDay(rows[i + 1].date, r.date))
@@ -584,12 +584,12 @@ private fun LedgerHead(
 
 /** The slim line above each day: the day's name and its totals in their columns. */
 @Composable
-private fun DayLine(date: Long, cols: List<LCol>, day: List<LRow>, card: Boolean = false) = Tight {
+private fun DayLine(date: Long, cols: List<LCol>, day: List<LRow>) = Tight {
     val w = colW(cols)
     val totals = cols.indices.map { k -> day.sumOf { it.amounts.getOrElse(k) { 0.0 } } }
     // One light keyboard-grey strip for the whole day: date, then the day's totals in their colours (no + / −).
     Row(
-        Modifier.padding(start = 10.dp, end = 10.dp, top = if (card) 2.dp else 0.dp).fillMaxWidth().height(IntrinsicSize.Min).background(DayStrip)
+        Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(IntrinsicSize.Min).background(DayStrip)
     ) {
         Text(dayLineFmt.format(Date(date)), fontSize = 11.sp, fontWeight = FontWeight.Bold,
             modifier = Modifier.weight(1f).padding(start = 12.dp, top = 4.dp, bottom = 4.dp))
