@@ -154,7 +154,7 @@ fun ChatScreen(
             items(messages, key = { it.id }) { message -> MockSize {
                 if (message.isUser) {
                     // What was said in live voice is not shown: only its answer is.
-                    if (message.meta != "live") UserBubble(message.text, message.attachment)
+                    if (message.meta != "live") UserBubble(message.text, message.attachment, message.timestamp)
                 } else {
                     // Each answer starts with the app's small logo, like a chat assistant's picture.
                     Row(Modifier.fillMaxWidth()) {
@@ -168,7 +168,7 @@ fun ChatScreen(
                         else remember(message.text, currency) { if (message.meta.contains("; plain")) null else Report.parse(message.text, currency) }
                             ?.let { ReportCard(it, message.text) }
                             // "What rate for 15000 Kachi eent?" on the last answer: the rate is typed right in the chat.
-                            ?: if (message == messages.lastOrNull() && RateAsk.matches(message.text)) RateCard(message.text, onSend) else AssistantBubble(message.text)
+                            ?: if (message == messages.lastOrNull() && RateAsk.matches(message.text)) RateCard(message.text, onSend) else AssistantBubble(message.text, message.timestamp)
                         // "Which A or B do you mean?": one tap on a name opens that khata.
                         if (message == messages.lastOrNull()) {
                             val names = NativeChatEngine.nameChoices(message.text)
@@ -326,10 +326,10 @@ private fun VoiceBubble(path: String) {
     DisposableEffect(path) { onDispose { runCatching { player?.release() } } }
     val seconds = (path.substringAfterLast('-').removeSuffix(".m4a").toLongOrNull() ?: 0L) / 1000
     val bars = remember(path) { listOf(8, 14, 20, 11, 17, 22, 9, 15, 19, 12, 7, 16, 21, 10, 13, 18, 8, 12) }
-    val light = MaterialTheme.colorScheme.surface
+    val light = Color.White
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
         Row(
-            Modifier.clip(MeShape).background(MaterialTheme.colorScheme.onSurface).clickable {
+            Modifier.clip(MeTail).background(MeBlue).clickable {
                 val playing = player
                 if (playing != null) { runCatching { playing.release() }; player = null }
                 else runCatching {
@@ -340,11 +340,11 @@ private fun VoiceBubble(path: String) {
                         start()
                     }
                 }
-            }.padding(start = 8.dp, end = 12.dp, top = 7.dp, bottom = 7.dp),
+            }.padding(start = 8.dp, end = 12.dp + TAIL, top = 7.dp, bottom = 7.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(Modifier.size(26.dp).clip(CircleShape).background(light), contentAlignment = Alignment.Center) {
-                Text(if (player == null) "▶" else "■", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface)
+                Text(if (player == null) "▶" else "■", fontSize = 10.sp, color = MeBlue)
             }
             Spacer(Modifier.width(8.dp))
             Row(Modifier.height(22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -356,11 +356,10 @@ private fun VoiceBubble(path: String) {
     }
 }
 
-private val MeShape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 6.dp)
 private val BotShape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 6.dp, bottomEnd = 16.dp)
 
 @Composable
-private fun UserBubble(text: String, attachment: String = "") {
+private fun UserBubble(text: String, attachment: String = "", time: Long = System.currentTimeMillis()) {
     // A message spoken with the mic shows as a voice note, not as its words.
     if (attachment.endsWith(".m4a")) {
         VoiceBubble(attachment)
@@ -370,21 +369,66 @@ private fun UserBubble(text: String, attachment: String = "") {
         AttachmentBubble(attachment, text)
         return
     }
-    val dark = LocalLook.current != null
+    // The question in a dark blue bubble with WhatsApp's tail, the answer in a white one; in the dark theme too.
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-        Text(
-            text,
-            // The question in a dark bubble, the answer in a white card (like the Yaad mock-up); in the dark theme too.
-            color = if (dark) Color.White else MaterialTheme.colorScheme.surfaceContainer,
-            fontSize = 13.sp,
-            lineHeight = 17.5.sp,
-            modifier = Modifier
+        Box(
+            Modifier
                 .widthIn(max = 300.dp)
-                .clip(MeShape)
+                .clip(MeTail)
                 .copyable(text)
-                .background(if (dark) Color(0xFF1C1917) else MaterialTheme.colorScheme.onSurface)
-                .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 6.dp)
-        )
+                .background(MeBlue)
+                .padding(start = 10.dp, end = 10.dp + TAIL, top = 6.dp, bottom = 5.dp)
+        ) { TimedText(text, time, Color.White) }
+    }
+}
+
+/** Your own bubble's blue (Messenger's). */
+private val MeBlue = Color(0xFF0866FF)
+
+/** WhatsApp's tail: a small corner at the bubble's top on the speaker's side, [TAIL] wide. */
+private val TAIL = 7.dp
+
+/** A bubble as WhatsApp draws it: corners of 8 and the tail at the top, on the right for mine ([right]), else on the left. */
+private class TailShape(private val right: Boolean) : androidx.compose.ui.graphics.Shape {
+    override fun createOutline(size: androidx.compose.ui.geometry.Size, layoutDirection: androidx.compose.ui.unit.LayoutDirection,
+        density: androidx.compose.ui.unit.Density): androidx.compose.ui.graphics.Outline {
+        val r = with(density) { 8.dp.toPx() }
+        val t = with(density) { TAIL.toPx() }
+        val w = size.width
+        val h = size.height
+        val p = androidx.compose.ui.graphics.Path()
+        if (right) {
+            p.moveTo(w, 0f); p.lineTo(r, 0f); p.quadraticBezierTo(0f, 0f, 0f, r)
+            p.lineTo(0f, h - r); p.quadraticBezierTo(0f, h, r, h)
+            p.lineTo(w - t - r, h); p.quadraticBezierTo(w - t, h, w - t, h - r)
+            p.lineTo(w - t, t)
+        } else {
+            p.moveTo(0f, 0f); p.lineTo(w - r, 0f); p.quadraticBezierTo(w, 0f, w, r)
+            p.lineTo(w, h - r); p.quadraticBezierTo(w, h, w - r, h)
+            p.lineTo(t + r, h); p.quadraticBezierTo(t, h, t, h - r)
+            p.lineTo(t, t)
+        }
+        p.close()
+        return androidx.compose.ui.graphics.Outline.Generic(p)
+    }
+}
+
+private val MeTail = TailShape(right = true)
+private val BotTail = TailShape(right = false)
+
+/**
+ * The words with the time small in the bubble's bottom right, as WhatsApp: the time is also written (unseen) at the end
+ * of the words, so the last line keeps room for it.
+ */
+@Composable
+private fun TimedText(text: String, time: Long, color: Color) {
+    val stamp = remember(time) { java.text.SimpleDateFormat("h:mm a", java.util.Locale.US).format(java.util.Date(time)).lowercase() }
+    Box {
+        Text(buildAnnotatedString {
+            append(text)
+            withStyle(SpanStyle(color = Color.Transparent, fontSize = 8.sp)) { append("\u2002\u2002$stamp") }
+        }, color = color, fontSize = 13.sp, lineHeight = 17.5.sp)
+        Text(stamp, color = color.copy(alpha = 0.6f), fontSize = 8.sp, lineHeight = 8.sp, modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = 1.dp))
     }
 }
 
@@ -483,22 +527,18 @@ private fun NameChoices(names: List<String>, onPick: (String) -> Unit) {
 }
 
 @Composable
-private fun AssistantBubble(text: String) {
-    // A white raised card like the mock-up; the engine trace is kept in the chat log for review, not shown here.
-    Text(
-        text,
-        color = MaterialTheme.colorScheme.onSurface,
-        fontSize = 13.sp,
-        lineHeight = 17.5.sp,
-        modifier = Modifier
-            .padding(start = 8.dp)
+private fun AssistantBubble(text: String, time: Long) {
+    // A white raised bubble with WhatsApp's tail pointing at the logo; the engine trace is kept in the chat log, not shown here.
+    Box(
+        Modifier
+            .padding(start = 1.dp)
             .widthIn(max = 320.dp)
-            .lift(1.dp, BotShape)
-            .clip(BotShape)
+            .lift(1.dp, BotTail)
+            .clip(BotTail)
             .copyable(text)
             .background(MaterialTheme.colorScheme.surface)
-            .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 6.dp)
-    )
+            .padding(start = 10.dp + TAIL, end = 10.dp, top = 6.dp, bottom = 5.dp)
+    ) { TimedText(text, time, MaterialTheme.colorScheme.onSurface) }
 }
 
 /** A khata, report or list answer as a card: the main amount big, every other amount on its own line. */
