@@ -193,8 +193,8 @@ fun ChatScreen(
                             Text(it.groupValues[1], fontSize = 8.sp, lineHeight = 8.sp, color = Color(0xFFA39E98),
                                 modifier = Modifier.padding(start = 14.dp, top = 3.dp))
                         }
-                        // Now and then (every eighth answer) a quiet ad under the answer: always the same card, picture or video.
-                        adAfter[message.id]?.let { video -> NativeAdCard("chat-" + message.id, Modifier.fillMaxWidth(0.92f).padding(start = 8.dp, end = 8.dp, top = 6.dp), video = video, small = !video) }
+                        // Now and then (every fifth answer) a quiet ad under the answer, from the bubbles' left edge to your bubbles' right one.
+                        adAfter[message.id]?.let { video -> NativeAdCard("chat-" + message.id, Modifier.padding(start = 8.dp, end = TAIL, top = 6.dp), video = video, small = !video) }
                     }
                     }
                 }
