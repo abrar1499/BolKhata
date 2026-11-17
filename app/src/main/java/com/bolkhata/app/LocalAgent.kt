@@ -143,7 +143,7 @@ object LocalTalk : LocalAgent.Reader {
         "entry", "entries", "edit", "change", "likhna", "likhun", "hisab", "khata", "pdf", "report")
 
     override fun read(s: LocalAgent.Said): LocalAgent.Reply? = when {
-        s.lastShown.trim().endsWith("?") && s.words.all { it in nods } -> null
+        s.lastShown.trim().let { it.endsWith("?") || it.endsWith("or say yes.") } && s.words.all { it in nods } -> null
         s.words.any { it in doing } -> null
         !NativeChatEngine.isSmallTalk(s.roman, s.now) -> null
         else -> LocalAgent.Reply(NativeChatEngine.interpret(s.roman, emptyList(), now = s.now).reply)
