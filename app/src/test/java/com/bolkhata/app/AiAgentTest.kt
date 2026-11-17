@@ -412,6 +412,6 @@ class AiAgentTest {
         val talk = AiAgent.learn(emptyList(), "kya haal hai", emptyList(), emptyMap(), "I'm fine, thanks.", "English").lesson
         assertEquals("I'm fine, thanks.", AiAgent.replay(talk, "kya haal hai", lang = "English")?.reply)
         assertEquals(null, AiAgent.replay(talk, "kya haal hai", lang = "Urdu"))
-        assertTrue(AiAgent.personal("SAR", emptyList(), "Urdu").endsWith("Answer in: Urdu, in its own script."))
+        assertTrue(AiAgent.personal("SAR", emptyList(), "Urdu").endsWith("App language (for a message by voice or with no words): Urdu, in its own script."))
     }
 }
