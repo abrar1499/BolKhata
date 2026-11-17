@@ -435,7 +435,7 @@ private fun TimedText(text: String, time: Long, color: Color) {
         Text(buildAnnotatedString {
             append(text)
             withStyle(SpanStyle(color = Color.Transparent, fontSize = 8.sp)) { append("\u2002\u2002$stamp") }
-        }, color = color, fontSize = 13.sp, lineHeight = 17.5.sp)
+        }, color = color, fontSize = 13.sp, lineHeight = 17.5.sp, style = LocalTextStyle.current.copy(textDirection = androidx.compose.ui.text.style.TextDirection.Content))
         Text(stamp, color = color.copy(alpha = 0.6f), fontSize = 8.sp, lineHeight = 8.sp,
             modifier = Modifier.align(if (rtl) Alignment.BottomStart else Alignment.BottomEnd).padding(bottom = 1.dp))
     } }
