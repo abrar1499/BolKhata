@@ -17,7 +17,9 @@ import androidx.core.content.FileProvider
 import java.io.File
 
 /** A business's details for its bills, PDFs and card. The name lives with the business list. */
-data class BizInfo(val owner: String = "", val phone: String = "", val address: String = "", val card: String = "Classic")
+data class BizInfo(val owner: String = "", val phone: String = "", val address: String = "", val card: String = "Classic",
+    /** The business's own logo (a picture in the app's files); "" for the app icon. */
+    val logo: String = "")
 
 /**
  * The business card, drawn as a picture so the same image is shown, saved and shared. Six looks:
