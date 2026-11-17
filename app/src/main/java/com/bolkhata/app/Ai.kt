@@ -222,8 +222,9 @@ object Ai {
                     .put("cache_control", JSONObject().put("type", "ephemeral").put("ttl", "1h")))
                     .apply { if (personal.isNotBlank()) put(JSONObject().put("type", "text").put("text", personal)) })
                 .put("tools", JSONArray().apply { tools.forEach { put(JSONObject().put("name", it.name).put("description", it.description).put("input_schema", it.schema)) } })
-                // And one at the end of the conversation so far, for the later steps of the same message.
-                .put("cache_control", JSONObject().put("type", "ephemeral"))
+                // And one at the end of the conversation so far, for the later steps of the same message: only once there is
+                // a step to read it back (writing it costs a quarter more, wasted on a one-step answer).
+                .apply { if (messages.length() > 1) put("cache_control", JSONObject().put("type", "ephemeral")) }
             if (!m.contains("haiku-4") && !m.contains("sonnet-4-5")) req.put("output_config", JSONObject().put("effort", effort))
             if (!thinking) req.put("thinking", JSONObject().put("type", "disabled"))
             val fallback = listOf("claude-fable-5", "claude-opus-5", "claude-sonnet-5-5").any { m.startsWith(it) }
