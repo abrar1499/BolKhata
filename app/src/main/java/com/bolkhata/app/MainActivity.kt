@@ -2889,9 +2889,9 @@ fun App(
                             toast("✓ Restored")
                         }
                     },
-                    onRestoreAll = {
+                    onRestoreAll = { some ->
                         val existing = entries.map { it.id }.toSet()
-                        val safe = trash.filter { it.id !in existing }.distinctBy { it.id }
+                        val safe = some.filter { it.id !in existing }.distinctBy { it.id }
                         if (safe.isEmpty()) {
                             toast("No entries to restore without duplicates.")
                         } else {
