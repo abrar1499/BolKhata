@@ -514,13 +514,13 @@ class EverydayTest {
         assertTrue("The app understood $passed of ${list.size} ${label.lowercase()} messages; it understood $floor before", passed >= floor)
     }
 
-    /** Every way of saying yes answers the app's question: after "Move them all to Trash?" the entries go. */
+    /** Every way of saying yes answers the app's question: after "Delete all … entries? Tap Delete, or say yes." the entries go. */
     @Test
     fun everyYesAnswersTheAppsQuestion() {
         for (yes in listOf("ji", "jee", "g", "gi", "haan", "han", "ha", "haa", "ok", "okay", "yes", "theek hai", "kar do", "haan kar do", "ji kar do")) {
             val (host, entries, _) = books()
             val ask = LocalAgent.run("sari entries delete kar do", host, now)?.text.orEmpty()
-            assertTrue("asks first: $ask", ask.endsWith("?"))
+            assertTrue("asks first: $ask", ask.endsWith("Tap Delete, or say yes."))
             LocalAgent.run(yes, host, now, lastShown = ask, recent = "Person: sari entries delete kar do\nApp: $ask")
             assertTrue("\"$yes\" did the delete", entries().isEmpty())
         }

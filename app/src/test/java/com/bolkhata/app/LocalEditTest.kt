@@ -273,7 +273,7 @@ class LocalEditTest {
     }
 
     @Test fun deleteEverythingAsksThenYes() = Books().run {
-        assertTrue('?' in say("sari entries delete kar do")!!.text)
+        assertTrue("Tap Delete" in say("sari entries delete kar do")!!.text)
         assertTrue(trashed.isEmpty())
         say("haan kar do")
         assertTrue(entries.isEmpty())
