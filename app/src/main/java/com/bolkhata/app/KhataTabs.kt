@@ -682,20 +682,29 @@ private fun adUnder(state: LazyListState, low: Dp, high: Dp): Boolean {
     return under
 }
 
-/** Round ↑ button that appears once the list is scrolled down (over the Cashbook's +). It steps aside while an ad is under it. */
+/**
+ * Small round ↑ button, centred a little above the Cashbook's +, shown only while a scrolled-down list moves and gone
+ * a second after it stops. It steps aside while an ad is under it.
+ */
 @Composable
 private fun BoxScope.UpButton(state: LazyListState) {
     val scope = rememberCoroutineScope()
-    val bottom = LocalBarSpace.current + 60.dp
+    val bottom = LocalBarSpace.current + 70.dp
     val down by remember { derivedStateOf { state.firstVisibleItemIndex > 4 } }
+    var moving by remember { mutableStateOf(false) }
+    val scrolling = state.isScrollInProgress
+    LaunchedEffect(scrolling) { if (scrolling) moving = true else { kotlinx.coroutines.delay(1000); moving = false } }
     // The button's lower and upper edge above the list's end, with a little room around it.
-    val clear = !adUnder(state, bottom - 6.dp, bottom + 46.dp)
-    if (down && clear) Box(
-        Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = bottom)
-            .size(40.dp).lift(2.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.onSurface)
+    val clear = !adUnder(state, bottom - 6.dp, bottom + 36.dp)
+    if (down && moving && clear) Box(
+        Modifier.align(Alignment.BottomEnd).padding(end = 25.dp, bottom = bottom)
+            .size(30.dp).lift(2.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.onSurface)
             .clickable { scope.launch { state.animateScrollToItem(0) } },
         contentAlignment = Alignment.Center
-    ) { Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Back to top", tint = MaterialTheme.colorScheme.surfaceContainer) }
+    ) {
+        Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Back to top", tint = MaterialTheme.colorScheme.surfaceContainer,
+            modifier = Modifier.size(20.dp))
+    }
 }
 
 private fun matches(e: Entry, q: String) =
