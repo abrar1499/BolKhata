@@ -101,7 +101,7 @@ Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Packa
 - The look is fixed: warm grey #E9E6E1 page with the Red band (the default). Side menu has only a 🌑 Dark mode switch (no
   header dots, no background colours, no photo). Dark = Navy glow: soft lights on navy (`pageGround`), the Navy band,
   see-through glass cards, floating parts solid (`solidCard`), top card solid #222A3E lighter at the top (never see-through: the band's edge would show through), its edge light at the top fading down, brighter red, day strips a light white shade (20%), the
-  business pill glass like the 🌐 pill, every logo in its own red; the open tab soft blue #8FB8FF with a pill, the + in the Navy band's blues (#2C5282→#1E3A5F) with a fine light edge, 85%. Chat bubbles as WhatsApp (corners 8, a tail at the top, the time small inside, bottom right); your own in dark blue #0866FF, in both themes. No glass on light cards.
+  business pill glass like the 🌐 pill, every logo in its own red; the open tab soft blue #8FB8FF with a pill, the + (a rounded square like WhatsApp's, 52, radius 16) in the Navy band's blues (#2C5282→#1E3A5F) with a fine light edge, 85%. Chat bubbles as WhatsApp (corners 8, a tail at the top, the time small inside, bottom right); your own in dark blue #0866FF, in both themes. No glass on light cards.
 - Search box and chat bar (`fieldEdge`): as in the Claude app, white (dark: a shade lighter than the page), soft
   see-through edge, faint shadow, radius 16 (chat 19).
 - App text is plain English only (account, not khata); no country-specific words (ID card, not Iqama). Chat answers in

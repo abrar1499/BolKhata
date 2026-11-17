@@ -770,7 +770,10 @@ fun CashBookScreen(
 
 // ---------------------------------------------------------------- + on the Cashbook
 
-/** The round + on the Cashbook: small, in the header's red with a white +. Like ↑, it steps aside while an ad is under it. */
+/** The + button's shape, as WhatsApp's: a rounded square. */
+private val FabShape = RoundedCornerShape(16.dp)
+
+/** The + on the Cashbook, shaped as WhatsApp's (a rounded square): the header's red, or the Navy blues in the dark, with a white +. Like ↑, it steps aside while an ad is under it. */
 @Composable
 private fun BoxScope.AddRound(state: LazyListState, onClick: () -> Unit) {
     val bottom = LocalBarSpace.current + 8.dp
@@ -778,14 +781,14 @@ private fun BoxScope.AddRound(state: LazyListState, onClick: () -> Unit) {
     val glow = LocalLook.current?.glow == true
     val red = if (glow) Color(0xFF1E3A5F) else Color(0xFFE3342F)
     if (!adUnder(state, bottom - 6.dp, bottom + 50.dp)) Box(
-        Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = bottom).size(44.dp)
-            .lift(6.dp, CircleShape, ambientColor = red, spotColor = red).clip(CircleShape)
-            .then(if (glow) Modifier.border(1.dp, Color(0x24FFFFFF), CircleShape) else Modifier)
+        Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = bottom).size(52.dp)
+            .lift(6.dp, FabShape, ambientColor = red, spotColor = red).clip(FabShape)
+            .then(if (glow) Modifier.border(1.dp, Color(0x24FFFFFF), FabShape) else Modifier)
             // A little see-through (85%), so the page shows faintly under it.
             .background(Brush.linearGradient((if (glow) listOf(Color(0xFF2C5282), red) else listOf(Color(0xFFFF7A45), red, Color(0xFFB91C3C))).map { it.copy(alpha = 0.85f) }))
             .clickable { onClick() }
             .drawBehind {
-                val arm = 7.dp.toPx()
+                val arm = 8.dp.toPx()
                 val width = 2.2.dp.toPx()
                 drawLine(Color.White, center.copy(y = center.y - arm), center.copy(y = center.y + arm), width, androidx.compose.ui.graphics.StrokeCap.Round)
                 drawLine(Color.White, center.copy(x = center.x - arm), center.copy(x = center.x + arm), width, androidx.compose.ui.graphics.StrokeCap.Round)
