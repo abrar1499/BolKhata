@@ -567,7 +567,7 @@ private fun ReportCard(r: Report, text: String, time: Long) {
     Column(
         Modifier
             .fillMaxWidth(0.92f)
-            .padding(start = 1.dp, end = 8.dp, top = 4.dp, bottom = 4.dp)
+            .padding(start = 1.dp, end = 8.dp, bottom = 4.dp)
             .lift(1.dp, BotTail)
             .clip(BotTail)
             .copyable(text)

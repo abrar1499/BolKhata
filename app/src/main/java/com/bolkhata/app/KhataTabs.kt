@@ -843,7 +843,7 @@ private fun PickHead(path: String, title: String, onBack: () -> Unit, tag: Pair<
     }
 }
 
-/** A small grey heading in the +'s card (ACCOUNTS, or an account over search results). */
+/** A small grey heading in the +'s card (ACCOUNTS, or an account over search results); its rows start with a line. */
 @Composable
 private fun PickLabel(text: String) = Text(text.uppercase(), fontSize = 10.5.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.4.sp,
     color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 12.dp, top = 10.dp, bottom = 2.dp))
@@ -960,14 +960,14 @@ private fun EntryPicker(all: List<Entry>, setup: SideSetup, onSetup: (SideSetup)
                             if (found.isEmpty()) item { Text("No account called \"${q.trim()}\" yet.", fontSize = 13.sp, color = sub, modifier = Modifier.padding(12.dp)) }
                             found.groupBy { it.book.name }.forEach { (g, ts) ->
                                 item { PickLabel(g) }
-                                items(ts.size) { i -> val t = ts[i]; PickRow(t.icon, t.name, t.path, null, "", sub, i == 0, plain = t.balance) { onPick(t) } }
+                                items(ts.size) { i -> val t = ts[i]; PickRow(t.icon, t.name, t.path, null, "", sub, false, plain = t.balance) { onPick(t) } }
                             }
                         }
                         s == null -> {
                             item { PickLabel("Accounts") }
                             item {
                                 val n = booksOf(Side.PARTY).sumOf { Sides.kids(it, all, setup).size }
-                                PickRow("👥", "Party", if (n == 1) "1 person" else "$n people", null, "", sub, true) { side = Side.PARTY }
+                                PickRow("👥", "Party", if (n == 1) "1 person" else "$n people", null, "", sub, false) { side = Side.PARTY }
                             }
                             listOf(Side.EXP, Side.INC).forEach { x ->
                                 item {
@@ -978,7 +978,8 @@ private fun EntryPicker(all: List<Entry>, setup: SideSetup, onSetup: (SideSetup)
                             }
                         }
                         book == null -> {
-                            val bs = booksOf(s)
+                            val bs = booksOf(s).sortedByDescending { b ->
+                                if (b.people) Sides.kids(b, all, setup).sumOf { kotlin.math.abs(it.balance) } else Sides.done(b, all, setup, thisMonth) }
                             items(bs.size) { i ->
                                 val b = bs[i]
                                 val kids = Sides.kids(b, all, setup)
@@ -987,7 +988,8 @@ private fun EntryPicker(all: List<Entry>, setup: SideSetup, onSetup: (SideSetup)
                             }
                         }
                         else -> {
-                            val kids = Sides.kids(book, all, setup)
+                            val kids = Sides.kids(book, all, setup).let { l ->
+                                if (book.people) l.sortedByDescending { kotlin.math.abs(it.balance) } else l.sortedByDescending { it.total } }
                             if (kids.isEmpty()) item { Text("Nothing in ${book.name} yet.", fontSize = 13.sp, color = sub, modifier = Modifier.padding(12.dp)) }
                             items(kids.size) { i ->
                                 val k = kids[i]
@@ -1524,7 +1526,11 @@ fun SideScreen(
                 book != null -> {
                     val auto = Sides.isAuto(book)
                     // People accounts show what is owed all time; things show the period picked.
-                    val allKids = Sides.kids(book, entries, setup)
+                    // The biggest money first: people by what is owed, things by the period's total.
+                    val allKids = Sides.kids(book, entries, setup).let { l ->
+                        if (book.people) l.sortedByDescending { kotlin.math.abs(it.balance) }
+                        else l.sortedByDescending { k -> k.entries.filter { e -> inPer(e.date) }.sumOf { it.amount } }
+                    }
                     val kids = if (book.people) allKids else allKids.map { Kid(it.name, it.entries.filter { e -> inPer(e.date) }) }
                     val inc = book.side == Side.INC
                     stickyHeader { TabHead {
@@ -1607,8 +1613,10 @@ fun SideScreen(
                         SearchBox(q, "Search") { q = it }
                         PeriodChips(newest, per) { period = it.encode() }
                     } }
+                    // The biggest money first: a people account by what its people owe, a thing account by the period's total.
                     val shown = books.filter { q.isBlank() || it.name.contains(q.trim(), true) ||
                         Sides.kids(it, entries, setup).any { k -> k.name.contains(q.trim(), true) } }
+                        .sortedByDescending { b -> if (b.people) Sides.kids(b, entries, setup).sumOf { kotlin.math.abs(it.balance) } else Sides.done(b, entries, setup, inPer) }
                     // The accounts in one card, a slim picture ad inside it (cardAdAfter).
                     val adAfter = cardAdAfter(shown.size)
                     val adPlace = "accounts-$side"
@@ -1964,7 +1972,9 @@ private fun AddBody(r: AddReq, all: List<Entry>, onDismiss: () -> Unit, onDelete
     var item by remember { mutableStateOf(old?.item.orEmpty()) }
     var qty by remember { mutableStateOf(old?.takeIf { r.goods }?.let { plain(it.qty) }.orEmpty()) }
     var rate by remember { mutableStateOf(old?.takeIf { r.goods }?.let { plain(it.rate) }.orEmpty()) }
-    var per1000 by remember { mutableStateOf(old?.unit == "1000") }
+    // The count's unit ("" each, "1000" per thousand, kg, bag…); per 1000 makes the rate one for a thousand.
+    var unit by remember { mutableStateOf(old?.takeIf { r.goods }?.unit.orEmpty()) }
+    val per1000 = unit == "1000"
     var date by remember { mutableLongStateOf(old?.date ?: System.currentTimeMillis()) }
     var cash by remember { mutableStateOf(false) }
     val goods = r.goods && !cash
@@ -1972,7 +1982,7 @@ private fun AddBody(r: AddReq, all: List<Entry>, onDismiss: () -> Unit, onDelete
     val known = remember(all) { Goods.known(all) }
     fun pick(n: String) {
         item = n
-        Goods.lastRate(n, r.template.person, out, all)?.let { rate = plain(it.rate); per1000 = it.unit == "1000" }
+        Goods.lastRate(n, r.template.person, out, all)?.let { rate = plain(it.rate); unit = it.unit }
     }
     val q = qty.toDoubleOrNull() ?: 0.0
     val rt = rate.toDoubleOrNull() ?: 0.0
@@ -2008,7 +2018,11 @@ private fun AddBody(r: AddReq, all: List<Entry>, onDismiss: () -> Unit, onDelete
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 WellField(qty, { qty = it }, "Qty", Modifier.weight(1f), big = true, number = true)
-                WellField(rate, { rate = it }, if (per1000) "Rate per 1000" else "Rate", Modifier.weight(1f), number = true)
+                WellField(rate, { rate = it }, if (unit.isEmpty()) "Rate" else "Rate per " + (UNITS.firstOrNull { it.first == unit }?.second ?: unit).removePrefix("Per ").lowercase(),
+                    Modifier.weight(1f), number = true)
+            }
+            LazyRow(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                items(UNITS) { (u, label) -> UnitChip(label, unit == u) { unit = u } }
             }
             Text(if (q > 0 && rt > 0) "Amount = " + fmt(q) + (if (per1000) " ÷ 1000" else "") + " × " + fmt(rt) + " = " + fmt(total) else "Amount = qty × rate",
                 fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 10.dp))
@@ -2046,13 +2060,26 @@ private fun AddBody(r: AddReq, all: List<Entry>, onDismiss: () -> Unit, onDelete
                         id = old?.id ?: ("e" + System.nanoTime()), amount = total, note = note.trim(), date = date, createdAt = old?.createdAt ?: now,
                         item = if (goods) Goods.canonical(item, known) else t.item,
                         qty = if (goods) q else t.qty, rate = if (goods) rt else t.rate,
-                        unit = if (!goods) t.unit else if (per1000) "1000" else t.unit.takeIf { it != "1000" }.orEmpty()
+                        unit = if (!goods) t.unit else unit
                     ))
                 },
                 contentAlignment = Alignment.Center
             ) { Text("Save", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
         }
     }
+}
+
+/** The units a count can be in (saved word to its label); Per 1000 counts thousands. */
+private val UNITS = listOf("" to "Each", "1000" to "Per 1000", "piece" to "Piece", "kg" to "Kg", "ton" to "Ton", "bag" to "Bag",
+    "dozen" to "Dozen", "litre" to "Litre", "metre" to "Metre", "ft" to "Ft", "sqft" to "Sq ft", "box" to "Box")
+
+/** One unit to tap: white with the fields' edge, dark when picked. */
+@Composable
+private fun UnitChip(label: String, on: Boolean, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(14.dp)
+    Text(label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (on) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.clip(shape).then(if (on) Modifier.background(MaterialTheme.colorScheme.onSurface) else Modifier.fieldEdge(shape))
+            .clickable { onClick() }.padding(horizontal = 11.dp, vertical = 5.dp))
 }
 
 /** A saved entry opened to change, from anywhere in the app: the same sheet as adding, filled, with Delete. */
