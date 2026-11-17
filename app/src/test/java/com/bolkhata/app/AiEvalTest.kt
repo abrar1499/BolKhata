@@ -44,14 +44,17 @@ class AiEvalTest {
         var pdf: PdfDoc? = null
         /** The app settings the AI changed ("currency=PKR"). */
         val changed = mutableListOf<String>()
-        val host = AiAgent.Host(
+        /** The app's language by its English name; the AI answers in it. */
+        var language = "English"
+        val host get() = AiAgent.Host(
             entries = { entries }, add = { entries = it + entries },
             update = { changed -> entries = entries.map { e -> changed.firstOrNull { it.id == e.id } ?: e } },
             trash = { ids -> trashed += ids; bin = entries.filter { it.id in ids } + bin; entries = entries.filter { it.id !in ids } },
             names = { (entries.map { it.person } + setup.people.keys).map { it.trim() }.filter { it.isNotBlank() }.distinct() },
             currency = "PKR", setup = { setup }, saveSetup = { setup = it }, pdf = { pdf = it },
             trashed = { bin }, restore = { ids -> entries = bin.filter { it.id in ids } + entries; bin = bin.filter { it.id !in ids }; trashed -= ids },
-            settings = { k, v -> changed += "$k=$v"; JSONObject().put("done", "Changed.").toString() }
+            settings = { k, v -> changed += "$k=$v"; JSONObject().put("done", "Changed.").toString() },
+            language = language
         )
         val added get() = entries.filter { it.id !in baseIds }
         fun byId(id: String) = entries.firstOrNull { it.id == id }
@@ -217,6 +220,9 @@ class AiEvalTest {
                 Entry("p3", Type.KHARCHA, 7.0, Cat.TRANSPORT, "City parking", "", "", now - 4 * day, now - 4 * day)) + entries
         }) { listOf("the station is under Petrol" to (world.byId("p1")?.item == "Petrol"), "the pump is under Petrol" to (world.byId("p2")?.item == "Petrol"),
             "parking stays" to (world.byId("p3")?.item == "City parking"), "nothing new" to added.isEmpty()) },
+        case("arabic app, english small talk", "i am good too", prepare = { language = "Arabic" }) { listOf("answer is in Arabic script" to Regex("[\u0600-\u06FF]").containsMatchIn(text)) },
+        case("arabic app, english talk after english answers", "hello", "kya hal hai", "i am good too", prepare = { language = "Arabic" }) {
+            listOf("the last answer is in Arabic script" to Regex("[\u0600-\u06FF]").containsMatchIn(text)) },
         case("rename a person", "salim raza ka naam salim raza butt kar do") { listOf("the entry carries the new name" to (world.byId("l2")?.person.equals("Salim Raza Butt", true) == true), "nothing new" to added.isEmpty()) },
         // ---- voice, as the recogniser hands it over
         voice("urdu script", "حامد کو پانچ سو دیے") { listOf("lent Hamid 500" to has(Type.DIYA, "Hamid Akram", 500.0), "answer is not in Urdu script" to !urduOrHindi.containsMatchIn(text)) },

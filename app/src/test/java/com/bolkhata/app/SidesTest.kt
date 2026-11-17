@@ -33,7 +33,7 @@ class SidesTest {
     }
 
     @Test fun salesAndPurchasesFillThemselvesFromTheKhatas() {
-        assertEquals(listOf(Sides.SALES), Sides.books(Side.INC, all, setup).map { it.name })
+        assertEquals(listOf(Sides.SALES, Sides.INCOME), Sides.books(Side.INC, all, setup).map { it.name })
         val sales = Sides.books(Side.INC, all, setup).first { it.name == Sides.SALES }
         // Inside: the Party accounts, each with its people's sales or work.
         assertEquals(Sides.CUSTOMERS to 70000.0, Sides.kids(sales, all, setup).single().let { it.name to it.total })
@@ -126,5 +126,17 @@ class SidesTest {
         assertEquals(1, Sides.kids(salary, all, moved).single().entries.size)
         // Back to Income received: out of Salary.
         assertEquals(0, Sides.kids(salary, all, Sides.intoIncomeAccount(moved, listOf("Hamid Akram"), Sides.INCOME)).sumOf { it.entries.size })
+    }
+
+    @Test fun anExpenseAccountShowsItsUsualThingsBeforeAnyEntry() {
+        val transport = Book(Side.EXP, Cat.TRANSPORT.label, false, Cat.TRANSPORT)
+        val names = Sides.kids(transport, emptyList(), SideSetup()).map { it.name }
+        assertTrue(defaultSubs[Cat.TRANSPORT]!!.all { it in names })
+    }
+
+    @Test fun incomeReceivedIsThereWithItsUsualThingsBeforeAnyIncome() {
+        val books = Sides.books(Side.INC, emptyList(), SideSetup())
+        val received = books.first { it.name == Sides.INCOME }
+        assertTrue(Sides.incomeThings.all { n -> Sides.kids(received, emptyList(), SideSetup()).any { it.name == n } })
     }
 }

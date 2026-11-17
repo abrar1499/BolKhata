@@ -397,7 +397,8 @@ private class TailShape(private val right: Boolean) : androidx.compose.ui.graphi
         val w = size.width
         val h = size.height
         val p = androidx.compose.ui.graphics.Path()
-        if (right) {
+        // A right-to-left app (Arabic, Urdu) puts the bubbles on the other side: the tail follows them.
+        if (right != (layoutDirection == androidx.compose.ui.unit.LayoutDirection.Rtl)) {
             p.moveTo(w, 0f); p.lineTo(r, 0f); p.quadraticBezierTo(0f, 0f, 0f, r)
             p.lineTo(0f, h - r); p.quadraticBezierTo(0f, h, r, h)
             p.lineTo(w - t - r, h); p.quadraticBezierTo(w - t, h, w - t, h - r)
@@ -426,13 +427,18 @@ private fun stampOf(time: Long) = java.text.SimpleDateFormat("h:mm a", java.util
 @Composable
 private fun TimedText(text: String, time: Long, color: Color) {
     val stamp = remember(time) { stampOf(time) }
-    Box {
+    // Laid out left to right whatever the app's language, so the time keeps its corner; the words keep their own
+    // direction. Right-to-left words end on the left, so there the kept room and the time are on the left.
+    val rtl = remember(text) { text.firstOrNull { Character.isLetter(it) }?.let {
+        Character.getDirectionality(it) == Character.DIRECTIONALITY_RIGHT_TO_LEFT_ARABIC || Character.getDirectionality(it) == Character.DIRECTIONALITY_RIGHT_TO_LEFT } == true }
+    CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Ltr) { Box {
         Text(buildAnnotatedString {
             append(text)
             withStyle(SpanStyle(color = Color.Transparent, fontSize = 8.sp)) { append("\u2002\u2002$stamp") }
         }, color = color, fontSize = 13.sp, lineHeight = 17.5.sp)
-        Text(stamp, color = color.copy(alpha = 0.6f), fontSize = 8.sp, lineHeight = 8.sp, modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = 1.dp))
-    }
+        Text(stamp, color = color.copy(alpha = 0.6f), fontSize = 8.sp, lineHeight = 8.sp,
+            modifier = Modifier.align(if (rtl) Alignment.BottomStart else Alignment.BottomEnd).padding(bottom = 1.dp))
+    } }
 }
 
 /** A small line mark on a 24 grid (stroke 2.2, rounded) or a filled shape on a 16 grid: the pencil of "Fix", the play of the reward card. */
