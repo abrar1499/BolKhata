@@ -119,7 +119,7 @@ val KHATA_TABS = listOf(Tab.CHAT, Tab.CASHBOOK, Tab.PARTIES, Tab.EXPENSE, Tab.IN
 fun KhataNav(tab: Tab, onTab: (Tab) -> Unit) {
     // No shadow: it joins the white chat strip above into one bottom panel.
     Surface(Modifier.solidCard(), color = Color.Transparent, contentColor = MaterialTheme.colorScheme.onSurface) {
-        // The dark theme marks the open tab in soft blue with a pill behind its picture (red is for money out there).
+        // The open tab has a light pill behind its picture: red in the light theme; soft blue in the dark (red is for money out there).
         val glow = LocalLook.current?.glow == true
         Row(Modifier.fillMaxWidth().navigationBarsPadding().height(58.dp)) {
             KHATA_TABS.forEach { t ->
@@ -130,7 +130,7 @@ fun KhataNav(tab: Tab, onTab: (Tab) -> Unit) {
                     Modifier.weight(1f).fillMaxHeight().clickable { onTab(t) },
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
                 ) {
-                    Text(icon, fontSize = 19.sp, modifier = if (on && glow) Modifier.clip(RoundedCornerShape(12.dp)).background(Color(0x298FB8FF)).padding(horizontal = 14.dp) else Modifier)
+                    Text(icon, fontSize = 19.sp, modifier = if (on) Modifier.clip(RoundedCornerShape(12.dp)).background(if (glow) Color(0x298FB8FF) else Ember.copy(alpha = 0.12f)).padding(horizontal = 14.dp) else Modifier)
                     Text(label, fontSize = 10.sp, color = tint, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium, modifier = Modifier.padding(top = 3.dp))
                 }
             }
