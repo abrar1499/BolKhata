@@ -204,7 +204,7 @@ class AiEvalTest {
         case("it was another, new person", "tariq ko 5000 udhaar diya", "ye naya tariq hai", prepare = {
             entries = listOf(Entry("q1", Type.DIYA, 300.0, Cat.UDHAAR, "Loans", "Bilal Tariq Mehmood", "", now - 12 * day, now - 12 * day)) + entries
         }) { listOf("one entry" to (added.size == 1), "it is under the new person Tariq" to added.all { it.person.equals("Tariq", true) }) },
-        case("delete everything is asked about first", "sari entries delete kar do") { listOf("nothing is deleted" to world.trashed.isEmpty(), "asks" to asked) },
+        case("delete everything shows the Delete button first", "sari entries delete kar do") { listOf("nothing is deleted" to world.trashed.isEmpty(), "the button holds every entry" to (world.shownDelete == world.baseIds)) },
         case("delete everything after a yes", "sari entries delete kar do", "haan kar do") { listOf("everything is in Trash" to world.entries.isEmpty()) },
         case("delete all of a big book in one go after a yes", "sari entries delete kar do", "haan kar do", prepare = {
             entries = entries + (1..100).map { Entry("b$it", Type.KHARCHA, 10.0 + it, Cat.KHANA, "Tea", "", "", now - (it % 60) * day, now - (it % 60) * day) }
