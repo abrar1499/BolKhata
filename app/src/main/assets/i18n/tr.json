@@ -840,6 +840,7 @@
  "Recording": "Kaydediliyor",
  "Red": "Kırmızı",
  "Remembered": "Hatırlandı",
+ "Remove": "Kaldır",
  "Removed the matching note from this phone.": "Eşleşen not bu telefondan kaldırıldı.",
  "Rename": "Yeniden adlandır",
  "Rename account": "Hesabı yeniden adlandır",
@@ -1281,5 +1282,6 @@
  "✦ Thinking…": "✦ Düşünüyor…",
  "⤓ PDF": "⤓ PDF",
  "📊 Report ›": "📊 Rapor ›",
+ "🖼  Change logo": "🖼  Logoyu değiştir",
  "🛠 Chat review": "🛠 Sohbet incelemesi"
 }

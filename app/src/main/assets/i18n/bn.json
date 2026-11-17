@@ -840,6 +840,7 @@
  "Recording": "রেকর্ড হচ্ছে",
  "Red": "লাল",
  "Remembered": "মনে রাখা হয়েছে",
+ "Remove": "সরান",
  "Removed the matching note from this phone.": "এই ফোন থেকে মিলে যাওয়া নোটটি মুছে ফেলা হয়েছে।",
  "Rename": "নাম বদলান",
  "Rename account": "অ্যাকাউন্টের নাম বদলান",
@@ -1281,5 +1282,6 @@
  "✦ Thinking…": "✦ ভাবছে…",
  "⤓ PDF": "⤓ PDF",
  "📊 Report ›": "📊 রিপোর্ট ›",
+ "🖼  Change logo": "🖼  লোগো বদলান",
  "🛠 Chat review": "🛠 চ্যাট পর্যালোচনা"
 }

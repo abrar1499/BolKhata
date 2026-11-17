@@ -840,6 +840,7 @@
  "Recording": "Enregistrement",
  "Red": "Rouge",
  "Remembered": "Mémorisé",
+ "Remove": "Supprimer",
  "Removed the matching note from this phone.": "La note correspondante a été supprimée de ce téléphone.",
  "Rename": "Renommer",
  "Rename account": "Renommer le compte",
@@ -1281,5 +1282,6 @@
  "✦ Thinking…": "✦ Réflexion…",
  "⤓ PDF": "⤓ PDF",
  "📊 Report ›": "📊 Rapport ›",
+ "🖼  Change logo": "🖼  Changer le logo",
  "🛠 Chat review": "🛠 Revue du chat"
 }

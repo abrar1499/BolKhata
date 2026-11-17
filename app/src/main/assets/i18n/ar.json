@@ -840,6 +840,7 @@
  "Recording": "جارٍ التسجيل",
  "Red": "أحمر",
  "Remembered": "تم الحفظ في الذاكرة",
+ "Remove": "إزالة",
  "Removed the matching note from this phone.": "تمت إزالة الملاحظة المطابقة من هذا الهاتف.",
  "Rename": "إعادة تسمية",
  "Rename account": "إعادة تسمية الحساب",
@@ -1281,5 +1282,6 @@
  "✦ Thinking…": "✦ يفكر…",
  "⤓ PDF": "⤓ PDF",
  "📊 Report ›": "📊 التقرير ›",
+ "🖼  Change logo": "🖼  تغيير الشعار",
  "🛠 Chat review": "🛠 مراجعة المحادثة"
 }
