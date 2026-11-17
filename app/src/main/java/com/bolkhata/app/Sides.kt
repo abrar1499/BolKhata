@@ -72,8 +72,8 @@ object Sides {
                 listOfNotNull(Book(side, PURCHASES, false).takeIf { all.any { it.type == Type.PURCHASE && it.amount > 0 } })
         } else listOfNotNull(
             Book(side, SALES, false).takeIf { all.any { it.type == Type.SALE && it.amount > 0 } },
-            // Income received is always there, before any income is saved.
-            Book(side, INCOME, false)
+            // Income received holds income saved outside an account: there only while it has some (+ Entry always offers it).
+            Book(side, INCOME, false).takeIf { all.any { it.type == Type.AAMDANI && loose(it) } }
         ) + incomeAccounts.map { Book(side, it, false) }
         return (things + own).distinctBy { it.name.lowercase() }
     }
