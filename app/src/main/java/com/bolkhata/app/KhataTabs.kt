@@ -249,9 +249,9 @@ private fun SumCard(
     Surface(
         shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 1.dp
     ) {
-        // In the dark theme see-through in the Navy band.s blues with a touch of red, so it stands apart from the search box.
+        // In the dark theme frosted glass: lighter at the top, a fine light edge, so it stands apart from the search box.
         val deep = LocalLook.current?.glow == true
-        Row(Modifier.then(if (deep) Modifier.background(Brush.linearGradient(listOf(Color(0x592C5282), Color(0x401E3A5F), Color(0x14FF635C)))).border(1.dp, Color(0x2E78A0DC), RoundedCornerShape(14.dp)) else Modifier.solidCard())
+        Row(Modifier.then(if (deep) Modifier.background(Brush.verticalGradient(listOf(Color(0x1FFFFFFF), Color(0x0AFFFFFF)))).border(1.dp, Color(0x24FFFFFF), RoundedCornerShape(14.dp)) else Modifier.solidCard())
             .fillMaxWidth().height(IntrinsicSize.Min).padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
             listOfNotNull(a, b, c).forEachIndexed { i, (value, label, color) ->
                 if (i > 0) VerticalDivider(Modifier.fillMaxHeight(), color = MaterialTheme.colorScheme.outlineVariant)
