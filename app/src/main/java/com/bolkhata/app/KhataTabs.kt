@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.DriveFileRenameOutline
@@ -46,6 +47,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
@@ -767,7 +769,7 @@ fun CashBookScreen(
     if (picking) EntryPicker(entries, setup, onSetup, onDismiss = { picking = false }) { t ->
         picking = false
         kinds = addButtons(t.book, t.name, t.book.name == Sides.STAFF, "${t.book.name} › ${t.name}").map { it.second }
-        head = if (kinds.size > 1) t.name to t.path + (t.balance?.let { " · " + it.first } ?: "") else "+ " + kinds[0].label + " · " + t.name to t.path
+        head = (if (t.book.people) "Party › ${t.book.name} ›" else t.path + " ›") to t.name
         sheet = kinds[0]
     }
     // Back on the add sheet returns to who or what.
@@ -815,18 +817,6 @@ private fun targets(all: List<Entry>, setup: SideSetup): List<EntryTarget> =
         }
     }.sortedByDescending { it.last }
 
-/** What a new account from the + can be: its word, picture and line; its Party account (a person) or none (a thing). */
-private class NewKind(val label: String, val icon: String, val line: String, val party: String?, val side: Side)
-
-private val newKinds = listOf(
-    NewKind("Customer", "🧑‍💼", "Buys from you", Sides.CUSTOMERS, Side.INC),
-    NewKind("Supplier", "🚚", "You buy from them", Sides.SUPPLIERS, Side.EXP),
-    NewKind("Staff", "👷", "Works for you", Sides.STAFF, Side.EXP),
-    NewKind("Person", "👤", "Loans, friends", Sides.PEOPLE, Side.EXP),
-    NewKind("Expense", "🧾", "A thing you spend on", null, Side.EXP),
-    NewKind("Income", "💵", "Money that comes in", null, Side.INC)
-)
-
 /** A sheet's top: [onBack]'s round ‹ (if any), the title with a small line under it, and a round ✕. */
 @Composable
 private fun SheetHead(title: String, sub: String, onBack: (() -> Unit)?, onClose: () -> Unit) {
@@ -846,160 +836,169 @@ private fun RoundTap(mark: String, onClick: () -> Unit) = Box(
     contentAlignment = Alignment.Center
 ) { Text(mark, fontSize = if (mark == "‹") 16.sp else 12.sp) }
 
+/** The +'s sheet's top inside an account: a small square ‹, the path over the name, and (one kind) its "+ Out" tag. */
+@Composable
+private fun PickHead(path: String, title: String, onBack: () -> Unit, tag: Pair<String, Color>? = null) {
+    Row(Modifier.padding(bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(26.dp).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surface).clickable { onBack() },
+            contentAlignment = Alignment.Center) {
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Back", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+        }
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(path, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(title, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        tag?.let { (t, c) ->
+            Text(t, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c,
+                modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(c.copy(alpha = 0.12f)).padding(horizontal = 10.dp, vertical = 5.dp))
+        }
+    }
+}
+
+/** A small grey heading in the +'s card (ACCOUNTS, or an account over search results). */
+@Composable
+private fun PickLabel(text: String) = Text(text.uppercase(), fontSize = 10.5.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.4.sp,
+    color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 12.dp, top = 10.dp, bottom = 2.dp))
+
+/** A row of the +'s card, as the tabs draw theirs: icon square, name and line, the amount with its word (or [plain]), ›. */
+@Composable
+private fun PickRow(icon: String, title: String, sub: String, amount: String?, word: String, color: Color, first: Boolean,
+    plain: Pair<String, Color>? = null, onClick: () -> Unit) {
+    if (!first) HorizontalDivider(color = Faint)
+    Row(Modifier.fillMaxWidth().clickable { onClick() }.padding(start = 12.dp, end = 10.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(32.dp).clip(RoundedCornerShape(10.dp)).background(Well), contentAlignment = Alignment.Center) { Text(icon, fontSize = 16.sp) }
+        Spacer(Modifier.width(11.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (sub.isNotBlank()) Text(sub, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        if (amount != null) Column(Modifier.padding(start = 8.dp).widthIn(max = 130.dp), horizontalAlignment = Alignment.End) {
+            MoneyText(amount, 14.sp, FontWeight.ExtraBold, color)
+            if (word.isNotBlank()) Text(word, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+        }
+        plain?.let { (v, c) -> Text(v, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c, maxLines = 1, modifier = Modifier.padding(start = 8.dp)) }
+        Text("›", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 8.dp))
+    }
+}
+
 /**
- * The +'s sheet. Who or what: search, the recent ones, or + New account (name, what it is and, for a thing, the account
- * it goes in). [onPick] then opens the add sheet straight away.
+ * The +'s sheet, walked like the tabs: ACCOUNTS (Party, Expense, Income) › an account › its people or things, in one
+ * card about five rows high; a search finds anyone. A tap opens the add sheet ([onPick]); "+ Add account" and
+ * "+ Add in Food" make a new one by its name only. The sheet keeps one size on every page.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun EntryPicker(all: List<Entry>, setup: SideSetup, onSetup: (SideSetup) -> Unit, onDismiss: () -> Unit, onPick: (EntryTarget) -> Unit) {
-    var step by remember { mutableStateOf("who") }
+    var side by remember { mutableStateOf<Side?>(null) }
+    var bookName by remember { mutableStateOf<String?>(null) }
     var q by remember { mutableStateOf("") }
-    var name by remember { mutableStateOf("") }
-    var kind by remember { mutableIntStateOf(-1) }
-    // The account a new thing goes in; "" makes it an account of its own.
-    var group by remember { mutableStateOf<String?>(null) }
-    // The things inside the picked account are showing in the accounts' place (‹ goes back to the accounts).
-    var inside by remember { mutableStateOf(false) }
+    // The name being typed for "+ Add account" / "+ Add in …"; null while the list shows.
+    var naming by remember { mutableStateOf<String?>(null) }
     val list = remember(all, setup) { targets(all, setup) }
     val sub = MaterialTheme.colorScheme.onSurfaceVariant
-    // Opens all the way, not half: everything in it shows at once (and scrolls on a small phone).
+    val now = remember { System.currentTimeMillis() }
+    val thisMonth = { ms: Long -> sameMonth(ms, now) }
+    fun sideName(s: Side) = when (s) { Side.PARTY -> "Party"; Side.EXP -> "Expense"; Side.INC -> "Income" }
+    // Party shows its four people accounts even while empty, so a person can be added in any of them.
+    fun booksOf(s: Side) = if (s == Side.PARTY) (listOf(Book(Side.INC, Sides.CUSTOMERS, true), Book(Side.EXP, Sides.SUPPLIERS, true),
+        Book(Side.EXP, Sides.STAFF, true), Book(Side.EXP, Sides.PEOPLE, true)) + Sides.books(s, all, setup)).distinctBy { it.name.lowercase() }
+        else Sides.books(s, all, setup).filterNot(Sides::isAuto)
+    fun spent(s: Side) = if (s == Side.INC) "received" else "spent"
+    fun ink(s: Side) = if (s == Side.INC) GreenIn else RedSpend
+    val s = side
+    val book = s?.let { x -> bookName?.let { n -> booksOf(x).firstOrNull { it.name == n } } }
+    fun target(b: Book, n: String) = list.firstOrNull { it.book.name == b.name && it.name.equals(n, true) }
+        ?: EntryTarget(b, n, if (b.people) "👤" else iconFor(n, b.side == Side.INC), if (b.people) b.name else thingPath(b.side, b.name), null, 0L)
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = LocalPage.current, dragHandle = null,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)) {
-        Column(Modifier.verticalScroll(rememberScrollState()).padding(14.dp).navigationBarsPadding().imePadding()) {
-            when (step) {
-                "who" -> {
-                    SheetHead("+ Entry", "Who or what?", null, onDismiss)
-                    WellField(q, { q = it }, "Search name or thing")
-                    val shown = list.filter { q.isBlank() || (it.name + " " + it.path).contains(q.trim(), true) }
-                    Column(Modifier.padding(top = 10.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surface)) {
-                        if (shown.isEmpty()) Text(if (q.isBlank()) "No accounts yet. Tap + New account." else "No account called \"${q.trim()}\" yet. Tap + New account.",
-                            fontSize = 13.sp, color = sub, modifier = Modifier.padding(12.dp))
-                        else {
-                            if (q.isBlank()) Text("RECENT", fontSize = 10.5.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.4.sp, color = sub,
-                                modifier = Modifier.padding(start = 12.dp, top = 8.dp, bottom = 2.dp))
-                            LazyColumn(Modifier.heightIn(max = 340.dp)) {
-                                items(shown.size) { i -> TargetRow(shown[i], i == 0) { onPick(shown[i]) } }
-                            }
-                        }
-                    }
-                    DashedAdd("+ New account", inset = 0.dp) { name = q.trim(); kind = -1; group = null; inside = false; step = "new" }
-                }
-                else -> {
-                    SheetHead("New account", "Name and what it is", { step = "who" }, onDismiss)
-                    WellField(name, { name = it }, "Name")
-                    newKinds.chunked(2).forEachIndexed { r, row ->
-                        Row(Modifier.padding(top = if (r == 0) 10.dp else 8.dp).height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            row.forEach { k ->
-                                val i = newKinds.indexOf(k)
-                                KindCard(k, kind == i, Modifier.weight(1f).fillMaxHeight()) { kind = i; group = null; inside = false }
-                            }
-                        }
-                    }
-                    val k = newKinds.getOrNull(kind)
-                    // A people kind: who is already in it, so a tap opens that person instead of making them twice.
-                    val saved = remember(k, list) { if (k?.party == null) emptyList() else list.filter { it.book.side == Side.PARTY && it.book.name == k.party } }
-                    if (saved.isNotEmpty()) {
-                        Text("Already in ${k!!.party}", fontSize = 11.sp, color = sub, modifier = Modifier.padding(start = 2.dp, top = 10.dp))
-                        FlowRow(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            saved.forEach { t -> PickChip("👤 ${t.name}", false) { onPick(t) } }
-                        }
-                    }
-                    if (k != null && k.party == null) {
-                        val groups = remember(k, all, setup) {
-                            (Sides.books(k.side, all, setup).filterNot(Sides::isAuto).map { it.name to bookIcon(it) } + accountPicks[k.side].orEmpty())
-                                .distinctBy { it.first.lowercase() }
-                        }
-                        // The things inside the picked account: a tap is the name; else it is typed above.
-                        val g = group
-                        val things = remember(g, k, all, setup) {
-                            if (g.isNullOrBlank()) emptyList() else {
-                                val book = Sides.books(k.side, all, setup).firstOrNull { it.name.equals(g, true) }
-                                val cat = book?.cat ?: Cat.values().firstOrNull { it.label.equals(g, true) && k.side == Side.EXP }
-                                (book?.let { b -> Sides.kids(b, all, setup).map { it.name } }.orEmpty() + cat?.let { defaultSubs[it] }.orEmpty())
-                                    .distinctBy { it.lowercase() }
-                            }
-                        }
-                        if (inside && things.isNotEmpty()) {
-                            // In the accounts' place: ‹ and the account's name, then its things.
-                            Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                                RoundTap("‹") { inside = false }
-                                Spacer(Modifier.width(8.dp))
-                                Text(g.orEmpty(), fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                            }
-                            FlowRow(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                things.forEach { n -> PickChip("${iconFor(n, k.side == Side.INC)} $n", name.trim().equals(n, true)) { name = n } }
-                            }
-                        } else {
-                            Text("Inside which " + (if (k.side == Side.INC) "income" else "expense") + "?", fontSize = 11.sp, color = sub,
-                                modifier = Modifier.padding(start = 2.dp, top = 10.dp))
-                            FlowRow(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                groups.forEach { (gr, icon) -> PickChip("$icon $gr", group == gr) { group = gr; inside = true } }
-                                PickChip("+ New", group == "") { group = ""; inside = false }
-                            }
-                        }
-                    }
-                    val ready = name.isNotBlank() && k != null && (k.party != null || group != null)
-                    Box(
-                        Modifier.padding(top = 12.dp).fillMaxWidth().height(46.dp).clip(RoundedCornerShape(14.dp))
-                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = if (ready) 1f else 0.4f))
-                            .clickable(enabled = ready) {
-                                val n = name.trim()
-                                val party = k!!.party
-                                onPick(if (party != null) {
+        Column(Modifier.heightIn(min = 500.dp).padding(14.dp).navigationBarsPadding().imePadding()) {
+            val name = naming
+            if (name != null && s != null) {
+                // Only a name: a new Expense / Income account opens to add things in; a person or thing opens its add sheet.
+                PickHead("Accounts › ${sideName(s)} ›" + (book?.let { " ${it.name} ›" } ?: ""), if (book == null) "New account" else "Add in ${book.name}", { naming = null })
+                WellField(name, { naming = it }, "Name")
+                val n = name.trim()
+                Box(
+                    Modifier.padding(top = 12.dp).fillMaxWidth().height(46.dp).clip(RoundedCornerShape(14.dp))
+                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = if (n.isNotEmpty()) 1f else 0.4f))
+                        .clickable(enabled = n.isNotEmpty()) {
+                            when {
+                                book == null -> {
+                                    val have = booksOf(s).firstOrNull { it.name.equals(n, true) }
+                                    if (have == null) onSetup(setup.copy(books = setup.books + Book(s, n, false)))
+                                    bookName = have?.name ?: n
+                                    naming = null
+                                }
+                                book.people -> {
                                     // One person, one account: this takes them out of any other.
-                                    onSetup(setup.copy(people = setup.people.filterKeys { !it.trim().equals(n, true) } + (n to party)))
-                                    EntryTarget(Book(k.side, party, true), n, "👤", party, null, 0L)
-                                } else {
-                                    val g = group!!.ifBlank { n }
-                                    val have = Sides.books(k.side, all, setup).firstOrNull { it.name.equals(g, true) }
-                                    // A new account named like a category (Food, Health…) holds that category.
-                                    val book = have ?: Cat.values().firstOrNull { it.label.equals(g, true) && k.side == Side.EXP }
-                                        ?.let { Book(k.side, it.label, false, it) } ?: Book(k.side, g, false)
-                                    onSetup(setup.copy(books = if (have == null) setup.books + Book(k.side, g, false) else setup.books,
-                                        kids = setup.kids + (book.name to (setup.kids[book.name].orEmpty().filterNot { it.equals(n, true) } + n))))
-                                    EntryTarget(book, n, iconFor(n, k.side == Side.INC), thingPath(k.side, book.name), null, 0L)
-                                })
-                            },
-                        contentAlignment = Alignment.Center
-                    ) { Text("Next", color = MaterialTheme.colorScheme.surfaceContainer, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+                                    onSetup(setup.copy(people = setup.people.filterKeys { !it.trim().equals(n, true) } + (n to book.name)))
+                                    onPick(EntryTarget(book, n, "👤", book.name, null, 0L))
+                                }
+                                else -> {
+                                    onSetup(setup.copy(kids = setup.kids + (book.name to (setup.kids[book.name].orEmpty().filterNot { it.equals(n, true) } + n))))
+                                    onPick(EntryTarget(book, n, iconFor(n, s == Side.INC), thingPath(s, book.name), null, 0L))
+                                }
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) { Text("Add", color = MaterialTheme.colorScheme.surfaceContainer, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+            } else {
+                if (s == null) Column(Modifier.padding(bottom = 6.dp)) {
+                    Text("+ Entry", fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
+                    Text("Who or what?", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = sub)
+                } else PickHead(if (book == null) "Accounts ›" else "Accounts › ${sideName(s)} ›", book?.name ?: sideName(s), { if (book != null) bookName = null else side = null })
+                WellField(q, { q = it }, "Search name or thing")
+                LazyColumn(Modifier.padding(top = 10.dp).fillMaxWidth().height(318.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surface)) {
+                    when {
+                        q.isNotBlank() -> {
+                            val found = list.filter { (it.name + " " + it.path).contains(q.trim(), true) }
+                            if (found.isEmpty()) item { Text("No account called \"${q.trim()}\" yet.", fontSize = 13.sp, color = sub, modifier = Modifier.padding(12.dp)) }
+                            found.groupBy { it.book.name }.forEach { (g, ts) ->
+                                item { PickLabel(g) }
+                                items(ts.size) { i -> val t = ts[i]; PickRow(t.icon, t.name, t.path, null, "", sub, i == 0, plain = t.balance) { onPick(t) } }
+                            }
+                        }
+                        s == null -> {
+                            item { PickLabel("Accounts") }
+                            item {
+                                val n = booksOf(Side.PARTY).sumOf { Sides.kids(it, all, setup).size }
+                                PickRow("👥", "Party", if (n == 1) "1 person" else "$n people", null, "", sub, true) { side = Side.PARTY }
+                            }
+                            listOf(Side.EXP, Side.INC).forEach { x ->
+                                item {
+                                    val bs = booksOf(x)
+                                    PickRow(if (x == Side.EXP) "🧾" else "💵", sideName(x), bs.joinToString(", ") { it.name },
+                                        fmt(bs.sumOf { Sides.done(it, all, setup, thisMonth) }), spent(x), ink(x), false) { side = x }
+                                }
+                            }
+                        }
+                        book == null -> {
+                            val bs = booksOf(s)
+                            items(bs.size) { i ->
+                                val b = bs[i]
+                                val kids = Sides.kids(b, all, setup)
+                                if (b.people) PickRow("👤", b.name, if (kids.size == 1) "1 person" else "${kids.size} people", null, "", sub, i == 0) { bookName = b.name }
+                                else PickRow(bookIcon(b), b.name, kids.take(4).joinToString(", ") { it.name }, fmt(Sides.done(b, all, setup, thisMonth)), spent(s), ink(s), i == 0) { bookName = b.name }
+                            }
+                        }
+                        else -> {
+                            val kids = Sides.kids(book, all, setup)
+                            if (kids.isEmpty()) item { Text("Nothing in ${book.name} yet.", fontSize = 13.sp, color = sub, modifier = Modifier.padding(12.dp)) }
+                            items(kids.size) { i ->
+                                val k = kids[i]
+                                if (book.people) {
+                                    val (v, w) = Sides.balanceText(book, k.balance)
+                                    PickRow("👤", k.name, entryCount(k.entries.size), v, w.lowercase(), balanceColor(w), i == 0) { onPick(target(book, k.name)) }
+                                } else PickRow(iconFor(k.name, s == Side.INC), k.name, entryCount(k.entries.size), fmt(k.total), spent(s), ink(s), i == 0) { onPick(target(book, k.name)) }
+                            }
+                        }
+                    }
                 }
+                // "+ Add account" in Expense or Income, "+ Add in …" inside an account; on the first page its place stays empty.
+                val add = when { s == null || (s == Side.PARTY && book == null) -> null; book == null -> "+ Add account"; else -> "+ Add in ${book.name}" }
+                Box(Modifier.alpha(if (add == null) 0f else 1f)) { DashedAdd(add ?: "+", inset = 0.dp) { if (add != null) naming = "" } }
             }
-        }
-    }
-}
-
-/** A row of the +'s list: icon square, name with where it sits, and a person's balance. */
-@Composable
-private fun TargetRow(t: EntryTarget, first: Boolean, onClick: () -> Unit) {
-    if (!first) HorizontalDivider(color = Faint)
-    Row(Modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 12.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(30.dp).clip(RoundedCornerShape(9.dp)).background(Well), contentAlignment = Alignment.Center) { Text(t.icon, fontSize = 15.sp) }
-        Spacer(Modifier.width(10.dp))
-        Column(Modifier.weight(1f)) {
-            Text(t.name, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(t.path, fontSize = 10.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        t.balance?.let { (v, c) -> Text(v, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c, maxLines = 1, modifier = Modifier.padding(start = 8.dp)) }
-    }
-}
-
-/** One kind in New account: a white card with its picture, word and line; ringed when picked. */
-@Composable
-private fun KindCard(k: NewKind, on: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(14.dp)
-    Row(
-        modifier.lift(1.dp, shape).clip(shape).background(MaterialTheme.colorScheme.surface)
-            .then(if (on) Modifier.border(2.dp, MaterialTheme.colorScheme.onSurface, shape) else Modifier)
-            .clickable { onClick() }.padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(k.icon, fontSize = 18.sp)
-        Spacer(Modifier.width(9.dp))
-        Column {
-            Text(k.label, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-            Text(k.line, fontSize = 10.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 13.sp)
         }
     }
 }
@@ -1932,7 +1931,7 @@ private val sheetTime = SimpleDateFormat("h:mm a", Locale.US)
  */
 @Composable
 private fun AddSheet(r: AddReq, all: List<Entry>, onDismiss: () -> Unit, onDelete: () -> Unit = {}, onBack: (() -> Unit)? = null,
-    /** From the +: a person's two kinds as a switch on top ([onKind] picks one), and the title and line over it. */
+    /** From the +: a person's two kinds as a switch on top ([onKind] picks one), and the path and name over it. */
     kinds: List<AddReq> = emptyList(), head: Pair<String, String>? = null, onKind: (AddReq) -> Unit = {}, onSave: (Entry) -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val old = r.template.takeIf { r.edit }
@@ -1956,12 +1955,14 @@ private fun AddSheet(r: AddReq, all: List<Entry>, onDismiss: () -> Unit, onDelet
     val total = if (goods) (if (per1000) q / 1000 * rt else q * rt) else amount.toDoubleOrNull() ?: 0.0
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = LocalPage.current, dragHandle = null,
         shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)) {
-        Column(Modifier.padding(16.dp).navigationBarsPadding().imePadding()) {
-            if (head != null) SheetHead(head.first, head.second, onBack, onDismiss) else SheetHead((if (r.edit) "" else "+ ") + r.label, r.crumb, onBack, onDismiss)
+        // From the +: the picker's size, so the sheet does not jump between who and how much.
+        Column((if (head != null) Modifier.heightIn(min = 500.dp).padding(14.dp) else Modifier.padding(16.dp)).navigationBarsPadding().imePadding()) {
+            if (head != null) PickHead(head.first, head.second, onBack ?: onDismiss, ("+ " + r.label to r.color).takeIf { kinds.size < 2 })
+            else SheetHead((if (r.edit) "" else "+ ") + r.label, r.crumb, onBack, onDismiss)
             if (kinds.size > 1) Row(Modifier.padding(top = 12.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Well).padding(3.dp)) {
                 kinds.forEach { k ->
                     val on = k.label == r.label
-                    Text(k.label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
+                    Text("+ " + k.label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
                         color = if (on) k.color else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(if (on) MaterialTheme.colorScheme.surface else Color.Transparent)
                             .clickable { onKind(k) }.padding(vertical = 8.dp))
