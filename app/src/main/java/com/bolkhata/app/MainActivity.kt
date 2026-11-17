@@ -1448,9 +1448,9 @@ fun App(
                     // A question the app only half knows ("namaz ka time kya hai" read as a search that found nothing, "chai kaise
                     // banate hain" as a greeting) goes to the AI when one can answer: it answers any question.
                     val shown = mine?.card?.ifBlank { mine.text }.orEmpty()
-                    // The app's own words are English: in another app language its plain answers (talk, a total in words) come
-                    // from the AI, which answers in that language; cards and saves stay the app's.
-                    val foreign = I18n.englishName != "English" && mine != null && mine.added.isEmpty() && mine.card.isBlank() && mine.ask.isBlank()
+                    // The app's own words are English: its plain answers (talk, a total in words) come from the AI, which answers in
+                    // the language the person typed (Roman Urdu, Urdu, French…); cards and saves stay the app's.
+                    val foreign = mine != null && mine.added.isEmpty() && mine.card.isBlank() && mine.ask.isBlank()
                     val weak = mine != null && mine.added.isEmpty() && (foreign || shown.startsWith("Nothing found") ||
                         (shown in setOf("Good, you?", "Hi! How can I help?", "Great! How can I help?") && text.trim().split(Regex("""\s+""")).size > 3))
                     val aiReady = !noAi && Ai.chain.any { (k, _) -> (Ai.restUntil[Ai.provider(k)?.name.orEmpty()] ?: 0L) <= System.currentTimeMillis() }
