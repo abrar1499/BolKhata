@@ -133,4 +133,10 @@ class SidesTest {
         val names = Sides.kids(transport, emptyList(), SideSetup()).map { it.name }
         assertTrue(defaultSubs[Cat.TRANSPORT]!!.all { it in names })
     }
+
+    @Test fun incomeReceivedIsThereWithItsUsualThingsBeforeAnyIncome() {
+        val books = Sides.books(Side.INC, emptyList(), SideSetup())
+        val received = books.first { it.name == Sides.INCOME }
+        assertTrue(Sides.incomeThings.all { n -> Sides.kids(received, emptyList(), SideSetup()).any { it.name == n } })
+    }
 }

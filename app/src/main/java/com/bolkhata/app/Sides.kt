@@ -70,7 +70,8 @@ object Sides {
                 listOfNotNull(Book(side, PURCHASES, false).takeIf { all.any { it.type == Type.PURCHASE && it.amount > 0 } })
         } else listOfNotNull(
             Book(side, SALES, false).takeIf { all.any { it.type == Type.SALE && it.amount > 0 } },
-            Book(side, INCOME, false).takeIf { all.any { it.type == Type.AAMDANI && loose(it) } }
+            // Income received is always there, with its usual things, before any income is saved.
+            Book(side, INCOME, false)
         )
         return (things + own).distinctBy { it.name.lowercase() }
     }
@@ -151,7 +152,7 @@ object Sides {
         val list = thingEntries(book, newest, setup)
         val groups = list.groupBy { thingName(it).lowercase() }
         // An expense account's usual things (Transport: Petrol, Car repair…) are there from the start, with nothing in them yet.
-        val usual = book.cat?.let { defaultSubs[it] }.orEmpty()
+        val usual = book.cat?.let { defaultSubs[it] } ?: (if (book.side == Side.INC && book.name == INCOME) incomeThings else emptyList())
         val names = (groups.values.map { thingName(it.first()) } + extra + usual)
             .distinctBy { it.lowercase() }
         return names.map { n -> Kid(n, groups[n.lowercase()].orEmpty()) }
@@ -165,6 +166,9 @@ object Sides {
         val kids = s.kids.mapValues { (b, l) -> if (b in own) l.filterNot { it.trim().lowercase() in low } else l }
         return s.copy(kids = if (account == INCOME) kids else kids + (account to (kids[account].orEmpty() + names)))
     }
+
+    /** The usual things inside Income received, there from the start. */
+    val incomeThings = listOf("Salary", "Business", "Commission", "Bonus", "Rent received", "Gift")
 
     /** What a thing entry is called inside its account: the payer for income, else its item ("Sent home" stays itself). */
     fun thingName(e: Entry): String =
