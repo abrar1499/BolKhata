@@ -422,8 +422,11 @@ private val PlayMark by lazy { mark("play", "M4 2.5v11l9-5.5z", 16f, filled = tr
 @Composable
 private fun AnswerActions(rating: Boolean?, onRate: (good: Boolean) -> Unit) {
     val wrong = rating == false
-    val ink = if (wrong) MaterialTheme.colorScheme.error else Color(0xFF6F6A64)
-    Row(Modifier.padding(start = 8.dp, top = 3.dp).clip(RoundedCornerShape(12.dp)).background(if (wrong) Color(0xFFF6DEDC) else Color(0xFFDEDAD4))
+    // In the dark mode a glass pill with light grey words; once tapped, a red tint with the bright red.
+    val dark = LocalLook.current != null
+    val ink = if (wrong) (if (dark) RedSpend else MaterialTheme.colorScheme.error) else if (dark) Color(0xFFBFC4CF) else Color(0xFF6F6A64)
+    val fill = if (dark) (if (wrong) RedSpend.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.10f)) else if (wrong) Color(0xFFF6DEDC) else Color(0xFFDEDAD4)
+    Row(Modifier.padding(start = 8.dp, top = 3.dp).clip(RoundedCornerShape(12.dp)).background(fill)
         .clickable(enabled = !wrong) { onRate(false) }.padding(start = 7.dp, end = 9.dp, top = 4.dp, bottom = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(Pencil, contentDescription = null, tint = ink, modifier = Modifier.size(11.dp))
