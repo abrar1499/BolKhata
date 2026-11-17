@@ -106,26 +106,20 @@ fun ChatScreen(
                     BusinessPill(business.ifBlank { "Chat" }, onMenu)
                     Text(subtitle, color = ink, fontSize = 11.sp, maxLines = 1,
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 10.dp, top = 10.dp))
-                    Box(Modifier.padding(top = 6.dp)) { LangMoneyPill() }
-                    Box {
-                        var more by remember { mutableStateOf(false) }
-                        IconButton(onClick = { more = true }) {
-                            Icon(Icons.Filled.MoreVert, contentDescription = "More options", tint = ink)
-                        }
-                        DropdownMenu(expanded = more, onDismissRequest = { more = false }) {
-                            DropdownMenuItem(
-                                text = { Text("Share chat log") },
-                                leadingIcon = { Icon(Icons.Outlined.Share, contentDescription = null) },
-                                enabled = !loading,
-                                onClick = { more = false; confirmShare = true }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Clear chat") },
-                                leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null) },
-                                enabled = messages.isNotEmpty() && !loading,
-                                onClick = { more = false; confirmClear = true }
-                            )
-                        }
+                    // The 🌐 pill and ⋮ in the same place as on every tab.
+                    TopActions(ink) { close ->
+                        DropdownMenuItem(
+                            text = { Text("Share chat log") },
+                            leadingIcon = { Icon(Icons.Outlined.Share, contentDescription = null) },
+                            enabled = !loading,
+                            onClick = { close(); confirmShare = true }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Clear chat") },
+                            leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null) },
+                            enabled = messages.isNotEmpty() && !loading,
+                            onClick = { close(); confirmClear = true }
+                        )
                     }
                 }
             }

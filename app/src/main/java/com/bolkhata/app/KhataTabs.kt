@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.DriveFileRenameOutline
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Book
@@ -167,9 +168,7 @@ private fun KhataTop(
         Column(Modifier.statusBarsPadding().padding(horizontal = 12.dp)) {
             if (business != null) Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.weight(1f)) { BusinessPill(business, onMenu) }
-                LangMoneyPill()
-                Spacer(Modifier.width(6.dp))
-                onPdf?.let { PdfButton(it) }
+                TopActions(ink) { close -> onPdf?.let { pdf -> DropdownMenuItem(text = { Text("Export PDF") }, onClick = { close(); pdf() }) } }
             } else
             Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onMenu) {
@@ -1184,15 +1183,22 @@ private fun ledgerTable(heading: String, cols: List<String>, rows: List<Pair<Ent
     return PdfTable(heading, listOf("Date", "Detail") + cols + (if (running) listOf("Balance") else emptyList()), body, foot, left = 2)
 }
 
-/** "⤓ PDF": a small white pill at the top right of a page; it makes a PDF of what the page shows. */
+/**
+ * The top right of every tab, in one place everywhere: the 🌐 pill ([pill]), then ⋮ with the page's own actions
+ * ([menu], e.g. Export PDF). [top] lines them up with the business pill (12 below the top).
+ */
 @Composable
-private fun PdfButton(onClick: () -> Unit) {
-    Row(
-        // The same pill as the 🌐 one beside it: no edge, no shadow, same size and words.
-        Modifier.clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.surface)
-            .clickable { onClick() }.padding(horizontal = 10.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) { Text("⤓ PDF", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface) }
+internal fun TopActions(tint: Color, pill: Boolean = true, top: Dp = 12.dp, menu: @Composable ColumnScope.(close: () -> Unit) -> Unit) {
+    Row(Modifier.padding(top = top), verticalAlignment = Alignment.CenterVertically) {
+        if (pill) LangMoneyPill()
+        Box {
+            var more by remember { mutableStateOf(false) }
+            Box(Modifier.padding(start = 4.dp).size(32.dp).clip(CircleShape).clickable { more = true }, contentAlignment = Alignment.Center) {
+                Icon(Icons.Filled.MoreVert, contentDescription = "More options", tint = tint, modifier = Modifier.size(22.dp))
+            }
+            DropdownMenu(expanded = more, onDismissRequest = { more = false }) { menu { more = false } }
+        }
+    }
 }
 
 /** An inner page's top: a round white back button, the path above the title, "⤓ PDF" on the right, then the summary card. */
@@ -1209,7 +1215,7 @@ private fun BackHead(title: String, crumb: String, onBack: () -> Unit, onPdf: ((
                 Text(crumb, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(title, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            onPdf?.let { PdfButton(it) }
+            onPdf?.let { pdf -> TopActions(MaterialTheme.colorScheme.onSurface, pill = false, top = 0.dp) { close -> DropdownMenuItem(text = { Text("Export PDF") }, onClick = { close(); pdf() }) } }
         }
         Spacer(Modifier.height(10.dp))
         card()
