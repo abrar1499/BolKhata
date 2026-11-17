@@ -215,7 +215,7 @@ class DarkLook(val page: Long, val card: Long, val well: Long, val edge: Long, v
  */
 val DARK_LOOKS = listOf(
     DarkLook(0xFF3A3D42, 0xFF2A2C30, 0xFF34373C, 0xFF4A4E54, 0xFF33373E, 0xFF45484D),
-    DarkLook(0xFF1B2230, 0x1AFFFFFF, 0x14FFFFFF, 0x29FFFFFF, 0x1AFFFFFF, 0xFF252D3D, menu = 0xFF27304A, glow = true)
+    DarkLook(0xFF1B2230, 0x1AFFFFFF, 0x14FFFFFF, 0x29FFFFFF, 0x26FFFFFF, 0xFF252D3D, menu = 0xFF27304A, glow = true)
 )
 val DARK_PAGES = DARK_LOOKS.map { it.page }
 
