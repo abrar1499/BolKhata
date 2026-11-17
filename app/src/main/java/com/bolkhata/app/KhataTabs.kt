@@ -1093,34 +1093,55 @@ fun TransactionsScreen(entries: List<Entry>, currency: String, onEdit: (Entry) -
 
 // ---------------------------------------------------------------- Trash
 
-/** Deleted entries (kept 30 days) on the ledger page; tap one to restore it. */
+/**
+ * Deleted entries (kept 30 days). Month chips pick which; the round ↺ on a row brings that entry back, "Restore day" on a
+ * day strip the whole day, and the card's link all that is shown ("Restore all", or "Restore Nov 2026").
+ */
 @Composable
 fun TrashScreen(
     trash: List<Entry>, currency: String, onMenu: () -> Unit,
-    onRestore: (Entry) -> Unit, onRestoreAll: () -> Unit, onEmpty: () -> Unit
+    onRestore: (Entry) -> Unit, onRestoreAll: (List<Entry>) -> Unit, onEmpty: () -> Unit
 ) {
     var askEmpty by remember { mutableStateOf(false) }
-    val list = remember(trash) { trash.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt }) }
+    var month by remember { mutableStateOf("All") }
+    val all = remember(trash) { trash.sortedWith(compareByDescending<Entry> { it.date }.thenByDescending { it.createdAt }) }
+    val months = remember(all) { all.map { monthFmt.format(Date(it.date)) }.distinct() }
+    val shown = if (month == "All" || month !in months) "All" else month
+    val list = remember(all, shown) { if (shown == "All") all else all.filter { monthFmt.format(Date(it.date)) == shown } }
     fun out(e: Entry) = cashOut(e) || e.type == Type.PURCHASE
     val listState = rememberLazyListState()
     LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = barSpace(24.dp))) {
         stickyHeader { TabHead {
             KhataTop("Trash", "Deleted entries stay here for 30 days", onMenu) {
                 SumCard(
-                    Triple("${trash.size}", if (trash.size == 1) "Entry" else "Entries", MaterialTheme.colorScheme.onSurface),
-                    Triple(fmt(trash.sumOf { it.amount }), "Total", RedSpend),
-                    "Restore all", onRestoreAll
+                    Triple("${list.size}", if (list.size == 1) "Entry" else "Entries", MaterialTheme.colorScheme.onSurface),
+                    Triple(fmt(list.sumOf { it.amount }), "Total", RedSpend),
+                    if (shown == "All") "↺ Restore all" else "↺ Restore $shown", { onRestoreAll(list) }, plain = setOf(0)
                 )
             }
+            if (months.isNotEmpty()) LazyRow(
+                Modifier.fillMaxWidth(), contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                item(key = "All") { SmallChip("All", shown == "All") { month = "All" } }
+                items(months, key = { it }) { m -> SmallChip(m, shown == m) { month = m } }
+            }
         } }
-        if (trash.isNotEmpty()) item {
-            TextButton(onClick = { askEmpty = true }, modifier = Modifier.padding(start = 6.dp, top = 6.dp)) { Text("Empty trash", color = RedSpend) }
+        item(key = "help") {
+            Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 4.dp, top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Tap ↺ to bring an entry back", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                if (trash.isNotEmpty()) TextButton(onClick = { askEmpty = true }) { Text("Empty trash", color = RedSpend, fontSize = 12.sp) }
+            }
         }
-        ledger(
-            "Tap an entry to restore it",
-            listOf(LCol("Out", fmt(list.filter(::out).sumOf { it.amount }), LKind.OUT), LCol("In", fmt(list.filterNot(::out).sumOf { it.amount }), LKind.IN)),
-            list.map { e -> LRow(e.id, e.date, title(e), e.note, listOf(if (out(e)) e.amount else 0.0, if (!out(e)) e.amount else 0.0)) { onRestore(e) } }
-        )
+        if (list.isEmpty()) item(key = "empty") { EmptyHint() }
+        list.forEachIndexed { i, e ->
+            if (i == 0 || dayNumber(list[i - 1].date) != dayNumber(e.date)) {
+                val day = list.filter { dayNumber(it.date) == dayNumber(e.date) }
+                item(key = "d" + e.id) { TrashDay(e.date) { onRestoreAll(day) } }
+            }
+            val last = i == list.lastIndex || dayNumber(list[i + 1].date) != dayNumber(e.date)
+            item(key = e.id) { TrashRow(e, out(e), last) { onRestore(e) } }
+        }
     }
     if (askEmpty) {
         AppAlert(
@@ -1132,6 +1153,43 @@ fun TrashScreen(
             },
             dismissButton = { TextButton(onClick = { askEmpty = false }) { Text("Cancel") } }
         )
+    }
+}
+
+/** A Trash day strip: the date, and "↺ Restore day" to bring all of that day back. */
+@Composable
+private fun TrashDay(date: Long, onRestore: () -> Unit) = Tight {
+    Row(
+        Modifier.padding(start = 10.dp, end = 10.dp, top = 6.dp).fillMaxWidth().background(DayStrip).padding(start = 12.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(dayLineFmt.format(Date(date)), fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+        Text("↺ Restore day", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = GreenIn,
+            modifier = Modifier.lift(1.dp, RoundedCornerShape(10.dp)).clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surface)
+                .clickable(onClick = onRestore).padding(horizontal = 9.dp, vertical = 3.dp))
+    }
+}
+
+/** A deleted entry: name, time and account, the amount (red out, green in) and a round ↺ that brings it back. */
+@Composable
+private fun TrashRow(e: Entry, out: Boolean, last: Boolean, onRestore: () -> Unit) = Tight {
+    val shape = sheetShape(last)
+    Row(
+        Modifier.padding(horizontal = 10.dp).fillMaxWidth().lift(1.dp, shape).clip(shape).background(MaterialTheme.colorScheme.surface)
+            .padding(start = 12.dp, end = 10.dp, top = 7.dp, bottom = 7.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title(e), fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(clockFmt.format(Date(e.date)).lowercase() + " · " + e.category.label, fontSize = 10.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+        }
+        MoneyText(fmt(e.amount), 12.sp, FontWeight.Bold, if (out) RedSpend else GreenIn)
+        Box(
+            Modifier.padding(start = 10.dp).size(28.dp).lift(2.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.surface)
+                .clickable(onClick = onRestore),
+            contentAlignment = Alignment.Center
+        ) { Text("↺", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = GreenIn) }
     }
 }
 
