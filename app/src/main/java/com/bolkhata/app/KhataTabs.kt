@@ -1197,9 +1197,9 @@ internal fun TopActions(tint: Color, pill: Boolean = true, top: Dp = 12.dp, menu
             Box(Modifier.padding(start = 4.dp).size(32.dp).clip(CircleShape).clickable { more = true }, contentAlignment = Alignment.Center) {
                 Icon(Icons.Filled.MoreVert, contentDescription = "More options", tint = tint, modifier = Modifier.size(22.dp))
             }
-            // A rounded card under ⋮ (as in the Claude app): the page colour's card, a soft shadow, icon + word rows.
+            // A card under ⋮ (as in the Claude app, corners only a little round): the page colour's card, a soft shadow, icon + word rows.
             DropdownMenu(
-                expanded = more, onDismissRequest = { more = false }, shape = RoundedCornerShape(20.dp),
+                expanded = more, onDismissRequest = { more = false }, shape = RoundedCornerShape(8.dp),
                 containerColor = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 0.dp, shadowElevation = 8.dp,
                 modifier = Modifier.widthIn(min = 200.dp)
             ) { menu { more = false } }
