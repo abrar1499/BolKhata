@@ -211,6 +211,12 @@ class AiEvalTest {
         case("put two names of one work together", "kachi eent molding ko kachi eent mein kar do", prepare = {
             entries = listOf(work("w9", "Hamid Akram", "Kachi eent molding", 4_000.0, 1_000.0, 1)) + entries
         }) { listOf("no entry is left under the second name" to world.entries.none { it.item.equals("Kachi eent molding", true) }, "it is under Kachi eent" to (world.byId("w9")?.item == "Kachi eent")) },
+        case("pump names into the Petrol thing", "petrol pump walay naam ki sab entries petrol account mein daal do", prepare = {
+            entries = listOf(Entry("p1", Type.KHARCHA, 100.0, Cat.TRANSPORT, "Shell Canal station", "", "", now - 3 * day, now - 3 * day),
+                Entry("p2", Type.KHARCHA, 50.0, Cat.TRANSPORT, "PSO Gulberg pump", "", "", now - 4 * day, now - 4 * day),
+                Entry("p3", Type.KHARCHA, 7.0, Cat.TRANSPORT, "City parking", "", "", now - 4 * day, now - 4 * day)) + entries
+        }) { listOf("the station is under Petrol" to (world.byId("p1")?.item == "Petrol"), "the pump is under Petrol" to (world.byId("p2")?.item == "Petrol"),
+            "parking stays" to (world.byId("p3")?.item == "City parking"), "nothing new" to added.isEmpty()) },
         case("rename a person", "salim raza ka naam salim raza butt kar do") { listOf("the entry carries the new name" to (world.byId("l2")?.person.equals("Salim Raza Butt", true) == true), "nothing new" to added.isEmpty()) },
         // ---- voice, as the recogniser hands it over
         voice("urdu script", "حامد کو پانچ سو دیے") { listOf("lent Hamid 500" to has(Type.DIYA, "Hamid Akram", 500.0), "answer is not in Urdu script" to !urduOrHindi.containsMatchIn(text)) },
