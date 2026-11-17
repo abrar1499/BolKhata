@@ -33,7 +33,7 @@ class SidesTest {
     }
 
     @Test fun salesAndPurchasesFillThemselvesFromTheKhatas() {
-        assertEquals(listOf(Sides.SALES), Sides.books(Side.INC, all, setup).map { it.name })
+        assertEquals(listOf(Sides.SALES, Sides.INCOME), Sides.books(Side.INC, all, setup).map { it.name })
         val sales = Sides.books(Side.INC, all, setup).first { it.name == Sides.SALES }
         // Inside: the Party accounts, each with its people's sales or work.
         assertEquals(Sides.CUSTOMERS to 70000.0, Sides.kids(sales, all, setup).single().let { it.name to it.total })
