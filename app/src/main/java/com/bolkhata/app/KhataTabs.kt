@@ -252,7 +252,7 @@ private fun SumCard(
         // In the dark theme solid (nothing behind shows through), lighter at the top, its edge light at the top fading down.
         val deep = LocalLook.current?.glow == true
         Row(Modifier.then(if (deep) Modifier.background(Color(0xFF222A3E)).background(Brush.verticalGradient(listOf(Color(0x1AFFFFFF), Color(0x05FFFFFF))))
-            .border(1.dp, Brush.verticalGradient(listOf(Color(0x33FFFFFF), Color(0x08FFFFFF))), RoundedCornerShape(14.dp)) else Modifier.solidCard())
+            .border(0.5.dp, Brush.verticalGradient(listOf(Color(0x1FFFFFFF), Color(0x08FFFFFF))), RoundedCornerShape(14.dp)) else Modifier.solidCard())
             .fillMaxWidth().height(IntrinsicSize.Min).padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
             listOfNotNull(a, b, c).forEachIndexed { i, (value, label, color) ->
                 if (i > 0) VerticalDivider(Modifier.fillMaxHeight(), color = MaterialTheme.colorScheme.outlineVariant)
