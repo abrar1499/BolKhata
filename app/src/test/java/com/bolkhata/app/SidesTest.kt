@@ -127,4 +127,10 @@ class SidesTest {
         // Back to Income received: out of Salary.
         assertEquals(0, Sides.kids(salary, all, Sides.intoIncomeAccount(moved, listOf("Hamid Akram"), Sides.INCOME)).sumOf { it.entries.size })
     }
+
+    @Test fun anExpenseAccountShowsItsUsualThingsBeforeAnyEntry() {
+        val transport = Book(Side.EXP, Cat.TRANSPORT.label, false, Cat.TRANSPORT)
+        val names = Sides.kids(transport, emptyList(), SideSetup()).map { it.name }
+        assertTrue(defaultSubs[Cat.TRANSPORT]!!.all { it in names })
+    }
 }

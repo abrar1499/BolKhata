@@ -150,7 +150,9 @@ object Sides {
         }
         val list = thingEntries(book, newest, setup)
         val groups = list.groupBy { thingName(it).lowercase() }
-        val names = (groups.values.map { thingName(it.first()) } + extra)
+        // An expense account's usual things (Transport: Petrol, Car repair…) are there from the start, with nothing in them yet.
+        val usual = book.cat?.let { defaultSubs[it] }.orEmpty()
+        val names = (groups.values.map { thingName(it.first()) } + extra + usual)
             .distinctBy { it.lowercase() }
         return names.map { n -> Kid(n, groups[n.lowercase()].orEmpty()) }
             .sortedWith(compareByDescending<Kid> { it.entries.firstOrNull()?.date ?: 0L })
