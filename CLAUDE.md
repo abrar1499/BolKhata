@@ -115,7 +115,9 @@ Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Packa
   period, boxes, tables. Long-press a customer's Given entry: Bill. Popups and sheets wear the page colour (`LocalPage`)
   with white fields.
 - Side menu › tap the open business: its page (name, owner, phone, address for bills and PDFs) and a business card in six
-  styles (`CardArt`: Classic, Minimal, Luxe, Split, Bold, Monogram) to save or share.
+  looks (`CardArt`: Classic, Minimal, Luxe, Wave, Bold, Monogram, Navy, Corner, Sunset, Stripe, Mint; the mock draws them
+  the same way) to save or share; sample words until typed; Change logo (no tile or edge around the logo).
+- Side menu rows are one height (44) with the line right under each (`MenuRow`).
 - White business pill (`BusinessPill`: glossy logo + name, no arrow); tapping it opens the side menu, which is also
   Settings: businesses (+ Add business), Google sign-in, then one card: Premium, Dark mode, Backup, Trash, Version.
   Currency and language only on the 🌐 pill; the mic listens in the app's language (`I18n.micLanguage`, Auto stays
