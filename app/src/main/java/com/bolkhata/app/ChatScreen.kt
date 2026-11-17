@@ -155,7 +155,7 @@ fun ChatScreen(
                 if (message.isUser) {
                     // What was said in live voice is not shown: only its answer is.
                     if (message.meta != "live") UserBubble(message.text, message.attachment, message.timestamp)
-                } else {
+                } else Column {
                     // Each answer starts with the app's small logo, like a chat assistant's picture.
                     Row(Modifier.fillMaxWidth()) {
                     // Level with the answer card's top, as the mock.
@@ -193,10 +193,11 @@ fun ChatScreen(
                             Text(it.groupValues[1], fontSize = 8.sp, lineHeight = 8.sp, color = Color(0xFFA39E98),
                                 modifier = Modifier.padding(start = 14.dp, top = 3.dp))
                         }
-                        // Now and then (every fifth answer) a quiet ad under the answer, from the bubbles' left edge to your bubbles' right one.
-                        adAfter[message.id]?.let { video -> NativeAdCard("chat-" + message.id, Modifier.padding(start = 8.dp, end = TAIL, top = 6.dp), video = video, small = !video) }
                     }
                     }
+                    // Now and then (every fifth answer) a quiet ad under the answer, from the logo's left edge to your bubbles'
+                    // right one (room for the wide 192 × 120 video), a little apart from the Fix pill so it is not tapped by mistake.
+                    adAfter[message.id]?.let { video -> NativeAdCard("chat-" + message.id, Modifier.padding(end = TAIL, top = 12.dp), big = video, small = !video) }
                 }
             } }
             if (loading) {
