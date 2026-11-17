@@ -129,7 +129,7 @@ Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Packa
   field on the page (no white strip, no +), 13sp, white round mic with a soft shadow.
   No Entry button on lists: entries are added inside a person or thing (solid + Paid / + Work, + Received / + Given, + Out).
 - Party / Expense / Income = accounts (`Sides.kt`, `SideScreen`): rows with icon square, name, sub, amount + word, ›; dashed
-  "+ Add account"; inner pages: round back button, path above title, one summary card, plain white ledger.
+  "+ Add account"; inner pages: the band too (to the middle of the card, words white), round back button, path above title, one summary card, plain white ledger.
   Party holds every people account (Customers, Suppliers, Staff, People, own); Expense/Income hold things only, plus
   Purchases / Sales filled from the khatas (read-only). No Stock / Work views.
 - Period chips (`PeriodChips`) on Party, Expense, Income and the Report: "All ▾" opens All, the years with entries and

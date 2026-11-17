@@ -1253,6 +1253,12 @@ internal fun TopMenuItem(icon: androidx.compose.ui.graphics.vector.ImageVector, 
 /** An inner page's top: a round white back button, the path above the title, "⤓ PDF" on the right, then the summary card. */
 @Composable
 private fun BackHead(title: String, crumb: String, onBack: () -> Unit, onPdf: (() -> Unit)? = null, card: @Composable () -> Unit) {
+    // The theme band as on the tabs: from the top of the screen to the middle of the card, the words white on it.
+    val theme = LocalHeader.current
+    val banded = theme.name != "Clean"
+    val ink = if (banded) theme.on else MaterialTheme.colorScheme.onSurface
+    var cardH by remember { mutableIntStateOf(0) }
+    Box(Modifier.fillMaxWidth().then(if (banded) Modifier.drawBehind { drawBand(theme, size.height - cardH / 2f) } else Modifier)) {
     Column(Modifier.statusBarsPadding().padding(start = 12.dp, end = 12.dp, top = 12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
@@ -1261,13 +1267,14 @@ private fun BackHead(title: String, crumb: String, onBack: () -> Unit, onPdf: ((
             ) { Text("‹", fontSize = 20.sp, fontWeight = FontWeight.Bold) }
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Text(crumb, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(title, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(crumb, fontSize = 11.sp, color = if (banded) ink.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(title, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            onPdf?.let { pdf -> TopActions(MaterialTheme.colorScheme.onSurface, pill = false, top = 0.dp) { close -> TopMenuItem(Icons.Outlined.PictureAsPdf, "Export PDF") { close(); pdf() } } }
+            onPdf?.let { pdf -> TopActions(ink, pill = false, top = 0.dp) { close -> TopMenuItem(Icons.Outlined.PictureAsPdf, "Export PDF") { close(); pdf() } } }
         }
         Spacer(Modifier.height(10.dp))
-        card()
+        Box(Modifier.onSizeChanged { cardH = it.height }) { card() }
+    }
     }
 }
 
