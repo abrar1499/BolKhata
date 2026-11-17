@@ -706,46 +706,6 @@ fun BoxScope.PickMenu(open: Boolean, onDismiss: () -> Unit, content: @Composable
     }
 }
 
-/**
- * A compact pick list in a small white card under the row whose Box it is placed in: a search box when [search],
- * then one short line per item in full ("QAR · Qatari Riyal"), the picked one bold in the app's colour.
- */
-@Composable
-fun BoxScope.CompactPicker(open: Boolean, items: List<Pair<String, String>>, selected: String, search: Boolean, onDismiss: () -> Unit, onPick: (String) -> Unit) {
-    if (!open) return
-    var q by remember { mutableStateOf("") }
-    Box(Modifier.align(Alignment.BottomEnd).padding(end = 12.dp)) {
-        androidx.compose.ui.window.Popup(
-            alignment = Alignment.TopEnd, onDismissRequest = onDismiss,
-            properties = androidx.compose.ui.window.PopupProperties(focusable = true)
-        ) {
-            val shape = RoundedCornerShape(14.dp)
-            Column(Modifier.width(270.dp).lift(8.dp, shape).clip(shape).solidCard().padding(vertical = 6.dp)) {
-                if (search) androidx.compose.foundation.text.BasicTextField(
-                    q, { q = it }, singleLine = true,
-                    textStyle = TextStyle(fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface),
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp).fillMaxWidth().height(34.dp).fieldEdge(RoundedCornerShape(10.dp))
-                        .padding(horizontal = 10.dp).wrapContentHeight(Alignment.CenterVertically),
-                    decorationBox = { f -> Box { if (q.isEmpty()) Text("Search", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant); f() } }
-                )
-                val shown = items.filter { (k, n) -> q.isBlank() || k.contains(q.trim(), true) || n.contains(q.trim(), true) }
-                androidx.compose.foundation.lazy.LazyColumn(Modifier.heightIn(max = 300.dp)) {
-                    items(shown.size) { i ->
-                        val (k, n) = shown[i]
-                        val on = k == selected
-                        Text(
-                            if (n.isBlank() || n == k) k else "$k · $n", fontSize = 13.sp, maxLines = 1,
-                            fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
-                            color = if (on) Color(0xFFF0572E) else MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.fillMaxWidth().clickable { onPick(k) }.padding(horizontal = 14.dp, vertical = 7.dp)
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
 // ---------- the glass look of the app icon ----------
 
 /** The app icon's colours: red-orange to deep red. */

@@ -621,14 +621,6 @@ class Store(context: Context) {
     var appLanguage: String
         get() = prefs.getString("appLang", "") ?: ""
         set(v) = prefs.edit().putString("appLang", v).apply()
-    /** The other language picked last (an ML Kit code like "nl", see Lingo): it stays in the short Language list. */
-    var moreLanguage: String
-        get() = prefs.getString("moreLang", "") ?: ""
-        set(v) = prefs.edit().putString("moreLang", v).apply()
-    /** Whether the mic has asked once which language will be spoken. */
-    var micAsked: Boolean
-        get() = prefs.getBoolean("micAsked", false)
-        set(v) = prefs.edit().putBoolean("micAsked", v).apply()
 
     var currency: String
         get() = prefs.getString("currency", "SAR") ?: "SAR"

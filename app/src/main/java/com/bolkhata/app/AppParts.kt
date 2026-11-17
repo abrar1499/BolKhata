@@ -132,11 +132,12 @@ internal fun InputBar(
                             .lift(1.dp, CircleShape)
                             .clip(CircleShape)
                             .background(if (talking && !voice!!.live) RedSpend else MaterialTheme.colorScheme.surface)
-                            .combinedClickable(enabled = talking || !busy, onLongClick = { if (!talking && text.isBlank()) onMic() }) {
+                            .combinedClickable(enabled = talking || !busy, onLongClick = { if (!talking && text.isBlank()) { viaMic = true; focus.requestFocus(); keyboard?.show() } }) {
+                                // A tap listens with the app's own mic; a long press opens the keyboard for its mic.
                                 when {
                                     talking -> voice!!.toggle()
                                     text.isNotBlank() -> send()
-                                    else -> { viaMic = true; focus.requestFocus(); keyboard?.show() }
+                                    else -> onMic()
                                 }
                             },
                         contentAlignment = Alignment.Center
@@ -193,12 +194,12 @@ private fun LiveWave(level: Float, working: Boolean) {
 /** Header themes offered in the side menu (the app's glossy bands), in this order. */
 
 /**
- * The side menu, which is also Settings: the app logo, the businesses (+ Add business), then every setting in plain
- * rows (Currency, Language, Header, Background) and Backup, Trash, Version. Nothing opens another settings page.
+ * The side menu, which is also Settings: the app logo, the businesses (+ Add business), Google sign-in, then one card:
+ * Premium, Dark mode, Backup, Trash, Version (money and language are on the 🌐 pill). Nothing opens another settings page.
  */
 @Composable
 internal fun SideMenu(
-    currency: String, lang: String, dark: Boolean, photo: Boolean, version: String,
+    dark: Boolean, photo: Boolean, version: String,
     businesses: List<Pair<String, String>>, current: String,
     onBusiness: (String) -> Unit,
     /** + Add business: opens the business page for a new one. */
@@ -206,7 +207,6 @@ internal fun SideMenu(
     /** The open business's own page (details and card). */
     onBusinessPage: () -> Unit,
     onRenameBusiness: (id: String, name: String) -> Unit, onDeleteBusiness: (id: String) -> Unit,
-    onCurrency: (String) -> Unit, onLang: (String) -> Unit,
     page: Long, onPage: (Long) -> Unit, onDark: (Long) -> Unit,
     onExport: () -> Unit, onImport: () -> Unit, onTrash: () -> Unit, onVersion: () -> Unit,
     /** The Gmail synced with Google Drive ("" when not signed in) and how the last save went. */
@@ -216,15 +216,11 @@ internal fun SideMenu(
     /** Test feature: the AI key row (null: not in this build). */
     ai: AiKeys? = null, onAiOpen: () -> Unit = {}, aiModels: (String) -> List<String> = { emptyList() },
     onAiSave: (name: String, key: String, model: String) -> Unit = { _, _, _ -> }, onAiSwitch: (name: String, on: Boolean) -> Unit = { _, _ -> },
-    /** The other language picked last (see Lingo), kept in the short Language list. */
-    moreLang: String = "",
     onSignIn: () -> Unit = {}, onSyncNow: () -> Unit = {}, onSignOut: () -> Unit = {},
     /** 20 quick taps on the menu's empty space. */
     onSecret: () -> Unit = {},
     /** Premium is on, and its row opens the Premium sheet. */
-    premium: Boolean = false, onPremium: () -> Unit = {},
-    /** The language of the app's own words ("" Auto: the phone's), see I18n. */
-    appLang: String = "", onAppLang: (String) -> Unit = {}
+    premium: Boolean = false, onPremium: () -> Unit = {}
 ) {
     // Taps on the empty space and when the last one was; a pause of over a second starts the count again.
     val secret = remember { longArrayOf(0, 0) }
@@ -315,64 +311,16 @@ internal fun SideMenu(
             }
             Spacer(Modifier.height(8.dp))
             MenuCard {
-                Box {
-                    var open by remember { mutableStateOf(false) }
-                    MenuRow(onClick = { open = true }) { MenuLabel("💱", "Currency"); MenuValue("$currency ▾") }
-                    val all = remember { CURRENCIES.map { it to currencyName(it) } }
-                    CompactPicker(open, all, currency, search = true, onDismiss = { open = false }) { onCurrency(it); open = false }
-                }
-                Box {
-                    var open by remember { mutableStateOf(false) }
-                    // The app's own words: Auto follows the phone; each language by its own name.
-                    val apps = APP_LANGS
-                    val now = apps.firstOrNull { it.first == appLang }?.second ?: "Auto"
-                    MenuRow(onClick = { open = true }) { MenuLabel("🌐", "App language"); MenuValue("$now ▾") }
-                    CompactPicker(open, apps.map { it.second to "" }, now, search = false, onDismiss = { open = false }) { picked ->
-                        open = false
-                        onAppLang(apps.first { it.second == picked }.first)
-                    }
-                }
-                Box {
-                    var open by remember { mutableStateOf(false) }
-                    var more by remember { mutableStateOf(false) }
-                    // The ones the app reads itself, the other language picked last (see Lingo), then the way to all the rest.
-                    val langs = listOf("" to "Auto", "hi-IN" to "Roman Urdu", "en-US" to "English", "ur-PK" to "Urdu", Lingo.HINDI.code to Lingo.HINDI.name) +
-                        (if (moreLang.isBlank()) emptyList() else listOf(moreLang to Lingo.name(moreLang)))
-                    val now = langs.firstOrNull { it.first == lang }?.second ?: "Auto"
-                    val code = Lingo.code(lang)
-                    val busy = code.isNotBlank() && Lingo.loading == code
-                    val ready = code.isNotBlank() && Lingo.arrived == code
-                    LaunchedEffect(ready) { if (ready) { kotlinx.coroutines.delay(1500); Lingo.seen() } }
-                    MenuRow(onClick = { open = true }) {
-                        Column(Modifier.weight(1f)) {
-                            Text("🎤 Mic language", fontSize = 13.sp, maxLines = 1)
-                            // Under it: the pack's size while it comes down, then Ready for a moment.
-                            if (busy) Text("Downloading · 30 MB", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 22.dp))
-                            else if (ready) Text("✓ Ready", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = GreenIn, modifier = Modifier.padding(start = 22.dp))
-                        }
-                        if (busy) CircularProgressIndicator(Modifier.padding(end = 6.dp).size(14.dp), color = EmberTop, strokeWidth = 2.dp, trackColor = Color(0xFFE3DFD9))
-                        MenuValue("$now ▾")
-                    }
-                    // The language's name shows (the code means nothing to people).
-                    CompactPicker(open, langs.map { it.second to "" } + ("More languages…" to ""), now, search = false, onDismiss = { open = false }) { picked ->
-                        open = false
-                        if (picked == "More languages…") more = true else onLang(langs.first { it.second == picked }.first)
-                    }
-                    if (more) LanguageSheet("Language for the mic", base = false, current = lang, onClose = { more = false }) { more = false; onLang(it) }
-                }
-                // Dark theme: on is Navy glow (soft lights, glass cards, the Navy band); off is the warm grey page with the red band, the default.
-                val darkOn = dark && !photo
-                MenuRow(onClick = { if (darkOn) onPage(PAGE_COLORS[0]) else onDark(DARK_PAGES[1]) }, last = true) {
-                    MenuLabel("🌙", "Dark theme")
-                    OnOff(darkOn)
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-            MenuCard {
                 // Premium heads the last card, as the mock: orange until it is on, then green.
                 MenuRow(onClick = onPremium) {
                     MenuLabel("⭐", "Premium")
                     Text(if (premium) "Active ✓" else "No ads ›", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (premium) GreenIn else EmberTop, maxLines = 1)
+                }
+                // Dark mode: on is Navy glow (soft lights, glass cards, the Navy band); off is the warm grey page with the red band, the default.
+                val darkOn = dark && !photo
+                MenuRow(onClick = { if (darkOn) onPage(PAGE_COLORS[0]) else onDark(DARK_PAGES[1]) }) {
+                    MenuLabel("🌙", "Dark mode")
+                    OnOff(darkOn)
                 }
                 Box {
                     var open by remember { mutableStateOf(false) }
@@ -449,46 +397,6 @@ private fun AiKeysSheet(ai: AiKeys, models: (String) -> List<String>, onSave: (S
                     }
                     AiBoxCard(i + 1, p, box, status, models(p.name), { k, m -> onSave(p.name, k, m) }) { onSwitch(p.name, it) }
                 }
-            }
-        }
-    }
-}
-
-/**
- * Every language to pick from, in a sheet of the page's colour: a search box, then one line per language with its name
- * in its own writing on the right. [base]: the four the app reads itself come first (the mic's first question).
- */
-@Composable
-internal fun LanguageSheet(title: String, base: Boolean, current: String, onClose: () -> Unit, onPick: (String) -> Unit) {
-    val all = remember(base) {
-        (if (base) listOf(Lingo.Lang("", "Auto", "your phone's language"), Lingo.Lang("hi-IN", "Roman Urdu", ""),
-            Lingo.Lang("en-US", "English", ""), Lingo.Lang("ur-PK", "Urdu", "اردو")) else emptyList()) + (Lingo.all() + Lingo.HINDI).sortedBy { it.name }
-    }
-    var q by remember { mutableStateOf("") }
-    val shown = all.filter { q.isBlank() || it.name.contains(q.trim(), true) || it.local.contains(q.trim(), true) }
-    val sub = MaterialTheme.colorScheme.onSurfaceVariant
-    Dialog(onDismissRequest = onClose) {
-        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(LocalPage.current).padding(12.dp)) {
-            Text(title, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 4.dp, top = 2.dp, bottom = 8.dp))
-            BasicTextField(
-                q, { q = it }, singleLine = true, textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface),
-                modifier = Modifier.fillMaxWidth().height(38.dp).fieldEdge(RoundedCornerShape(16.dp)).padding(horizontal = 14.dp).wrapContentHeight(Alignment.CenterVertically),
-                decorationBox = { f -> Box { if (q.isEmpty()) Text("Search language", fontSize = 13.sp, color = sub.copy(alpha = 0.6f)); f() } }
-            )
-            androidx.compose.foundation.lazy.LazyColumn(
-                Modifier.padding(top = 8.dp).fillMaxWidth().heightIn(max = 420.dp).clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.surface)
-            ) {
-                items(shown.size) { i ->
-                    val l = shown[i]
-                    val on = l.code == current
-                    if (i > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
-                    Row(Modifier.fillMaxWidth().clickable { onPick(l.code) }.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(l.name, fontSize = 13.5.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
-                            color = if (on) RedSpend else MaterialTheme.colorScheme.onSurface, maxLines = 1, modifier = Modifier.weight(1f))
-                        Text(l.local, fontSize = 11.5.sp, color = sub, maxLines = 1)
-                    }
-                }
-                if (shown.isEmpty()) item { Text("No language like that", fontSize = 12.5.sp, color = sub, modifier = Modifier.fillMaxWidth().padding(18.dp)) }
             }
         }
     }

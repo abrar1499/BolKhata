@@ -98,7 +98,7 @@ Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Packa
 
 ## Look the owner likes (keep it)
 - Mock-up of record: Artifact https://claude.ai/artifact/KaEp1kbD1q82ARWJdB9zhr (copied 1:1 into Compose).
-- The look is fixed: warm grey #E9E6E1 page with the Red band (the default). Side menu has only a 🌙 Dark theme switch (no
+- The look is fixed: warm grey #E9E6E1 page with the Red band (the default). Side menu has only a 🌙 Dark mode switch (no
   header dots, no background colours, no photo). Dark = Navy glow: soft lights on navy (`pageGround`), the Navy band,
   see-through glass cards, floating parts solid (`solidCard`), top card a shade deeper than search, brighter red, the
   business pill glass like the 🌐 pill, every logo in its own red, own chat bubbles near-black. No glass on light cards.
@@ -117,8 +117,9 @@ Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Packa
 - Side menu › tap the open business: its page (name, owner, phone, address for bills and PDFs) and a business card in six
   styles (`CardArt`: Classic, Minimal, Luxe, Split, Bold, Monogram) to save or share.
 - White business pill (`BusinessPill`: glossy logo + name, no arrow); tapping it opens the side menu, which is also
-  Settings: businesses (+ Add business), Name, Currency, App language, Mic language, Dark theme, Backup, Trash,
-  Version. No separate Settings page.
+  Settings: businesses (+ Add business), Google sign-in, then one card: Premium, Dark mode, Backup, Trash, Version.
+  Currency and language only on the 🌐 pill; the mic listens in the app's language (`I18n.micLanguage`, Auto stays
+  Auto). Mic: a tap listens with the app, a long press opens the keyboard (its own mic). No separate Settings page.
 - 🌐 pill (`LangMoneyPill`) top right on every tab: App language (10, Auto = phone; tables in assets/i18n, `tools/i18n.py`)
   and Currency. Premium (`Premium.kt`, side menu ⭐): no ads + smart assistant without limits. Grey Fix pill under answers.
 - The band runs on Chat too, slim: just behind its top line (no card under it); messages scroll below it.
