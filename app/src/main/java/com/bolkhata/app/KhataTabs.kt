@@ -119,16 +119,18 @@ val KHATA_TABS = listOf(Tab.CHAT, Tab.CASHBOOK, Tab.PARTIES, Tab.EXPENSE, Tab.IN
 fun KhataNav(tab: Tab, onTab: (Tab) -> Unit) {
     // No shadow: it joins the white chat strip above into one bottom panel.
     Surface(Modifier.solidCard(), color = Color.Transparent, contentColor = MaterialTheme.colorScheme.onSurface) {
+        // The open tab has a light pill behind its picture: red in the light theme; soft blue in the dark (red is for money out there).
+        val glow = LocalLook.current?.glow == true
         Row(Modifier.fillMaxWidth().navigationBarsPadding().height(58.dp)) {
             KHATA_TABS.forEach { t ->
                 val (label, icon) = navItem(t)
                 val on = t == tab
-                val tint = if (on) Ember else MaterialTheme.colorScheme.onSurfaceVariant
+                val tint = if (on) (if (glow) Color(0xFF8FB8FF) else Ember) else MaterialTheme.colorScheme.onSurfaceVariant
                 Column(
                     Modifier.weight(1f).fillMaxHeight().clickable { onTab(t) },
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
                 ) {
-                    Text(icon, fontSize = 19.sp)
+                    Text(icon, fontSize = 19.sp, modifier = if (on) Modifier.clip(RoundedCornerShape(12.dp)).background(if (glow) Color(0x298FB8FF) else Ember.copy(alpha = 0.12f)).padding(horizontal = 14.dp) else Modifier)
                     Text(label, fontSize = 10.sp, color = tint, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium, modifier = Modifier.padding(top = 3.dp))
                 }
             }
@@ -768,21 +770,35 @@ fun CashBookScreen(
 
 // ---------------------------------------------------------------- + on the Cashbook
 
-/** The round + on the Cashbook: small, in the header's red with a white +. Like ↑, it steps aside while an ad is under it. */
+/** The + button's shape, as WhatsApp's: a rounded square. */
+private val FabShape = RoundedCornerShape(16.dp)
+
+/** The + on the Cashbook, shaped as WhatsApp's (a rounded square): the header's red, or the Navy blues in the dark, with a white +. Like ↑, it steps aside while an ad is under it. */
 @Composable
 private fun BoxScope.AddRound(state: LazyListState, onClick: () -> Unit) {
     val bottom = LocalBarSpace.current + 8.dp
-    val red = Color(0xFFE3342F)
+    // Dark: the Navy band's own blues with a fine light edge (red is for money out there); light: the header's red.
+    val glow = LocalLook.current?.glow == true
+    val red = if (glow) Color(0xFF1E3A5F) else Color(0xFFE3342F)
     if (!adUnder(state, bottom - 6.dp, bottom + 50.dp)) Box(
-        Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = bottom).size(44.dp)
-            .lift(6.dp, CircleShape, ambientColor = red, spotColor = red).clip(CircleShape)
-            .background(Brush.linearGradient(listOf(Color(0xFFFF7A45), red, Color(0xFFB91C3C))))
+        Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = bottom).size(52.dp)
+            .lift(6.dp, FabShape, ambientColor = red, spotColor = red).clip(FabShape)
+            .then(if (glow) Modifier.border(1.dp, Color(0x24FFFFFF), FabShape) else Modifier)
+            // A little see-through (85%), so the page shows faintly under it.
+            .background(Brush.linearGradient((if (glow) listOf(Color(0xFF2C5282), red) else listOf(Color(0xFFFF7A45), red, Color(0xFFB91C3C))).map { it.copy(alpha = 0.85f) }))
             .clickable { onClick() }
             .drawBehind {
-                val arm = 7.dp.toPx()
+                // As WhatsApp's new-chat mark: a white rounded square with the + inside in the button's colour.
+                val w = 22.dp.toPx()
+                val h = 17.dp.toPx()
+                val left = center.x - w / 2
+                val top = center.y - h / 2
+                drawRoundRect(Color.White, Offset(left, top), Size(w, h), androidx.compose.ui.geometry.CornerRadius(5.dp.toPx()))
+                val c = Offset(center.x, top + h / 2)
+                val arm = 4.5.dp.toPx()
                 val width = 2.2.dp.toPx()
-                drawLine(Color.White, center.copy(y = center.y - arm), center.copy(y = center.y + arm), width, androidx.compose.ui.graphics.StrokeCap.Round)
-                drawLine(Color.White, center.copy(x = center.x - arm), center.copy(x = center.x + arm), width, androidx.compose.ui.graphics.StrokeCap.Round)
+                drawLine(red, c.copy(y = c.y - arm), c.copy(y = c.y + arm), width, androidx.compose.ui.graphics.StrokeCap.Round)
+                drawLine(red, c.copy(x = c.x - arm), c.copy(x = c.x + arm), width, androidx.compose.ui.graphics.StrokeCap.Round)
             }
     )
 }
