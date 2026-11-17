@@ -51,6 +51,8 @@ object CardArt {
                 text(c, nm, 74 * U, 38 * U, 20 * U, 0xFF1C1917.toInt(), bold = true, maxW = W - 92 * U)
                 if (info.owner.isNotBlank()) text(c, info.owner, 74 * U, 54 * U, 11 * U, 0xFF78716C.toInt(), maxW = W - 92 * U)
                 c.drawRoundRect(RectF(18 * U, 80 * U, 64 * U, 83 * U), 2 * U, 2 * U, fill(colors.second))
+                // A thin grey line on from the colour line to the right edge.
+                c.drawRect(68 * U, 81.15f * U, W - 18 * U, 81.85f * U, fill(0xFFE7E5E4.toInt()))
                 bottomLines(c, lines, 18 * U, 0xFF57534E.toInt())
             }
             "Luxe" -> {
