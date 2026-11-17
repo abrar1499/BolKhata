@@ -320,7 +320,8 @@ internal fun SideMenu(
                 val darkOn = dark && !photo
                 MenuRow(onClick = { if (darkOn) onPage(PAGE_COLORS[0]) else onDark(DARK_PAGES[1]) }) {
                     MenuLabel("🌙", "Dark mode")
-                    OnOff(darkOn)
+                    // Blue when on, the night look's colour.
+                    OnOff(darkOn, onColor = Color(0xFF5B9BFF))
                 }
                 Box {
                     var open by remember { mutableStateOf(false) }
@@ -517,10 +518,10 @@ private fun MenuValue(value: String) {
     Text(value, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
 }
 
-/** A small on/off switch: green with the knob right when on. */
+/** A small on/off switch: [onColor] (green) with the knob right when on. */
 @Composable
-private fun OnOff(on: Boolean, modifier: Modifier = Modifier) {
-    Box(Modifier.size(34.dp, 20.dp).clip(RoundedCornerShape(10.dp)).background(if (on) GreenIn else Color(0xFFD6D2CC)).then(modifier)) {
+private fun OnOff(on: Boolean, modifier: Modifier = Modifier, onColor: Color = GreenIn) {
+    Box(Modifier.size(34.dp, 20.dp).clip(RoundedCornerShape(10.dp)).background(if (on) onColor else Color(0xFFD6D2CC)).then(modifier)) {
         Box(Modifier.align(if (on) Alignment.CenterEnd else Alignment.CenterStart).padding(2.dp).size(16.dp).lift(1.dp, CircleShape).clip(CircleShape).background(Color.White))
     }
 }
