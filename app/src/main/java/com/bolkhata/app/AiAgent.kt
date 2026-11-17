@@ -281,6 +281,7 @@ object AiAgent {
                 Goods.known(host.entries()).take(15).let { if (it.isEmpty()) "" else "Work and goods names in use: " + it.joinToString(", ") + "\n" } +
                 (if (!spoken) "" else "The message came by voice and may be misheard." +
                     (if (heardAlso.isEmpty()) "" else " It was also heard as: " + heardAlso.joinToString(" | ") { it.take(200) }) + "\n") +
+                (if (typedScript) "Write the answer in this message's own script, as typed (not in Roman letters).\n" else "") +
                 "Message: " + said.take(600) +
                 // Urdu or Hindi script also goes in Roman letters by its sound, so a word is not swapped for another.
                 (if (roman.trim().equals(said.trim(), true)) "" else "\nThe same message by sound, in Roman letters: " + roman.take(600)) +
