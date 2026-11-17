@@ -780,7 +780,8 @@ private fun BoxScope.AddRound(state: LazyListState, onClick: () -> Unit) {
     if (!adUnder(state, bottom - 6.dp, bottom + 50.dp)) Box(
         Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = bottom).size(44.dp)
             .lift(6.dp, CircleShape, ambientColor = red, spotColor = red).clip(CircleShape)
-            .background(Brush.linearGradient(if (glow) listOf(Color(0xFF6EA8FF), red) else listOf(Color(0xFFFF7A45), red, Color(0xFFB91C3C))))
+            // A little see-through (85%), so the page shows faintly under it.
+            .background(Brush.linearGradient((if (glow) listOf(Color(0xFF6EA8FF), red) else listOf(Color(0xFFFF7A45), red, Color(0xFFB91C3C))).map { it.copy(alpha = 0.85f) }))
             .clickable { onClick() }
             .drawBehind {
                 val arm = 7.dp.toPx()
