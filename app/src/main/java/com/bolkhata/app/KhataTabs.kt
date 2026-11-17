@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Book
@@ -168,7 +169,7 @@ private fun KhataTop(
         Column(Modifier.statusBarsPadding().padding(horizontal = 12.dp)) {
             if (business != null) Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.weight(1f)) { BusinessPill(business, onMenu) }
-                TopActions(ink) { close -> onPdf?.let { pdf -> DropdownMenuItem(text = { Text("Export PDF") }, onClick = { close(); pdf() }) } }
+                TopActions(ink) { close -> onPdf?.let { pdf -> TopMenuItem(Icons.Outlined.PictureAsPdf, "Export PDF") { close(); pdf() } } }
             } else
             Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onMenu) {
@@ -1196,10 +1197,24 @@ internal fun TopActions(tint: Color, pill: Boolean = true, top: Dp = 12.dp, menu
             Box(Modifier.padding(start = 4.dp).size(32.dp).clip(CircleShape).clickable { more = true }, contentAlignment = Alignment.Center) {
                 Icon(Icons.Filled.MoreVert, contentDescription = "More options", tint = tint, modifier = Modifier.size(22.dp))
             }
-            DropdownMenu(expanded = more, onDismissRequest = { more = false }) { menu { more = false } }
+            // A rounded card under ⋮ (as in the Claude app): the page colour's card, a soft shadow, icon + word rows.
+            DropdownMenu(
+                expanded = more, onDismissRequest = { more = false }, shape = RoundedCornerShape(20.dp),
+                containerColor = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 0.dp, shadowElevation = 8.dp,
+                modifier = Modifier.widthIn(min = 200.dp)
+            ) { menu { more = false } }
         }
     }
 }
+
+/** One row of the ⋮ card: a line icon and the word. */
+@Composable
+internal fun TopMenuItem(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, enabled: Boolean = true, onClick: () -> Unit) =
+    DropdownMenuItem(
+        text = { Text(label, fontSize = 15.sp) }, onClick = onClick, enabled = enabled,
+        leadingIcon = { Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp)) },
+        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 6.dp)
+    )
 
 /** An inner page's top: a round white back button, the path above the title, "⤓ PDF" on the right, then the summary card. */
 @Composable
@@ -1215,7 +1230,7 @@ private fun BackHead(title: String, crumb: String, onBack: () -> Unit, onPdf: ((
                 Text(crumb, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(title, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            onPdf?.let { pdf -> TopActions(MaterialTheme.colorScheme.onSurface, pill = false, top = 0.dp) { close -> DropdownMenuItem(text = { Text("Export PDF") }, onClick = { close(); pdf() }) } }
+            onPdf?.let { pdf -> TopActions(MaterialTheme.colorScheme.onSurface, pill = false, top = 0.dp) { close -> TopMenuItem(Icons.Outlined.PictureAsPdf, "Export PDF") { close(); pdf() } } }
         }
         Spacer(Modifier.height(10.dp))
         card()

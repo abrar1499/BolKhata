@@ -108,18 +108,8 @@ fun ChatScreen(
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 10.dp, top = 10.dp))
                     // The 🌐 pill and ⋮ in the same place as on every tab.
                     TopActions(ink) { close ->
-                        DropdownMenuItem(
-                            text = { Text("Share chat log") },
-                            leadingIcon = { Icon(Icons.Outlined.Share, contentDescription = null) },
-                            enabled = !loading,
-                            onClick = { close(); confirmShare = true }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Clear chat") },
-                            leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null) },
-                            enabled = messages.isNotEmpty() && !loading,
-                            onClick = { close(); confirmClear = true }
-                        )
+                        TopMenuItem(Icons.Outlined.Share, "Share chat log", enabled = !loading) { close(); confirmShare = true }
+                        TopMenuItem(Icons.Outlined.Delete, "Clear chat", enabled = messages.isNotEmpty() && !loading) { close(); confirmClear = true }
                     }
                 }
             }
