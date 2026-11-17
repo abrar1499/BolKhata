@@ -817,13 +817,6 @@ class Store(context: Context) {
         }
         set(v) = prefs.edit().putString("memory", JSONArray(v.takeLast(80)).toString()).apply()
 
-    var theme: String
-        get() {
-            // The red band look is given to everyone once; any theme picked afterwards (Clean too) is kept.
-            if (!prefs.getBoolean("redBandV1", false)) prefs.edit().putBoolean("redBandV1", true).putString("theme", "Red").apply()
-            return prefs.getString("theme", "Red") ?: "Red"
-        }
-        set(v) = prefs.edit().putString("theme", v).apply()
 
     var dark: Boolean
         get() = prefs.getBoolean("dark", false)

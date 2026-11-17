@@ -98,10 +98,10 @@ Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Packa
 
 ## Look the owner likes (keep it)
 - Mock-up of record: Artifact https://claude.ai/artifact/KaEp1kbD1q82ARWJdB9zhr (copied 1:1 into Compose).
-- Defaults on a new install: Red header, warm grey #E9E6E1 page. Side menu Background offers warm grey and light slate (`PAGE_COLORS`,
-  cards stay white), two dark looks (`DARK_LOOKS`: Graphite; Navy glow = soft lights on navy (`pageGround`) with
-  see-through glass cards, floating parts solid via `solidCard`) and an own photo. Header dots: Clean, Red, Green, Navy.
-  No glass on light cards; only the app icon (`GlassLogo`), the optional header band and the Navy glow look are glossy.
+- The look is fixed: warm grey #E9E6E1 page with the Red band (the default). Side menu has only a 🌙 Dark theme switch (no
+  header dots, no background colours, no photo). Dark = Navy glow: soft lights on navy (`pageGround`), the Navy band,
+  see-through glass cards, floating parts solid (`solidCard`), top card a shade deeper than search, brighter red, the
+  business pill glass like the 🌐 pill, every logo in its own red, own chat bubbles near-black. No glass on light cards.
 - Search box and chat bar (`fieldEdge`): as in the Claude app, white (dark: a shade lighter than the page), soft
   see-through edge, faint shadow, radius 16 (chat 19).
 - App text is plain English only (account, not khata); no country-specific words (ID card, not Iqama). Chat answers in
@@ -117,10 +117,11 @@ Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Packa
 - Side menu › tap the open business: its page (name, owner, phone, address for bills and PDFs) and a business card in six
   styles (`CardArt`: Classic, Minimal, Luxe, Split, Bold, Monogram) to save or share.
 - White business pill (`BusinessPill`: glossy logo + name, no arrow); tapping it opens the side menu, which is also
-  Settings: businesses (+ Add business), Name, Currency, Language, Header dots, Background dots + photo, Backup, Trash,
+  Settings: businesses (+ Add business), Name, Currency, App language, Mic language, Dark theme, Backup, Trash,
   Version. No separate Settings page.
 - 🌐 pill (`LangMoneyPill`) top right on every tab: App language (10, Auto = phone; tables in assets/i18n, `tools/i18n.py`)
   and Currency. Premium (`Premium.kt`, side menu ⭐): no ads + smart assistant without limits. Grey Fix pill under answers.
+- The band runs on Chat too, slim: just behind its top line (no card under it); messages scroll below it.
 - Bottom tabs Chat · Cashbook · Party · Expense · Income (emoji icons 💬 📒 👥 🧾 💵). Chat bar only on Chat: a 38-high
   field on the page (no white strip, no +), 13sp, white round mic with a soft shadow.
   No Entry button on lists: entries are added inside a person or thing (solid + Paid / + Work, + Received / + Given, + Out).

@@ -149,7 +149,9 @@ val LocalBarSpace = compositionLocalOf { 0.dp }
 fun barSpace(extra: Dp = 24.dp): Dp = LocalBarSpace.current + extra
 
 val Green = Color(0xFF10B981)
-val RedSpend = Color(0xFFD6403A)
+/** Money out: red, a little brighter in the dark theme so it doesn't look dull on navy (set by [BolTheme]). */
+var RedSpend by mutableStateOf(Color(0xFFD6403A))
+    private set
 val GreenIn = Color(0xFF1F9A54)
 val OrangeOwe = Color(0xFFE8892B)
 
@@ -243,7 +245,8 @@ fun BolTheme(dark: Boolean, clear: Boolean = false, page: Long = PAGE_COLORS[0],
         background = bg,
         surface = Color(look.card),
         surfaceVariant = Color(look.well),
-        onSurfaceVariant = Color(0xFFA3A3A3),
+        // Small grey words (currency, labels) a touch lighter on the dark page.
+        onSurfaceVariant = Color(0xFFBFC4CF),
         outline = Color(look.edge),
         outlineVariant = Color(look.well),
         // Menus white-ish (the card), dialogs and sheets the page: no system purple tint anywhere.
@@ -269,6 +272,8 @@ fun BolTheme(dark: Boolean, clear: Boolean = false, page: Long = PAGE_COLORS[0],
         surfaceContainerLowest = Color.White, surfaceContainerLow = bg, surfaceContainer = Color.White,
         surfaceContainerHigh = bg, surfaceContainerHighest = Color(0xFFF1F1F2), surfaceTint = Color.Transparent
     )
+    val red = if (look != null) Color(0xFFFF6B6B) else Color(0xFFD6403A)
+    if (RedSpend != red) RedSpend = red
     // Arabic and Urdu read right to left: the whole app turns round with them.
     val direction = if (I18n.rtl) androidx.compose.ui.unit.LayoutDirection.Rtl else androidx.compose.ui.unit.LayoutDirection.Ltr
     androidx.compose.runtime.CompositionLocalProvider(LocalLook provides look, LocalPage provides bg,
@@ -767,7 +772,8 @@ fun DrawScope.drawGlass(colors: List<Color>, h: Float) {
  */
 @Composable
 fun GlassLogo(size: Dp, modifier: Modifier = Modifier, onBand: Boolean = false) {
-    val c = glassColors(LocalHeader.current)
+    // In the dark theme the logo keeps its own red, whatever the header.
+    val c = if (LocalLook.current != null) BrandGlass else glassColors(LocalHeader.current)
     val shape = RoundedCornerShape(size * 0.26f)
     Canvas(
         modifier.size(size)

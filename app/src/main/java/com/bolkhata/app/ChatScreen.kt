@@ -95,9 +95,12 @@ fun ChatScreen(
     }
 
     Column(Modifier.fillMaxSize()) {
-        // One slim line with the business pill on the page colour (no band on Chat).
-        val ink = MaterialTheme.colorScheme.onSurfaceVariant
-        Box(Modifier.fillMaxWidth()) {
+        // One slim line with the business pill on the theme's band: the band runs just behind the line (Chat has no
+        // summary card under it); the messages start below it.
+        val theme = LocalHeader.current
+        val banded = theme.name != "Clean"
+        val ink = if (banded) theme.on.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant
+        Box(Modifier.fillMaxWidth().then(if (banded) Modifier.drawBehind { drawBand(theme, size.height) } else Modifier)) {
             Column(Modifier.statusBarsPadding().padding(horizontal = 12.dp).padding(bottom = 10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     BusinessPill(business.ifBlank { "Chat" }, onMenu)
@@ -383,18 +386,19 @@ private fun UserBubble(text: String, attachment: String = "") {
         AttachmentBubble(attachment, text)
         return
     }
+    val dark = LocalLook.current != null
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
         Text(
             text,
-            // The question in a dark bubble, the answer in a white card (like the Yaad mock-up).
-            color = MaterialTheme.colorScheme.surfaceContainer,
+            // The question in a dark bubble, the answer in a white card (like the Yaad mock-up); in the dark theme too.
+            color = if (dark) Color.White else MaterialTheme.colorScheme.surfaceContainer,
             fontSize = 13.sp,
             lineHeight = 17.5.sp,
             modifier = Modifier
                 .widthIn(max = 300.dp)
                 .clip(MeShape)
                 .copyable(text)
-                .background(MaterialTheme.colorScheme.onSurface)
+                .background(if (dark) Color(0xFF1C1917) else MaterialTheme.colorScheme.onSurface)
                 .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 6.dp)
         )
     }

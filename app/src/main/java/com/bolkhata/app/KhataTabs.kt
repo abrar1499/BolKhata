@@ -195,7 +195,7 @@ private fun TabHead(content: @Composable ColumnScope.() -> Unit) =
     Column(Modifier.fillMaxWidth().pageGround().padding(bottom = 4.dp), content = content)
 
 /** The theme band in the app icon's glass look, with a thin light bottom edge. */
-private fun DrawScope.drawBand(theme: HeaderTheme, h: Float) {
+internal fun DrawScope.drawBand(theme: HeaderTheme, h: Float) {
     drawGlass(bandColors(theme), h)
     drawRect(Color.White.copy(alpha = 0.35f), topLeft = Offset(0f, h - 1.dp.toPx()), size = Size(size.width, 1.dp.toPx()))
 }
@@ -203,15 +203,18 @@ private fun DrawScope.drawBand(theme: HeaderTheme, h: Float) {
 /** White pill at the top: the glossy app logo and the open business; a tap opens the side menu (businesses and settings). */
 @Composable
 internal fun BusinessPill(name: String, onMenu: () -> Unit) {
+    // In the dark theme it is glass like the 🌐 pill beside it.
+    val dark = LocalLook.current != null
     Row(
-        Modifier.padding(top = 12.dp).lift(1.dp, CircleShape).clip(CircleShape).background(Color.White)
+        Modifier.padding(top = 12.dp).then(if (dark) Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.surface)
+            else Modifier.lift(1.dp, CircleShape).clip(CircleShape).background(Color.White))
             .clickable(onClickLabel = "Menu") { onMenu() }.padding(start = 6.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         GlassLogo(24.dp)
         Spacer(Modifier.width(6.dp))
-        Text(name, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1C1917), maxLines = 1, overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.widthIn(max = 170.dp))
+        Text(name, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (dark) MaterialTheme.colorScheme.onSurface else Color(0xFF1C1917),
+            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 170.dp))
     }
 }
 
@@ -244,7 +247,10 @@ private fun SumCard(
     Surface(
         shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 1.dp
     ) {
-        Row(Modifier.solidCard().fillMaxWidth().height(IntrinsicSize.Min).padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+        // In the dark theme a shade deeper than the search box with a faint edge, so the two don't look alike.
+        val deep = LocalLook.current?.glow == true
+        Row(Modifier.then(if (deep) Modifier.background(Color(0xFF222A3E)).border(1.dp, Color.White.copy(alpha = 0.10f), RoundedCornerShape(14.dp)) else Modifier.solidCard())
+            .fillMaxWidth().height(IntrinsicSize.Min).padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
             listOfNotNull(a, b, c).forEachIndexed { i, (value, label, color) ->
                 if (i > 0) VerticalDivider(Modifier.fillMaxHeight(), color = MaterialTheme.colorScheme.outlineVariant)
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {

@@ -191,7 +191,6 @@ private fun LiveWave(level: Float, working: Boolean) {
 }
 
 /** Header themes offered in the side menu (the app's glossy bands), in this order. */
-private val MENU_THEMES = listOf("Clean", "Red", "Green", "Navy")
 
 /**
  * The side menu, which is also Settings: the app logo, the businesses (+ Add business), then every setting in plain
@@ -199,7 +198,7 @@ private val MENU_THEMES = listOf("Clean", "Red", "Green", "Navy")
  */
 @Composable
 internal fun SideMenu(
-    currency: String, lang: String, dark: Boolean, photo: Boolean, themeName: String, version: String,
+    currency: String, lang: String, dark: Boolean, photo: Boolean, version: String,
     businesses: List<Pair<String, String>>, current: String,
     onBusiness: (String) -> Unit,
     /** + Add business: opens the business page for a new one. */
@@ -207,8 +206,8 @@ internal fun SideMenu(
     /** The open business's own page (details and card). */
     onBusinessPage: () -> Unit,
     onRenameBusiness: (id: String, name: String) -> Unit, onDeleteBusiness: (id: String) -> Unit,
-    onCurrency: (String) -> Unit, onLang: (String) -> Unit, onTheme: (String) -> Unit,
-    page: Long, onPage: (Long) -> Unit, onDark: (Long) -> Unit, onPhoto: () -> Unit,
+    onCurrency: (String) -> Unit, onLang: (String) -> Unit,
+    page: Long, onPage: (Long) -> Unit, onDark: (Long) -> Unit,
     onExport: () -> Unit, onImport: () -> Unit, onTrash: () -> Unit, onVersion: () -> Unit,
     /** The Gmail synced with Google Drive ("" when not signed in) and how the last save went. */
     driveEmail: String = "", driveStatus: String = "",
@@ -315,14 +314,23 @@ internal fun SideMenu(
                 }
             }
             Spacer(Modifier.height(8.dp))
-            MenuCard { MenuRow(onClick = onPremium, last = true) { MenuLabel("⭐", "Premium"); MenuValue(if (premium) "Active ✓" else "No ads ›") } }
-            Spacer(Modifier.height(8.dp))
             MenuCard {
                 Box {
                     var open by remember { mutableStateOf(false) }
                     MenuRow(onClick = { open = true }) { MenuLabel("💱", "Currency"); MenuValue("$currency ▾") }
                     val all = remember { CURRENCIES.map { it to currencyName(it) } }
                     CompactPicker(open, all, currency, search = true, onDismiss = { open = false }) { onCurrency(it); open = false }
+                }
+                Box {
+                    var open by remember { mutableStateOf(false) }
+                    // The app's own words: Auto follows the phone; each language by its own name.
+                    val apps = APP_LANGS
+                    val now = apps.firstOrNull { it.first == appLang }?.second ?: "Auto"
+                    MenuRow(onClick = { open = true }) { MenuLabel("🌐", "App language"); MenuValue("$now ▾") }
+                    CompactPicker(open, apps.map { it.second to "" }, now, search = false, onDismiss = { open = false }) { picked ->
+                        open = false
+                        onAppLang(apps.first { it.second == picked }.first)
+                    }
                 }
                 Box {
                     var open by remember { mutableStateOf(false) }
@@ -352,34 +360,20 @@ internal fun SideMenu(
                     }
                     if (more) LanguageSheet("Language for the mic", base = false, current = lang, onClose = { more = false }) { more = false; onLang(it) }
                 }
-                Box {
-                    var open by remember { mutableStateOf(false) }
-                    // The app's own words: Auto follows the phone; each language by its own name.
-                    val apps = APP_LANGS
-                    val now = apps.firstOrNull { it.first == appLang }?.second ?: "Auto"
-                    MenuRow(onClick = { open = true }) { MenuLabel("🌐", "App language"); MenuValue("$now ▾") }
-                    CompactPicker(open, apps.map { it.second to "" }, now, search = false, onDismiss = { open = false }) { picked ->
-                        open = false
-                        onAppLang(apps.first { it.second == picked }.first)
-                    }
-                }
-                MenuRow(onClick = null) {
-                    MenuLabel("🖌", "Header")
-                    MENU_THEMES.mapNotNull { n -> HEADER_THEMES.firstOrNull { it.name == n } }.forEach { t ->
-                        Dot(Brush.linearGradient(listOf(t.c1, t.c2, t.c3)), themeName == t.name) { onTheme(t.name) }
-                    }
-                }
-                MenuRow(onClick = null, last = true) {
-                    // Like Header: the label, the light colours, the dull dark ones, then a photo.
-                    MenuLabel("🎨", "Background")
-                    PAGE_COLORS.forEach { c -> Dot(SolidColor(Color(c)), !dark && !photo && page == c) { onPage(c) } }
-                    DARK_PAGES.forEach { c -> Dot(SolidColor(Color(c)), dark && !photo && (page == c || (c == DARK_PAGES[0] && page !in DARK_PAGES))) { onDark(c) } }
-                    Text("🖼", fontSize = 16.sp, modifier = Modifier.padding(start = 5.dp).clip(CircleShape).clickable(onClick = onPhoto)
-                                .then(if (photo) Modifier.border(2.dp, EmberTop, CircleShape) else Modifier).padding(2.dp))
+                // Dark theme: on is Navy glow (soft lights, glass cards, the Navy band); off is the warm grey page with the red band, the default.
+                val darkOn = dark && !photo
+                MenuRow(onClick = { if (darkOn) onPage(PAGE_COLORS[0]) else onDark(DARK_PAGES[1]) }, last = true) {
+                    MenuLabel("🌙", "Dark theme")
+                    OnOff(darkOn)
                 }
             }
             Spacer(Modifier.height(8.dp))
             MenuCard {
+                // Premium heads the last card, as the mock: orange until it is on, then green.
+                MenuRow(onClick = onPremium) {
+                    MenuLabel("⭐", "Premium")
+                    Text(if (premium) "Active ✓" else "No ads ›", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (premium) GreenIn else EmberTop, maxLines = 1)
+                }
                 Box {
                     var open by remember { mutableStateOf(false) }
                     MenuRow(onClick = { open = true }) { MenuLabel("💾", "Backup"); MenuValue("Export · Import") }
@@ -524,10 +518,7 @@ private fun AiBoxCard(n: Int, p: Ai.Provider, box: AiBox, status: Pair<String, C
                 Text(status.first, fontSize = 10.sp, color = status.second, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             // The switch: without a key it opens the box for one.
-            Box(Modifier.size(34.dp, 20.dp).clip(RoundedCornerShape(10.dp)).background(if (on) GreenIn else Color(0xFFD6D2CC))
-                .clickable { if (box.key.isBlank()) open = !open else onSwitch(!box.on) }) {
-                Box(Modifier.align(if (on) Alignment.CenterEnd else Alignment.CenterStart).padding(2.dp).size(16.dp).lift(1.dp, CircleShape).clip(CircleShape).background(Color.White))
-            }
+            OnOff(on, Modifier.clickable { if (box.key.isBlank()) open = !open else onSwitch(!box.on) })
         }
         if (open) {
             WellField(key, { key = it.trim() }, "Paste API key", small = true)
@@ -602,7 +593,8 @@ private fun MenuRow(onClick: (() -> Unit)?, last: Boolean = false, onLong: (() -
 
 @Composable
 private fun RowScope.MenuLabel(icon: String, label: String) {
-    Text("$icon $label", fontSize = 13.sp, maxLines = 1, modifier = Modifier.weight(1f))
+    // The label is put in the app's language on its own (the icon in front would hide it from the table).
+    Text("$icon " + t(label), fontSize = 13.sp, maxLines = 1, modifier = Modifier.weight(1f))
 }
 
 @Composable
@@ -610,14 +602,12 @@ private fun MenuValue(value: String) {
     Text(value, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
 }
 
-/** A small round colour to pick (header theme or background), ringed when chosen. */
+/** A small on/off switch: green with the knob right when on. */
 @Composable
-private fun Dot(fill: Brush, on: Boolean, onClick: () -> Unit) {
-    Box(
-        Modifier.padding(start = 4.dp).size(18.dp)
-            .then(if (on) Modifier.border(2.dp, EmberTop, CircleShape).padding(3.dp) else Modifier.border(1.dp, MaterialTheme.colorScheme.outline, CircleShape))
-            .clip(CircleShape).background(fill).clickable(onClick = onClick)
-    )
+private fun OnOff(on: Boolean, modifier: Modifier = Modifier) {
+    Box(Modifier.size(34.dp, 20.dp).clip(RoundedCornerShape(10.dp)).background(if (on) GreenIn else Color(0xFFD6D2CC)).then(modifier)) {
+        Box(Modifier.align(if (on) Alignment.CenterEnd else Alignment.CenterStart).padding(2.dp).size(16.dp).lift(1.dp, CircleShape).clip(CircleShape).background(Color.White))
+    }
 }
 
 /** A friendly one-tap question for things the app did not understand. */
