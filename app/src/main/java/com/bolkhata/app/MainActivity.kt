@@ -73,10 +73,10 @@ class MainActivity : ComponentActivity() {
             val bg = remember(photo) { photo.takeIf { it.isNotBlank() }?.let { android.graphics.BitmapFactory.decodeFile(it)?.asImageBitmap() } }
             // The header is fixed: the red band on the light page, Navy in the dark theme.
             val header = headerTheme(if (dark) "Navy" else "Red", dark)
-            // Every phone shows the design 1:1: the screen is 350 units wide (the 390 mock-up, everything a bit bigger) and the phone's
+            // Every phone shows the design 1:1 with the mock: the screen is 390 units wide, as the mock's phone, and the phone's
             // font-size and display-size settings don't blow the compact ledgers up.
             val m = resources.displayMetrics
-            CompositionLocalProvider(LocalHeader provides header, LocalDensity provides Density(minOf(m.widthPixels, m.heightPixels) / 350f, 1f)) {
+            CompositionLocalProvider(LocalHeader provides header, LocalDensity provides Density(minOf(m.widthPixels, m.heightPixels) / 390f, 1f)) {
                 BolTheme(dark, clear = bg != null, page = page) {
                     // The page colour, or the glow look's lights (pageGround); screens and the Scaffold stay see-through over it.
                     Surface(Modifier.fillMaxSize().pageGround(), color = Color.Transparent, contentColor = MaterialTheme.colorScheme.onBackground) {
