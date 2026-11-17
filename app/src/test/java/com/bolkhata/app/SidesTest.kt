@@ -33,7 +33,7 @@ class SidesTest {
     }
 
     @Test fun salesAndPurchasesFillThemselvesFromTheKhatas() {
-        assertEquals(listOf(Sides.SALES, Sides.INCOME), Sides.books(Side.INC, all, setup).map { it.name })
+        assertEquals(listOf(Sides.SALES, Sides.INCOME) + Sides.incomeAccounts, Sides.books(Side.INC, all, setup).map { it.name })
         val sales = Sides.books(Side.INC, all, setup).first { it.name == Sides.SALES }
         // Inside: the Party accounts, each with its people's sales or work.
         assertEquals(Sides.CUSTOMERS to 70000.0, Sides.kids(sales, all, setup).single().let { it.name to it.total })
@@ -89,7 +89,9 @@ class SidesTest {
         val moved = SideSetup(people = mapOf("hamid akram" to Sides.CUSTOMERS))
         val cust = Sides.books(Side.PARTY, all, moved).first { it.name == Sides.CUSTOMERS }
         assertEquals(2, Sides.kids(cust, all, moved).first { it.name == "Hamid Akram" }.entries.size)
-        assertEquals(false, Sides.books(Side.PARTY, all, moved).any { it.name == Sides.STAFF })
+        // Staff stays as a main account, now with nobody in it.
+        val staff = Sides.books(Side.PARTY, all, moved).first { it.name == Sides.STAFF }
+        assertEquals(0, Sides.kids(staff, all, moved).size)
     }
 
     @Test fun assetsAreNotAnExpenseButCountInNetWorth() {
@@ -134,9 +136,8 @@ class SidesTest {
         assertTrue(defaultSubs[Cat.TRANSPORT]!!.all { it in names })
     }
 
-    @Test fun incomeReceivedIsThereWithItsUsualThingsBeforeAnyIncome() {
-        val books = Sides.books(Side.INC, emptyList(), SideSetup())
-        val received = books.first { it.name == Sides.INCOME }
-        assertTrue(Sides.incomeThings.all { n -> Sides.kids(received, emptyList(), SideSetup()).any { it.name == n } })
+    @Test fun incomeShowsItsUsualAccountsBeforeAnyIncome() {
+        val names = Sides.books(Side.INC, emptyList(), SideSetup()).map { it.name }
+        assertTrue(Sides.INCOME in names && Sides.incomeAccounts.all { it in names })
     }
 }

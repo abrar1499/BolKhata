@@ -52,10 +52,9 @@ object Sides {
      */
     fun books(side: Side, all: List<Entry>, setup: SideSetup): List<Book> {
         if (side == Side.PARTY) {
-            val used = all.filter(::withPerson).map { it.person }.distinctBy { it.trim().lowercase() }.map { bookOf(it, all, setup) }.toSet()
-            fun hasPeople(name: String) = setup.people.values.any { it.equals(name, true) } || name in used
+            // The four main people accounts are always there, before anyone is put in them.
             val ready = listOf(CUSTOMERS to Side.INC, SUPPLIERS to Side.EXP, STAFF to Side.EXP, PEOPLE to Side.EXP)
-                .filter { hasPeople(it.first) }.map { (n, s) -> Book(s, n, true) }
+                .map { (n, s) -> Book(s, n, true) }
             return (ready + setup.books.filter { it.people }).distinctBy { it.name.lowercase() }
         }
         val own = setup.books.filter { it.side == side && !it.people }.map { b ->
@@ -70,9 +69,9 @@ object Sides {
                 listOfNotNull(Book(side, PURCHASES, false).takeIf { all.any { it.type == Type.PURCHASE && it.amount > 0 } })
         } else listOfNotNull(
             Book(side, SALES, false).takeIf { all.any { it.type == Type.SALE && it.amount > 0 } },
-            // Income received is always there, with its usual things, before any income is saved.
+            // Income received is always there, before any income is saved.
             Book(side, INCOME, false)
-        )
+        ) + incomeAccounts.map { Book(side, it, false) }
         return (things + own).distinctBy { it.name.lowercase() }
     }
 
@@ -152,7 +151,7 @@ object Sides {
         val list = thingEntries(book, newest, setup)
         val groups = list.groupBy { thingName(it).lowercase() }
         // An expense account's usual things (Transport: Petrol, Car repair…) are there from the start, with nothing in them yet.
-        val usual = book.cat?.let { defaultSubs[it] } ?: (if (book.side == Side.INC && book.name == INCOME) incomeThings else emptyList())
+        val usual = book.cat?.let { defaultSubs[it] }.orEmpty()
         val names = (groups.values.map { thingName(it.first()) } + extra + usual)
             .distinctBy { it.lowercase() }
         return names.map { n -> Kid(n, groups[n.lowercase()].orEmpty()) }
@@ -162,13 +161,13 @@ object Sides {
     /** [s] with the income [names] put in the owner's own Income [account] (out of any other); [INCOME] takes them out of all. */
     fun intoIncomeAccount(s: SideSetup, names: List<String>, account: String): SideSetup {
         val low = names.map { it.trim().lowercase() }.toSet()
-        val own = s.books.filter { it.side == Side.INC && !it.people }.map { it.name }.toSet()
+        val own = s.books.filter { it.side == Side.INC && !it.people }.map { it.name }.toSet() + incomeAccounts
         val kids = s.kids.mapValues { (b, l) -> if (b in own) l.filterNot { it.trim().lowercase() in low } else l }
         return s.copy(kids = if (account == INCOME) kids else kids + (account to (kids[account].orEmpty() + names)))
     }
 
-    /** The usual things inside Income received, there from the start. */
-    val incomeThings = listOf("Salary", "Business", "Commission", "Bonus", "Rent received", "Gift")
+    /** The usual Income accounts beside Income received, there from the start. */
+    val incomeAccounts = listOf("Salary", "Business", "Commission", "Bonus", "Rent received", "Gift")
 
     /** What a thing entry is called inside its account: the payer for income, else its item ("Sent home" stays itself). */
     fun thingName(e: Entry): String =
@@ -176,7 +175,8 @@ object Sides {
 
     /** Things inside the owner's own accounts, by lowercase name, so their entries leave Other. */
     private fun ownThings(side: Side, setup: SideSetup): Map<String, String> =
-        setup.books.filter { it.side == side && !it.people }.flatMap { b -> setup.kids[b.name].orEmpty().map { it.lowercase() to b.name } }.toMap()
+        (setup.books.filter { it.side == side && !it.people }.map { it.name } + (if (side == Side.INC) incomeAccounts else emptyList()))
+            .flatMap { b -> setup.kids[b].orEmpty().map { it.lowercase() to b } }.toMap()
 
     private fun thingEntries(book: Book, newest: List<Entry>, setup: SideSetup): List<Entry> {
         val own = ownThings(book.side, setup)
