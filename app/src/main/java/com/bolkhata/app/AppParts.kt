@@ -319,7 +319,7 @@ internal fun SideMenu(
                 // Dark mode: on is Navy glow (soft lights, glass cards, the Navy band); off is the warm grey page with the red band, the default.
                 val darkOn = dark && !photo
                 MenuRow(onClick = { if (darkOn) onPage(PAGE_COLORS[0]) else onDark(DARK_PAGES[1]) }) {
-                    MenuLabel("🌙", "Dark mode")
+                    MenuLabel("🌑", "Dark mode")
                     // Blue when on, the night look's colour.
                     OnOff(darkOn, onColor = Color(0xFF5B9BFF))
                 }

@@ -98,7 +98,7 @@ Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Packa
 
 ## Look the owner likes (keep it)
 - Mock-up of record: Artifact https://claude.ai/artifact/KaEp1kbD1q82ARWJdB9zhr (copied 1:1 into Compose).
-- The look is fixed: warm grey #E9E6E1 page with the Red band (the default). Side menu has only a 🌙 Dark mode switch (no
+- The look is fixed: warm grey #E9E6E1 page with the Red band (the default). Side menu has only a 🌑 Dark mode switch (no
   header dots, no background colours, no photo). Dark = Navy glow: soft lights on navy (`pageGround`), the Navy band,
   see-through glass cards, floating parts solid (`solidCard`), top card a shade deeper than search, brighter red, the
   business pill glass like the 🌐 pill, every logo in its own red, own chat bubbles near-black. No glass on light cards.
