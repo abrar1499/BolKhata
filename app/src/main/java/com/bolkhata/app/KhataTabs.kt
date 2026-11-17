@@ -119,16 +119,18 @@ val KHATA_TABS = listOf(Tab.CHAT, Tab.CASHBOOK, Tab.PARTIES, Tab.EXPENSE, Tab.IN
 fun KhataNav(tab: Tab, onTab: (Tab) -> Unit) {
     // No shadow: it joins the white chat strip above into one bottom panel.
     Surface(Modifier.solidCard(), color = Color.Transparent, contentColor = MaterialTheme.colorScheme.onSurface) {
+        // The dark theme marks the open tab in soft blue with a pill behind its picture (red is for money out there).
+        val glow = LocalLook.current?.glow == true
         Row(Modifier.fillMaxWidth().navigationBarsPadding().height(58.dp)) {
             KHATA_TABS.forEach { t ->
                 val (label, icon) = navItem(t)
                 val on = t == tab
-                val tint = if (on) Ember else MaterialTheme.colorScheme.onSurfaceVariant
+                val tint = if (on) (if (glow) Color(0xFF8FB8FF) else Ember) else MaterialTheme.colorScheme.onSurfaceVariant
                 Column(
                     Modifier.weight(1f).fillMaxHeight().clickable { onTab(t) },
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
                 ) {
-                    Text(icon, fontSize = 19.sp)
+                    Text(icon, fontSize = 19.sp, modifier = if (on && glow) Modifier.clip(RoundedCornerShape(12.dp)).background(Color(0x298FB8FF)).padding(horizontal = 14.dp) else Modifier)
                     Text(label, fontSize = 10.sp, color = tint, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium, modifier = Modifier.padding(top = 3.dp))
                 }
             }
@@ -772,11 +774,13 @@ fun CashBookScreen(
 @Composable
 private fun BoxScope.AddRound(state: LazyListState, onClick: () -> Unit) {
     val bottom = LocalBarSpace.current + 8.dp
-    val red = Color(0xFFE3342F)
+    // Dark: the theme's blue (red is for money out there); light: the header's red.
+    val glow = LocalLook.current?.glow == true
+    val red = if (glow) Color(0xFF3B6FD8) else Color(0xFFE3342F)
     if (!adUnder(state, bottom - 6.dp, bottom + 50.dp)) Box(
         Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = bottom).size(44.dp)
             .lift(6.dp, CircleShape, ambientColor = red, spotColor = red).clip(CircleShape)
-            .background(Brush.linearGradient(listOf(Color(0xFFFF7A45), red, Color(0xFFB91C3C))))
+            .background(Brush.linearGradient(if (glow) listOf(Color(0xFF6EA8FF), red) else listOf(Color(0xFFFF7A45), red, Color(0xFFB91C3C))))
             .clickable { onClick() }
             .drawBehind {
                 val arm = 7.dp.toPx()
