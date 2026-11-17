@@ -30,6 +30,8 @@ import androidx.compose.material.icons.filled.DriveFileRenameOutline
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Book
@@ -167,9 +169,7 @@ private fun KhataTop(
         Column(Modifier.statusBarsPadding().padding(horizontal = 12.dp)) {
             if (business != null) Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.weight(1f)) { BusinessPill(business, onMenu) }
-                LangMoneyPill()
-                Spacer(Modifier.width(6.dp))
-                onPdf?.let { PdfButton(it) }
+                TopActions(ink) { close -> onPdf?.let { pdf -> TopMenuItem(Icons.Outlined.PictureAsPdf, "Export PDF") { close(); pdf() } } }
             } else
             Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onMenu) {
@@ -273,7 +273,7 @@ private fun SumCard(
 private fun SearchBox(q: String, hint: String, onChange: (String) -> Unit) {
     val sub = MaterialTheme.colorScheme.onSurfaceVariant
     Row(
-        Modifier.padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 4.dp).fillMaxWidth()
+        Modifier.padding(start = 12.dp, end = 12.dp, top = 10.dp).fillMaxWidth()
             .fieldEdge(RoundedCornerShape(16.dp))
             .padding(horizontal = 12.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -338,7 +338,8 @@ private fun MonthChips(months: List<Pair<Int, Long>>, current: Int, onPick: (Int
     // No background of its own: the header behind it already has one, and a fill here would cut the card's shadow above.
     LazyRow(
         Modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)
+        // 10 above (from the card or the search) and 10 to the list (the head's 4 and the first row's 6), as everywhere.
+        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         item(key = ALL_MONTHS) { SmallChip("All", current == ALL_MONTHS) { onPick(ALL_MONTHS) } }
         items(months, key = { it.first }) { (k, ms) -> SmallChip(monthFmt.format(Date(ms)), k == current) { onPick(k) } }
@@ -391,7 +392,8 @@ internal fun PeriodChips(newest: List<Entry>, period: Period, onPick: (Period) -
     val row = rememberLazyListState(initialFirstVisibleItemIndex = months.indexOfFirst { it.first == period.month }.coerceAtLeast(0))
     LazyRow(
         Modifier.fillMaxWidth(), state = row,
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)
+        // 10 above (from the card or the search) and 10 to the list (the head's 4 and the first row's 6), as everywhere.
+        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         item(key = "first") {
             Box {
@@ -1184,15 +1186,37 @@ private fun ledgerTable(heading: String, cols: List<String>, rows: List<Pair<Ent
     return PdfTable(heading, listOf("Date", "Detail") + cols + (if (running) listOf("Balance") else emptyList()), body, foot, left = 2)
 }
 
-/** "⤓ PDF": a small white pill at the top right of a page; it makes a PDF of what the page shows. */
+/**
+ * The top right of every tab, in one place everywhere: the 🌐 pill ([pill]), then ⋮ with the page's own actions
+ * ([menu], e.g. Export PDF). [top] lines them up with the business pill (12 below the top).
+ */
 @Composable
-private fun PdfButton(onClick: () -> Unit) {
-    Row(
-        Modifier.lift(1.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape).clickable { onClick() }.padding(horizontal = 11.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) { Text("⤓ PDF", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface) }
+internal fun TopActions(tint: Color, pill: Boolean = true, top: Dp = 12.dp, menu: @Composable ColumnScope.(close: () -> Unit) -> Unit) {
+    Row(Modifier.padding(top = top), verticalAlignment = Alignment.CenterVertically) {
+        if (pill) LangMoneyPill()
+        Box {
+            var more by remember { mutableStateOf(false) }
+            Box(Modifier.padding(start = 4.dp).size(32.dp).clip(CircleShape).clickable { more = true }, contentAlignment = Alignment.Center) {
+                Icon(Icons.Filled.MoreVert, contentDescription = "More options", tint = tint, modifier = Modifier.size(22.dp))
+            }
+            // A card under ⋮ (as in the Claude app, corners only a little round): the page colour's card, a soft shadow, icon + word rows.
+            DropdownMenu(
+                expanded = more, onDismissRequest = { more = false }, shape = RoundedCornerShape(8.dp),
+                containerColor = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 0.dp, shadowElevation = 8.dp,
+                modifier = Modifier.widthIn(min = 160.dp)
+            ) { menu { more = false } }
+        }
+    }
 }
+
+/** One row of the ⋮ card: a line icon and the word. */
+@Composable
+internal fun TopMenuItem(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, enabled: Boolean = true, onClick: () -> Unit) =
+    DropdownMenuItem(
+        text = { Text(label, fontSize = 13.5.sp) }, onClick = onClick, enabled = enabled,
+        leadingIcon = { Icon(icon, contentDescription = null, modifier = Modifier.size(19.dp)) },
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp)
+    )
 
 /** An inner page's top: a round white back button, the path above the title, "⤓ PDF" on the right, then the summary card. */
 @Composable
@@ -1208,7 +1232,7 @@ private fun BackHead(title: String, crumb: String, onBack: () -> Unit, onPdf: ((
                 Text(crumb, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(title, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            onPdf?.let { PdfButton(it) }
+            onPdf?.let { pdf -> TopActions(MaterialTheme.colorScheme.onSurface, pill = false, top = 0.dp) { close -> TopMenuItem(Icons.Outlined.PictureAsPdf, "Export PDF") { close(); pdf() } } }
         }
         Spacer(Modifier.height(10.dp))
         card()
@@ -1540,8 +1564,9 @@ fun SideScreen(
                                 SumCard(Triple(fmt(total), (if (income) "Income · " else "Spent · ") + per.label(), ink), null, "Report ›", onReport)
                             }
                         }
-                        PeriodChips(newest, per) { period = it.encode() }
+                        // Search first, then the period chips, as on the Cashbook (10 apart each).
                         SearchBox(q, "Search") { q = it }
+                        PeriodChips(newest, per) { period = it.encode() }
                     } }
                     val shown = books.filter { q.isBlank() || it.name.contains(q.trim(), true) ||
                         Sides.kids(it, entries, setup).any { k -> k.name.contains(q.trim(), true) } }

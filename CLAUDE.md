@@ -111,7 +111,7 @@ Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Packa
 - Expense › Business costs (💼, was Purchases) and Income › Sales: grouped by Party account; an account shows WORK DONE /
   SOLD (count, cost, rate "per 1000" or "each") and PEOPLE; nothing kiln-specific, item names are the owner's.
 - Amounts carry the currency small after them (`MoneyText`, `LocalCurrency`); ledger heads "OUT · PKR"; counts never do.
-- "⤓ PDF" top right on every page (`BackHead` / `KhataTop` onPdf → `LocalPdf`, `Pdf.kt`): business on top, title and
+- ⋮ top right on every page and Chat (`TopActions`, after the 🌐 pill, same place everywhere) with Export PDF (`BackHead` / `KhataTop` onPdf → `LocalPdf`, `Pdf.kt`): business on top, title and
   period, boxes, tables. Long-press a customer's Given entry: Bill. Popups and sheets wear the page colour (`LocalPage`)
   with white fields.
 - Side menu › tap the open business: its page (name, owner, phone, address for bills and PDFs) and a business card in six

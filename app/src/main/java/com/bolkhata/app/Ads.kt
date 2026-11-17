@@ -98,10 +98,13 @@ object Ads {
         private set
 
     /**
+     * The day's limits (taps, loads, reward videos) are for the Play app only: the test APK shows Google's test ads
+     * without a limit, to check them as often as needed.
+     *
      * True once this phone tapped ads [AD_TAPS_A_DAY] times today: no ad is drawn or fetched until tomorrow. It keeps the
      * account safe from someone tapping the ads again and again on purpose; a real reader never gets that far.
      */
-    val resting: Boolean get() = restDay == today()
+    val resting: Boolean get() = play && restDay == today()
 
     /** The day the taps ran out; the next day the ads are back by themselves, also when the app was left open overnight. */
     private var restDay by mutableStateOf("")
@@ -115,7 +118,7 @@ object Ads {
     private fun count(c: Context, what: String) = saved(c.applicationContext).edit().putString("$what-day", today()).putInt(what, today(c, what) + 1).apply()
 
     /** Whether a reward video may still be offered today (at most [REWARDS_A_DAY]). */
-    fun rewardsLeft(c: Context) = today(c, "rewards") < REWARDS_A_DAY
+    fun rewardsLeft(c: Context) = !play || today(c, "rewards") < REWARDS_A_DAY
 
     /** Counts each tap on the ad it is given to. */
     fun taps(context: Context): AdListener = object : AdListener() {
@@ -140,7 +143,7 @@ object Ads {
     /** The ad for [place], fetched once; [onReady] gets it when it arrives. [small]: from the pictures-only unit. */
     fun native(context: Context, place: String, small: Boolean = false, onReady: (NativeAd) -> Unit) {
         loaded[place]?.let { onReady(it); return }
-        if (!ready || resting || Premium.active || today(context, "loads") >= AD_LOADS_A_DAY) return
+        if (!ready || resting || Premium.active || (play && today(context, "loads") >= AD_LOADS_A_DAY)) return
         AdLoader.Builder(context, if (small) smallUnit else nativeUnit)
             .forNativeAd { ad -> loaded[place] = ad; count(context, "loads"); onReady(ad) }
             .withAdListener(taps(context))

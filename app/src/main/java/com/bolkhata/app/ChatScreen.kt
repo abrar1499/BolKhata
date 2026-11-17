@@ -106,26 +106,10 @@ fun ChatScreen(
                     BusinessPill(business.ifBlank { "Chat" }, onMenu)
                     Text(subtitle, color = ink, fontSize = 11.sp, maxLines = 1,
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 10.dp, top = 10.dp))
-                    Box(Modifier.padding(top = 6.dp)) { LangMoneyPill() }
-                    Box {
-                        var more by remember { mutableStateOf(false) }
-                        IconButton(onClick = { more = true }) {
-                            Icon(Icons.Filled.MoreVert, contentDescription = "More options", tint = ink)
-                        }
-                        DropdownMenu(expanded = more, onDismissRequest = { more = false }) {
-                            DropdownMenuItem(
-                                text = { Text("Share chat log") },
-                                leadingIcon = { Icon(Icons.Outlined.Share, contentDescription = null) },
-                                enabled = !loading,
-                                onClick = { more = false; confirmShare = true }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Clear chat") },
-                                leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null) },
-                                enabled = messages.isNotEmpty() && !loading,
-                                onClick = { more = false; confirmClear = true }
-                            )
-                        }
+                    // The 🌐 pill and ⋮ in the same place as on every tab.
+                    TopActions(ink) { close ->
+                        TopMenuItem(Icons.Outlined.Share, "Share chat log", enabled = !loading) { close(); confirmShare = true }
+                        TopMenuItem(Icons.Outlined.Delete, "Clear chat", enabled = messages.isNotEmpty() && !loading) { close(); confirmClear = true }
                     }
                 }
             }
@@ -422,8 +406,11 @@ private val PlayMark by lazy { mark("play", "M4 2.5v11l9-5.5z", 16f, filled = tr
 @Composable
 private fun AnswerActions(rating: Boolean?, onRate: (good: Boolean) -> Unit) {
     val wrong = rating == false
-    val ink = if (wrong) MaterialTheme.colorScheme.error else Color(0xFF6F6A64)
-    Row(Modifier.padding(start = 8.dp, top = 3.dp).clip(RoundedCornerShape(12.dp)).background(if (wrong) Color(0xFFF6DEDC) else Color(0xFFDEDAD4))
+    // In the dark mode a glass pill with light grey words; once tapped, a red tint with the bright red.
+    val dark = LocalLook.current != null
+    val ink = if (wrong) (if (dark) RedSpend else MaterialTheme.colorScheme.error) else if (dark) Color(0xFFBFC4CF) else Color(0xFF6F6A64)
+    val fill = if (dark) (if (wrong) RedSpend.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.10f)) else if (wrong) Color(0xFFF6DEDC) else Color(0xFFDEDAD4)
+    Row(Modifier.padding(start = 8.dp, top = 3.dp).clip(RoundedCornerShape(12.dp)).background(fill)
         .clickable(enabled = !wrong) { onRate(false) }.padding(start = 7.dp, end = 9.dp, top = 4.dp, bottom = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(Pencil, contentDescription = null, tint = ink, modifier = Modifier.size(11.dp))
