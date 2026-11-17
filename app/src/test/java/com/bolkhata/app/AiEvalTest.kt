@@ -213,7 +213,7 @@ class AiEvalTest {
         case("delete all of a big book shows the Delete button for every entry", "sari entries delete kar do", prepare = {
             entries = entries + (1..100).map { Entry("b$it", Type.KHARCHA, 10.0 + it, Cat.KHANA, "Tea", "", "", now - (it % 60) * day, now - (it % 60) * day) }
             baseIds = entries.map { it.id }.toSet()
-        }) { listOf("nothing is deleted yet" to world.trashed.isEmpty(), "the button holds every entry" to (world.shownDelete == baseIds)) },
+        }) { listOf("nothing is deleted yet" to world.trashed.isEmpty(), "the button holds every entry" to (world.shownDelete == world.baseIds)) },
         case("delete all in a small book is asked about first", "delete all", prepare = {
             entries = entries.take(2); baseIds = entries.map { it.id }.toSet()
         }) { listOf("nothing is deleted" to world.trashed.isEmpty(), "asks" to (asked || world.shownDelete.isNotEmpty())) },
