@@ -28,6 +28,7 @@ import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.FullScreenContentCallback
 import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.MobileAds
+import com.google.android.gms.ads.VideoController
 import com.google.android.gms.ads.VideoOptions
 import com.google.android.gms.ads.nativead.MediaView
 import com.google.android.gms.ads.nativead.NativeAd
@@ -288,5 +289,9 @@ private fun NativeAdView.show(ad: NativeAd) {
     (callToActionView as TextView).text = (ad.callToAction ?: "Open").let { if (tag == "banner") it.uppercase() else "$it ›" }
     (iconView as? ImageView)?.let { it.setImageDrawable(ad.icon?.drawable); it.visibility = if (ad.icon == null) android.view.View.GONE else android.view.View.VISIBLE }
     ad.mediaContent?.let { mediaView?.mediaContent = it }
+    // A video starts again (still muted) when it ends, so Google's big play button never sits on the card.
+    ad.mediaContent?.takeIf { it.hasVideoContent() }?.videoController?.let { c ->
+        c.videoLifecycleCallbacks = object : VideoController.VideoLifecycleCallbacks() { override fun onVideoEnd() { c.play() } }
+    }
     setNativeAd(ad)
 }
