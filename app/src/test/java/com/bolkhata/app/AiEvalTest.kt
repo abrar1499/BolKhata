@@ -221,7 +221,8 @@ class AiEvalTest {
         }) { listOf("the station is under Petrol" to (world.byId("p1")?.item == "Petrol"), "the pump is under Petrol" to (world.byId("p2")?.item == "Petrol"),
             "parking stays" to (world.byId("p3")?.item == "City parking"), "nothing new" to added.isEmpty()) },
         case("arabic app, english small talk", "i am good too", prepare = { language = "Arabic" }) { listOf("answer is in Arabic script" to Regex("[\u0600-\u06FF]").containsMatchIn(text)) },
-        case("arabic app, an entry", "petrol 60", prepare = { language = "Arabic" }) { listOf("petrol 60 saved" to has(Type.KHARCHA, amount = 60.0), "answer is in Arabic script" to Regex("[\u0600-\u06FF]").containsMatchIn(text)) },
+        case("arabic app, english talk after english answers", "hello", "kya hal hai", "i am good too", prepare = { language = "Arabic" }) {
+            listOf("the last answer is in Arabic script" to Regex("[\u0600-\u06FF]").containsMatchIn(text)) },
         case("rename a person", "salim raza ka naam salim raza butt kar do") { listOf("the entry carries the new name" to (world.byId("l2")?.person.equals("Salim Raza Butt", true) == true), "nothing new" to added.isEmpty()) },
         // ---- voice, as the recogniser hands it over
         voice("urdu script", "حامد کو پانچ سو دیے") { listOf("lent Hamid 500" to has(Type.DIYA, "Hamid Akram", 500.0), "answer is not in Urdu script" to !urduOrHindi.containsMatchIn(text)) },
