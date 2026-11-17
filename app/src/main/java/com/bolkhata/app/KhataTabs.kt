@@ -514,15 +514,13 @@ internal fun LazyListScope.ledger(
     var days = 0
     rows.forEachIndexed { i, r ->
         if (i == 0 || !sameDay(rows[i - 1].date, r.date)) {
-            // The Cashbook keeps its ads near the top, where they are seen: a video card after the 3rd day, a slim picture
-            // after the 6th. Other ledgers: an ad every third day, a video card and a slim picture in turn.
+            // The Cashbook keeps its ads near the top, where they are seen: a wide video card (192 × 120) after the 3rd day, a slim picture
+            // after the 6th. Other ledgers (inside an account, opened for a quick look): one slim picture after the 3rd day.
             if (cash && (days == 3 || days == 6)) {
                 val n = days
-                item(key = keyPrefix + "ad" + n, contentType = "ad") { NativeAdCard("ledger-$keyPrefix$title-$n", Modifier.padding(start = 10.dp, end = 10.dp, top = 1.dp), video = n == 3, round = false, small = n != 3) }
-            } else if (!cash && days > 0 && days % 3 == 0) {
-                val n = days
-                val video = videoTurn(n / 3)
-                item(key = keyPrefix + "ad" + n, contentType = "ad") { NativeAdCard("ledger-$keyPrefix$title-$n", Modifier.padding(start = 10.dp, end = 10.dp, top = 1.dp), video = video, round = false, small = !video) }
+                item(key = keyPrefix + "ad" + n, contentType = "ad") { NativeAdCard("ledger-$keyPrefix$title-$n", Modifier.padding(start = 10.dp, end = 10.dp, top = 1.dp), big = n == 3, round = false, small = n != 3) }
+            } else if (!cash && days == 3) {
+                item(key = keyPrefix + "ad3", contentType = "ad") { NativeAdCard("ledger-$keyPrefix$title-3", Modifier.padding(start = 10.dp, end = 10.dp, top = 1.dp), round = false, small = true) }
             }
             days++
             val day = byDay[dayNumber(r.date)].orEmpty()
@@ -533,7 +531,8 @@ internal fun LazyListScope.ledger(
         item(key = keyPrefix + r.key) { LedgerRow(r, cols, last, cards) }
     }
     // At the end of the Cashbook: the banner strip, square and joined to the rows above it as a day strip is.
-    if (cash && rows.isNotEmpty()) item(key = keyPrefix + "end-ad", contentType = "ad") {
+    // Only under three or more entries: a near-empty book gets no ad.
+    if (cash && rows.size >= 3) item(key = keyPrefix + "end-ad", contentType = "ad") {
         NativeAdCard("ledger-end-$keyPrefix$title", Modifier.padding(start = 10.dp, end = 10.dp, top = 1.dp), round = false, small = true, banner = true)
     }
 }
@@ -682,20 +681,29 @@ private fun adUnder(state: LazyListState, low: Dp, high: Dp): Boolean {
     return under
 }
 
-/** Round ↑ button that appears once the list is scrolled down (over the Cashbook's +). It steps aside while an ad is under it. */
+/**
+ * Small round ↑ button, centred a little above the Cashbook's +, shown only while a scrolled-down list moves and gone
+ * a second after it stops. It steps aside while an ad is under it.
+ */
 @Composable
 private fun BoxScope.UpButton(state: LazyListState) {
     val scope = rememberCoroutineScope()
-    val bottom = LocalBarSpace.current + 60.dp
+    val bottom = LocalBarSpace.current + 70.dp
     val down by remember { derivedStateOf { state.firstVisibleItemIndex > 4 } }
+    var moving by remember { mutableStateOf(false) }
+    val scrolling = state.isScrollInProgress
+    LaunchedEffect(scrolling) { if (scrolling) moving = true else { kotlinx.coroutines.delay(1000); moving = false } }
     // The button's lower and upper edge above the list's end, with a little room around it.
-    val clear = !adUnder(state, bottom - 6.dp, bottom + 46.dp)
-    if (down && clear) Box(
-        Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = bottom)
-            .size(40.dp).lift(2.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.onSurface)
+    val clear = !adUnder(state, bottom - 6.dp, bottom + 36.dp)
+    if (down && moving && clear) Box(
+        Modifier.align(Alignment.BottomEnd).padding(end = 25.dp, bottom = bottom)
+            .size(30.dp).lift(2.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.onSurface)
             .clickable { scope.launch { state.animateScrollToItem(0) } },
         contentAlignment = Alignment.Center
-    ) { Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Back to top", tint = MaterialTheme.colorScheme.surfaceContainer) }
+    ) {
+        Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Back to top", tint = MaterialTheme.colorScheme.surfaceContainer,
+            modifier = Modifier.size(20.dp))
+    }
 }
 
 private fun matches(e: Entry, q: String) =
@@ -1673,8 +1681,8 @@ fun SideScreen(
                     }
                     if (shown.isEmpty()) emptyNote("Nothing found")
                     item(key = "addbook") { DashedAdd("+ Add account") { adding = "book" } }
-                    // Under the accounts: the wide white card.
-                    if (shown.isNotEmpty()) item(key = "banner", contentType = "ad") {
+                    // Under three or more accounts: the wide white card (a near-empty page gets no ad bigger than itself).
+                    if (shown.size >= 3) item(key = "banner", contentType = "ad") {
                         NativeAdCard("accounts-big-$side", Modifier.padding(start = 10.dp, end = 10.dp, top = 10.dp), big = true)
                     }
                 }
@@ -2367,8 +2375,7 @@ fun ProfitScreen(entries: List<Entry>, currency: String, setup: SideSetup, onBac
                 item(key = "n4") { ReportRow("Assets", "laptop, car, machines… at cost", withSign(worth.assets, "+"), GreenIn) { open = "Assets" } }
                 item(key = "n5") { ReportRow("To pay", "money you owe", withSign(worth.toPay, "−"), RedSpend) { open = "To pay" } }
                 item(key = "n6") { ReportRow("Net worth", "what you are worth today", plusMinus(worth.net).trimStart('+'), if (worth.net < 0) RedSpend else GreenIn, null) }
-                // At the end: a slim picture ad, then the banner strip.
-                item(key = "ad", contentType = "ad") { NativeAdCard("report", Modifier.padding(start = 12.dp, end = 12.dp, top = 10.dp), small = true) }
+                // At the end: the banner strip (one ad, never two stacked).
                 item(key = "banner", contentType = "ad") { NativeAdCard("report-banner", Modifier.padding(start = 10.dp, end = 10.dp, top = 10.dp), small = true, banner = true) }
             }
         }

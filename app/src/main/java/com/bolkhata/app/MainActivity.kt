@@ -1346,7 +1346,8 @@ fun App(
         setup = { sides }, saveSetup = { s -> sides = s; store.saveSides(s) }, pdf = { doc -> aiPdf[0]?.invoke(doc) },
         trashed = { trash }, restore = { ids -> val back = trash.filter { it.id in ids }; save(back + entries); saveTrash(trash.filter { it.id !in ids }) },
         settings = { k, v -> appSet[0]?.invoke(k, v) ?: org.json.JSONObject().put("error", "not ready").toString() },
-        language = I18n.englishName
+        language = I18n.englishName,
+        askTrash = { what, ids -> confirm = what to ids }
     )
 
     /**
@@ -1413,9 +1414,14 @@ fun App(
                     postChat("", isUser = false, meta = "ask=$p|$n|" + Ask.kinds(book).joinToString(",") + (if (book == Sides.STAFF) "|staff" else ""))
                     return@launch
                 }
+                // The AI reads every message first whenever one can answer: the app's own rules can misread a message, and a
+                // wrong save is worse than a second's wait. The app answers by itself only when no AI can (no key, no internet,
+                // the smart answers and today's reward videos used up).
+                val aiNow = !noAi && Ai.handles(groqKey) && Ai.chain.any { (k, _) -> (Ai.restUntil[Ai.provider(k)?.name.orEmpty()] ?: 0L) <= System.currentTimeMillis() }
+                val aiFirst = Ai.first(aiNow, onOwnKey(), Premium.active, store.smartLeft, Ads.rewardsLeft(context))
                 // Learnt from the AI before: a message of the same shape (only its numbers differ) is done by the app alone, for nothing.
                 // People and numbers are open places in it, so a known sentence with another name needs no AI either.
-                if (!retry) {
+                if (!retry && !aiFirst) {
                     val host = chatHost(names0)
                     val who = AiAgent.who(names0, store.known())
                     val counted = AiAgent.counted(roman)
@@ -1436,9 +1442,10 @@ fun App(
                         }
                     }
                 }
-                // The app's own assistant (LocalAgent) first, offline and free, with the AI's tools; the AI only when it cannot.
-                // Inside an open account the older rules stay, as they keep to that account.
-                if (!retry && scoped.size == entries.size) {
+                // The app's own assistant (LocalAgent), offline and free, with the AI's tools: when no AI can answer, or the one asked
+                // did not. Inside an open account the older rules stay, as they keep to that account. True when it answered.
+                fun localAnswer(): Boolean {
+                    if (retry || scoped.size != entries.size) return false
                     chatWatch = null
                     val mine = runCatching {
                         LocalAgent.run(text, chatHost(names0), roman = roman, previous = aiPicked, justSaved = aiSaved,
@@ -1460,7 +1467,7 @@ fun App(
                             val book = Sides.bookOf(mine.ask.substringBefore("|"), entries, sides)
                             lastSpeech = "Choose"
                             postChat("", isUser = false, meta = "ask=${mine.ask}|" + Ask.kinds(book).joinToString(",") + (if (book == Sides.STAFF) "|staff" else ""))
-                            return@launch
+                            return true
                         }
                         aiPicked = mine.filter
                         aiSaved = mine.added
@@ -1468,9 +1475,12 @@ fun App(
                         lastSpeech = mine.text.ifBlank { if (mine.added.isNotEmpty()) "Saved" else mine.card }
                         postChat(mine.card.ifBlank { mine.text }, isUser = false, entryIds = mine.added, listIds = mine.listIds,
                             meta = "engine=LocalAgent; intent=agent" + (if (mine.card.isBlank()) "; plain" else "") + "; usage=App engine")
-                        return@launch
+                        return true
                     }
+                    return false
                 }
+                if (!aiFirst && localAnswer()) return@launch
+                if (aiFirst && !retry && scoped.size == entries.size) chatWatch = null
                 // Test feature: with an AI key saved, the AI does the whole job itself through tools (see AiAgent).
                 var aiDown = false
                 var aiWhy = ""
@@ -1574,6 +1584,8 @@ fun App(
                     return@launch
                     }
                 }
+                // The AI was asked first but none answered (no internet, no credit): the app's own assistant answers.
+                if (aiFirst && localAnswer()) return@launch
                 // Asked again after ✗ and no AI answered: the app reads it once more with its spelling put right, else asks
                 // for other words (its first answer is not given a second time).
                 if (retry) {

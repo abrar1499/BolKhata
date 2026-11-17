@@ -27,7 +27,9 @@ object AiAgent {
         /** Changes one of the side menu's settings (see [AppSettings]); JSON with "done" (what changed) or "error". */
         val settings: (setting: String, value: String) -> String = { _, _ -> JSONObject().put("error", "not here").toString() },
         /** The app's language by its English name ("Urdu"): the AI answers in it. */
-        val language: String = "English"
+        val language: String = "English",
+        /** Shows the app's Delete / Cancel question ([what]: "Delete all 120 entries?"); nothing goes until Delete is tapped. */
+        val askTrash: (what: String, ids: Set<String>) -> Unit = { _, _ -> }
     )
 
     /**
@@ -135,10 +137,10 @@ object AiAgent {
             shape(*picking, "title" to text("Heading of the PDF, e.g. Expenses"),
                 "group_by" to JSONObject().put("type", "string").put("enum", JSONArray(listOf("category", "person", "month"))).put("description", "A table per group, with a summary first"),
                 required = listOf("title"))),
-        Ai.Tool("delete_entries", "Moves saved entries to Trash (ids from find_entries, or all_matching); the person can restore them. Up to 25 entries the person named are deleted at once, with no question first; only more than 25, or nearly the whole book, need their yes.", shape("ids" to words("Entry ids"),
+        Ai.Tool("delete_entries", "Moves saved entries to Trash (ids from find_entries, or all_matching); the person can restore them. Up to 25 entries the person named are deleted at once, with no question first; more than 25, or nearly the whole book, show the person a Delete button instead.", shape("ids" to words("Entry ids"),
             "all_matching" to JSONObject().put("type", "boolean").put("description", "Instead of ids: every entry the filters pick, in one go (with no filter, the whole book). Use it for 'delete all' or anything over 40 entries"),
             *picking,
-            "confirmed" to JSONObject().put("type", "boolean").put("description", "Only for more than 25 entries or nearly all of them: true after the person said yes"))),
+            "confirmed" to JSONObject().put("type", "boolean").put("description", "Only after the Delete button was shown and the person then said yes in words"))),
         Ai.Tool("rename_person", "Gives a person a new name everywhere: all their entries and their place in an account. Also puts two spellings of one person together (to: the name that stays).",
             shape("from" to text("The saved name now"), "to" to text("The new name"), required = listOf("from", "to"))),
         Ai.Tool("restore_entries", "Brings entries back from Trash: the last so many deleted, or by id. With nothing given it lists what is in Trash.", shape(
@@ -219,7 +221,8 @@ object AiAgent {
         - A person's name changed, or two spellings of one person: rename_person.
         - A khata or account for a person, with no kind said, is put_in_account People; do not ask which kind.
         - To delete everything, or more entries than a look-up shows (40), call delete_entries with all_matching and the
-          filters (none for the whole book), never in parts.
+          filters (none for the whole book), never in parts. A big delete shows the app's Delete button: then just say in a
+          few words to tap Delete; do not ask for a yes.
         - To change or delete, first find_entries for the ids. When it is clear which entries are meant, do it without
           asking again; when it is not, ask one short question instead of guessing. Deleted entries go to Trash.
         - "is mahine" is the 1st of this month to today, "kal" yesterday, "aaj tak" / "ab tak" all time (no dates).
@@ -764,10 +767,15 @@ object AiAgent {
             // A slip of the tongue must not empty the books: a big delete, or nearly everything, is asked about first.
             val all = host.entries().size
             // A small book too: deleting all (or nearly all) of even two entries waits for a yes.
-            if ((ids.size > 25 || (all >= 2 && ids.size * 10 >= all * 8)) && !input.optBoolean("confirmed", false))
-                error("that is " + ids.size + " of the " + all + " entries: ask the person to confirm first, then call again with confirmed true")
-            host.trash(ids)
-            JSONObject().put("moved_to_trash", ids.size).toString()
+            // It waits for a tap on the app's Delete button (or a yes in words after it).
+            if ((ids.size > 25 || (all >= 2 && ids.size * 10 >= all * 8)) && !input.optBoolean("confirmed", false)) {
+                host.askTrash((if (ids.size == all) "Delete all " else "Delete ") + ids.size + (if (ids.size == 1) " entry?" else " entries?"), ids)
+                JSONObject().put("deleted", 0).put("delete_button_shown_for", ids.size)
+                    .put("say", "Nothing is deleted yet: tell the person in a few words to tap Delete (or Cancel). Do not ask for a yes").toString()
+            } else {
+                host.trash(ids)
+                JSONObject().put("moved_to_trash", ids.size).toString()
+            }
         }
         "rename_person" -> {
             val from = input.optString("from").trim()

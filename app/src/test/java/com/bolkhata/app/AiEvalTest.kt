@@ -40,6 +40,8 @@ class AiEvalTest {
         var baseIds = entries.map { it.id }.toSet()
         val trashed = mutableSetOf<String>()
         var bin = listOf<Entry>()
+        /** The entries the app's Delete button was shown for. */
+        var shownDelete = setOf<String>()
         var setup = SideSetup(people = mapOf("Hamid Akram" to Sides.STAFF, "Zubair Latif" to Sides.STAFF, "Nargis Salim Rashid" to Sides.CUSTOMERS))
         var pdf: PdfDoc? = null
         /** The app settings the AI changed ("currency=PKR"). */
@@ -54,7 +56,8 @@ class AiEvalTest {
             currency = "PKR", setup = { setup }, saveSetup = { setup = it }, pdf = { pdf = it },
             trashed = { bin }, restore = { ids -> entries = bin.filter { it.id in ids } + entries; bin = bin.filter { it.id !in ids }; trashed -= ids },
             settings = { k, v -> changed += "$k=$v"; JSONObject().put("done", "Changed.").toString() },
-            language = language
+            language = language,
+            askTrash = { _, ids -> shownDelete = ids }
         )
         val added get() = entries.filter { it.id !in baseIds }
         fun byId(id: String) = entries.firstOrNull { it.id == id }
@@ -201,15 +204,19 @@ class AiEvalTest {
         case("it was another, new person", "tariq ko 5000 udhaar diya", "ye naya tariq hai", prepare = {
             entries = listOf(Entry("q1", Type.DIYA, 300.0, Cat.UDHAAR, "Loans", "Bilal Tariq Mehmood", "", now - 12 * day, now - 12 * day)) + entries
         }) { listOf("one entry" to (added.size == 1), "it is under the new person Tariq" to added.all { it.person.equals("Tariq", true) }) },
-        case("delete everything is asked about first", "sari entries delete kar do") { listOf("nothing is deleted" to world.trashed.isEmpty(), "asks" to asked) },
+        case("delete everything shows the Delete button first", "sari entries delete kar do") { listOf("nothing is deleted" to world.trashed.isEmpty(), "the button holds every entry" to (world.shownDelete == world.baseIds)) },
         case("delete everything after a yes", "sari entries delete kar do", "haan kar do") { listOf("everything is in Trash" to world.entries.isEmpty()) },
         case("delete all of a big book in one go after a yes", "sari entries delete kar do", "haan kar do", prepare = {
             entries = entries + (1..100).map { Entry("b$it", Type.KHARCHA, 10.0 + it, Cat.KHANA, "Tea", "", "", now - (it % 60) * day, now - (it % 60) * day) }
             baseIds = entries.map { it.id }.toSet()
         }) { listOf("everything is in Trash" to world.entries.isEmpty()) },
+        case("delete all of a big book shows the Delete button for every entry", "sari entries delete kar do", prepare = {
+            entries = entries + (1..100).map { Entry("b$it", Type.KHARCHA, 10.0 + it, Cat.KHANA, "Tea", "", "", now - (it % 60) * day, now - (it % 60) * day) }
+            baseIds = entries.map { it.id }.toSet()
+        }) { listOf("nothing is deleted yet" to world.trashed.isEmpty(), "the button holds every entry" to (world.shownDelete == world.baseIds)) },
         case("delete all in a small book is asked about first", "delete all", prepare = {
             entries = entries.take(2); baseIds = entries.map { it.id }.toSet()
-        }) { listOf("nothing is deleted" to world.trashed.isEmpty(), "asks" to asked) },
+        }) { listOf("nothing is deleted" to world.trashed.isEmpty(), "asks" to (asked || world.shownDelete.isNotEmpty())) },
         // ---- accounts
         case("two accounts for one work, said plainly", "kachi eent ke do khate ban gaye hain, kachi eent aur kachi eent molding. mujhe ek hi chahiye", prepare = {
             entries = listOf(work("w9", "Hamid Akram", "Kachi eent molding", 4_000.0, 1_000.0, 1)) + entries

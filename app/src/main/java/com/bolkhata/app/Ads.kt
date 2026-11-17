@@ -165,10 +165,11 @@ fun videoTurn(nth: Int) = nth % 2 == 1
  * nothing when no ad came; [round] false gives it square corners, like the cashbook sheet. [video], or an ad that is a video: a 120 × 120 picture or video (playing without sound) on
  * the left instead (Google asks for the ad's picture in its own MediaView, and a video no smaller than that). [small]:
  * an ad of pictures only, so the row stays slim between accounts. [big]: the white card under a short list, its picture
- * or video wider (192 × 120). [banner]: the strip at the end of the Cashbook and the Report.
+ * or video wider (192 × 120). [banner]: the strip at the end of the Cashbook and the Report. [corner]: its corner
+ * radius in dp, as the chat's bubbles (8).
  */
 @Composable
-fun NativeAdCard(place: String, modifier: Modifier = Modifier, video: Boolean = false, round: Boolean = true, small: Boolean = false, big: Boolean = false, banner: Boolean = false) {
+fun NativeAdCard(place: String, modifier: Modifier = Modifier, video: Boolean = false, round: Boolean = true, small: Boolean = false, big: Boolean = false, banner: Boolean = false, corner: Int? = null) {
     val context = LocalContext.current
     var ad by remember(place) { mutableStateOf<NativeAd?>(null) }
     DisposableEffect(place, Ads.ready) {
@@ -176,7 +177,7 @@ fun NativeAdCard(place: String, modifier: Modifier = Modifier, video: Boolean = 
         onDispose { }
     }
     val shown = ad?.takeIf { !Ads.resting && !Premium.active } ?: return
-    AndroidView(factory = { ctx: Context -> (if (banner) bannerRow(ctx) else if (big) videoRow(ctx, wide = true) else if (video || shown.mediaContent?.hasVideoContent() == true) videoRow(ctx) else adRow(ctx)).also { if (!round) (it.getChildAt(0).background as? GradientDrawable)?.cornerRadius = 0f } }, modifier = modifier.fillMaxWidth(), update = { v: NativeAdView -> v.show(shown) })
+    AndroidView(factory = { ctx: Context -> (if (banner) bannerRow(ctx) else if (big) videoRow(ctx, wide = true) else if (video || shown.mediaContent?.hasVideoContent() == true) videoRow(ctx) else adRow(ctx)).also { v -> (v.getChildAt(0).background as? GradientDrawable)?.let { if (!round) it.cornerRadius = 0f else if (corner != null) it.cornerRadius = ctx.dp(corner).toFloat() } } }, modifier = modifier.fillMaxWidth(), update = { v: NativeAdView -> v.show(shown) })
 }
 
 private fun Context.dp(v: Int) = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), resources.displayMetrics).toInt()
@@ -199,6 +200,7 @@ private fun adRow(ctx: Context): NativeAdView {
     val titleRow = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
     val headline = TextView(ctx).apply { textSize = 11.5f; setTextColor(AColor.rgb(29, 29, 31)); maxLines = 1; paint.isFakeBoldText = true }
     val tag = TextView(ctx).apply { text = "Ad"; textSize = 8f; setTextColor(AColor.rgb(155, 149, 142)); setPadding(ctx.dp(3), 0, ctx.dp(3), 0)
+        minHeight = ctx.dp(15); minWidth = ctx.dp(15); gravity = Gravity.CENTER  // Google: the ad badge at least 15 high and wide
         background = GradientDrawable().apply { cornerRadius = ctx.dp(4).toFloat(); setStroke(ctx.dp(1), AColor.rgb(214, 209, 202)) }
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginStart = ctx.dp(5) } }
     val body = TextView(ctx).apply { textSize = 10f; setTextColor(AColor.rgb(138, 133, 128)); maxLines = 1 }
@@ -232,6 +234,7 @@ private fun videoRow(ctx: Context, wide: Boolean = false): NativeAdView {
     val headline = TextView(ctx).apply { textSize = 12f; setTextColor(AColor.rgb(29, 29, 31)); maxLines = 2; paint.isFakeBoldText = true
         layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f) }
     val tag = TextView(ctx).apply { text = "Ad"; textSize = 8f; setTextColor(AColor.rgb(155, 149, 142)); setPadding(ctx.dp(3), 0, ctx.dp(3), 0)
+        minHeight = ctx.dp(15); minWidth = ctx.dp(15); gravity = Gravity.CENTER  // Google: the ad badge at least 15 high and wide
         background = GradientDrawable().apply { cornerRadius = ctx.dp(4).toFloat(); setStroke(ctx.dp(1), AColor.rgb(214, 209, 202)) } }
     val body = TextView(ctx).apply { textSize = 10.5f; setTextColor(AColor.rgb(138, 133, 128)); maxLines = 2; ellipsize = TextUtils.TruncateAt.END; setPadding(0, ctx.dp(3), 0, 0) }
     val action = TextView(ctx).apply { textSize = 11f; setTextColor(AColor.WHITE); paint.isFakeBoldText = true
@@ -267,6 +270,7 @@ private fun bannerRow(ctx: Context): NativeAdView {
     val titleRow = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
     val headline = TextView(ctx).apply { textSize = 12f; setTextColor(AColor.rgb(29, 29, 31)); maxLines = 1; ellipsize = TextUtils.TruncateAt.END; paint.isFakeBoldText = true }
     val tag = TextView(ctx).apply { text = "Ad"; textSize = 8f; setTextColor(AColor.rgb(155, 149, 142)); setPadding(ctx.dp(3), 0, ctx.dp(3), 0)
+        minHeight = ctx.dp(15); minWidth = ctx.dp(15); gravity = Gravity.CENTER  // Google: the ad badge at least 15 high and wide
         background = GradientDrawable().apply { cornerRadius = ctx.dp(4).toFloat(); setStroke(ctx.dp(1), AColor.rgb(214, 209, 202)) }
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginStart = ctx.dp(5) } }
     val body = TextView(ctx).apply { textSize = 10f; setTextColor(AColor.rgb(138, 133, 128)); maxLines = 1; ellipsize = TextUtils.TruncateAt.END }

@@ -33,6 +33,32 @@ class AiAgentTest {
     private fun ids(o: JSONObject) = o.getJSONArray("entries").let { a -> (0 until a.length()).map { a.getJSONObject(it).getString("id") } }.toSet()
 
     @Test
+    fun theAiReadsFirstWheneverItCanAnswer() {
+        assertTrue(Ai.first(ready = true, ownKey = true, premium = false, smartLeft = 3, rewardsLeft = true))
+        // Out of smart answers, a reward video still left: the AI way (the video is offered first).
+        assertTrue(Ai.first(ready = true, ownKey = true, premium = false, smartLeft = 0, rewardsLeft = true))
+        // Out of answers and of today's videos: the app answers by itself; Premium or the person's own key never runs out.
+        assertFalse(Ai.first(ready = true, ownKey = true, premium = false, smartLeft = 0, rewardsLeft = false))
+        assertTrue(Ai.first(ready = true, ownKey = true, premium = true, smartLeft = 0, rewardsLeft = false))
+        assertTrue(Ai.first(ready = true, ownKey = false, premium = false, smartLeft = 0, rewardsLeft = false))
+        // No AI can answer (no key, no internet, resting): the app's own assistant.
+        assertFalse(Ai.first(ready = false, ownKey = true, premium = true, smartLeft = 10, rewardsLeft = true))
+    }
+
+    @Test
+    fun deleteAllShowsTheDeleteButtonAndDeletesNothingYet() {
+        val now = System.currentTimeMillis()
+        val many = (1..30).map { Entry("t$it", Type.KHARCHA, 5.0, Cat.KHANA, "Tea", "", "", now - it * 60_000L, now - it * 60_000L) }
+        var shown = emptySet<String>(); var gone = emptySet<String>()
+        val h = AiAgent.Host(entries = { many }, add = {}, update = {}, trash = { gone = it }, names = { emptyList() }, currency = "PKR",
+            askTrash = { _, ids -> shown = ids })
+        val out = JSONObject(AiAgent.use("delete_entries", JSONObject().put("all_matching", true), h, now))
+        assertEquals(0, out.getInt("deleted"))
+        assertEquals(many.map { it.id }.toSet(), shown)
+        assertTrue(gone.isEmpty())
+    }
+
+    @Test
     fun entriesTypedInLatelyAreFoundAndDeleted() {
         val found = use("find_entries", """{"added_in_last_minutes": 20}""")
         assertEquals(setOf("new1", "new2"), ids(found))
