@@ -304,7 +304,6 @@ fun App(
     var progress by remember { mutableIntStateOf(-1) }
     var checking by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) { newVersion = Updater.check() }
     LaunchedEffect(Unit) { (context as? android.app.Activity)?.let { Ads.start(it); Premium.start(it) } }
     // The Premium sheet (side menu ⭐ Premium, or "Go Premium" under the reward card).
     var premiumOpen by remember { mutableStateOf(false) }
@@ -3400,11 +3399,12 @@ fun App(
         }
     }
 
-    // A new version must be installed before the app can be used. No skip.
+    // A new version, found only when the person checks (side menu › Version); Back or a tap outside closes it until
+    // the download starts.
     newVersion?.let { info ->
         Dialog(
-            onDismissRequest = {},
-            properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false, usePlatformDefaultWidth = false)
+            onDismissRequest = { if (progress < 0) newVersion = null },
+            properties = DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = true, usePlatformDefaultWidth = false)
         ) {
             // Compact: icon and title on one row, then either the button or a slim progress line in its place.
             Surface(
