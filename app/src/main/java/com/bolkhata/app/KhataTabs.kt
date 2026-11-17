@@ -1981,21 +1981,22 @@ private fun AddBody(r: AddReq, all: List<Entry>, onDismiss: () -> Unit, onDelete
     Column((if (head != null) Modifier.heightIn(min = PICK_HEIGHT).padding(14.dp) else Modifier.padding(16.dp)).navigationBarsPadding().imePadding()) {
         if (head != null) PickHead(head.first, head.second, onBack ?: onDismiss, ("+ " + r.label to r.color).takeIf { kinds.size < 2 })
         else SheetHead((if (r.edit) "" else "+ ") + r.label, r.crumb, onBack, onDismiss)
-        if (kinds.size > 1) Row(Modifier.padding(top = 12.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Well).padding(3.dp)) {
+        // The switches wear the fields' white and edge; the picked side its kind's colour, lightly.
+        if (kinds.size > 1) Row(Modifier.padding(top = 12.dp).fillMaxWidth().fieldEdge(RoundedCornerShape(12.dp)).padding(3.dp)) {
             kinds.forEach { k ->
                 val on = k.label == r.label
                 Text("+ " + k.label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
                     color = if (on) k.color else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(if (on) MaterialTheme.colorScheme.surface else Color.Transparent)
+                    modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(if (on) k.color.copy(alpha = 0.13f) else Color.Transparent)
                         .clickable { onKind(k) }.padding(vertical = 8.dp))
             }
         }
-        if (r.money != null) Row(Modifier.padding(top = 12.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Well).padding(3.dp)) {
+        if (r.money != null) Row(Modifier.padding(top = 12.dp).fillMaxWidth().fieldEdge(RoundedCornerShape(12.dp)).padding(3.dp)) {
             listOf((if (r.label == "Given") "Goods" else "Work") to false, "Money" to true).forEach { (label, v) ->
                 val on = cash == v
                 Text(label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
                     color = if (on) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(if (on) MaterialTheme.colorScheme.surface else Color.Transparent)
+                    modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(if (on) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f) else Color.Transparent)
                         .clickable { cash = v }.padding(vertical = 8.dp))
             }
         }
