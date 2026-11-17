@@ -52,9 +52,12 @@ object Sides {
      */
     fun books(side: Side, all: List<Entry>, setup: SideSetup): List<Book> {
         if (side == Side.PARTY) {
-            // The four main people accounts are always there, before anyone is put in them.
+            // People (loans, friends) is always there, so a first-time user sees where a person goes; Customers,
+            // Suppliers and Staff show once someone is in them.
+            val used = all.filter(::withPerson).map { it.person }.distinctBy { it.trim().lowercase() }.map { bookOf(it, all, setup) }.toSet()
+            fun hasPeople(name: String) = name == PEOPLE || setup.people.values.any { it.equals(name, true) } || name in used
             val ready = listOf(CUSTOMERS to Side.INC, SUPPLIERS to Side.EXP, STAFF to Side.EXP, PEOPLE to Side.EXP)
-                .map { (n, s) -> Book(s, n, true) }
+                .filter { hasPeople(it.first) }.map { (n, s) -> Book(s, n, true) }
             return (ready + setup.books.filter { it.people }).distinctBy { it.name.lowercase() }
         }
         val own = setup.books.filter { it.side == side && !it.people }.map { b ->
@@ -76,7 +79,7 @@ object Sides {
     }
 
     /** The basic expense accounts every book starts with, in the order they show. */
-    val common = listOf(Cat.KHANA, Cat.TRANSPORT, Cat.BIJLI, Cat.RENT, Cat.MOBILE, Cat.SHOPPING, Cat.SEHAT)
+    val common = listOf(Cat.KHANA, Cat.TRANSPORT, Cat.BIJLI, Cat.SHOPPING, Cat.SEHAT)
 
     /** Accounts an earlier version added to every book (not basic); their entries still show them, as for any category. */
     private val noLongerCommon = listOf(Cat.EDU, Cat.PERSONAL, Cat.CHARITY, Cat.GHAR, Cat.FEES)
@@ -166,8 +169,8 @@ object Sides {
         return s.copy(kids = if (account == INCOME) kids else kids + (account to (kids[account].orEmpty() + names)))
     }
 
-    /** The usual Income accounts beside Income received, there from the start. */
-    val incomeAccounts = listOf("Salary", "Business", "Commission", "Bonus", "Rent received", "Gift")
+    /** The basic Income account beside Income received, there from the start (others are added by the person). */
+    val incomeAccounts = listOf("Salary")
 
     /** What a thing entry is called inside its account: the payer for income, else its item ("Sent home" stays itself). */
     fun thingName(e: Entry): String =

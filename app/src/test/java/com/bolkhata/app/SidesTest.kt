@@ -89,9 +89,7 @@ class SidesTest {
         val moved = SideSetup(people = mapOf("hamid akram" to Sides.CUSTOMERS))
         val cust = Sides.books(Side.PARTY, all, moved).first { it.name == Sides.CUSTOMERS }
         assertEquals(2, Sides.kids(cust, all, moved).first { it.name == "Hamid Akram" }.entries.size)
-        // Staff stays as a main account, now with nobody in it.
-        val staff = Sides.books(Side.PARTY, all, moved).first { it.name == Sides.STAFF }
-        assertEquals(0, Sides.kids(staff, all, moved).size)
+        assertEquals(false, Sides.books(Side.PARTY, all, moved).any { it.name == Sides.STAFF })
     }
 
     @Test fun assetsAreNotAnExpenseButCountInNetWorth() {
@@ -108,7 +106,7 @@ class SidesTest {
     fun aNewBookStartsWithTheEverydayExpenseAccounts() {
         val s = Sides.withCommon(SideSetup())
         val shown = Sides.books(Side.EXP, emptyList(), s).map { it.name }
-        assertEquals(listOf("Food", "Transport", "Bills", "Rent", "Mobile & Internet", "Shopping", "Health").sorted(), shown.sorted())
+        assertEquals(listOf("Food", "Transport", "Bills", "Shopping", "Health").sorted(), shown.sorted())
         // Food is the Food category's account: its entries show in it.
         assertEquals(Cat.KHANA, Sides.books(Side.EXP, emptyList(), s).first { it.name == "Food" }.cat)
         // Added once: an account the person already has is not added again.
