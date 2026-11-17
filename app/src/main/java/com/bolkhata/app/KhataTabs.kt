@@ -843,7 +843,7 @@ private fun PickHead(path: String, title: String, onBack: () -> Unit, tag: Pair<
     }
 }
 
-/** A small grey heading in the +'s card (ACCOUNTS, or an account over search results). */
+/** A small grey heading in the +'s card (ACCOUNTS, or an account over search results); its rows start with a line. */
 @Composable
 private fun PickLabel(text: String) = Text(text.uppercase(), fontSize = 10.5.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.4.sp,
     color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 12.dp, top = 10.dp, bottom = 2.dp))
@@ -960,14 +960,14 @@ private fun EntryPicker(all: List<Entry>, setup: SideSetup, onSetup: (SideSetup)
                             if (found.isEmpty()) item { Text("No account called \"${q.trim()}\" yet.", fontSize = 13.sp, color = sub, modifier = Modifier.padding(12.dp)) }
                             found.groupBy { it.book.name }.forEach { (g, ts) ->
                                 item { PickLabel(g) }
-                                items(ts.size) { i -> val t = ts[i]; PickRow(t.icon, t.name, t.path, null, "", sub, i == 0, plain = t.balance) { onPick(t) } }
+                                items(ts.size) { i -> val t = ts[i]; PickRow(t.icon, t.name, t.path, null, "", sub, false, plain = t.balance) { onPick(t) } }
                             }
                         }
                         s == null -> {
                             item { PickLabel("Accounts") }
                             item {
                                 val n = booksOf(Side.PARTY).sumOf { Sides.kids(it, all, setup).size }
-                                PickRow("👥", "Party", if (n == 1) "1 person" else "$n people", null, "", sub, true) { side = Side.PARTY }
+                                PickRow("👥", "Party", if (n == 1) "1 person" else "$n people", null, "", sub, false) { side = Side.PARTY }
                             }
                             listOf(Side.EXP, Side.INC).forEach { x ->
                                 item {
