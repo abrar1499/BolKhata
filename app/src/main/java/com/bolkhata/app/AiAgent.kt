@@ -753,7 +753,8 @@ object AiAgent {
             val ids = strings(input, "ids").toSet().intersect(host.entries().map { it.id }.toSet())
             // A slip of the tongue must not empty the books: a big delete, or nearly everything, is asked about first.
             val all = host.entries().size
-            if ((ids.size > 25 || (all > 5 && ids.size * 10 >= all * 8)) && !input.optBoolean("confirmed", false))
+            // A small book too: deleting all (or nearly all) of even two entries waits for a yes.
+            if ((ids.size > 25 || (all >= 2 && ids.size * 10 >= all * 8)) && !input.optBoolean("confirmed", false))
                 error("that is " + ids.size + " of the " + all + " entries: ask the person to confirm first, then call again with confirmed true")
             host.trash(ids)
             JSONObject().put("moved_to_trash", ids.size).toString()
