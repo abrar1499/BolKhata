@@ -1014,8 +1014,10 @@ private fun EntryPicker(all: List<Entry>, setup: SideSetup, onSetup: (SideSetup)
                             }
                         }
                         else -> {
+                            // Every usual thing of an expense account, not only the few its page starts with.
                             val kids = Sides.kids(book, all, setup).let { l ->
                                 if (book.people) l.sortedByDescending { kotlin.math.abs(it.balance) } else l.sortedByDescending { it.total } }
+                                .let { l -> l + book.cat?.let { defaultSubs[it] }.orEmpty().filter { n -> l.none { it.name.equals(n, true) } }.map { Kid(it, emptyList()) } }
                             if (kids.isEmpty()) item { Text("Nothing in ${book.name} yet.", fontSize = 13.sp, color = sub, modifier = Modifier.padding(12.dp)) }
                             items(kids.size) { i ->
                                 val k = kids[i]
@@ -1704,7 +1706,13 @@ fun SideScreen(
             // Things: the category's usual sub-accounts not made yet, as chips.
             val have = book?.let { b -> Sides.kids(b, entries, setup).map { it.name.lowercase() }.toSet() }.orEmpty()
             val picks = book?.takeIf { !it.people }?.cat?.let { defaultSubs[it] }.orEmpty().filter { it.lowercase() !in have }
-            NamePopup("Add in ${book?.name}", if (book?.people == true) "Name" else "Name (e.g. Groceries)", onDismiss = { adding = null }, picks = picks, onSave = done)
+            // The example fits the account: one of its usual things (Transport: Petrol), a payer for income.
+            val example = when {
+                book == null || book.people -> null
+                book.side == Side.INC -> "Company name"
+                else -> book.cat?.let { defaultSubs[it]?.firstOrNull() }
+            }
+            NamePopup("Add in ${book?.name}", example?.let { "Name (e.g. $it)" } ?: "Name", onDismiss = { adding = null }, picks = picks, onSave = done)
         }
     }
     sheet?.let { r ->

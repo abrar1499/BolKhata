@@ -112,7 +112,7 @@ class SidesTest {
         // Added once: an account the person already has is not added again.
         assertEquals(s.books.size, Sides.withCommon(s).books.size)
         // The extra ones an earlier version added go; the basic ones and the person's own stay.
-        val old = SideSetup(books = s.books + listOf("Education", "Sent home", "Fees & Govt", "Tools").map { Book(Side.EXP, it, false) })
+        val old = SideSetup(books = s.books + listOf("Education", "Sent home", "Fees & Govt", "Rent", "Tools").map { Book(Side.EXP, it, false) })
         assertEquals(s.books.map { it.name } + "Tools", Sides.trimCommon(old).books.map { it.name })
     }
 
@@ -131,7 +131,7 @@ class SidesTest {
     @Test fun anExpenseAccountShowsItsUsualThingsBeforeAnyEntry() {
         val transport = Book(Side.EXP, Cat.TRANSPORT.label, false, Cat.TRANSPORT)
         val names = Sides.kids(transport, emptyList(), SideSetup()).map { it.name }
-        assertTrue(defaultSubs[Cat.TRANSPORT]!!.all { it in names })
+        assertEquals(defaultSubs[Cat.TRANSPORT]!!.take(Sides.BASIC_THINGS), names)
     }
 
     @Test fun incomeShowsItsUsualAccountsBeforeAnyIncome() {

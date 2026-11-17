@@ -538,13 +538,13 @@ class Store(context: Context) {
      */
     fun loadSides(): SideSetup = readSides().let { s ->
         val added = prefs.getBoolean(scoped("commonAdded"), false)
-        val trimmed = prefs.getBoolean(scoped("commonTrimmed"), false)
+        val trimmed = prefs.getBoolean(scoped("commonFive"), false)
         when {
             !added -> Sides.withCommon(s).also { saveSides(it) }
-            // 1.509 added more than the basic ones once: those go again (an account with entries still shows).
+            // Earlier versions added more than the 5 basic ones: those go again (an account with entries still shows).
             !trimmed -> Sides.trimCommon(s).also { saveSides(it) }
             else -> s
-        }.also { if (!added || !trimmed) prefs.edit().putBoolean(scoped("commonAdded"), true).putBoolean(scoped("commonTrimmed"), true).apply() }
+        }.also { if (!added || !trimmed) prefs.edit().putBoolean(scoped("commonAdded"), true).putBoolean(scoped("commonFive"), true).apply() }
     }
 
     private fun readSides(): SideSetup = try {

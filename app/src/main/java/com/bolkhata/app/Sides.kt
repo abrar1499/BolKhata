@@ -82,7 +82,7 @@ object Sides {
     val common = listOf(Cat.KHANA, Cat.TRANSPORT, Cat.BIJLI, Cat.SHOPPING, Cat.SEHAT)
 
     /** Accounts an earlier version added to every book (not basic); their entries still show them, as for any category. */
-    private val noLongerCommon = listOf(Cat.EDU, Cat.PERSONAL, Cat.CHARITY, Cat.GHAR, Cat.FEES)
+    private val noLongerCommon = listOf(Cat.EDU, Cat.PERSONAL, Cat.CHARITY, Cat.GHAR, Cat.FEES, Cat.RENT, Cat.MOBILE)
 
     /** [s] without the accounts an earlier version added that are not basic. */
     fun trimCommon(s: SideSetup): SideSetup =
@@ -153,8 +153,9 @@ object Sides {
         }
         val list = thingEntries(book, newest, setup)
         val groups = list.groupBy { thingName(it).lowercase() }
-        // An expense account's usual things (Transport: Petrol, Car repair…) are there from the start, with nothing in them yet.
-        val usual = book.cat?.let { defaultSubs[it] }.orEmpty()
+        // An expense account's first few usual things (Transport: Petrol, Car repair, Oil change) are there from the start, with
+        // nothing in them yet; the person adds the rest (+ Entry offers them all).
+        val usual = book.cat?.let { defaultSubs[it] }.orEmpty().take(BASIC_THINGS)
         val names = (groups.values.map { thingName(it.first()) } + extra + usual)
             .distinctBy { it.lowercase() }
         return names.map { n -> Kid(n, groups[n.lowercase()].orEmpty()) }
@@ -168,6 +169,9 @@ object Sides {
         val kids = s.kids.mapValues { (b, l) -> if (b in own) l.filterNot { it.trim().lowercase() in low } else l }
         return s.copy(kids = if (account == INCOME) kids else kids + (account to (kids[account].orEmpty() + names)))
     }
+
+    /** How many of an expense account's usual things it starts with. */
+    const val BASIC_THINGS = 3
 
     /** The basic Income account beside Income received, there from the start (others are added by the person). */
     val incomeAccounts = listOf("Salary")
