@@ -788,10 +788,20 @@ private fun BoxScope.AddRound(state: LazyListState, onClick: () -> Unit) {
             .background(Brush.linearGradient((if (glow) listOf(Color(0xFF2C5282), red) else listOf(Color(0xFFFF7A45), red, Color(0xFFB91C3C))).map { it.copy(alpha = 0.85f) }))
             .clickable { onClick() }
             .drawBehind {
-                val arm = 8.dp.toPx()
+                // WhatsApp's new-chat mark: a white bubble (its tail at the top left) with the + inside in the button's colour.
+                val w = 22.dp.toPx()
+                val h = 17.dp.toPx()
+                val left = center.x - w / 2
+                val top = center.y - h / 2 + 1.dp.toPx()
+                drawPath(androidx.compose.ui.graphics.Path().apply {
+                    moveTo(left - 1.dp.toPx(), top - 3.dp.toPx()); lineTo(left + 8.dp.toPx(), top); lineTo(left, top + 7.dp.toPx()); close()
+                }, Color.White)
+                drawRoundRect(Color.White, Offset(left, top), Size(w, h), androidx.compose.ui.geometry.CornerRadius(5.dp.toPx()))
+                val c = Offset(center.x, top + h / 2)
+                val arm = 4.5.dp.toPx()
                 val width = 2.2.dp.toPx()
-                drawLine(Color.White, center.copy(y = center.y - arm), center.copy(y = center.y + arm), width, androidx.compose.ui.graphics.StrokeCap.Round)
-                drawLine(Color.White, center.copy(x = center.x - arm), center.copy(x = center.x + arm), width, androidx.compose.ui.graphics.StrokeCap.Round)
+                drawLine(red, c.copy(y = c.y - arm), c.copy(y = c.y + arm), width, androidx.compose.ui.graphics.StrokeCap.Round)
+                drawLine(red, c.copy(x = c.x - arm), c.copy(x = c.x + arm), width, androidx.compose.ui.graphics.StrokeCap.Round)
             }
     )
 }
