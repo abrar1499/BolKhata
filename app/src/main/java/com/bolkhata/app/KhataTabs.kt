@@ -1143,13 +1143,15 @@ private fun cardSlot(at: Int, rows: Int, adAfter: Int, place: String): Pair<Int,
     return (if (ad && at > adAfter) at + 1 else at) to rows + (if (ad) 1 else 0)
 }
 
-/** The slim picture ad as a row of the card ([i] of [n]): square, on the card's white. */
+/** The slim picture ad as a row of the card ([i] of [n]): square, on the card's white, with the rows' hairline under it. */
 @Composable
 private fun CardAd(place: String, i: Int, n: Int) {
     val shape = sheetRow(i, n)
     Box(Modifier.padding(start = 10.dp, end = 10.dp).fillMaxWidth().lift(1.dp, shape).clip(shape).background(MaterialTheme.colorScheme.surface)) {
         NativeAdCard(place, round = false, small = true)
     }
+    // The same hairline under it as under every row, when rows follow (only while the ad shows).
+    if (i < n - 1 && Ads.showing(place)) HorizontalDivider(Modifier.padding(horizontal = 10.dp), color = Faint)
 }
 
 /** One row of an account list: icon square, name and a small line, the amount with its word under it, and ›. */
