@@ -135,9 +135,7 @@ fun App(
     var lang by remember { mutableStateOf(store.language) }
     // The app's own words (side menu › App language); Auto is the phone's language.
     var appLang by remember { mutableStateOf(store.appLanguage) }
-    var moreLang by remember { mutableStateOf(store.moreLanguage) }
     // The mic's first question: which language will be spoken.
-    var askLang by remember { mutableStateOf(false) }
     // "Dutch → I paid 20 for petrol": what a translated message was read as, shown small under the answer to it.
     val sayNote = remember { arrayOf("") }
     val tabNav = remember { TabNav() }
@@ -1726,14 +1724,15 @@ fun App(
         }
     }
 
-    /** Picks the language to listen in. Another language than the app's own stays in the short list, and its pack comes down at once ([fetch]). */
+    /** Picks the language to listen in; another language than the app's own gets its pack at once ([fetch]). */
     fun setLanguage(l: String, fetch: Boolean = true) {
         lang = l; store.language = l
         val code = Lingo.code(l)
         if (code.isBlank()) return
-        moreLang = l; store.moreLanguage = l
         if (fetch) scope.launch { Lingo.fetch(code) }
     }
+    // The mic listens in the app's language (Auto: the app's own guess from the chat).
+    LaunchedEffect(appLang) { I18n.micLanguage(appLang).let { if (it != lang) setLanguage(it) } }
 
     /** Home is a second entry point to the same assistant and persisted conversation as the Chat screen. */
     fun homeInput(raw: String) {
@@ -2491,8 +2490,6 @@ fun App(
     LaunchedEffect(chatLoading) { if (!chatLoading) listener.resume() }
 
     fun startVoice(forChat: Boolean = false) {
-        // The first time, the chat's mic asks which language will be spoken (it can only listen in one).
-        if (forChat && !store.micAsked && lang.isBlank()) { askLang = true; return }
         // Every mic listens live with the phone, also with a Groq key: the words go as soon as they are said.
         if (!android.speech.SpeechRecognizer.isRecognitionAvailable(context)) { toast("Google voice not found. Update the Google app from Play Store."); return }
         val granted = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) ==
@@ -2628,7 +2625,7 @@ fun App(
         drawerContent = {
             fun close() = scope.launch { drawer.close() }
             SideMenu(
-                currency = currency, lang = lang, dark = dark, photo = photo,
+                dark = dark, photo = photo,
                 version = BuildConfig.VERSION_NAME,
                 businesses = remember(businessTick, businessName) { store.businesses() }, current = store.business,
                 onBusiness = { id -> if (id != store.business) openBusiness(id); close() },
@@ -2636,9 +2633,6 @@ fun App(
                 onDeleteBusiness = { id -> val wasOpen = id == store.business; store.deleteBusiness(id); if (wasOpen) openBusiness("") else businessTick++ },
                 onAddBusiness = { bizNew = true; bizPage = true; close() },
                 onBusinessPage = { bizPage = true; close() },
-                onCurrency = { c -> currency = c; store.currency = c; toast("✓ Currency set to $c") },
-                onLang = { setLanguage(it) }, moreLang = moreLang,
-                appLang = appLang, onAppLang = { appLang = it; store.appLanguage = it; I18n.use(context, it) },
                 page = page, onPage = { onPhoto(""); onDark(false); onPage(it) },
                 onDark = { c -> onPhoto(""); onDark(true); onPage(c) },
                 onExport = {
@@ -3165,11 +3159,6 @@ fun App(
                         )
                     }
                 }
-            }
-            if (askLang) LanguageSheet("Which language will you speak?", base = true, current = lang, onClose = { askLang = false; store.micAsked = true }) { l ->
-                askLang = false; store.micAsked = true
-                setLanguage(l)
-                startVoice(forChat = true)
             }
             if (confirmEmptyTrash) {
                 AppAlert(

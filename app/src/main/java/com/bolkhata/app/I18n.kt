@@ -52,6 +52,9 @@ object I18n {
     /** Written right to left (Arabic, Urdu). */
     val rtl get() = code in RTL
 
+    /** The mic's language for an app language: Auto stays Auto (the app guesses from the chat), the rest the same tongue. */
+    fun micLanguage(app: String): String = when (app) { "" -> ""; "en" -> "en-US"; "ur" -> "ur-PK"; "hi" -> "hi"; else -> app }
+
     /** The app language's English name, for the AI to answer in ("Urdu"); English for Auto on an English phone. */
     val englishName get() = NAMES[code] ?: "English"
     private val NAMES = mapOf("en" to "English", "ur" to "Urdu", "hi" to "Hindi", "ar" to "Arabic", "bn" to "Bengali", "es" to "Spanish",
