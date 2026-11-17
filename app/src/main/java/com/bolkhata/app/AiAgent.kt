@@ -116,7 +116,7 @@ object AiAgent {
         Ai.Tool("update_entries", "Changes saved entries (ids from find_entries); only the fields given change.", shape(
             "ids" to words("Entry ids"),
             "set" to shape("amount" to number("New amount"), "qty" to number("New count of a sale or work (the app works out the amount)"),
-                "rate" to number("New rate of a sale or work"), "item" to text("New item"), "category" to text("New expense category"),
+                "rate" to number("New rate of a sale or work"), "item" to text("New item: also moves the entries to that thing inside their account (e.g. Petrol in Transport)"), "category" to text("New expense category"),
                 "person" to text("New person"), "note" to text("New note"), "date" to text("New day, YYYY-MM-DD"),
                 "type" to JSONObject().put("type", "string").put("enum", JSONArray(TYPES.keys.toList()))),
             required = listOf("ids", "set"))),
@@ -187,7 +187,10 @@ object AiAgent {
           (not "molding", "work", "making"). A new name is only for a really different work or thing.
           Two names for one work ("X ko Y mein kar do", "ye dono ek hain"): find_entries with items X, then
           update_entries on those ids with set item Y. Do it without asking; when the person does not say which
-          name stays, keep the shorter, plainer one. In a sale or work, the number said with the thing is its count
+          name stays, keep the shorter, plainer one. The things inside an Expense or Income account (Petrol inside
+          Transport, Tea inside Food) are the entries' items: "move these into the Petrol account" is find_entries
+          (the account's category), then update_entries on the ones that fit (by their names: petrol pumps and fuel
+          stations for Petrol) with set item Petrol. You can always do this; never say it cannot be done. In a sale or work, the number said with the thing is its count
           ("4000 pakki eent di": qty 4000), also when the same message has money too ("aur us ne 10000 diye"). A worker or
           supplier with a count of things they made, did or brought and no money word ("Hamid ne 10000 kachi eent
           dali", "Hamid 300 shirts") is work with that qty: save it, do not ask whether it is money. Money a customer pays later is received_back; money paid

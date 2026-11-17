@@ -727,10 +727,6 @@ fun CashBookScreen(
     val pdf = LocalPdf.current
     val cur = LocalCurrency.current.let { if (it.isBlank()) "" else " $it" }
     var picking by remember { mutableStateOf(false) }
-    var sheet by remember { mutableStateOf<AddReq?>(null) }
-    // The picked one's kinds (Received | Given, Paid | Work, or one) and the sheet's title and line.
-    var kinds by remember { mutableStateOf(listOf<AddReq>()) }
-    var head by remember { mutableStateOf("" to "") }
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
             stickyHeader { TabHead {
@@ -766,16 +762,7 @@ fun CashBookScreen(
         UpButton(state)
         AddRound(state) { picking = true }
     }
-    if (picking) EntryPicker(entries, setup, onSetup, onDismiss = { picking = false }) { t ->
-        picking = false
-        kinds = addButtons(t.book, t.name, t.book.name == Sides.STAFF, "${t.book.name} › ${t.name}").map { it.second }
-        head = (if (t.book.people) "Party › ${t.book.name} ›" else t.path + " ›") to t.name
-        sheet = kinds[0]
-    }
-    // Back on the add sheet returns to who or what.
-    sheet?.let { r ->
-        AddSheet(r, entries, onDismiss = { sheet = null }, onBack = { sheet = null; picking = true }, kinds = kinds, head = head, onKind = { sheet = it }) { e -> onSave(e); sheet = null }
-    }
+    if (picking) EntryPicker(entries, setup, onSetup, onDismiss = { picking = false }) { e -> onSave(e); picking = false }
 }
 
 // ---------------------------------------------------------------- + on the Cashbook
@@ -861,6 +848,9 @@ private fun PickHead(path: String, title: String, onBack: () -> Unit, tag: Pair<
 private fun PickLabel(text: String) = Text(text.uppercase(), fontSize = 10.5.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.4.sp,
     color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 12.dp, top = 10.dp, bottom = 2.dp))
 
+/** The +'s sheet's height, the same for who and how much, so it does not jump. */
+private val PICK_HEIGHT = 520.dp
+
 /** A row of the +'s card, as the tabs draw theirs: icon square, name and line, the amount with its word (or [plain]), ›. */
 @Composable
 private fun PickRow(icon: String, title: String, sub: String, amount: String?, word: String, color: Color, first: Boolean,
@@ -884,11 +874,20 @@ private fun PickRow(icon: String, title: String, sub: String, amount: String?, w
 
 /**
  * The +'s sheet, walked like the tabs: ACCOUNTS (Party, Expense, Income) › an account › its people or things, in one
- * card about five rows high; a search finds anyone. A tap opens the add sheet ([onPick]); "+ Add account" and
+ * card about five rows high; a search finds anyone. A tap opens the add form in this same sheet; "+ Add account" and
  * "+ Add in Food" make a new one by its name only. The sheet keeps one size on every page.
  */
 @Composable
-private fun EntryPicker(all: List<Entry>, setup: SideSetup, onSetup: (SideSetup) -> Unit, onDismiss: () -> Unit, onPick: (EntryTarget) -> Unit) {
+private fun EntryPicker(all: List<Entry>, setup: SideSetup, onSetup: (SideSetup) -> Unit, onDismiss: () -> Unit, onSave: (Entry) -> Unit) {
+    // The one picked: its kinds (Received | Given, Paid | Work, or one) show in this same sheet, ‹ goes back to the list.
+    var chosen by remember { mutableStateOf<EntryTarget?>(null) }
+    var kinds by remember { mutableStateOf(listOf<AddReq>()) }
+    var req by remember { mutableStateOf<AddReq?>(null) }
+    fun onPick(t: EntryTarget) {
+        kinds = addButtons(t.book, t.name, t.book.name == Sides.STAFF, "${t.book.name} › ${t.name}").map { it.second }
+        req = kinds[0]
+        chosen = t
+    }
     var side by remember { mutableStateOf<Side?>(null) }
     var bookName by remember { mutableStateOf<String?>(null) }
     var q by remember { mutableStateOf("") }
@@ -912,7 +911,12 @@ private fun EntryPicker(all: List<Entry>, setup: SideSetup, onSetup: (SideSetup)
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = LocalPage.current, dragHandle = null,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)) {
-        Column(Modifier.heightIn(min = 500.dp).padding(14.dp).navigationBarsPadding().imePadding()) {
+        val t = chosen
+        val r = req
+        if (t != null && r != null) key(t.book.name, t.name) {
+            AddBody(r, all, onDismiss, onBack = { chosen = null }, kinds = kinds,
+                head = (if (t.book.people) "Party › ${t.book.name} ›" else t.path + " ›") to t.name, onKind = { req = it }, onSave = onSave)
+        } else Column(Modifier.heightIn(min = PICK_HEIGHT).padding(14.dp).navigationBarsPadding().imePadding()) {
             val name = naming
             if (name != null && s != null) {
                 // Only a name: a new Expense / Income account opens to add things in; a person or thing opens its add sheet.
@@ -1935,6 +1939,17 @@ private val sheetTime = SimpleDateFormat("h:mm a", Locale.US)
 private fun AddSheet(r: AddReq, all: List<Entry>, onDismiss: () -> Unit, onDelete: () -> Unit = {}, onBack: (() -> Unit)? = null,
     /** From the +: a person's two kinds as a switch on top ([onKind] picks one), and the path and name over it. */
     kinds: List<AddReq> = emptyList(), head: Pair<String, String>? = null, onKind: (AddReq) -> Unit = {}, onSave: (Entry) -> Unit) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = LocalPage.current, dragHandle = null,
+        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)) {
+        AddBody(r, all, onDismiss, onDelete, onBack, kinds, head, onKind, onSave)
+    }
+}
+
+/** What the add sheet holds; the +'s sheet shows it in place of its list, at the same height. */
+@Composable
+private fun AddBody(r: AddReq, all: List<Entry>, onDismiss: () -> Unit, onDelete: () -> Unit = {}, onBack: (() -> Unit)? = null,
+    /** From the +: a person's two kinds as a switch on top ([onKind] picks one), and the path and name over it. */
+    kinds: List<AddReq> = emptyList(), head: Pair<String, String>? = null, onKind: (AddReq) -> Unit = {}, onSave: (Entry) -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val old = r.template.takeIf { r.edit }
     var amount by remember { mutableStateOf(old?.let { plain(it.amount) }.orEmpty()) }
@@ -1955,82 +1970,79 @@ private fun AddSheet(r: AddReq, all: List<Entry>, onDismiss: () -> Unit, onDelet
     val q = qty.toDoubleOrNull() ?: 0.0
     val rt = rate.toDoubleOrNull() ?: 0.0
     val total = if (goods) (if (per1000) q / 1000 * rt else q * rt) else amount.toDoubleOrNull() ?: 0.0
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = LocalPage.current, dragHandle = null,
-        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)) {
-        // From the +: the picker's size, so the sheet does not jump between who and how much.
-        Column((if (head != null) Modifier.heightIn(min = 500.dp).padding(14.dp) else Modifier.padding(16.dp)).navigationBarsPadding().imePadding()) {
-            if (head != null) PickHead(head.first, head.second, onBack ?: onDismiss, ("+ " + r.label to r.color).takeIf { kinds.size < 2 })
-            else SheetHead((if (r.edit) "" else "+ ") + r.label, r.crumb, onBack, onDismiss)
-            if (kinds.size > 1) Row(Modifier.padding(top = 12.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Well).padding(3.dp)) {
-                kinds.forEach { k ->
-                    val on = k.label == r.label
-                    Text("+ " + k.label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
-                        color = if (on) k.color else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(if (on) MaterialTheme.colorScheme.surface else Color.Transparent)
-                            .clickable { onKind(k) }.padding(vertical = 8.dp))
-                }
+    // From the +: the picker's size, so the sheet does not jump between who and how much.
+    Column((if (head != null) Modifier.heightIn(min = PICK_HEIGHT).padding(14.dp) else Modifier.padding(16.dp)).navigationBarsPadding().imePadding()) {
+        if (head != null) PickHead(head.first, head.second, onBack ?: onDismiss, ("+ " + r.label to r.color).takeIf { kinds.size < 2 })
+        else SheetHead((if (r.edit) "" else "+ ") + r.label, r.crumb, onBack, onDismiss)
+        if (kinds.size > 1) Row(Modifier.padding(top = 12.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Well).padding(3.dp)) {
+            kinds.forEach { k ->
+                val on = k.label == r.label
+                Text("+ " + k.label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
+                    color = if (on) k.color else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(if (on) MaterialTheme.colorScheme.surface else Color.Transparent)
+                        .clickable { onKind(k) }.padding(vertical = 8.dp))
             }
-            if (r.money != null) Row(Modifier.padding(top = 12.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Well).padding(3.dp)) {
-                listOf((if (r.label == "Given") "Goods" else "Work") to false, "Money" to true).forEach { (label, v) ->
-                    val on = cash == v
-                    Text(label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
-                        color = if (on) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(if (on) MaterialTheme.colorScheme.surface else Color.Transparent)
-                            .clickable { cash = v }.padding(vertical = 8.dp))
-                }
+        }
+        if (r.money != null) Row(Modifier.padding(top = 12.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Well).padding(3.dp)) {
+            listOf((if (r.label == "Given") "Goods" else "Work") to false, "Money" to true).forEach { (label, v) ->
+                val on = cash == v
+                Text(label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
+                    color = if (on) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(if (on) MaterialTheme.colorScheme.surface else Color.Transparent)
+                        .clickable { cash = v }.padding(vertical = 8.dp))
             }
-            if (goods) {
-                WellField(item, { item = it; known.firstOrNull { k -> k.equals(it.trim(), true) }?.let(::pick) }, if (r.label == "Given") "Item (type new or tap one)" else "Work (type new or tap one)")
-                val hints = remember(item, known) { Goods.suggest(item, known) }
-                if (hints.isNotEmpty()) LazyRow(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(hints) { h -> PickChip(h, item == h) { pick(h) } }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    WellField(qty, { qty = it }, "Qty", Modifier.weight(1f), big = true, number = true)
-                    WellField(rate, { rate = it }, if (per1000) "Rate per 1000" else "Rate", Modifier.weight(1f), number = true)
-                }
-                Text(if (q > 0 && rt > 0) "Amount = " + fmt(q) + (if (per1000) " ÷ 1000" else "") + " × " + fmt(rt) + " = " + fmt(total) else "Amount = qty × rate",
-                    fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 10.dp))
-            } else WellField(amount, { amount = it }, "Amount", big = true, number = true)
-            WellField(note, { note = it }, "Note (optional)")
+        }
+        if (goods) {
+            WellField(item, { item = it; known.firstOrNull { k -> k.equals(it.trim(), true) }?.let(::pick) }, if (r.label == "Given") "Item (type new or tap one)" else "Work (type new or tap one)")
+            val hints = remember(item, known) { Goods.suggest(item, known) }
+            if (hints.isNotEmpty()) LazyRow(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                items(hints) { h -> PickChip(h, item == h) { pick(h) } }
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                val c = cal(date)
-                PickBox(sheetDay.format(Date(date)), Modifier.weight(1f)) {
-                    android.app.DatePickerDialog(context, { _, y, m, d -> date = cal(date).apply { set(y, m, d) }.timeInMillis },
-                        c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH)).show()
-                }
-                PickBox(sheetTime.format(Date(date)).replace("AM", "am").replace("PM", "pm"), Modifier.weight(1f)) {
-                    android.app.TimePickerDialog(context, { _, h, m -> date = cal(date).apply { set(Calendar.HOUR_OF_DAY, h); set(Calendar.MINUTE, m) }.timeInMillis },
-                        c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE), false).show()
-                }
+                WellField(qty, { qty = it }, "Qty", Modifier.weight(1f), big = true, number = true)
+                WellField(rate, { rate = it }, if (per1000) "Rate per 1000" else "Rate", Modifier.weight(1f), number = true)
             }
-            Text(
-                when {
-                    cash -> if (r.label == "Given") "Money paid to the customer. Goes in Cashbook too." else "Money they paid back. Goes in Cashbook too."
-                    r.label == "Given" -> "Money comes later with + Received."
-                    r.label == "Work" -> "Pay later with + Paid."
-                    else -> "Goes in Cashbook too."
+            Text(if (q > 0 && rt > 0) "Amount = " + fmt(q) + (if (per1000) " ÷ 1000" else "") + " × " + fmt(rt) + " = " + fmt(total) else "Amount = qty × rate",
+                fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 10.dp))
+        } else WellField(amount, { amount = it }, "Amount", big = true, number = true)
+        WellField(note, { note = it }, "Note (optional)")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            val c = cal(date)
+            PickBox(sheetDay.format(Date(date)), Modifier.weight(1f)) {
+                android.app.DatePickerDialog(context, { _, y, m, d -> date = cal(date).apply { set(y, m, d) }.timeInMillis },
+                    c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH)).show()
+            }
+            PickBox(sheetTime.format(Date(date)).replace("AM", "am").replace("PM", "pm"), Modifier.weight(1f)) {
+                android.app.TimePickerDialog(context, { _, h, m -> date = cal(date).apply { set(Calendar.HOUR_OF_DAY, h); set(Calendar.MINUTE, m) }.timeInMillis },
+                    c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE), false).show()
+            }
+        }
+        Text(
+            when {
+                cash -> if (r.label == "Given") "Money paid to the customer. Goes in Cashbook too." else "Money they paid back. Goes in Cashbook too."
+                r.label == "Given" -> "Money comes later with + Received."
+                r.label == "Work" -> "Pay later with + Paid."
+                else -> "Goes in Cashbook too."
+            },
+            fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 10.dp)
+        )
+        Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (r.edit) Box(Modifier.width(96.dp).height(42.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surface).clickable { onDelete() },
+                contentAlignment = Alignment.Center) { Text("Delete", color = RedSpend, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
+            Box(
+                Modifier.weight(1f).height(42.dp).clip(RoundedCornerShape(12.dp)).background(r.color).clickable {
+                    if (total <= 0.0 || (goods && item.isBlank())) return@clickable
+                    val now = System.currentTimeMillis()
+                    val t = if (cash) r.money ?: r.template else r.template
+                    onSave(t.copy(
+                        id = old?.id ?: ("e" + System.nanoTime()), amount = total, note = note.trim(), date = date, createdAt = old?.createdAt ?: now,
+                        item = if (goods) Goods.canonical(item, known) else t.item,
+                        qty = if (goods) q else t.qty, rate = if (goods) rt else t.rate,
+                        unit = if (!goods) t.unit else if (per1000) "1000" else t.unit.takeIf { it != "1000" }.orEmpty()
+                    ))
                 },
-                fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 10.dp)
-            )
-            Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (r.edit) Box(Modifier.width(96.dp).height(42.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surface).clickable { onDelete() },
-                    contentAlignment = Alignment.Center) { Text("Delete", color = RedSpend, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
-                Box(
-                    Modifier.weight(1f).height(42.dp).clip(RoundedCornerShape(12.dp)).background(r.color).clickable {
-                        if (total <= 0.0 || (goods && item.isBlank())) return@clickable
-                        val now = System.currentTimeMillis()
-                        val t = if (cash) r.money ?: r.template else r.template
-                        onSave(t.copy(
-                            id = old?.id ?: ("e" + System.nanoTime()), amount = total, note = note.trim(), date = date, createdAt = old?.createdAt ?: now,
-                            item = if (goods) Goods.canonical(item, known) else t.item,
-                            qty = if (goods) q else t.qty, rate = if (goods) rt else t.rate,
-                            unit = if (!goods) t.unit else if (per1000) "1000" else t.unit.takeIf { it != "1000" }.orEmpty()
-                        ))
-                    },
-                    contentAlignment = Alignment.Center
-                ) { Text("Save", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
-            }
+                contentAlignment = Alignment.Center
+            ) { Text("Save", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
         }
     }
 }
