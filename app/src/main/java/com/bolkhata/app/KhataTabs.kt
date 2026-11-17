@@ -512,7 +512,7 @@ internal fun LazyListScope.ledger(
             if (days > 0 && days % 3 == 0) {
                 val n = days
                 val video = videoTurn(n / 3)
-                item(key = keyPrefix + "ad" + n, contentType = "ad") { NativeAdCard("ledger-$keyPrefix$title-$n", Modifier.padding(horizontal = 10.dp, vertical = 6.dp), video = video, round = false, small = !video) }
+                item(key = keyPrefix + "ad" + n, contentType = "ad") { NativeAdCard("ledger-$keyPrefix$title-$n", Modifier.padding(start = 10.dp, end = 10.dp, top = 1.dp), video = video, round = false, small = !video) }
             }
             days++
             val day = byDay[dayNumber(r.date)].orEmpty()
