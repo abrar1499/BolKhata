@@ -166,7 +166,7 @@ fun ChatScreen(
                         else if (message.entryIds.isNotEmpty()) SavedCard(message, byId, currency, onUndo, onEditEntry)
                         // The AI's own sentences ("plain") are never read as a report.
                         else remember(message.text, currency) { if (message.meta.contains("; plain")) null else Report.parse(message.text, currency) }
-                            ?.let { ReportCard(it, message.text) }
+                            ?.let { ReportCard(it, message.text, message.timestamp) }
                             // "What rate for 15000 Kachi eent?" on the last answer: the rate is typed right in the chat.
                             ?: if (message == messages.lastOrNull() && RateAsk.matches(message.text)) RateCard(message.text, onSend) else AssistantBubble(message.text, message.timestamp)
                         // "Which A or B do you mean?": one tap on a name opens that khata.
@@ -194,7 +194,7 @@ fun ChatScreen(
                                 modifier = Modifier.padding(start = 14.dp, top = 3.dp))
                         }
                         // Now and then (every eighth answer) a quiet ad under the answer: always the same card, picture or video.
-                        adAfter[message.id]?.let { video -> NativeAdCard("chat-" + message.id, Modifier.padding(top = 6.dp), video = video, small = !video) }
+                        adAfter[message.id]?.let { video -> NativeAdCard("chat-" + message.id, Modifier.fillMaxWidth(0.92f).padding(start = 8.dp, end = 8.dp, top = 6.dp), video = video, small = !video) }
                     }
                     }
                 }
@@ -416,13 +416,16 @@ private class TailShape(private val right: Boolean) : androidx.compose.ui.graphi
 private val MeTail = TailShape(right = true)
 private val BotTail = TailShape(right = false)
 
+/** A message's time as the bubbles show it: "4:44 pm". */
+private fun stampOf(time: Long) = java.text.SimpleDateFormat("h:mm a", java.util.Locale.US).format(java.util.Date(time)).lowercase()
+
 /**
  * The words with the time small in the bubble's bottom right, as WhatsApp: the time is also written (unseen) at the end
  * of the words, so the last line keeps room for it.
  */
 @Composable
 private fun TimedText(text: String, time: Long, color: Color) {
-    val stamp = remember(time) { java.text.SimpleDateFormat("h:mm a", java.util.Locale.US).format(java.util.Date(time)).lowercase() }
+    val stamp = remember(time) { stampOf(time) }
     Box {
         Text(buildAnnotatedString {
             append(text)
@@ -543,8 +546,9 @@ private fun AssistantBubble(text: String, time: Long) {
 
 /** A khata, report or list answer as a card: the main amount big, every other amount on its own line. */
 @Composable
-private fun ReportCard(r: Report, text: String) {
-    // Like the Yaad mock-up: a small headline amount, then the detail rows in one bordered box.
+private fun ReportCard(r: Report, text: String, time: Long) {
+    // A message bubble (WhatsApp's tail, the time small at the bottom right) holding a small headline amount, then the
+    // detail rows in one bordered box.
     val grey = MaterialTheme.colorScheme.onSurfaceVariant
     val line = grey.copy(alpha = 0.14f)
     fun color(tone: Int) = when (tone) { 1 -> GreenIn; -1 -> RedSpend; else -> Color.Unspecified }
@@ -552,12 +556,12 @@ private fun ReportCard(r: Report, text: String) {
     Column(
         Modifier
             .fillMaxWidth(0.92f)
-            .padding(horizontal = 8.dp, vertical = 4.dp)
-            .clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp, bottomEnd = 14.dp, bottomStart = 4.dp))
+            .padding(start = 1.dp, end = 8.dp, top = 4.dp, bottom = 4.dp)
+            .lift(1.dp, BotTail)
+            .clip(BotTail)
             .copyable(text)
             .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, line, RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp, bottomEnd = 14.dp, bottomStart = 4.dp))
-            .padding(horizontal = 10.dp, vertical = 9.dp),
+            .padding(start = 10.dp + TAIL, end = 10.dp, top = 9.dp, bottom = 5.dp),
         verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
         if (r.title.isNotBlank() && r.title != hero?.label) Text(r.title, fontWeight = FontWeight.SemiBold, fontSize = 11.sp)
@@ -605,6 +609,7 @@ private fun ReportCard(r: Report, text: String) {
                 Text(l.amount, fontSize = 9.5.sp, fontWeight = FontWeight.SemiBold)
             }
         }
+        Text(stampOf(time), fontSize = 8.sp, lineHeight = 8.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), modifier = Modifier.align(Alignment.End))
     }
 }
 
