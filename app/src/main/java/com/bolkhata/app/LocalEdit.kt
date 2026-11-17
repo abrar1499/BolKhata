@@ -47,7 +47,7 @@ object LocalEdit : LocalAgent.Reader {
     // ---------- answers to the app's own question ----------
 
     /**
-     * The answer to what this reader asked last: "haan kar do" after "Move them all to Trash?" does the delete ("nahi"
+     * The answer to what this reader asked last: "haan kar do" after "Delete all 40 entries? Tap Delete, or say yes." does the delete ("nahi"
      * leaves it); "salim raza" after "Which Salim do you mean…?" or "hamid wala" after "Which one: …?" reads the earlier
      * message again with it.
      */
@@ -423,6 +423,7 @@ object LocalEdit : LocalAgent.Reader {
         // Still several (and not "all" said): asked again, never more deleted than was meant.
         if (chosen.size > 1 && !every) return askWhich(m, chosen)
         val r = m.s.use("delete_entries", JSONObject().put("ids", JSONArray(chosen.map { it.id })))
+        if (r.has("delete_button_shown_for")) return tapDelete(chosen.size, m.all.size)
         if (r.has("error")) return LocalAgent.Reply("That did not work: " + r.optString("error") + ".")
         return LocalAgent.Reply(if (chosen.size == 1) "Deleted. It is in Trash if you need it back." else "Deleted ${chosen.size} entries. They are in Trash if you need them back.")
     }
@@ -447,13 +448,15 @@ object LocalEdit : LocalAgent.Reader {
         val input = JSONObject().put("ids", JSONArray(picked.map { it.id }))
         if (sure) input.put("confirmed", true)
         val r = m.s.use("delete_entries", input)
-        if (r.has("error")) {
-            return if (r.optString("error").contains("confirm")) LocalAgent.Reply("That is ${picked.size} of your ${m.all.size} entries. Move them all to Trash?")
-            else LocalAgent.Reply("That could not be deleted: " + r.optString("error") + ".")
-        }
+        if (r.has("delete_button_shown_for")) return tapDelete(picked.size, m.all.size)
+        if (r.has("error")) return LocalAgent.Reply("That could not be deleted: " + r.optString("error") + ".")
         val n = r.optInt("moved_to_trash", picked.size)
         return LocalAgent.Reply(if (n == 1) "Moved to Trash: " + said(picked[0]) + "." else "Moved $n entries to Trash.")
     }
+
+    /** A big delete waits on the app's Delete / Cancel popup; a spoken "haan" answers it too. */
+    private fun tapDelete(n: Int, all: Int) =
+        LocalAgent.Reply((if (n == all) "Delete all $n entries?" else "Delete $n of your $all entries?") + " Tap Delete, or say yes.")
 
     /** The entries a delete means; null when nothing in it says which. */
     private fun pickFor(m: Msg, wantAll: Boolean): List<Entry>? {
@@ -893,7 +896,7 @@ object LocalEdit : LocalAgent.Reader {
     private fun plain(n: Double) = if (n == Math.floor(n)) n.toLong().toString() else n.toString()
 
     private val WORD = Regex("""\d+(?:\.\d+)?|[\p{L}\p{M}]+|\?""")
-    private val PENDING = Regex("""to Trash\?\s*$""")
+    private val PENDING = Regex("""(to Trash\?|or say yes\.)\s*$""")
 
     // ---------- words ----------
 

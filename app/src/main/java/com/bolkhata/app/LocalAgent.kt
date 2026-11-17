@@ -136,7 +136,7 @@ object LocalAgent {
 
 /** Greetings, "kaise ho", thanks, "acha": a short friendly answer, nothing saved. */
 object LocalTalk : LocalAgent.Reader {
-    /** Words of a nod: after the app's own question ("Move them all to Trash?") they answer it, so that reader reads them. */
+    /** Words of a nod: after the app's own question ("Delete all 40 entries? Tap Delete, or say yes.") they answer it, so that reader reads them. */
     private val nods = setOf("ok", "okay", "okk", "ji", "jee", "g", "haan", "han", "ha", "theek", "thik", "thek", "hai", "acha", "accha", "achha", "done", "sahi", "yes")
     /** Words of a how-to question or a task: "delete kaise karte hain" is not "kaise ho". */
     private val doing = setOf("kar", "karte", "karti", "karna", "karun", "karoon", "karen", "karein", "kare", "karu", "karoo", "delete", "add", "save",

@@ -1342,7 +1342,8 @@ fun App(
     fun chatHost(names: List<String>) = AiAgent.Host(
         entries = { entries }, add = { save(it + entries) },
         update = { changed -> save(entries.map { e -> changed.firstOrNull { it.id == e.id } ?: e }) },
-        trash = { ids -> moveToTrash(ids) }, names = { names }, currency = currency,
+        // A spoken "haan" did the delete the popup asks about: the popup goes too.
+        trash = { ids -> moveToTrash(ids); if (confirm?.second?.all { it in ids } == true) confirm = null }, names = { names }, currency = currency,
         setup = { sides }, saveSetup = { s -> sides = s; store.saveSides(s) }, pdf = { doc -> aiPdf[0]?.invoke(doc) },
         trashed = { trash }, restore = { ids -> val back = trash.filter { it.id in ids }; save(back + entries); saveTrash(trash.filter { it.id !in ids }) },
         settings = { k, v -> appSet[0]?.invoke(k, v) ?: org.json.JSONObject().put("error", "not ready").toString() },
