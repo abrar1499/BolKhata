@@ -531,7 +531,8 @@ internal fun LazyListScope.ledger(
         item(key = keyPrefix + r.key) { LedgerRow(r, cols, last, cards) }
     }
     // At the end of the Cashbook: the banner strip, square and joined to the rows above it as a day strip is.
-    if (cash && rows.isNotEmpty()) item(key = keyPrefix + "end-ad", contentType = "ad") {
+    // Only under three or more entries: a near-empty book gets no ad.
+    if (cash && rows.size >= 3) item(key = keyPrefix + "end-ad", contentType = "ad") {
         NativeAdCard("ledger-end-$keyPrefix$title", Modifier.padding(start = 10.dp, end = 10.dp, top = 1.dp), round = false, small = true, banner = true)
     }
 }
@@ -2374,8 +2375,7 @@ fun ProfitScreen(entries: List<Entry>, currency: String, setup: SideSetup, onBac
                 item(key = "n4") { ReportRow("Assets", "laptop, car, machines… at cost", withSign(worth.assets, "+"), GreenIn) { open = "Assets" } }
                 item(key = "n5") { ReportRow("To pay", "money you owe", withSign(worth.toPay, "−"), RedSpend) { open = "To pay" } }
                 item(key = "n6") { ReportRow("Net worth", "what you are worth today", plusMinus(worth.net).trimStart('+'), if (worth.net < 0) RedSpend else GreenIn, null) }
-                // At the end: a slim picture ad, then the banner strip.
-                item(key = "ad", contentType = "ad") { NativeAdCard("report", Modifier.padding(start = 12.dp, end = 12.dp, top = 10.dp), small = true) }
+                // At the end: the banner strip (one ad, never two stacked).
                 item(key = "banner", contentType = "ad") { NativeAdCard("report-banner", Modifier.padding(start = 10.dp, end = 10.dp, top = 10.dp), small = true, banner = true) }
             }
         }

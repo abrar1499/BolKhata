@@ -28,7 +28,6 @@ import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.FullScreenContentCallback
 import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.MobileAds
-import com.google.android.gms.ads.VideoController
 import com.google.android.gms.ads.VideoOptions
 import com.google.android.gms.ads.nativead.MediaView
 import com.google.android.gms.ads.nativead.NativeAd
@@ -200,6 +199,7 @@ private fun adRow(ctx: Context): NativeAdView {
     val titleRow = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
     val headline = TextView(ctx).apply { textSize = 11.5f; setTextColor(AColor.rgb(29, 29, 31)); maxLines = 1; paint.isFakeBoldText = true }
     val tag = TextView(ctx).apply { text = "Ad"; textSize = 8f; setTextColor(AColor.rgb(155, 149, 142)); setPadding(ctx.dp(3), 0, ctx.dp(3), 0)
+        minHeight = ctx.dp(15); minWidth = ctx.dp(15); gravity = Gravity.CENTER  // Google: the ad badge at least 15 high and wide
         background = GradientDrawable().apply { cornerRadius = ctx.dp(4).toFloat(); setStroke(ctx.dp(1), AColor.rgb(214, 209, 202)) }
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginStart = ctx.dp(5) } }
     val body = TextView(ctx).apply { textSize = 10f; setTextColor(AColor.rgb(138, 133, 128)); maxLines = 1 }
@@ -233,6 +233,7 @@ private fun videoRow(ctx: Context, wide: Boolean = false): NativeAdView {
     val headline = TextView(ctx).apply { textSize = 12f; setTextColor(AColor.rgb(29, 29, 31)); maxLines = 2; paint.isFakeBoldText = true
         layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f) }
     val tag = TextView(ctx).apply { text = "Ad"; textSize = 8f; setTextColor(AColor.rgb(155, 149, 142)); setPadding(ctx.dp(3), 0, ctx.dp(3), 0)
+        minHeight = ctx.dp(15); minWidth = ctx.dp(15); gravity = Gravity.CENTER  // Google: the ad badge at least 15 high and wide
         background = GradientDrawable().apply { cornerRadius = ctx.dp(4).toFloat(); setStroke(ctx.dp(1), AColor.rgb(214, 209, 202)) } }
     val body = TextView(ctx).apply { textSize = 10.5f; setTextColor(AColor.rgb(138, 133, 128)); maxLines = 2; ellipsize = TextUtils.TruncateAt.END; setPadding(0, ctx.dp(3), 0, 0) }
     val action = TextView(ctx).apply { textSize = 11f; setTextColor(AColor.WHITE); paint.isFakeBoldText = true
@@ -268,6 +269,7 @@ private fun bannerRow(ctx: Context): NativeAdView {
     val titleRow = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
     val headline = TextView(ctx).apply { textSize = 12f; setTextColor(AColor.rgb(29, 29, 31)); maxLines = 1; ellipsize = TextUtils.TruncateAt.END; paint.isFakeBoldText = true }
     val tag = TextView(ctx).apply { text = "Ad"; textSize = 8f; setTextColor(AColor.rgb(155, 149, 142)); setPadding(ctx.dp(3), 0, ctx.dp(3), 0)
+        minHeight = ctx.dp(15); minWidth = ctx.dp(15); gravity = Gravity.CENTER  // Google: the ad badge at least 15 high and wide
         background = GradientDrawable().apply { cornerRadius = ctx.dp(4).toFloat(); setStroke(ctx.dp(1), AColor.rgb(214, 209, 202)) }
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginStart = ctx.dp(5) } }
     val body = TextView(ctx).apply { textSize = 10f; setTextColor(AColor.rgb(138, 133, 128)); maxLines = 1; ellipsize = TextUtils.TruncateAt.END }
@@ -289,9 +291,5 @@ private fun NativeAdView.show(ad: NativeAd) {
     (callToActionView as TextView).text = (ad.callToAction ?: "Open").let { if (tag == "banner") it.uppercase() else "$it ›" }
     (iconView as? ImageView)?.let { it.setImageDrawable(ad.icon?.drawable); it.visibility = if (ad.icon == null) android.view.View.GONE else android.view.View.VISIBLE }
     ad.mediaContent?.let { mediaView?.mediaContent = it }
-    // A video starts again (still muted) when it ends, so Google's big play button never sits on the card.
-    ad.mediaContent?.takeIf { it.hasVideoContent() }?.videoController?.let { c ->
-        c.videoLifecycleCallbacks = object : VideoController.VideoLifecycleCallbacks() { override fun onVideoEnd() { c.play() } }
-    }
     setNativeAd(ad)
 }
