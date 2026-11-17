@@ -1201,7 +1201,7 @@ internal fun TopActions(tint: Color, pill: Boolean = true, top: Dp = 12.dp, menu
             DropdownMenu(
                 expanded = more, onDismissRequest = { more = false }, shape = RoundedCornerShape(8.dp),
                 containerColor = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 0.dp, shadowElevation = 8.dp,
-                modifier = Modifier.widthIn(min = 200.dp)
+                modifier = Modifier.widthIn(min = 160.dp)
             ) { menu { more = false } }
         }
     }
@@ -1211,9 +1211,9 @@ internal fun TopActions(tint: Color, pill: Boolean = true, top: Dp = 12.dp, menu
 @Composable
 internal fun TopMenuItem(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, enabled: Boolean = true, onClick: () -> Unit) =
     DropdownMenuItem(
-        text = { Text(label, fontSize = 15.sp) }, onClick = onClick, enabled = enabled,
-        leadingIcon = { Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp)) },
-        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 6.dp)
+        text = { Text(label, fontSize = 13.5.sp) }, onClick = onClick, enabled = enabled,
+        leadingIcon = { Icon(icon, contentDescription = null, modifier = Modifier.size(19.dp)) },
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp)
     )
 
 /** An inner page's top: a round white back button, the path above the title, "⤓ PDF" on the right, then the summary card. */
