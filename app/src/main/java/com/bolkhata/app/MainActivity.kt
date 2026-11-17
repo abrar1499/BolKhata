@@ -1346,7 +1346,8 @@ fun App(
         setup = { sides }, saveSetup = { s -> sides = s; store.saveSides(s) }, pdf = { doc -> aiPdf[0]?.invoke(doc) },
         trashed = { trash }, restore = { ids -> val back = trash.filter { it.id in ids }; save(back + entries); saveTrash(trash.filter { it.id !in ids }) },
         settings = { k, v -> appSet[0]?.invoke(k, v) ?: org.json.JSONObject().put("error", "not ready").toString() },
-        language = I18n.englishName
+        language = I18n.englishName,
+        askTrash = { what, ids -> confirm = what to ids }
     )
 
     /**
