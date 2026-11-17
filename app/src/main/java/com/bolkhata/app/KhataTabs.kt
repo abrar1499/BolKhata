@@ -1574,8 +1574,8 @@ fun SideScreen(
                             fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
                         )
                     } else item(key = "addkid") { DashedAdd("+ Add in ${book.name}") { adding = "kid" } }
-                    // Under five or more things: the wide white card, as under the accounts.
-                    if (kids.size >= 5) item(key = "kend", contentType = "ad") {
+                    // Under a Party account's people (part of the Party tab) or five or more things: the wide card, as under the accounts.
+                    if (kids.isNotEmpty() && (book.people || kids.size >= 5)) item(key = "kend", contentType = "ad") {
                         NativeAdCard("kids-big-${book.name}", Modifier.padding(start = 10.dp, end = 10.dp, top = 10.dp), big = true)
                     }
                 }
