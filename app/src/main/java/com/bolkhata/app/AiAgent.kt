@@ -135,8 +135,10 @@ object AiAgent {
             shape(*picking, "title" to text("Heading of the PDF, e.g. Expenses"),
                 "group_by" to JSONObject().put("type", "string").put("enum", JSONArray(listOf("category", "person", "month"))).put("description", "A table per group, with a summary first"),
                 required = listOf("title"))),
-        Ai.Tool("delete_entries", "Moves saved entries to Trash (ids from find_entries); the person can restore them. Up to 25 entries the person named are deleted at once, with no question first; only more than 25, or nearly the whole book, need their yes.", shape("ids" to words("Entry ids"),
-            "confirmed" to JSONObject().put("type", "boolean").put("description", "Only for more than 25 entries or nearly all of them: true after the person said yes"), required = listOf("ids"))),
+        Ai.Tool("delete_entries", "Moves saved entries to Trash (ids from find_entries, or all_matching); the person can restore them. Up to 25 entries the person named are deleted at once, with no question first; only more than 25, or nearly the whole book, need their yes.", shape("ids" to words("Entry ids"),
+            "all_matching" to JSONObject().put("type", "boolean").put("description", "Instead of ids: every entry the filters pick, in one go (with no filter, the whole book). Use it for 'delete all' or anything over 40 entries"),
+            *picking,
+            "confirmed" to JSONObject().put("type", "boolean").put("description", "Only for more than 25 entries or nearly all of them: true after the person said yes"))),
         Ai.Tool("rename_person", "Gives a person a new name everywhere: all their entries and their place in an account. Also puts two spellings of one person together (to: the name that stays).",
             shape("from" to text("The saved name now"), "to" to text("The new name"), required = listOf("from", "to"))),
         Ai.Tool("restore_entries", "Brings entries back from Trash: the last so many deleted, or by id. With nothing given it lists what is in Trash.", shape(
@@ -216,6 +218,8 @@ object AiAgent {
         - "wapas lao", "restore", "undo the delete": restore_entries (last: how many were just deleted).
         - A person's name changed, or two spellings of one person: rename_person.
         - A khata or account for a person, with no kind said, is put_in_account People; do not ask which kind.
+        - To delete everything, or more entries than a look-up shows (40), call delete_entries with all_matching and the
+          filters (none for the whole book), never in parts.
         - To change or delete, first find_entries for the ids. When it is clear which entries are meant, do it without
           asking again; when it is not, ask one short question instead of guessing. Deleted entries go to Trash.
         - "is mahine" is the 1st of this month to today, "kal" yesterday, "aaj tak" / "ab tak" all time (no dates).
@@ -750,7 +754,13 @@ object AiAgent {
             else { host.saveSetup(setup.copy(books = setup.books + Book(side, name, false))); JSONObject().put("made", name).toString() }
         }
         "delete_entries" -> {
-            val ids = strings(input, "ids").toSet().intersect(host.entries().map { it.id }.toSet())
+            // "Delete all": every match at once, not only the 40 a look-up shows.
+            // Filters with no ids mean the same, even when all_matching was left out.
+            val byFilter = input.optBoolean("all_matching", false) ||
+                (strings(input, "ids").isEmpty() && picking.any { (key, _) -> input.has(key) })
+            val ids = if (byFilter) pick(input, host, now).map { it.id }.toSet()
+                else strings(input, "ids").toSet().intersect(host.entries().map { it.id }.toSet())
+            if (ids.isEmpty()) error("no entries match: give ids, or all_matching with filters")
             // A slip of the tongue must not empty the books: a big delete, or nearly everything, is asked about first.
             val all = host.entries().size
             // A small book too: deleting all (or nearly all) of even two entries waits for a yes.
