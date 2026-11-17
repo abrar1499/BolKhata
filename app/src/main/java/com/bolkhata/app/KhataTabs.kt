@@ -978,7 +978,8 @@ private fun EntryPicker(all: List<Entry>, setup: SideSetup, onSetup: (SideSetup)
                             }
                         }
                         book == null -> {
-                            val bs = booksOf(s)
+                            val bs = booksOf(s).sortedByDescending { b ->
+                                if (b.people) Sides.kids(b, all, setup).sumOf { kotlin.math.abs(it.balance) } else Sides.done(b, all, setup, thisMonth) }
                             items(bs.size) { i ->
                                 val b = bs[i]
                                 val kids = Sides.kids(b, all, setup)
@@ -987,7 +988,8 @@ private fun EntryPicker(all: List<Entry>, setup: SideSetup, onSetup: (SideSetup)
                             }
                         }
                         else -> {
-                            val kids = Sides.kids(book, all, setup)
+                            val kids = Sides.kids(book, all, setup).let { l ->
+                                if (book.people) l.sortedByDescending { kotlin.math.abs(it.balance) } else l.sortedByDescending { it.total } }
                             if (kids.isEmpty()) item { Text("Nothing in ${book.name} yet.", fontSize = 13.sp, color = sub, modifier = Modifier.padding(12.dp)) }
                             items(kids.size) { i ->
                                 val k = kids[i]
@@ -1524,7 +1526,11 @@ fun SideScreen(
                 book != null -> {
                     val auto = Sides.isAuto(book)
                     // People accounts show what is owed all time; things show the period picked.
-                    val allKids = Sides.kids(book, entries, setup)
+                    // The biggest money first: people by what is owed, things by the period's total.
+                    val allKids = Sides.kids(book, entries, setup).let { l ->
+                        if (book.people) l.sortedByDescending { kotlin.math.abs(it.balance) }
+                        else l.sortedByDescending { k -> k.entries.filter { e -> inPer(e.date) }.sumOf { it.amount } }
+                    }
                     val kids = if (book.people) allKids else allKids.map { Kid(it.name, it.entries.filter { e -> inPer(e.date) }) }
                     val inc = book.side == Side.INC
                     stickyHeader { TabHead {
@@ -1607,8 +1613,10 @@ fun SideScreen(
                         SearchBox(q, "Search") { q = it }
                         PeriodChips(newest, per) { period = it.encode() }
                     } }
+                    // The biggest money first: a people account by what its people owe, a thing account by the period's total.
                     val shown = books.filter { q.isBlank() || it.name.contains(q.trim(), true) ||
                         Sides.kids(it, entries, setup).any { k -> k.name.contains(q.trim(), true) } }
+                        .sortedByDescending { b -> if (b.people) Sides.kids(b, entries, setup).sumOf { kotlin.math.abs(it.balance) } else Sides.done(b, entries, setup, inPer) }
                     // The accounts in one card, a slim picture ad inside it (cardAdAfter).
                     val adAfter = cardAdAfter(shown.size)
                     val adPlace = "accounts-$side"
