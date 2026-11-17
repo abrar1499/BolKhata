@@ -326,17 +326,17 @@ internal fun SideMenu(
                 Box {
                     var open by remember { mutableStateOf(false) }
                     MenuRow(onClick = { open = true }) { MenuLabel("💾", "Backup"); MenuValue("Export · Import") }
-                    // Right under "Export · Import", inside the side menu (the shared PickMenu would spill past its edge).
-                    // A small card (as the ⋮ menus) whose right edge lines up with the words, opening just under them.
-                    Box(Modifier.align(Alignment.BottomEnd).padding(end = 12.dp).width(112.dp)) {
+                    // A small card just as wide as "Export · Import", right under those words (plain rows: the menu's own
+                    // rows have a wider least width).
+                    Box(Modifier.align(Alignment.BottomEnd).padding(end = 12.dp).width(96.dp)) {
                         DropdownMenu(
                             expanded = open, onDismissRequest = { open = false }, shape = RoundedCornerShape(8.dp),
                             containerColor = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 0.dp, shadowElevation = 6.dp,
-                            offset = androidx.compose.ui.unit.DpOffset(0.dp, (-6).dp), modifier = Modifier.width(112.dp)
+                            offset = androidx.compose.ui.unit.DpOffset(0.dp, (-6).dp), modifier = Modifier.width(96.dp)
                         ) {
                             listOf("Export data" to onExport, "Import data" to onImport).forEach { (label, act) ->
-                                DropdownMenuItem(text = { Text(label, fontSize = 13.5.sp) }, onClick = { open = false; act() },
-                                    modifier = Modifier.height(38.dp), contentPadding = PaddingValues(horizontal = 12.dp))
+                                Text(label, fontSize = 13.sp, maxLines = 1, modifier = Modifier.fillMaxWidth().clickable { open = false; act() }
+                                    .padding(horizontal = 12.dp, vertical = 9.dp))
                             }
                         }
                     }
