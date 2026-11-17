@@ -156,6 +156,14 @@ object Sides {
             .sortedWith(compareByDescending<Kid> { it.entries.firstOrNull()?.date ?: 0L })
     }
 
+    /** [s] with the income [names] put in the owner's own Income [account] (out of any other); [INCOME] takes them out of all. */
+    fun intoIncomeAccount(s: SideSetup, names: List<String>, account: String): SideSetup {
+        val low = names.map { it.trim().lowercase() }.toSet()
+        val own = s.books.filter { it.side == Side.INC && !it.people }.map { it.name }.toSet()
+        val kids = s.kids.mapValues { (b, l) -> if (b in own) l.filterNot { it.trim().lowercase() in low } else l }
+        return s.copy(kids = if (account == INCOME) kids else kids + (account to (kids[account].orEmpty() + names)))
+    }
+
     /** What a thing entry is called inside its account: the payer for income, else its item ("Sent home" stays itself). */
     fun thingName(e: Entry): String =
         if (e.type == Type.AAMDANI) source(e) else e.item.trim().ifBlank { "Other" }

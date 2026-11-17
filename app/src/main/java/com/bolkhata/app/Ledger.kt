@@ -232,7 +232,9 @@ fun splitSub(to: String): Pair<String, String> = to.substringBefore(" › ").tri
 
 /** Every khata to move into, by kind: "party", "business" (stock item), "income" (who paid), "expense" (category label). */
 @Composable
-fun MoveToKhata(subtitle: String, all: List<Entry>, except: String, onMove: (kind: String, name: String) -> Unit, onDismiss: () -> Unit) {
+fun MoveToKhata(subtitle: String, all: List<Entry>, except: String, onMove: (kind: String, name: String) -> Unit, onDismiss: () -> Unit,
+    /** The Income accounts (Income received, Salary…) to move into, with their names inside; none: Income is a plain list of names. */
+    sides: SideSetup? = null) {
     val people = remember(all) { partyNames(all) }
     val stockNames = remember(all) { stock(all).map { it.name.trim() }.filter { it.isNotBlank() }.distinctBy { it.lowercase() } }
     val incomeNames = remember(all) { all.filter { it.type == Type.AAMDANI }.map { source(it).trim() }.filter { it.isNotBlank() }.distinctBy { it.lowercase() } }
@@ -244,6 +246,11 @@ fun MoveToKhata(subtitle: String, all: List<Entry>, except: String, onMove: (kin
         subs = { subsFor(it, all) }, onSub = { c, s -> onMove("expense", c.label + " › " + s) },
         stockNames = stockNames.filterNot { it.equals(except, true) }, onStock = { onMove("business", it) },
         incomeNames = incomeNames.filterNot { it.equals(except, true) }, onIncome = { onMove("income", it) },
+        incomeAccounts = sides?.let { s -> Sides.books(Side.INC, all, s).filterNot(Sides::isAuto).map { (if (it.name == Sides.INCOME) "💰" else NameIcon.of(it.name, true)) to it.name } }.orEmpty(),
+        incomeSubs = { a -> sides?.let { s -> Sides.books(Side.INC, all, s).firstOrNull { it.name == a }?.let { b -> Sides.kids(b, all, s).map { it.name } } }.orEmpty()
+            .filterNot { it.equals(except, true) } },
+        // "Salary" moves the names into that account; "Salary › Ali" makes the entries Ali's, inside it.
+        onIncomeAccount = { a, n -> onMove("income-account", if (n == null) a else "$a › $n") },
         subtitle = subtitle
     )
 }
@@ -288,14 +295,20 @@ fun PartyPicker(
     /** When given, Business (stock items) and Income (who paid) tabs too, so one picker reaches every khata. */
     stockNames: List<String> = emptyList(), onStock: (String) -> Unit = {},
     incomeNames: List<String> = emptyList(), onIncome: (String) -> Unit = {},
+    /** When given, Income lists these accounts (icon, name) like Expense, each opening its names ([incomeSubs]). */
+    incomeAccounts: List<Pair<String, String>> = emptyList(), incomeSubs: (String) -> List<String> = { emptyList() },
+    onIncomeAccount: (account: String, name: String?) -> Unit = { _, _ -> },
     subtitle: String = ""
 ) {
-    val tabs = listOfNotNull("Party", "Business".takeIf { stockNames.isNotEmpty() }, "Income".takeIf { incomeNames.isNotEmpty() },
+    val tabs = listOfNotNull("Party", "Business".takeIf { stockNames.isNotEmpty() }, "Income".takeIf { incomeNames.isNotEmpty() || incomeAccounts.isNotEmpty() },
         "Expense".takeIf { categories.isNotEmpty() })
     var tab by remember { mutableStateOf("Party") }
     var pickedCat by remember { mutableStateOf<Cat?>(null) }
     var pickedSub by remember(pickedCat) { mutableStateOf<String?>(null) }
     var picked by remember(tab) { mutableStateOf<String?>(null) }
+    var pickedAcc by remember { mutableStateOf<String?>(null) }
+    var pickedAccSub by remember(pickedAcc) { mutableStateOf<String?>(null) }
+    val accounts = tab == "Income" && incomeAccounts.isNotEmpty()
     var query by remember(tab) { mutableStateOf("") }
     val q = query.trim()
     val names = when (tab) { "Business" -> stockNames; "Income" -> incomeNames; else -> people }
@@ -337,6 +350,14 @@ fun PartyPicker(
                             Box(Modifier.padding(start = 26.dp)) { KhataChoice("·", s, pickedSub == s, false) { pickedSub = s } }
                         }
                     }
+                } else if (accounts) LazyColumn(Modifier.padding(top = 6.dp).fillMaxWidth().heightIn(max = 260.dp)) {
+                    // Income as its tab shows it: the accounts, the picked one opening its names right under it.
+                    incomeAccounts.forEach { (icon, a) ->
+                        item(key = "acc/$a") { KhataChoice(icon, a, a == pickedAcc && pickedAccSub == null, false) { pickedAcc = a } }
+                        if (a == pickedAcc) items(incomeSubs(a), key = { "acc/$a/$it" }) { n ->
+                            Box(Modifier.padding(start = 26.dp)) { KhataChoice("·", n, pickedAccSub == n, false) { pickedAccSub = n } }
+                        }
+                    }
                 } else {
                     // One box: search the list, or type a new name (Party only; Business and Income too).
                     BasicTextField(
@@ -371,17 +392,17 @@ fun PartyPicker(
                 Row(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = onDismiss, shape = shape, modifier = Modifier.weight(1f).height(40.dp)) { Text("Cancel") }
                     Button(
-                        enabled = if (tab == "Expense") pickedCat != null else picked != null, shape = shape,
+                        enabled = if (tab == "Expense") pickedCat != null else if (accounts) pickedAcc != null else picked != null, shape = shape,
                         colors = ButtonDefaults.buttonColors(containerColor = RedSpend), modifier = Modifier.weight(1f).height(40.dp),
                         onClick = {
                             when (tab) {
                                 "Expense" -> { val c = pickedCat ?: return@Button; pickedSub?.let { onSub(c, it) } ?: onCategory(c) }
                                 "Business" -> onStock(picked ?: return@Button)
-                                "Income" -> onIncome(picked ?: return@Button)
+                                "Income" -> if (accounts) onIncomeAccount(pickedAcc ?: return@Button, pickedAccSub) else onIncome(picked ?: return@Button)
                                 else -> onPick(picked ?: return@Button)
                             }
                         }
-                    ) { Text(confirm(creating && tab != "Expense"), fontWeight = FontWeight.Bold, maxLines = 1) }
+                    ) { Text(confirm(creating && tab != "Expense" && !accounts), fontWeight = FontWeight.Bold, maxLines = 1) }
                 }
             }
         }

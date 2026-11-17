@@ -115,4 +115,16 @@ class SidesTest {
         val old = SideSetup(books = s.books + listOf("Education", "Sent home", "Fees & Govt", "Tools").map { Book(Side.EXP, it, false) })
         assertEquals(s.books.map { it.name } + "Tools", Sides.trimCommon(old).books.map { it.name })
     }
+
+    @Test fun movingIncomeIntoAnAccountTakesItsNamesThereAndBack() {
+        val now = System.currentTimeMillis()
+        val all = listOf(Entry("i1", Type.AAMDANI, 4_000.0, Cat.TANKHWAH, "Hamid Akram", "", "", now, now))
+        val salary = Book(Side.INC, "Salary", false)
+        val s = SideSetup(books = listOf(salary))
+        val moved = Sides.intoIncomeAccount(s, listOf("Hamid Akram"), "Salary")
+        assertEquals(listOf("Hamid Akram"), Sides.kids(salary, all, moved).map { it.name })
+        assertEquals(1, Sides.kids(salary, all, moved).single().entries.size)
+        // Back to Income received: out of Salary.
+        assertEquals(0, Sides.kids(salary, all, Sides.intoIncomeAccount(moved, listOf("Hamid Akram"), Sides.INCOME)).sumOf { it.entries.size })
+    }
 }

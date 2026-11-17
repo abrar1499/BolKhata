@@ -468,6 +468,19 @@ fun App(
     fun moveEntries(ids: Set<String>, kind: String, to: String): Int {
         val t = to.trim()
         if (ids.isEmpty() || t.isEmpty()) return 0
+        // An Income account: a name in it ("Salary › Ali") is a plain income move; the account alone takes the entries'
+        // names into it as they are (Income received: out of the owner's own accounts).
+        if (kind == "income-account") {
+            val (account, name) = splitSub(t)
+            if (name.isNotBlank()) return moveEntries(ids, "income", name)
+            val moved = entries.filter { it.id in ids && it.type == Type.AAMDANI }
+            if (moved.isEmpty()) { toast("Money out can't go to Income"); return 0 }
+            val keys = moved.map { Sides.thingName(it) }.distinctBy { it.lowercase() }
+            sides = Sides.intoIncomeAccount(sides, keys, account)
+            store.saveSides(sides)
+            toast("✓ Moved ${moved.size} " + (if (moved.size == 1) "entry" else "entries") + " to $account")
+            return moved.size
+        }
         // "Transport › Petrol": the category, and the sub-category that becomes the entry's item.
         val (catLabel, sub) = if (kind == "expense") splitSub(t) else t to ""
         val cat = if (kind == "expense") Cat.entries.firstOrNull { it.label.equals(catLabel, true) } ?: return 0 else null
@@ -3203,12 +3216,12 @@ fun App(
             }
             movingAll?.let { (n, ids) ->
                 MoveToKhata((if (ids.size == 1) "1 entry" else "${ids.size} entries") + " · all of $n", entries, n,
-                    onMove = { toKind, to -> movingAll = null; moveEntries(ids, toKind, to) }, onDismiss = { movingAll = null })
+                    onMove = { toKind, to -> movingAll = null; moveEntries(ids, toKind, to) }, onDismiss = { movingAll = null }, sides = sides)
             }
             if (movingPicked) MoveToKhata(
                 "${selection.ids.size} selected " + (if (selection.ids.size == 1) "entry" else "entries"), entries, "",
                 onMove = { toKind, to -> movingPicked = false; moveEntries(selection.ids.toSet(), toKind, to); selection.clear() },
-                onDismiss = { movingPicked = false }
+                onDismiss = { movingPicked = false }, sides = sides
             )
             // The picking bar: count, All is in each ledger's head, Move opens the khata list, × stops picking.
             if (selection.active) Surface(
@@ -3235,7 +3248,7 @@ fun App(
             }
             moving?.let { e ->
                 MoveToKhata("1 entry · " + entryTitle(e), entries, "",
-                    onMove = { toKind, to -> moving = null; moveEntries(setOf(e.id), toKind, to) }, onDismiss = { moving = null })
+                    onMove = { toKind, to -> moving = null; moveEntries(setOf(e.id), toKind, to) }, onDismiss = { moving = null }, sides = sides)
             }
             confirmNew?.let { (list, said) ->
                 ConfirmCard(
