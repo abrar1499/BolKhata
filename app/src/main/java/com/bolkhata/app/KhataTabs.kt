@@ -1188,10 +1188,11 @@ private fun ledgerTable(heading: String, cols: List<String>, rows: List<Pair<Ent
 @Composable
 private fun PdfButton(onClick: () -> Unit) {
     Row(
-        Modifier.lift(1.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape).clickable { onClick() }.padding(horizontal = 11.dp, vertical = 6.dp),
+        // The same pill as the 🌐 one beside it: no edge, no shadow, same size and words.
+        Modifier.clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.surface)
+            .clickable { onClick() }.padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
-    ) { Text("⤓ PDF", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface) }
+    ) { Text("⤓ PDF", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface) }
 }
 
 /** An inner page's top: a round white back button, the path above the title, "⤓ PDF" on the right, then the summary card. */
