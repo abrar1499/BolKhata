@@ -515,14 +515,12 @@ internal fun LazyListScope.ledger(
     rows.forEachIndexed { i, r ->
         if (i == 0 || !sameDay(rows[i - 1].date, r.date)) {
             // The Cashbook keeps its ads near the top, where they are seen: a video card after the 3rd day, a slim picture
-            // after the 6th. Other ledgers: an ad every third day, a video card and a slim picture in turn.
+            // after the 6th. Other ledgers (inside an account, opened for a quick look): one slim picture after the 3rd day.
             if (cash && (days == 3 || days == 6)) {
                 val n = days
                 item(key = keyPrefix + "ad" + n, contentType = "ad") { NativeAdCard("ledger-$keyPrefix$title-$n", Modifier.padding(start = 10.dp, end = 10.dp, top = 1.dp), video = n == 3, round = false, small = n != 3) }
-            } else if (!cash && days > 0 && days % 3 == 0) {
-                val n = days
-                val video = videoTurn(n / 3)
-                item(key = keyPrefix + "ad" + n, contentType = "ad") { NativeAdCard("ledger-$keyPrefix$title-$n", Modifier.padding(start = 10.dp, end = 10.dp, top = 1.dp), video = video, round = false, small = !video) }
+            } else if (!cash && days == 3) {
+                item(key = keyPrefix + "ad3", contentType = "ad") { NativeAdCard("ledger-$keyPrefix$title-3", Modifier.padding(start = 10.dp, end = 10.dp, top = 1.dp), round = false, small = true) }
             }
             days++
             val day = byDay[dayNumber(r.date)].orEmpty()
