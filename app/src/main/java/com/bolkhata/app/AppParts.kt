@@ -70,7 +70,9 @@ internal fun InputBar(
     busy: Boolean = false,
     voice: VoiceState? = null,
     /** False when a bar below (the bottom tabs) already keeps clear of the system navigation. */
-    navPad: Boolean = true
+    navPad: Boolean = true,
+    /** Test: a long press listens with Whisper instead of opening the keyboard (null: the keyboard). */
+    onMicLong: (() -> Unit)? = null
 ) {
     var text by rememberSaveable { mutableStateOf("") }
     // A tap on the mic opens the keyboard on the bar: its own mic (Gboard) hears best and puts it right as it goes.
@@ -132,7 +134,7 @@ internal fun InputBar(
                             .lift(1.dp, CircleShape)
                             .clip(CircleShape)
                             .background(if (talking && !voice!!.live) RedSpend else MaterialTheme.colorScheme.surface)
-                            .combinedClickable(enabled = talking || !busy, onLongClick = { if (!talking && text.isBlank()) { viaMic = true; focus.requestFocus(); keyboard?.show() } }) {
+                            .combinedClickable(enabled = talking || !busy, onLongClick = { if (!talking && text.isBlank()) { if (onMicLong != null) onMicLong() else { viaMic = true; focus.requestFocus(); keyboard?.show() } } }) {
                                 // A tap listens with the app's own mic; a long press opens the keyboard for its mic.
                                 when {
                                     talking -> voice!!.toggle()

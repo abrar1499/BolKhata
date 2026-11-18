@@ -932,10 +932,11 @@ class VoiceFixTest {
     @Test fun thePhoneListensInTheLanguageThePersonWrites() {
         // Picked in the menu: that one, whatever was typed.
         assertEquals("fr", Normalizer.voiceLanguage("fr", listOf("what did I spend this month")))
-        // Urdu, picked or typed, is heard as Hindi (phones hear spoken Urdu best that way); Roman Urdu too; Arabic as Arabic.
-        assertEquals("hi-IN", Normalizer.voiceLanguage("ur-PK", listOf("what did I spend this month")))
-        assertEquals("hi-IN", Normalizer.voiceLanguage("", listOf("chai 50", "hamid ko 500 diye", "is mahine kitna kharcha hua")))
-        assertEquals("hi-IN", Normalizer.voiceLanguage("", listOf("چائے 50", "حامد کو 500 دیے")))
+        // Urdu, picked, typed or in Roman letters, is heard as Urdu (it knows the names); Hindi as Hindi; Arabic as Arabic.
+        assertEquals("ur-PK", Normalizer.voiceLanguage("ur-PK", listOf("what did I spend this month")))
+        assertEquals("ur-PK", Normalizer.voiceLanguage("", listOf("chai 50", "hamid ko 500 diye", "is mahine kitna kharcha hua")))
+        assertEquals("ur-PK", Normalizer.voiceLanguage("", listOf("چائے 50", "حامد کو 500 دیے")))
+        assertEquals("hi-IN", Normalizer.voiceLanguage("", listOf("चाय 50")))
         assertEquals("ar", Normalizer.voiceLanguage("", listOf("كم صرفت هذا الشهر")))
         // English, or nothing typed yet: the phone's own language.
         assertEquals("", Normalizer.voiceLanguage("", listOf("how much did I spend this month", "show my last 5 entries")))

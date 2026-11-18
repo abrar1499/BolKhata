@@ -2523,9 +2523,9 @@ fun App(
     // Live voice listens again as soon as the answer to the last sentence is there.
     LaunchedEffect(chatLoading) { if (!chatLoading) listener.resume() }
 
-    fun startVoice(forChat: Boolean = false) {
-        // The chat mic with Whisper: a tap records, a pause (or a second tap) sends it to be written out.
-        if (forChat && whisperKey().isNotBlank()) {
+    fun startVoice(forChat: Boolean = false, whisper: Boolean = false) {
+        // Test: a long press on the chat mic records for Whisper; a pause (or a tap) sends it to be written out.
+        if (forChat && whisper && whisperKey().isNotBlank()) {
             if (hearing) { finishRecording(); return }
             hearing = true
             startRecording(
@@ -2762,6 +2762,7 @@ fun App(
                 Column {
                     InputBar(
                         onSend = { chatSay(it) }, onMic = { startVoice(forChat = true) }, placeholder = "Speak, type or ask…",
+                        onMicLong = if (whisperKey().isNotBlank()) ({ startVoice(forChat = true, whisper = true) }) else null,
                         busy = chatLoading,
                         voice = if (recorder != null) VoiceState(true, "Recording", "tap to send", level = voiceLevel) { finishRecording() }
                             else if (hearing) VoiceState(true, if (listener.live && chatLoading) "Working" else "Listening", heardSoFar.ifBlank { "tap to send" },
