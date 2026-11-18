@@ -241,8 +241,8 @@ class AiEvalTest {
         case("typed roman urdu", "kya hal hai bhai") { listOf("answer is in Roman letters" to !urduOrHindi.containsMatchIn(text), "answer is Roman Urdu" to Regex("""(?i)\b(hai|hain|aap|theek|main|kya|ji|shukriya|batayein|karna)\b""").containsMatchIn(text)) },
         case("rename a person", "salim raza ka naam salim raza butt kar do") { listOf("the entry carries the new name" to (world.byId("l2")?.person.equals("Salim Raza Butt", true) == true), "nothing new" to added.isEmpty()) },
         // ---- voice, as the recogniser hands it over
-        voice("urdu script", "حامد کو پانچ سو دیے") { listOf("lent Hamid 500" to has(Type.DIYA, "Hamid Akram", 500.0), "answer is not in Urdu script" to !urduOrHindi.containsMatchIn(text)) },
-        voice("hindi script", "नरगिस ने दो हज़ार दिए") { listOf("received 2000 from Nargis" to has(Type.WAPIS_MILA, "Nargis Salim Rashid", 2_000.0), "answer is not in Hindi script" to !urduOrHindi.containsMatchIn(text)) },
+        voice("urdu script", "حامد کو پانچ سو دیے") { listOf("lent Hamid 500" to has(Type.DIYA, "Hamid Akram", 500.0), "answered in Roman Urdu" to (!urduOrHindi.containsMatchIn(text) && (text.isBlank() || !NativeChatEngine.isEnglish(text)))) },
+        voice("hindi script", "नरगिस ने दो हज़ार दिए") { listOf("received 2000 from Nargis" to has(Type.WAPIS_MILA, "Nargis Salim Rashid", 2_000.0), "answered in Roman Urdu" to (!urduOrHindi.containsMatchIn(text) && (text.isBlank() || !NativeChatEngine.isEnglish(text)))) },
         voice("a name misheard", "motion ko 2000 udhaar diye") { listOf("lent Mohsin 2000" to has(Type.DIYA, "Mohsin Javed", 2_000.0), "one entry" to (added.size == 1)) },
         voice("work misheard", "hameed ne 6000 kacchi int daali") { listOf("work by Hamid 6000 = 6000" to has(Type.PURCHASE, "Hamid Akram", 6_000.0, qty = 6_000.0), "kept the name Kachi eent" to added.all { it.item == "Kachi eent" }) },
         voice("question in urdu script", "اس مہینے کا خرچہ کتنا ہے") { listOf("says 365" to told.contains("365"), "nothing saved" to added.isEmpty(), "answer is not in Urdu script" to !urduOrHindi.containsMatchIn(text)) },

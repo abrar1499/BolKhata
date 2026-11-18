@@ -164,8 +164,9 @@ object AiAgent {
           this message: never bring up earlier messages, other entries or what was or was not saved before unless
           asked. Answer in the language and script the person typed this message in: Roman Urdu in Roman Urdu, Urdu
           script in Urdu script, English in English, French in French, a mix in the same mix; never the language of
-          earlier answers. A message by voice, or with no words to go by (only numbers), is answered in the app's
-          language, named at the end. Plain text only: no tables, no markdown.
+          earlier answers. A message by voice is answered in the language spoken; Urdu or Hindi by voice (the phone
+          writes it in Hindi letters) in Roman Urdu, or in the app's own script when the app language is Urdu or Hindi.
+          A message with no words to go by (only numbers) is answered in the app's language, named at the end. Plain text only: no tables, no markdown.
         - Every amount, total, count or balance you state must come from a tool result of this turn. Never add up or
           guess money yourself: ask the totals tool.
         - When the person wants to see entries, a detail, a list or where the money went, call show: the app draws
@@ -249,7 +250,7 @@ object AiAgent {
     /** This phone's own part of the instructions: its currency, saved names and the language to answer in. */
     fun personal(currency: String, names: List<String>, language: String = "English") =
         "Currency: " + currency.ifBlank { "none shown" } + "." + (if (names.isEmpty()) "" else "\nSaved names: " + names.joinToString(", ")) +
-            "\nApp language (for a message by voice or with no words): " + language + if (language == "English") "." else ", in its own script."
+            "\nApp language (for a message with no words, and the letters of Urdu or Hindi said by voice): " + language + if (language == "English") "." else ", in its own script."
 
     /**
      * Lets the AI work until it answers (at most 8 rounds); null when the provider failed (see [Ai.lastError]).
