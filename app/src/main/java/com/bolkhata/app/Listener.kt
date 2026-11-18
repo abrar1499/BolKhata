@@ -145,6 +145,11 @@ class Listener(context: Context) {
                 putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_SAMPLING_RATE, RATE)
             }
         })
+        // A recogniser that takes the cleaned mic but writes nothing for 6 seconds: its own mic instead, at once.
+        val f = feed ?: return
+        main.postDelayed({
+            if (wanted && feed === f && !feedHeard) { cleanMic = false; recognizer?.cancel(); closeFeed(); begin() }
+        }, 6000)
     }
 
     /**
