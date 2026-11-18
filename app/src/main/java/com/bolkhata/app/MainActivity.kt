@@ -1408,18 +1408,19 @@ fun App(
                 // Reading the message runs off the main thread, so the chat keeps scrolling smoothly with many entries.
                 val scoped = scopeKhataEntries(entries)
                 val names0 = contactNames()
-                // A saved person and a number, nothing else: the chat asks what happened with a small card, in any language.
-                if (!retry) Ask.of(AiAgent.counted(roman), AiAgent.who(names0, store.known()))?.let { (p, n) ->
-                    val book = Sides.bookOf(p, entries, sides)
-                    lastSpeech = "Choose"
-                    postChat("", isUser = false, meta = "ask=$p|$n|" + Ask.kinds(book).joinToString(",") + (if (book == Sides.STAFF) "|staff" else ""))
-                    return@launch
-                }
                 // The AI reads every message first whenever one can answer: the app's own rules can misread a message, and a
                 // wrong save is worse than a second's wait. The app answers by itself only when no AI can (no key, no internet,
                 // the smart answers and today's reward videos used up).
                 val aiNow = !noAi && Ai.handles(groqKey) && Ai.chain.any { (k, _) -> (Ai.restUntil[Ai.provider(k)?.name.orEmpty()] ?: 0L) <= System.currentTimeMillis() }
                 val aiFirst = Ai.first(aiNow, onOwnKey(), Premium.active, store.smartLeft, Ads.rewardsLeft(context))
+                // A saved person and a number, nothing else: the chat asks what happened with a small card, in any language.
+                // With the AI first it reads such a message itself ("anwar ko 5000 awal eent di" is goods, not money).
+                if (!retry && !aiFirst) Ask.of(AiAgent.counted(roman), AiAgent.who(names0, store.known()))?.let { (p, n) ->
+                    val book = Sides.bookOf(p, entries, sides)
+                    lastSpeech = "Choose"
+                    postChat("", isUser = false, meta = "ask=$p|$n|" + Ask.kinds(book).joinToString(",") + (if (book == Sides.STAFF) "|staff" else ""))
+                    return@launch
+                }
                 // Learnt from the AI before: a message of the same shape (only its numbers differ) is done by the app alone, for nothing.
                 // People and numbers are open places in it, so a known sentence with another name needs no AI either.
                 if (!retry && !aiFirst) {
@@ -2532,11 +2533,12 @@ fun App(
         listener.onPartial = { heardSoFar = if (Lingo.code(lang).isNotBlank()) it else runCatching { Translit.toRoman(it) }.getOrDefault(it) }
         listener.onLevel = { voiceLevel = it }
         listener.onError = { toast(it) }
-        listener.onFinal = { said ->
+        listener.onFinal = onFinal@{ said ->
             keepHearings(listOf(said), said)
             // With the AI reading it, the words go as heard; else the app's own voice fixes come first.
             val fixed = if (Ai.handles(groqKey) || Lingo.code(lang).isNotBlank()) said else Normalizer.voiceFix(said, voiceKnown())
             if (forChat) {
+                if (RateBox.take(fixed)) { listener.resume(); return@onFinal }
                 chatSay(fixed, live = true)
                 // Answered on the spot (nothing is being worked on): listen for the next sentence at once.
                 if (!chatLoading) listener.resume()
@@ -2755,7 +2757,7 @@ fun App(
                         startVoice(forChat = true)
                     }
                     InputBar(
-                        onSend = { chatSay(it) }, onMic = { if (store.micPicked) startVoice(forChat = true) else micCard = true }, placeholder = "Speak, type or ask…",
+                        onSend = { if (!RateBox.take(it)) chatSay(it) }, onMic = { if (store.micPicked) startVoice(forChat = true) else micCard = true }, placeholder = "Speak, type or ask…",
                         onMicLong = { micCard = true },
                         busy = chatLoading,
                         voice = if (recorder != null) VoiceState(true, "Recording", "tap to send", level = voiceLevel) { finishRecording() }

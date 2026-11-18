@@ -168,7 +168,7 @@ fun ChatScreen(
                         else remember(message.text, currency) { if (message.meta.contains("; plain")) null else Report.parse(message.text, currency) }
                             ?.let { ReportCard(it, message.text, message.timestamp) }
                             // "What rate for 15000 Kachi eent?" on the last answer: the rate is typed right in the chat.
-                            ?: if (message == messages.lastOrNull() && RateAsk.matches(message.text)) RateCard(message.text, onSend) else AssistantBubble(message.text, message.timestamp)
+                            ?: AssistantBubble(message.text, message.timestamp)
                         // "Which A or B do you mean?": one tap on a name opens that khata.
                         if (message == messages.lastOrNull()) {
                             val names = NativeChatEngine.nameChoices(message.text)
@@ -188,6 +188,8 @@ fun ChatScreen(
                             if (names.isEmpty() && asks.isNotEmpty()) FollowChips(asks, onSend)
                         }
                         if (!message.meta.startsWith("reward")) AnswerActions(ratings[message.id]) { good -> onRate(message.id, good) }
+                        // The AI asked a work's or sale's rate on the last answer: the rate box under it (see RateCard).
+                        if (message == messages.lastOrNull() && RateAsk.matches(message.text)) RateCard(message.text, onSend)
                         // "Claude · 1.2s · 340 tokens" under an answer: the APK only; the Play build shows no such detail.
                         if (!BuildConfig.PLAY) Regex("""usage=([^;]+)""").find(message.meta)?.let {
                             Text(it.groupValues[1], fontSize = 8.sp, lineHeight = 8.sp, color = Color(0xFFA39E98),
@@ -965,48 +967,72 @@ private fun Working(label: String) {
     }
 }
 
-private val RateAsk = Regex("""^What rate for (.+)\?$""")
+/** A question for a work's or sale's rate, the app's ("What rate for 5000 Kachi eent?") or the AI's in any language
+ * ("Ashraf ke 5000 kachi eent ka rate kya hai?"): a number, the word rate, and a question mark at the end. */
+private val RateAsk = Regex("""(?is)^(?=.*\d)(?=.*(\brate\b|ریٹ|रेट)).*\?\s*$""")
 
 /**
- * The app's question for a work's or sale's rate, as a small card in the chat: the rate in one box with "per 1000 |
- * each" inside it, the amount it makes, and Save, which answers the question ("900 per 1000" or "900 each"). The box
- * comes filled with the last rate when the question carries one ("(last 900 per 1000)"): Save keeps it, or it is changed.
+ * The rate box under the AI's rate question: "RATE · 6,000" with what it comes to, the rate and Save on one line, and
+ * the units (as in + Entry) to pick. Save answers the question ("900 per 1000", "50 per kg", "900 each"). A rate typed
+ * or said in the chat bar while it is open fills it (see [RateBox]).
  */
 @Composable
 private fun RateCard(text: String, onSend: (String) -> Unit) {
-    val qty = Regex("""[\d,]+(?:\.\d+)?""").find(text.removePrefix("What rate for "))?.value?.replace(",", "")?.toDoubleOrNull() ?: 0.0
+    val qty = Regex("""\d[\d,]*(?:\.\d+)?""").find(text)?.value?.replace(",", "")?.toDoubleOrNull() ?: 0.0
     val last = remember(text) { Regex("""\(last ([\d.]+) (per 1000|each)\)""").find(text) }
-    var rate by remember { mutableStateOf(last?.groupValues?.get(1).orEmpty()) }
-    var per1000 by remember { mutableStateOf(last?.let { it.groupValues[2] == "per 1000" } ?: (qty >= 1000)) }
+    var rate by remember(text) { mutableStateOf(last?.groupValues?.get(1).orEmpty()) }
+    var unit by remember(text) { mutableStateOf(if (last != null) (if (last.groupValues[2] == "per 1000") "1000" else "") else if (qty >= 1000) "1000" else "") }
+    DisposableEffect(text) { RateBox.open = true; onDispose { RateBox.open = false } }
+    // A rate typed or said in the chat bar fills the box.
+    LaunchedEffect(RateBox.fill) { RateBox.fill?.let { (r, u) -> rate = r; if (u != null) unit = u; RateBox.fill = null } }
     val r = rate.toDoubleOrNull() ?: 0.0
     val sub = MaterialTheme.colorScheme.onSurfaceVariant
-    Column(Modifier.padding(start = 8.dp).widthIn(max = 280.dp).lift(1.dp, BotShape).clip(BotShape).background(MaterialTheme.colorScheme.surface)
-        .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 9.dp)) {
-        Text(text.replace(Regex(""" \(last [^)]*\)"""), ""), fontSize = 13.sp, lineHeight = 17.5.sp)
-        Row(Modifier.padding(top = 8.dp).fillMaxWidth().height(34.dp).fieldEdge(RoundedCornerShape(12.dp)).padding(start = 10.dp, end = 4.dp),
-            verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.weight(1f)) {
-                if (rate.isEmpty()) Text("Rate", fontSize = 15.sp, color = sub)
+    val shape = RoundedCornerShape(8.dp)
+    Column(Modifier.padding(start = 8.dp, top = 4.dp).width(262.dp).lift(1.dp, shape).clip(shape).background(MaterialTheme.colorScheme.surface)
+        .padding(start = 12.dp, end = 10.dp, top = 8.dp, bottom = 9.dp)) {
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text("RATE · " + fmt(qty), fontSize = 9.5.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp, color = sub, modifier = Modifier.weight(1f))
+            if (r > 0 && qty > 0) Text("= " + fmt(if (unit == "1000") qty / 1000 * r else qty * r) + " " + LocalCurrency.current,
+                fontSize = 11.sp, fontWeight = FontWeight.Bold, color = RedSpend)
+        }
+        Row(Modifier.padding(top = 6.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f).height(32.dp).fieldEdge(RoundedCornerShape(11.dp)).padding(horizontal = 9.dp), contentAlignment = Alignment.CenterStart) {
+                if (rate.isEmpty()) Text("Rate", fontSize = 14.sp, color = sub)
                 androidx.compose.foundation.text.BasicTextField(rate, { v -> rate = v.filter { it.isDigit() || it == '.' } }, singleLine = true,
-                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface),
+                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface),
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
                     cursorBrush = androidx.compose.ui.graphics.SolidColor(EmberTop), modifier = Modifier.fillMaxWidth())
             }
-            Row(Modifier.clip(RoundedCornerShape(9.dp)).background(Color(0xFFF1EEEA)).padding(2.dp)) {
-                listOf(true to "per 1000", false to "each").forEach { (v, label) ->
-                    val on = per1000 == v
-                    Text(label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = if (on) MaterialTheme.colorScheme.onSurface else sub,
-                        modifier = Modifier.then(if (on) Modifier.lift(1.dp, RoundedCornerShape(7.dp)) else Modifier).clip(RoundedCornerShape(7.dp))
-                            .background(if (on) Color.White else Color.Transparent).clickable { per1000 = v }.padding(horizontal = 8.dp, vertical = 5.dp))
-                }
-            }
-        }
-        Row(Modifier.padding(top = 7.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(if (r > 0 && qty > 0) "= " + fmt(if (per1000) qty / 1000 * r else qty * r) + " " + LocalCurrency.current else "",
-                fontSize = 11.sp, color = sub, modifier = Modifier.weight(1f))
             Text("Save", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF1D1D1F),
-                modifier = Modifier.lift(3.dp, RoundedCornerShape(15.dp)).clip(RoundedCornerShape(15.dp)).background(Color.White)
-                    .clickable(enabled = r > 0) { onSend(rate + if (per1000) " per 1000" else " each") }.padding(horizontal = 14.dp, vertical = 6.dp))
+                modifier = Modifier.padding(start = 6.dp).height(32.dp).lift(3.dp, RoundedCornerShape(16.dp)).clip(RoundedCornerShape(16.dp)).background(Color.White)
+                    .clickable(enabled = r > 0) { onSend(rate + when (unit) { "" -> " each"; "1000" -> " per 1000"; else -> " per $unit" }) }
+                    .wrapContentHeight(Alignment.CenterVertically).padding(horizontal = 13.dp))
         }
+        androidx.compose.foundation.lazy.LazyRow(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            items(UNITS.size) { k -> val (u, label) = UNITS[k]; UnitChip(label, unit == u) { unit = u } }
+        }
+    }
+}
+
+/** The open rate box and what the chat bar fills it with: a rate typed or said ("900", "900 per 1000", "50 kg"). */
+object RateBox {
+    var open by mutableStateOf(false)
+    var fill by mutableStateOf<Pair<String, String?>?>(null)
+
+    /** The rate and unit (a key of UNITS, null when none was said) a message gives, or null when it is not just a rate. */
+    fun parse(text: String): Pair<String, String?>? {
+        val m = Regex("""^\s*(?:rate\s*)?(\d[\d,]*(?:\.\d+)?)\s*(?:rs|rupay|rupees|riyal|sar|pkr)?\s*(per\s*1000|per\s*thousand|hazar|each|piece|kg|ton|bag|dozen|litre|liter|metre|meter|sq\s*ft|ft|box)?\s*(?:wala|ka|ki|ke)?\s*$""",
+            RegexOption.IGNORE_CASE).find(text) ?: return null
+        val unit = m.groupValues[2].lowercase().replace(" ", "").takeIf { it.isNotEmpty() }?.let {
+            when (it) { "per1000", "perthousand", "hazar" -> "1000"; "each" -> ""; "liter" -> "litre"; "meter" -> "metre"; else -> it }
+        }
+        return m.groupValues[1].replace(",", "") to unit
+    }
+
+    /** Fills the open box with [text] when it is a rate; true when it did (the message is then not sent). */
+    fun take(text: String): Boolean {
+        if (!open) return false
+        fill = parse(text) ?: return false
+        return true
     }
 }

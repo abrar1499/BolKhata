@@ -40,9 +40,9 @@ enum class Cat(val label: String, val icon: String) {
     OTHER("Other", "📝")
 }
 
-/** Every currency a country pays in today: the Gulf, South Asia and the big ones first, then all others A–Z. */
+/** Every currency a country pays in today: USD, EUR, PKR, SAR first, then the Gulf, South Asia and GBP, then all others A–Z. */
 val CURRENCIES: List<String> = run {
-    val first = listOf("SAR", "PKR", "AED", "QAR", "KWD", "OMR", "BHD", "INR", "BDT", "NPR", "LKR", "USD", "EUR", "GBP")
+    val first = listOf("USD", "EUR", "PKR", "SAR", "AED", "QAR", "KWD", "OMR", "BHD", "INR", "BDT", "NPR", "LKR", "GBP")
     // Only the money of real countries: no metals, test or fund codes (XPD, XTS, XXX) and no old ones (YDD, USS).
     first + java.util.Locale.getISOCountries()
         .mapNotNull { runCatching { java.util.Currency.getInstance(java.util.Locale("", it))?.currencyCode }.getOrNull() }

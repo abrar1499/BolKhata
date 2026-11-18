@@ -2170,12 +2170,12 @@ private fun AddBody(r: AddReq, all: List<Entry>, onDismiss: () -> Unit, onDelete
 }
 
 /** The units a count can be in (saved word to its label); Per 1000 counts thousands. */
-private val UNITS = listOf("" to "Each", "1000" to "Per 1000", "piece" to "Piece", "kg" to "Kg", "ton" to "Ton", "bag" to "Bag",
+internal val UNITS = listOf("" to "Each", "1000" to "Per 1000", "piece" to "Piece", "kg" to "Kg", "ton" to "Ton", "bag" to "Bag",
     "dozen" to "Dozen", "litre" to "Litre", "metre" to "Metre", "ft" to "Ft", "sqft" to "Sq ft", "box" to "Box")
 
 /** One unit to tap: white with the fields' edge, dark when picked. */
 @Composable
-private fun UnitChip(label: String, on: Boolean, onClick: () -> Unit) {
+internal fun UnitChip(label: String, on: Boolean, onClick: () -> Unit) {
     val shape = RoundedCornerShape(14.dp)
     Text(label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (on) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.onSurface,
         modifier = Modifier.clip(shape).then(if (on) Modifier.background(MaterialTheme.colorScheme.onSurface) else Modifier.fieldEdge(shape))
