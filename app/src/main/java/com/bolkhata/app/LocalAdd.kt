@@ -347,6 +347,17 @@ object LocalAdd : LocalAgent.Reader {
             val said = w.subList(i, end)
             hits.singleOrNull { it.second == said }?.let { hits = listOf(it) }
         }
+        // "salim akhtar ko": the first name and a last name nobody saved under it, where a name stands, is someone new
+        // ("Salim Akhtar"), not one of the saved Salims.
+        if (end == i + 1 && x in hits.flatMap { it.second }) w.getOrNull(i + 1)?.let { last ->
+            if (last.length >= 3 && last !in stop && last !in honorifics && num(last) == null && isContent(last) && !isThing(last, c) &&
+                hits.none { (_, parts) -> parts.any { it == last || Understand.closeName(last, it) } } && namePlace(w, i + 1)) {
+                val name = listOf(x, last).joinToString(" ") { it.replaceFirstChar { ch -> ch.uppercase() } }
+                c.fresh[x] = name
+                c.fresh[last] = name
+                return Mention(name, i, i + 2, wayAfter(w, i + 2) ?: wayBefore(w, i))
+            }
+        }
         if (hits.size > 1) return Unsure(x, hits.map { it.first })
         val (name, parts) = hits[0]
         // The rest of the name said too ("nargis salim rashid").
