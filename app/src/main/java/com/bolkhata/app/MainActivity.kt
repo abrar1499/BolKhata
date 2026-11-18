@@ -3012,7 +3012,8 @@ fun App(
                             moveToTrash(ids.toSet())
                         },
                         // A saved row opens its person's account; one without a person opens to change.
-                        onEditEntry = { if (it.person.isNotBlank()) openParty(it.person, fromChat = true) else editing = it },
+                        // A tap on a saved card: the entry's own menu (Edit, Rename, Move, Delete…), as a long press in a list.
+                        onEditEntry = { menuFor = it },
                         onAddSuggestions = { list ->
                             val added = list.mapIndexed { i, e -> e.copy(id = "e" + System.nanoTime() + i) }
                             save(added + entries)
