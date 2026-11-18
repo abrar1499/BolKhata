@@ -244,6 +244,10 @@ class AiEvalTest {
         voice("urdu script", "حامد کو پانچ سو دیے") { listOf("lent Hamid 500" to has(Type.DIYA, "Hamid Akram", 500.0), "answered in Roman Urdu" to (!urduOrHindi.containsMatchIn(text) && (text.isBlank() || !NativeChatEngine.isEnglish(text)))) },
         voice("hindi script", "नरगिस ने दो हज़ार दिए") { listOf("received 2000 from Nargis" to has(Type.WAPIS_MILA, "Nargis Salim Rashid", 2_000.0), "answered in Roman Urdu" to (!urduOrHindi.containsMatchIn(text) && (text.isBlank() || !NativeChatEngine.isEnglish(text)))) },
         voice("a name misheard", "motion ko 2000 udhaar diye") { listOf("lent Mohsin 2000" to has(Type.DIYA, "Mohsin Javed", 2_000.0), "one entry" to (added.size == 1)) },
+        Case("a saved name with its first sound lost", listOf(Turn("absa ko 15 riyal diye", spoken = true)), {
+            entries = listOf(Entry("h1", Type.DIYA, 200.0, Cat.UDHAAR, "Loans", "Hafsa Noor", "", now - 2 * day, now - 2 * day)) + entries
+            baseIds = entries.map { it.id }.toSet()
+        }) { listOf("given to Hafsa Noor" to has(Type.DIYA, "Hafsa Noor", 15.0), "no new person" to added.none { it.person.contains("bsa", true) }) },
         voice("work misheard", "hameed ne 6000 kacchi int daali") { listOf("work by Hamid 6000 = 6000" to has(Type.PURCHASE, "Hamid Akram", 6_000.0, qty = 6_000.0), "kept the name Kachi eent" to added.all { it.item == "Kachi eent" }) },
         voice("question in urdu script", "اس مہینے کا خرچہ کتنا ہے") { listOf("says 365" to told.contains("365"), "nothing saved" to added.isEmpty(), "answer is not in Urdu script" to !urduOrHindi.containsMatchIn(text)) },
         voice("two works in one breath", "hamid ne aaj das hazar kachi eent dali aur zubair ne paanch hazar bharai ki") {

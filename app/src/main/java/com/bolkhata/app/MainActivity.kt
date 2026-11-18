@@ -2186,6 +2186,7 @@ fun App(
             // Give the person time to finish a long story before it stops listening.
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2500L)
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2000L)
+            biasTo(contactNames())
         }
         hushBeep()
         runCatching { r.cancel(); r.startListening(i) }
@@ -2541,7 +2542,7 @@ fun App(
         // Outside the chat no bar shows the words: say that it listens.
         if (!forChat) toast("Listening… speak now")
         // In the chat the mic is live voice: sentence after sentence, each answered in the chat, until it is tapped again.
-        listener.start(voiceLang(), live = forChat)
+        listener.start(voiceLang(), live = forChat, names = contactNames())
     }
 
     var updateMsg by remember { mutableStateOf<String?>(null) }

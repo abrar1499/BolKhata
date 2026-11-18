@@ -15,6 +15,7 @@ import android.speech.SpeechRecognizer
  * was said, until the tap or a long silence. Everything runs on the main thread.
  */
 class Listener(context: Context) {
+    private var names: List<String> = emptyList()
     private val app = context.applicationContext
     private val main = Handler(Looper.getMainLooper())
     private var recognizer: SpeechRecognizer? = null
@@ -90,9 +91,10 @@ class Listener(context: Context) {
         }
     }
 
-    /** Starts listening in [language] (a tag like "ur-PK"; blank for the phone's own); [live] keeps it on, sentence after sentence. */
-    fun start(language: String, live: Boolean = false) {
+    /** Starts listening in [language] (a tag like "ur-PK"; blank for the phone's own); [live] keeps it on, sentence after sentence. [names]: the saved people, which the phone is told to expect. */
+    fun start(language: String, live: Boolean = false, names: List<String> = emptyList()) {
         this.language = language
+        this.names = names
         this.live = live
         waiting = false
         wanted = true; busyTries = 0; soFar = ""; said = ""; stopping = false; quiet = 0; run++
@@ -111,6 +113,7 @@ class Listener(context: Context) {
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
             putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, app.packageName)
+            biasTo(names)
         })
     }
 
@@ -169,4 +172,10 @@ class Listener(context: Context) {
         wanted = false; run++
         reset()
     }
+}
+
+/** Android 13+: the phone hears these words (saved names: "Hafsa", not "Absa") more readily. */
+fun Intent.biasTo(words: List<String>) {
+    if (android.os.Build.VERSION.SDK_INT >= 33 && words.isNotEmpty())
+        putStringArrayListExtra(RecognizerIntent.EXTRA_BIASING_STRINGS, ArrayList(words.distinct().take(100)))
 }
