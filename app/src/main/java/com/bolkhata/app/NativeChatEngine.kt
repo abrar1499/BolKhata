@@ -611,7 +611,10 @@ object NativeChatEngine {
     private val urduWords = setOf(
         "kya", "kia", "hai", "ha", "hain", "ho", "hon", "kaise", "kaisa", "kaisi", "aap", "ap", "tum", "masla", "batao",
         "btao", "kar", "karo", "ka", "ki", "ke", "ko", "se", "me", "mein", "theek", "thik", "salam", "assalam", "aoa",
-        "shukriya", "shukria", "bhai", "yar", "yaar", "nahi", "haan", "aaj", "aj", "kal", "kitna", "kitne", "hal", "haal"
+        "shukriya", "shukria", "bhai", "yar", "yaar", "nahi", "haan", "aaj", "aj", "kal", "kitna", "kitne", "hal", "haal",
+        "sab", "chal", "raha", "rahi", "rahe", "hun", "hoon", "gaya", "gayi", "gaye", "diya", "diye", "liya", "liye", "mila", "mile",
+        "wala", "wali", "wale", "kuch", "bohat", "bahut", "acha", "accha", "achha", "abhi", "phir", "kyun", "kyu", "kahan", "kidhar",
+        "mera", "meri", "mere", "mujhe", "aur", "bhi", "hua", "hui", "hue", "karna", "dena", "lena", "paise", "kharcha", "hisab", "hisaab"
     )
 
     /** True when the message is in English, so the app answers in English too. */
