@@ -2533,11 +2533,12 @@ fun App(
         listener.onPartial = { heardSoFar = if (Lingo.code(lang).isNotBlank()) it else runCatching { Translit.toRoman(it) }.getOrDefault(it) }
         listener.onLevel = { voiceLevel = it }
         listener.onError = { toast(it) }
-        listener.onFinal = { said ->
+        listener.onFinal = onFinal@{ said ->
             keepHearings(listOf(said), said)
             // With the AI reading it, the words go as heard; else the app's own voice fixes come first.
             val fixed = if (Ai.handles(groqKey) || Lingo.code(lang).isNotBlank()) said else Normalizer.voiceFix(said, voiceKnown())
             if (forChat) {
+                if (RateBox.take(fixed)) { listener.resume(); return@onFinal }
                 chatSay(fixed, live = true)
                 // Answered on the spot (nothing is being worked on): listen for the next sentence at once.
                 if (!chatLoading) listener.resume()
@@ -2756,7 +2757,7 @@ fun App(
                         startVoice(forChat = true)
                     }
                     InputBar(
-                        onSend = { chatSay(it) }, onMic = { if (store.micPicked) startVoice(forChat = true) else micCard = true }, placeholder = "Speak, type or ask…",
+                        onSend = { if (!RateBox.take(it)) chatSay(it) }, onMic = { if (store.micPicked) startVoice(forChat = true) else micCard = true }, placeholder = "Speak, type or ask…",
                         onMicLong = { micCard = true },
                         busy = chatLoading,
                         voice = if (recorder != null) VoiceState(true, "Recording", "tap to send", level = voiceLevel) { finishRecording() }
