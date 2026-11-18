@@ -2934,6 +2934,9 @@ fun App(
                                 store.saveChatMessages(chatMessages)
                                 waiting?.let { chatInput(it, quiet = true) }
                             }
+                            // A voice chat listening on would keep taking the mic during the video (the mic sign coming and
+                            // going, the video pausing): it ends before the video plays.
+                            if (voiceOn) stopVoice()
                             (context as? android.app.Activity)?.let { Ads.showReward(it) { watched -> go(watched) } } ?: go(true)
                         },
                         onPremium = { premiumOpen = true },
