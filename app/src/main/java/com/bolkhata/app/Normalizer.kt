@@ -297,6 +297,13 @@ object Normalizer {
      * ([typed], their latest messages): Urdu script is ur-PK, Hindi script and Roman Urdu are hi-IN (its hearing is then
      * written in Roman letters), English or nothing typed yet is "" (the phone's own language).
      */
+    /**
+     * Whether a message is in Roman Urdu, Urdu or Hindi, which the app's own assistant reads (free); any other language
+     * goes to the AI first. [roman]: the message in Roman letters.
+     */
+    fun localTongue(text: String, roman: String): Boolean =
+        text.any { it in "ٹڈڑںےۓہھ" || it in '\u0900'..'\u097F' } || (text.none { it in '\u0600'..'\u06FF' } && !NativeChatEngine.isEnglish(roman))
+
     fun voiceLanguage(picked: String, typed: List<String>): String {
         // Urdu, typed or in Roman letters, is heard as Pakistan's Urdu: it knows names like Hafsa that the Hindi one
         // turns into other words (its letters are turned into Roman ones for the chat). Hindi is heard as India's Hindi.

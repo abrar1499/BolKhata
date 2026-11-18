@@ -95,6 +95,9 @@ object LocalAgent {
         val pick = said.firstNotNullOfOrNull { order[it] }?.let { if (it < 0) choices.lastOrNull() else choices.getOrNull(it) }
             ?: choices.firstOrNull { it.equals(s.lower.trim(), true) }
             ?: choices.filter { c -> val parts = c.lowercase(Locale.ROOT).split(' ').filter { it != word }; said.any { w -> parts.any { it == w || Understand.closeName(w, it) } } }.singleOrNull()
+            // None of them: a full name with that word first ("imran mohammad") is someone new of that name.
+            ?: s.words.takeIf { ws -> ws.size in 2..4 && ws.first() == word && ws.none { w -> w in around || w.any(Char::isDigit) } }
+                ?.joinToString(" ") { w -> w.replaceFirstChar { it.uppercase() } }
             ?: return null
         // The word as it was typed: "saleem" when the question spells it "Salim".
         val roman = runCatching { Translit.toRoman(request) }.getOrDefault(request)

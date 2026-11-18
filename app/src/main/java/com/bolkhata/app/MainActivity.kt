@@ -1408,14 +1408,15 @@ fun App(
                 // Reading the message runs off the main thread, so the chat keeps scrolling smoothly with many entries.
                 val scoped = scopeKhataEntries(entries)
                 val names0 = contactNames()
-                // The AI reads every message first whenever one can answer: the app's own rules can misread a message, and a
-                // wrong save is worse than a second's wait. The app answers by itself only when no AI can (no key, no internet,
-                // the smart answers and today's reward videos used up).
+                // Roman Urdu, Urdu and Hindi go to the app's own assistant first (free; ads pay little there): the AI takes
+                // only what it is not sure of. Any other language goes to the AI first, whenever one can answer. The app
+                // answers by itself only when no AI can (no key, no internet, the smart answers and reward videos used up).
                 val aiNow = !noAi && Ai.handles(groqKey) && Ai.chain.any { (k, _) -> (Ai.restUntil[Ai.provider(k)?.name.orEmpty()] ?: 0L) <= System.currentTimeMillis() }
-                val aiFirst = Ai.first(aiNow, onOwnKey(), Premium.active, store.smartLeft, Ads.rewardsLeft(context))
+                val aiFirst = Ai.first(aiNow, onOwnKey(), Premium.active, store.smartLeft, Ads.rewardsLeft(context)) && !Normalizer.localTongue(text, roman)
                 // A saved person and a number, nothing else: the chat asks what happened with a small card, in any language.
-                // With the AI first it reads such a message itself ("anwar ko 5000 awal eent di" is goods, not money).
-                if (!retry && !aiFirst) Ask.of(AiAgent.counted(roman), AiAgent.who(names0, store.known()))?.let { (p, n) ->
+                // With an AI at hand the assistants read such a message themselves ("anwar ko 5000 awal eent di" is goods,
+                // not money); this quick card is for when no AI can answer.
+                if (!retry && !aiNow) Ask.of(AiAgent.counted(roman), AiAgent.who(names0, store.known()))?.let { (p, n) ->
                     val book = Sides.bookOf(p, entries, sides)
                     lastSpeech = "Choose"
                     postChat("", isUser = false, meta = "ask=$p|$n|" + Ask.kinds(book).joinToString(",") + (if (book == Sides.STAFF) "|staff" else ""))

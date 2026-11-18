@@ -38,7 +38,8 @@ Android khata/expense app, Kotlin + Jetpack Compose, single module `app/`. Packa
 - Groq key and Chat review token stay on the phone and are excluded from backups.
 
 ## How the app thinks
-- Chat: the AI (`AiAgent`, tools on the saved records) reads every message first whenever one can answer (`Ai.first`);
+- Chat: Roman Urdu, Urdu and Hindi go to the app's own assistant first (`Normalizer.localTongue`, free), the AI only when it is
+  not sure; any other language goes to the AI (`AiAgent`, tools on the saved records) first whenever one can answer (`Ai.first`);
   the app's own assistant (`LocalAgent`, learned replays) only without it, out of smart answers and reward videos, or
   when the AI did not answer. Big deletes show the app's Delete / Cancel popup (`askTrash`), never a typed yes.
 - Older path: optional Groq correction first (`Groq.correct`, only spelling/script/names, never numbers) →
