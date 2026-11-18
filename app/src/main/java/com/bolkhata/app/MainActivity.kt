@@ -1408,18 +1408,19 @@ fun App(
                 // Reading the message runs off the main thread, so the chat keeps scrolling smoothly with many entries.
                 val scoped = scopeKhataEntries(entries)
                 val names0 = contactNames()
-                // A saved person and a number, nothing else: the chat asks what happened with a small card, in any language.
-                if (!retry) Ask.of(AiAgent.counted(roman), AiAgent.who(names0, store.known()))?.let { (p, n) ->
-                    val book = Sides.bookOf(p, entries, sides)
-                    lastSpeech = "Choose"
-                    postChat("", isUser = false, meta = "ask=$p|$n|" + Ask.kinds(book).joinToString(",") + (if (book == Sides.STAFF) "|staff" else ""))
-                    return@launch
-                }
                 // The AI reads every message first whenever one can answer: the app's own rules can misread a message, and a
                 // wrong save is worse than a second's wait. The app answers by itself only when no AI can (no key, no internet,
                 // the smart answers and today's reward videos used up).
                 val aiNow = !noAi && Ai.handles(groqKey) && Ai.chain.any { (k, _) -> (Ai.restUntil[Ai.provider(k)?.name.orEmpty()] ?: 0L) <= System.currentTimeMillis() }
                 val aiFirst = Ai.first(aiNow, onOwnKey(), Premium.active, store.smartLeft, Ads.rewardsLeft(context))
+                // A saved person and a number, nothing else: the chat asks what happened with a small card, in any language.
+                // With the AI first it reads such a message itself ("anwar ko 5000 awal eent di" is goods, not money).
+                if (!retry && !aiFirst) Ask.of(AiAgent.counted(roman), AiAgent.who(names0, store.known()))?.let { (p, n) ->
+                    val book = Sides.bookOf(p, entries, sides)
+                    lastSpeech = "Choose"
+                    postChat("", isUser = false, meta = "ask=$p|$n|" + Ask.kinds(book).joinToString(",") + (if (book == Sides.STAFF) "|staff" else ""))
+                    return@launch
+                }
                 // Learnt from the AI before: a message of the same shape (only its numbers differ) is done by the app alone, for nothing.
                 // People and numbers are open places in it, so a known sentence with another name needs no AI either.
                 if (!retry && !aiFirst) {

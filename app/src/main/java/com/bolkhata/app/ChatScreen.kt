@@ -965,7 +965,9 @@ private fun Working(label: String) {
     }
 }
 
-private val RateAsk = Regex("""^What rate for (.+)\?$""")
+/** A question for a work's or sale's rate, the app's ("What rate for 5000 Kachi eent?") or the AI's in any language
+ * ("Ashraf ke 5000 kachi eent ka rate kya hai?"): a number, the word rate, and a question mark at the end. */
+private val RateAsk = Regex("""(?is)^(?=.*\d)(?=.*(\brate\b|ریٹ|रेट)).*\?\s*$""")
 
 /**
  * The app's question for a work's or sale's rate, as a small card in the chat: the rate in one box with "per 1000 |
