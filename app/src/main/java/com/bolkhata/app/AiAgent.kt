@@ -211,8 +211,9 @@ object AiAgent {
           ledger. A person's name is kept as heard: change it to a saved name only when the two sound almost the same
           (Hamid / Hameed); a different name (Ahmed is not Ashraf) is a new person. But an ordinary word that is no
           one's name, standing where a name must be ("motion ko 2000 diye"), is a saved name misheard: take the saved
-          name closest in sound (motion: Mohsin), and ask who when none is close. Amounts must agree between the
-          hearings, else ask.
+          name closest in sound (motion: Mohsin), and ask who when none is close. So is a heard name that is no usual
+          name at all and differs from a saved one only by a sound lost at the start or a near letter (b/f/v/p, s/z,
+          d/t): "absa" for Hafsa is Hafsa. Amounts must agree between the hearings, else ask.
         - A correction of what was just saved ("sirf Hamid se", "nahi 40 tha", "ye kal ka tha") changes those entries
           with update_entries (their ids are under "Just saved"); never add the same entry a second time. But the
           very same message sent again means it happened again: save it again with again true, do not say it is saved.
