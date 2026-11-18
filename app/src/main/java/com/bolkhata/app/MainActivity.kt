@@ -1414,8 +1414,9 @@ fun App(
                 val aiNow = !noAi && Ai.handles(groqKey) && Ai.chain.any { (k, _) -> (Ai.restUntil[Ai.provider(k)?.name.orEmpty()] ?: 0L) <= System.currentTimeMillis() }
                 val aiFirst = Ai.first(aiNow, onOwnKey(), Premium.active, store.smartLeft, Ads.rewardsLeft(context)) && !Normalizer.localTongue(text, roman)
                 // A saved person and a number, nothing else: the chat asks what happened with a small card, in any language.
-                // With the AI first it reads such a message itself ("anwar ko 5000 awal eent di" is goods, not money).
-                if (!retry && !aiFirst) Ask.of(AiAgent.counted(roman), AiAgent.who(names0, store.known()))?.let { (p, n) ->
+                // With an AI at hand the assistants read such a message themselves ("anwar ko 5000 awal eent di" is goods,
+                // not money); this quick card is for when no AI can answer.
+                if (!retry && !aiNow) Ask.of(AiAgent.counted(roman), AiAgent.who(names0, store.known()))?.let { (p, n) ->
                     val book = Sides.bookOf(p, entries, sides)
                     lastSpeech = "Choose"
                     postChat("", isUser = false, meta = "ask=$p|$n|" + Ask.kinds(book).joinToString(",") + (if (book == Sides.STAFF) "|staff" else ""))
