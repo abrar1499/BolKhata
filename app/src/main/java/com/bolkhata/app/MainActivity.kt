@@ -1760,7 +1760,10 @@ fun App(
         if (fetch) scope.launch { Lingo.fetch(code) }
     }
     // The mic listens in the app's language (Auto: the app's own guess from the chat).
-    LaunchedEffect(appLang) { I18n.micLanguage(appLang).let { if (it != lang) setLanguage(it) } }
+    // Once the person picks the mic's language from its card, it stays theirs.
+    LaunchedEffect(appLang) { if (!store.micPicked) I18n.micLanguage(appLang).let { if (it != lang) setLanguage(it) } }
+    // The mic's language card: the first tap on the chat mic, or a long press on it.
+    var micCard by remember { mutableStateOf(false) }
 
     /** Home is a second entry point to the same assistant and persisted conversation as the Chat screen. */
     fun homeInput(raw: String) {
@@ -2745,8 +2748,15 @@ fun App(
             // The chat bar belongs to Chat only, not to a page opened over it (business page, report).
             if (main && tab == Tab.CHAT && !bizPage && !profitOpen) {
                 Column {
+                    if (micCard) MicLanguageCard(lang.takeIf { store.micPicked } ?: "\u0000", onDismiss = { micCard = false }) { tag ->
+                        micCard = false
+                        store.micPicked = true
+                        setLanguage(tag)
+                        startVoice(forChat = true)
+                    }
                     InputBar(
-                        onSend = { chatSay(it) }, onMic = { startVoice(forChat = true) }, placeholder = "Speak, type or ask…",
+                        onSend = { chatSay(it) }, onMic = { if (store.micPicked) startVoice(forChat = true) else micCard = true }, placeholder = "Speak, type or ask…",
+                        onMicLong = { micCard = true },
                         busy = chatLoading,
                         voice = if (recorder != null) VoiceState(true, "Recording", "tap to send", level = voiceLevel) { finishRecording() }
                             else if (hearing) VoiceState(true, if (listener.live && chatLoading) "Working" else "Listening", heardSoFar.ifBlank { "tap to send" },

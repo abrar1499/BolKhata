@@ -70,7 +70,9 @@ internal fun InputBar(
     busy: Boolean = false,
     voice: VoiceState? = null,
     /** False when a bar below (the bottom tabs) already keeps clear of the system navigation. */
-    navPad: Boolean = true
+    navPad: Boolean = true,
+    /** A long press on the mic (null: it opens the keyboard for its own mic). */
+    onMicLong: (() -> Unit)? = null
 ) {
     var text by rememberSaveable { mutableStateOf("") }
     // A tap on the mic opens the keyboard on the bar: its own mic (Gboard) hears best and puts it right as it goes.
@@ -132,7 +134,7 @@ internal fun InputBar(
                             .lift(1.dp, CircleShape)
                             .clip(CircleShape)
                             .background(if (talking && !voice!!.live) RedSpend else MaterialTheme.colorScheme.surface)
-                            .combinedClickable(enabled = talking || !busy, onLongClick = { if (!talking && text.isBlank()) { viaMic = true; focus.requestFocus(); keyboard?.show() } }) {
+                            .combinedClickable(enabled = talking || !busy, onLongClick = { if (!talking && text.isBlank()) { if (onMicLong != null) onMicLong() else { viaMic = true; focus.requestFocus(); keyboard?.show() } } }) {
                                 // A tap listens with the app's own mic; a long press opens the keyboard for its mic.
                                 when {
                                     talking -> voice!!.toggle()
@@ -655,5 +657,41 @@ private fun ChoiceTile(title: String, sub: String, glyph: String, color: Color, 
         Spacer(Modifier.height(4.dp))
         Text(title, fontWeight = FontWeight.Bold, color = color, fontSize = 16.sp)
         Text(sub, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+    }
+}
+
+/** The mic's languages: a name to show and the tag it listens in ("" Auto: the app's own guess). */
+internal val MIC_LANGUAGES = listOf("Auto" to "", "English" to "en-US", "اردو Urdu" to "ur-PK", "हिन्दी Hindi" to "hi", "العربية" to "ar",
+    "বাংলা" to "bn", "Español" to "es", "Français" to "fr", "Deutsch" to "de", "Nederlands" to "nl", "Português" to "pt", "Türkçe" to "tr")
+
+/** A small white card right above the chat mic: "SPEAK IN" and the mic's languages; a tap picks one. */
+@Composable
+internal fun MicLanguageCard(picked: String, onDismiss: () -> Unit, onPick: (String) -> Unit) {
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val gap = with(density) { 8.dp.roundToPx() }
+    val side = with(density) { 12.dp.roundToPx() }
+    androidx.compose.ui.window.Popup(
+        popupPositionProvider = object : androidx.compose.ui.window.PopupPositionProvider {
+            override fun calculatePosition(anchorBounds: androidx.compose.ui.unit.IntRect, windowSize: androidx.compose.ui.unit.IntSize,
+                layoutDirection: androidx.compose.ui.unit.LayoutDirection, popupContentSize: androidx.compose.ui.unit.IntSize) =
+                androidx.compose.ui.unit.IntOffset(anchorBounds.right - popupContentSize.width - side, anchorBounds.top - popupContentSize.height - gap)
+        },
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.PopupProperties(focusable = true)
+    ) {
+        val shape = RoundedCornerShape(14.dp)
+        Column(
+            Modifier.width(172.dp).heightIn(max = 300.dp).lift(8.dp, shape).clip(shape).background(Color.White)
+                .verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(vertical = 4.dp)
+        ) {
+            Text("SPEAK IN", fontSize = 10.5.sp, fontWeight = FontWeight.Bold, color = Color(0xFF8A8580), letterSpacing = 0.3.sp,
+                modifier = Modifier.padding(start = 12.dp, top = 6.dp, bottom = 4.dp))
+            MIC_LANGUAGES.forEach { (name, tag) ->
+                val on = tag == picked
+                Text(name, fontSize = 13.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium,
+                    color = if (on) Color(0xFFE3342F) else Color(0xFF1C1917),
+                    modifier = Modifier.fillMaxWidth().clickable { onPick(tag) }.padding(horizontal = 12.dp, vertical = 7.dp))
+            }
+        }
     }
 }

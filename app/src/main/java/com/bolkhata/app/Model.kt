@@ -758,6 +758,11 @@ class Store(context: Context) {
         }.getOrDefault(emptyMap())
         set(v) = prefs.edit().putString("aiLearned", org.json.JSONObject(v.entries.toList().takeLast(500).associate { it.key to it.value }).toString()).apply()
 
+    /** The person picked the mic's language from its card (first tap, or a long press): it no longer follows the app's. */
+    var micPicked: Boolean
+        get() = prefs.getBoolean("micPicked", false)
+        set(v) = prefs.edit().putBoolean("micPicked", v).apply()
+
     /** Use Groq Whisper for the mic and the voice call instead of the phone's speech recognition. */
     var groqVoice: Boolean
         get() = prefs.getBoolean("groqVoice", true)
