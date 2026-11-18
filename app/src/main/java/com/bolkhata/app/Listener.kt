@@ -45,6 +45,8 @@ class Listener(context: Context) {
     /** Android 13+: the app's own mic feeds the recogniser, cleaned (noise held down, a soft or far voice raised). */
     private var cleanMic = Build.VERSION.SDK_INT >= 33
     private var feed: Feed? = null
+    /** Words came through the cleaned mic at least once: it works with this phone's recogniser. */
+    private var feedHeard = false
     private class Feed(val record: AudioRecord, val read: ParcelFileDescriptor, val pump: Thread)
 
     var onPartial: (String) -> Unit = {}
@@ -65,9 +67,10 @@ class Listener(context: Context) {
         override fun onRmsChanged(rmsdB: Float) { if (wanted) onLevel(((rmsdB + 2f) / 12f).coerceIn(0f, 1f)) }
         override fun onPartialResults(partialResults: Bundle?) {
             if (!wanted) return
-            best(partialResults).takeIf { it.isNotBlank() }?.let { soFar = it; onPartial(whole()) }
+            best(partialResults).takeIf { it.isNotBlank() }?.let { if (feed != null) feedHeard = true; soFar = it; onPartial(whole()) }
         }
         override fun onResults(results: Bundle?) {
+            if (feed != null && best(results).isNotBlank()) feedHeard = true
             closeFeed()
             if (!wanted) return
             if (live) {
@@ -89,8 +92,10 @@ class Listener(context: Context) {
             val fed = feed != null
             closeFeed()
             if (!wanted) return
-            // The cleaned mic did not work with this phone's recogniser: its own mic from now on.
-            if (fed && error in setOf(SpeechRecognizer.ERROR_CLIENT, SpeechRecognizer.ERROR_AUDIO, SpeechRecognizer.ERROR_SERVER)) {
+            // The cleaned mic did not work with this phone's recogniser (an error, or nothing heard through it yet): its
+            // own mic from now on, at once.
+            if (fed && !feedHeard && error != SpeechRecognizer.ERROR_NETWORK && error != SpeechRecognizer.ERROR_NETWORK_TIMEOUT &&
+                error != SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
                 cleanMic = false; again(120); return
             }
             when (error) {
