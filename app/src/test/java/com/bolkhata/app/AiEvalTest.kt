@@ -248,6 +248,9 @@ class AiEvalTest {
             entries = listOf(Entry("h1", Type.DIYA, 200.0, Cat.UDHAAR, "Loans", "Hafsa Noor", "", now - 2 * day, now - 2 * day)) + entries
             baseIds = entries.map { it.id }.toSet()
         }) { listOf("given to Hafsa Noor" to has(Type.DIYA, "Hafsa Noor", 15.0), "no new person" to added.none { it.person.contains("bsa", true) }) },
+        voice("a heard name that is no name, nobody close", "absa ko 15 riyal diye") {
+            listOf("nothing saved yet" to added.isEmpty(), "asks with a real name" to (asked && text.contains("hafsa", true)))
+        },
         voice("work misheard", "hameed ne 6000 kacchi int daali") { listOf("work by Hamid 6000 = 6000" to has(Type.PURCHASE, "Hamid Akram", 6_000.0, qty = 6_000.0), "kept the name Kachi eent" to added.all { it.item == "Kachi eent" }) },
         voice("question in urdu script", "اس مہینے کا خرچہ کتنا ہے") { listOf("says 365" to told.contains("365"), "nothing saved" to added.isEmpty(), "answer is not in Urdu script" to !urduOrHindi.containsMatchIn(text)) },
         voice("two works in one breath", "hamid ne aaj das hazar kachi eent dali aur zubair ne paanch hazar bharai ki") {

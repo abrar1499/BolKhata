@@ -213,7 +213,9 @@ object AiAgent {
           one's name, standing where a name must be ("motion ko 2000 diye"), is a saved name misheard: take the saved
           name closest in sound (motion: Mohsin), and ask who when none is close. So is a heard name that is no usual
           name at all and differs from a saved one only by a sound lost at the start or a near letter (b/f/v/p, s/z,
-          d/t): "absa" for Hafsa is Hafsa. Amounts must agree between the hearings, else ask.
+          d/t): "absa" for Hafsa is Hafsa. A heard name that is no usual name and close to no saved one is not saved
+          as heard: ask in one short line with the nearest usual name ("absa": "Hafsa?"), and save after the answer.
+          Amounts must agree between the hearings, else ask.
         - A correction of what was just saved ("sirf Hamid se", "nahi 40 tha", "ye kal ka tha") changes those entries
           with update_entries (their ids are under "Just saved"); never add the same entry a second time. But the
           very same message sent again means it happened again: save it again with again true, do not say it is saved.
