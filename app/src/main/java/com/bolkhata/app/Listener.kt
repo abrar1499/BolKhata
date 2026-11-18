@@ -2,15 +2,7 @@ package com.bolkhata.app
 
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.media.AudioFormat
-import android.media.AudioRecord
-import android.media.MediaRecorder
-import android.media.audiofx.AutomaticGainControl
-import android.media.audiofx.NoiseSuppressor
-import android.os.Build
 import android.os.Bundle
-import android.os.ParcelFileDescriptor
 import android.os.Handler
 import android.os.Looper
 import android.speech.RecognitionListener
@@ -42,12 +34,6 @@ class Listener(context: Context) {
         private set
     /** A sentence is out and its answer is being made: listening starts again on [resume]. */
     private var waiting = false
-    /** Android 13+: the app's own mic feeds the recogniser, cleaned (noise held down, a soft or far voice raised). */
-    private var cleanMic = Build.VERSION.SDK_INT >= 33
-    private var feed: Feed? = null
-    /** Words came through the cleaned mic at least once: it works with this phone's recogniser. */
-    private var feedHeard = false
-    private class Feed(val record: AudioRecord, val read: ParcelFileDescriptor, val pump: Thread)
 
     var onPartial: (String) -> Unit = {}
     var onFinal: (String) -> Unit = {}
@@ -67,11 +53,9 @@ class Listener(context: Context) {
         override fun onRmsChanged(rmsdB: Float) { if (wanted) onLevel(((rmsdB + 2f) / 12f).coerceIn(0f, 1f)) }
         override fun onPartialResults(partialResults: Bundle?) {
             if (!wanted) return
-            best(partialResults).takeIf { it.isNotBlank() }?.let { if (feed != null) feedHeard = true; soFar = it; onPartial(whole()) }
+            best(partialResults).takeIf { it.isNotBlank() }?.let { soFar = it; onPartial(whole()) }
         }
         override fun onResults(results: Bundle?) {
-            if (feed != null && best(results).isNotBlank()) feedHeard = true
-            closeFeed()
             if (!wanted) return
             if (live) {
                 val part = best(results).ifBlank { soFar }
@@ -89,15 +73,7 @@ class Listener(context: Context) {
             if (stopping) done(said) else { onPartial(said); again(120) }
         }
         override fun onError(error: Int) {
-            val fed = feed != null
-            closeFeed()
             if (!wanted) return
-            // The cleaned mic did not work with this phone's recogniser (an error, or nothing heard through it yet): its
-            // own mic from now on, at once.
-            if (fed && !feedHeard && error != SpeechRecognizer.ERROR_NETWORK && error != SpeechRecognizer.ERROR_NETWORK_TIMEOUT &&
-                error != SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
-                cleanMic = false; again(120); return
-            }
             when (error) {
                 // Still closing the last session: start afresh a moment later, a few times.
                 SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> if (busyTries < 3) { busyTries++; reset(); again(400) } else fail("Voice is busy. Try again.")
@@ -137,61 +113,11 @@ class Listener(context: Context) {
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
             putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, app.packageName)
+            // A slow or soft speaker gets time to finish: a short breath does not end the sentence.
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2000L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L)
             biasTo(names)
-            openFeed()?.let { src ->
-                putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE, src)
-                putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_CHANNEL_COUNT, 1)
-                putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_ENCODING, AudioFormat.ENCODING_PCM_16BIT)
-                putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_SAMPLING_RATE, RATE)
-            }
         })
-        // A recogniser that takes the cleaned mic but writes nothing for 6 seconds: its own mic instead, at once.
-        val f = feed ?: return
-        main.postDelayed({
-            if (wanted && feed === f && !feedHeard) { cleanMic = false; recognizer?.cancel(); closeFeed(); begin() }
-        }, 6000)
-    }
-
-    /**
-     * The mic as tuned for speech, with the phone's noise suppressor and automatic gain on, piped to the recogniser;
-     * null (the recogniser's own mic) before Android 13, without the mic permission, or when it cannot open.
-     */
-    private fun openFeed(): ParcelFileDescriptor? {
-        closeFeed()
-        if (!cleanMic || Build.VERSION.SDK_INT < 33) return null
-        if (app.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return null
-        return runCatching {
-            val size = AudioRecord.getMinBufferSize(RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT).coerceAtLeast(3200)
-            val record = AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, size * 4)
-            if (record.state != AudioRecord.STATE_INITIALIZED) { record.release(); return null }
-            if (NoiseSuppressor.isAvailable()) NoiseSuppressor.create(record.audioSessionId)?.enabled = true
-            if (AutomaticGainControl.isAvailable()) AutomaticGainControl.create(record.audioSessionId)?.enabled = true
-            val (read, write) = ParcelFileDescriptor.createPipe()
-            record.startRecording()
-            val pump = Thread {
-                val buf = ByteArray(size)
-                runCatching {
-                    ParcelFileDescriptor.AutoCloseOutputStream(write).use { out ->
-                        while (!Thread.currentThread().isInterrupted) {
-                            val n = record.read(buf, 0, buf.size)
-                            if (n <= 0) break
-                            out.write(buf, 0, n)
-                        }
-                    }
-                }
-            }.apply { isDaemon = true; start() }
-            feed = Feed(record, read, pump)
-            read
-        }.getOrElse { cleanMic = false; null }
-    }
-
-    private fun closeFeed() {
-        val f = feed ?: return
-        feed = null
-        f.pump.interrupt()
-        runCatching { f.record.stop() }
-        runCatching { f.record.release() }
-        runCatching { f.read.close() }
     }
 
     private fun whole() = (said + " " + soFar).trim()
@@ -224,7 +150,6 @@ class Listener(context: Context) {
     }
 
     private fun finish() {
-        closeFeed()
         wanted = false; run++
         onListening(false)
     }
@@ -241,7 +166,6 @@ class Listener(context: Context) {
     }
 
     private fun reset() {
-        closeFeed()
         recognizer?.destroy()
         recognizer = null
     }
@@ -252,9 +176,6 @@ class Listener(context: Context) {
         reset()
     }
 }
-
-/** The cleaned mic's samples a second: what speech recognisers take. */
-private const val RATE = 16_000
 
 /** Android 13+: the phone hears these words (saved names: "Hafsa", not "Absa") more readily. */
 fun Intent.biasTo(words: List<String>) {
