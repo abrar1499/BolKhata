@@ -1958,10 +1958,6 @@ fun App(
      * setup also needs its own voice switch (which may have been turned off long ago) to be on.
      */
     fun whisperOn() = Ai.voiceKeyFor(groqKey).isNotBlank() && groqVoice
-    // Test: the APK's chat mic hears with Whisper on the app's own Groq key (none in the Play build), told the saved
-    // names; when that key is at its limit the phone's mic takes over.
-    var whisperDown by remember { mutableStateOf(false) }
-    fun whisperKey(): String = Ai.voiceKeyFor(groqKey).ifBlank { if (!BuildConfig.PLAY && BuildConfig.GROQ_KEY.isNotBlank() && !whisperDown) Groq.SHARED else "" }
     /** The language to listen in: the one picked, else guessed from how the person writes (see Normalizer.voiceLanguage). */
     fun voiceLang() = Normalizer.voiceLanguage(lang, chatMessages.filter { it.isUser }.map { it.text })
     val ttsReady = remember { mutableStateOf(false) }
@@ -2007,9 +2003,8 @@ fun App(
             // With the AI reading the message, Whisper is not shown the saved names (it then turns a new name into a
             // saved one that only sounds a little alike) and gives the words as it heard them; the AI matches the names.
             val ai = Ai.handles(groqKey)
-            val key = whisperKey()
-            val said = Groq.transcribe(key, file, contactNames() + entries.filter { it.type == Type.AAMDANI }.map { source(it) }, roman = !ai)
-            if (said.isFailure && key == Groq.SHARED) whisperDown = true
+            val said = Groq.transcribe(Ai.voiceKeyFor(groqKey), file,
+                if (ai) emptyList() else contactNames() + entries.filter { it.type == Type.AAMDANI }.map { source(it) }, roman = !ai)
             if (ai && said.isSuccess) aiHeard[0] = emptyList()
             // In the chat (not the call) the recording is kept, named with its length, and shown as a voice note.
             voiceNote[0] = if (voiceOn || said.isFailure) null else runCatching {
@@ -2028,7 +2023,7 @@ fun App(
             loadingLabel = "Thinking…"
             said.fold(
                 onSuccess = { text -> if (Groq.isNoise(text)) { voiceNote[0]?.let { runCatching { File(it).delete() } }; voiceNote[0] = null; missed() } else heard(text.trim()) },
-                onFailure = { toast(if (whisperDown) "Voice is busy: tap the mic again to use the phone's" else (it.message ?: "Groq voice failed") + ". You can turn off Groq voice in Settings."); missed() }
+                onFailure = { toast((it.message ?: "Groq voice failed") + ". You can turn off Groq voice in Settings."); missed() }
             )
         }
     }
@@ -2523,17 +2518,7 @@ fun App(
     // Live voice listens again as soon as the answer to the last sentence is there.
     LaunchedEffect(chatLoading) { if (!chatLoading) listener.resume() }
 
-    fun startVoice(forChat: Boolean = false, whisper: Boolean = false) {
-        // Test: a long press on the chat mic records for Whisper; a pause (or a tap) sends it to be written out.
-        if (forChat && whisper && whisperKey().isNotBlank()) {
-            if (hearing) { finishRecording(); return }
-            hearing = true
-            startRecording(
-                heard = { said -> hearing = false; keepHearings(listOf(said), said); chatSay(said, live = true) },
-                missed = { hearing = false }
-            )
-            return
-        }
+    fun startVoice(forChat: Boolean = false) {
         // Every mic listens live with the phone, also with a Groq key: the words go as soon as they are said.
         if (!android.speech.SpeechRecognizer.isRecognitionAvailable(context)) { toast("Google voice not found. Update the Google app from Play Store."); return }
         val granted = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) ==
@@ -2762,7 +2747,6 @@ fun App(
                 Column {
                     InputBar(
                         onSend = { chatSay(it) }, onMic = { startVoice(forChat = true) }, placeholder = "Speak, type or ask…",
-                        onMicLong = if (whisperKey().isNotBlank()) ({ startVoice(forChat = true, whisper = true) }) else null,
                         busy = chatLoading,
                         voice = if (recorder != null) VoiceState(true, "Recording", "tap to send", level = voiceLevel) { finishRecording() }
                             else if (hearing) VoiceState(true, if (listener.live && chatLoading) "Working" else "Listening", heardSoFar.ifBlank { "tap to send" },
