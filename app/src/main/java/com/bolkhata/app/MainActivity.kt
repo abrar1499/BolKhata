@@ -1518,7 +1518,9 @@ fun App(
                         return AiAgent.Host(entries = { mine }, add = { mine = it + mine }, update = { ch -> mine = mine.map { e -> ch.firstOrNull { it.id == e.id } ?: e } },
                             trash = { ids -> bin = mine.filter { it.id in ids } + bin; mine = mine.filter { it.id !in ids } }, names = { names0 }, currency = currency,
                             setup = { setup }, saveSetup = { setup = it }, trashed = { bin },
-                            restore = { ids -> mine = bin.filter { it.id in ids } + mine; bin = bin.filter { it.id !in ids } })
+                            restore = { ids -> mine = bin.filter { it.id in ids } + mine; bin = bin.filter { it.id !in ids } },
+                            // The app's language too: the AI answers voice in it, and a learnt reply is tagged with it (see AiAgent.replay).
+                            language = I18n.englishName)
                     }
                     class Won(val answer: AiAgent.Answer, val calls: List<Pair<String, org.json.JSONObject>>, val key: String, val model: String)
                     val stop = java.util.concurrent.atomic.AtomicBoolean(false)
@@ -1587,7 +1589,7 @@ fun App(
                     postChat(card.ifBlank { answer?.text ?: lastSpeech }, isUser = false, entryIds = answer?.added.orEmpty(), listIds = answer?.listIds.orEmpty(),
                         meta = "engine=AI; intent=agent" + (if (card.isBlank()) "; plain" else "") + (if (lesson.isBlank()) "" else "; shape=" + answer!!.shape) + (if (words.isEmpty()) "" else "; words=" + words.keys.joinToString(",")) +
                             "; own=" + (own?.let { it.kind + (if (it.what.isBlank()) "" else "/" + it.what) + (if (it.unsure) "/unsure" else "") } ?: "error") +
-                            (if (usage.isBlank()) "" else "; usage=" + usage))
+                            (if (usage.isBlank()) "" else "; usage=" + usage + (if (lesson.isBlank()) "" else " · learnt")))
                     return@launch
                     }
                 }

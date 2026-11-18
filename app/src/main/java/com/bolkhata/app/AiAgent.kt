@@ -358,10 +358,15 @@ object AiAgent {
      * else the one saved name it is short for ("hmd" for Hamid). Null when it is no name, or could be two people.
      */
     fun who(names: List<String>, learned: Map<String, String>): (String) -> String? = { w ->
-        if (w.length < 3) null else learned["=$w"]
+        if (w.length < 3 || w in everyday) null else learned["=$w"]
             ?: names.filter { n -> n.lowercase(Locale.ROOT).split(' ').any { it == w } }.distinct().singleOrNull()
             ?: names.filter { Understand.shortFor(w, it.lowercase(Locale.ROOT).substringBefore(' ')) }.distinct().singleOrNull()
     }
+
+    /** Everyday words never taken for a person's name ("hai" for Haider, "raha" for Raheel), so talk is learnt and said again. */
+    private val everyday = setOf("hai", "hain", "kya", "kia", "raha", "rahi", "rahe", "kar", "karo", "sab", "kuch", "acha", "theek",
+        "thik", "nahi", "haan", "aap", "tum", "mera", "meri", "mere", "wala", "wali", "wale", "hua", "hui", "gaya", "gayi", "chal",
+        "bhai", "yaar", "the", "and", "you", "how", "are", "what", "diya", "diye", "liya", "liye", "mila", "mile", "aaj", "kal")
 
     /** The words of a message, each with the person it names (null for other words); a name of two words counts once. */
     private fun read(said: String, who: (String) -> String?): List<Pair<String, String?>> {
