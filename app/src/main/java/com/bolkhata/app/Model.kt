@@ -40,13 +40,14 @@ enum class Cat(val label: String, val icon: String) {
     OTHER("Other", "📝")
 }
 
-/** Every currency: the Gulf, South Asia and the big ones first, then all others A–Z. */
+/** Every currency a country pays in today: the Gulf, South Asia and the big ones first, then all others A–Z. */
 val CURRENCIES: List<String> = run {
     val first = listOf("SAR", "PKR", "AED", "QAR", "KWD", "OMR", "BHD", "INR", "BDT", "NPR", "LKR", "USD", "EUR", "GBP")
-    // Old currencies no longer in use ("… (1927–2002)") are left out.
-    first + java.util.Currency.getAvailableCurrencies()
-        .filter { c -> runCatching { c.getDisplayName(java.util.Locale.ENGLISH) }.getOrDefault("").none { it.isDigit() } }
-        .map { it.currencyCode }.filter { it !in first }.sorted()
+    // Only the money of real countries: no metals, test or fund codes (XPD, XTS, XXX) and no old ones (YDD, USS).
+    first + java.util.Locale.getISOCountries()
+        .mapNotNull { runCatching { java.util.Currency.getInstance(java.util.Locale("", it))?.currencyCode }.getOrNull() }
+        .filter { !it.startsWith("X") || it in setOf("XAF", "XOF", "XCD", "XPF") }
+        .distinct().filter { it !in first }.sorted()
 }
 
 /** A currency's English name ("Saudi Riyal"), or the code. */
