@@ -177,6 +177,12 @@ class LocalAddTest {
         assertEquals(1, added.size)
         assertTrue(has(Type.DIYA, "Salim Khan", 200.0))
     }
+    @Test fun whichOfTwoNamesItIsSomeoneNew() = Books().run {
+        assertTrue(say("salim ko 200 diye")?.text.orEmpty().contains("?"))
+        say("Salim Akhtar")
+        assertEquals(1, added.size)
+        assertTrue(has(Type.DIYA, "Salim Akhtar", 200.0))
+    }
     @Test fun workWithNoCount() = Books().run {
         assertTrue(say("hamid ne kaam kiya")?.text.orEmpty().contains("?"))
         say("4000 kachi eent")

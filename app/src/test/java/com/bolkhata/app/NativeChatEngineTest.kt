@@ -1,6 +1,7 @@
 package com.bolkhata.app
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Calendar
@@ -929,6 +930,15 @@ class ParserShampooSpellingTest {
 
 /** What the phone's voice writes wrongly is fixed before the chat reads it; typed text is left alone. */
 class VoiceFixTest {
+    @Test fun romanUrduUrduAndHindiAreTheAppsOwn() {
+        assertTrue(Normalizer.localTongue("hamid ko 500 diye", "hamid ko 500 diye"))
+        assertTrue(Normalizer.localTongue("حامد کو 500 دیے", "hamid ko 500 diye"))
+        assertTrue(Normalizer.localTongue("हामिद को 500 दिए", "hamid ko 500 diye"))
+        assertFalse(Normalizer.localTongue("I gave Hamid 500", "I gave Hamid 500"))
+        assertFalse(Normalizer.localTongue("أعطيت حامد 500", "atayt hamid 500"))
+        assertFalse(Normalizer.localTongue("j'ai donné 500 à Hamid", "j'ai donné 500 à Hamid"))
+    }
+
     @Test fun thePhoneListensInTheLanguageThePersonWrites() {
         // Picked in the menu: that one, whatever was typed.
         assertEquals("fr", Normalizer.voiceLanguage("fr", listOf("what did I spend this month")))

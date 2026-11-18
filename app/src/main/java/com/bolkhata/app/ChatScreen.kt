@@ -20,6 +20,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -177,7 +178,9 @@ fun ChatScreen(
                             val asked = messages.lastOrNull { it.isUser }?.text.orEmpty()
                             // "Which Imran do you mean: A or B?" (a message waiting for its person): the tap answers with the name.
                             val picking = Regex("""^Which \S+ do you mean: """).containsMatchIn(message.text)
-                            if (names.isNotEmpty()) NameChoices(names) { name -> onSend(if (moving) "$asked $name" else if (picking) name else "$name account") }
+                            // Asked which person: "+ New" too, for someone else of that name (typed in full, a new person).
+                            val word = Regex("""^Which (\S+) do you mean: """).find(message.text)?.groupValues?.get(1)
+                            if (names.isNotEmpty()) NameChoices(names, newOf = word.takeIf { picking }) { name -> onSend(if (moving) "$asked $name" else if (picking) name else "$name account") }
                             // After a total, the likely next questions as chips.
                             val hero = remember(message.text, currency) { Report.parse(message.text, currency)?.hero?.label.orEmpty() }
                             val asks = when {
@@ -512,7 +515,8 @@ private fun RewardCard(onWatch: () -> Unit, onLater: () -> Unit, onPremium: () -
 @OptIn(ExperimentalLayoutApi::class)
 /** Saved names to pick from, in one card; a tap opens that khata (or finishes the move that asked). */
 @Composable
-private fun NameChoices(names: List<String>, onPick: (String) -> Unit) {
+private fun NameChoices(names: List<String>, newOf: String? = null, onPick: (String) -> Unit) {
+    var typing by remember(names) { mutableStateOf<String?>(null) }
     Column(
         Modifier
             .fillMaxWidth(0.92f)
@@ -533,6 +537,33 @@ private fun NameChoices(names: List<String>, onPick: (String) -> Unit) {
                 Spacer(Modifier.width(12.dp))
                 Text(name, Modifier.weight(1f), fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text("›", fontSize = 20.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        // Someone else of that name: "+ New Imran" opens a field for the full name ("Imran Mohammad"), saved as a new person.
+        if (newOf != null) {
+            HorizontalDivider(Modifier.padding(start = 60.dp), color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.12f))
+            val t = typing
+            if (t == null) Row(
+                Modifier.fillMaxWidth().clickable { typing = newOf.replaceFirstChar { it.uppercase() } + " " }.padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(Modifier.size(34.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.10f)), contentAlignment = Alignment.Center) {
+                    Text("+", fontWeight = FontWeight.Bold, fontSize = 17.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Spacer(Modifier.width(12.dp))
+                Text("New " + newOf.replaceFirstChar { it.uppercase() }, Modifier.weight(1f), fontSize = 15.sp, fontWeight = FontWeight.Medium)
+            } else Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+                LaunchedEffect(Unit) { focus.requestFocus() }
+                Box(Modifier.weight(1f).height(36.dp).fieldEdge(RoundedCornerShape(12.dp)).padding(horizontal = 10.dp), contentAlignment = Alignment.CenterStart) {
+                    androidx.compose.foundation.text.BasicTextField(t, { typing = it }, singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurface),
+                        cursorBrush = androidx.compose.ui.graphics.SolidColor(EmberTop), modifier = Modifier.fillMaxWidth().focusRequester(focus))
+                }
+                val full = t.trim().split(Regex("""\s+""")).size >= 2
+                Text("Save", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (full) Color(0xFF1D1D1F) else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 6.dp).clip(RoundedCornerShape(16.dp)).clickable(enabled = full) { onPick(t.trim()) }
+                        .padding(horizontal = 12.dp, vertical = 8.dp))
             }
         }
     }
