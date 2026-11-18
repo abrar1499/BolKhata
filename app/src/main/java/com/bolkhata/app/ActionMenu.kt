@@ -86,7 +86,7 @@ fun ActionMenu(
 /** Long-press menu of one entry: Edit, Move, Delete. */
 @Composable
 fun EntryMenu(
-    e: Entry, currency: String, onEdit: () -> Unit, onRename: () -> Unit, onMove: () -> Unit, onSelect: () -> Unit, onDelete: () -> Unit, onDismiss: () -> Unit,
+    e: Entry, currency: String, onEdit: () -> Unit, onRename: () -> Unit, onMove: () -> Unit, onSelect: (() -> Unit)?, onDelete: () -> Unit, onDismiss: () -> Unit,
     /** A bill for goods given to a customer (shown only for such entries). */
     onBill: (() -> Unit)? = null
 ) {
@@ -101,7 +101,8 @@ fun EntryMenu(
             MenuAction("Edit", Icons.Filled.Edit, onClick = onEdit),
             MenuAction("Rename", Icons.Filled.DriveFileRenameOutline, onClick = onRename),
             MenuAction("Move", Icons.Filled.SwapHoriz, onClick = onMove),
-            MenuAction("Select", Icons.Filled.CheckCircle, onClick = onSelect),
+            // Picking more entries, in a list only (null from the chat).
+            onSelect?.let { MenuAction("Select", Icons.Filled.CheckCircle, onClick = it) },
             MenuAction("Delete", Icons.Filled.Delete, danger = true, onClick = onDelete)
         ),
         onDismiss = onDismiss

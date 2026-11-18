@@ -211,6 +211,8 @@ fun App(
     // The main account opened from the home screen, and the entry whose long-press menu / move dialog is open.
     var ledger by remember { mutableStateOf<MainAcct?>(null) }
     var menuFor by remember { mutableStateOf<Entry?>(null) }
+    // The menu was opened from a saved card in the chat (no list there to pick more entries in).
+    var menuInChat by remember { mutableStateOf(false) }
     // A long-pressed khata (kind to name), and the khata being renamed or moved.
     // Entries a long-press Move is moving (what they are called, their ids), and what a Delete does once confirmed.
     var movingAll by remember { mutableStateOf<Pair<String, Set<String>>?>(null) }
@@ -438,6 +440,10 @@ fun App(
         val after = entries.map { if (it.person.equals(from, ignoreCase = true)) it.copy(person = to) else it }
         val record = store.recordMove(entries, after) ?: return
         save(after)
+        // The account they were put in (Staff, Customers…) goes with the new name.
+        sides.people.entries.firstOrNull { it.key.trim().equals(from, true) }?.let { (key, book) ->
+            if (sides.people.keys.none { it.trim().equals(to, true) }) { val s = sides.copy(people = sides.people - key + (to to book)); sides = s; store.saveSides(s) }
+        }
         scope.launch {
             val response = snackbar.showSnackbar(
                 if (merge) "Merged ${source.size} entries into $to" else "Renamed to $to",
@@ -2827,7 +2833,7 @@ fun App(
                 LocalCurrency provides currency,
                 LocalPdf provides { doc: PdfDoc -> sharePdf(doc) },
                 LocalMainOpener provides { a: MainAcct -> ledger = a },
-                LocalEntryMenu provides { e: Entry -> menuFor = e },
+                LocalEntryMenu provides { e: Entry -> menuInChat = false; menuFor = e },
                 LocalSelection provides selection
             ) {
             // Each screen keeps its own scroll and picks when another opens over it (a party, a report…),
@@ -3020,7 +3026,7 @@ fun App(
                         },
                         // A saved row opens its person's account; one without a person opens to change.
                         // A tap on a saved card: the entry's own menu (Edit, Rename, Move, Delete…), as a long press in a list.
-                        onEditEntry = { menuFor = it },
+                        onEditEntry = { menuInChat = true; menuFor = it },
                         onAddSuggestions = { list ->
                             val added = list.mapIndexed { i, e -> e.copy(id = "e" + System.nanoTime() + i) }
                             save(added + entries)
@@ -3168,7 +3174,7 @@ fun App(
                     Modifier.fillMaxSize().pageGround()
                         .pointerInput(Unit) { detectTapGestures { } }
                 ) {
-                    CompositionLocalProvider(LocalEntryMenu provides { e: Entry -> menuFor = e }) {
+                    CompositionLocalProvider(LocalEntryMenu provides { e: Entry -> menuInChat = false; menuFor = e }) {
                         LedgerScreen(
                             start = start, entries = entries, currency = currency,
                             onClose = { ledger = null; ledgerPerson = null; activeLedgerPerson = partyOpen }, onEdit = { editing = it }, onNew = { trade = it },
@@ -3248,7 +3254,16 @@ fun App(
                     onDismiss = { showMoveHistory = false }
                 )
             }
-            renamingEntry?.let { e ->
+            // Money given to or taken from a person: the person's name is what shows, so it is renamed on all their entries
+            // (a name that is saved already puts the two together). Work, goods or a thing: the entry's own name (its item).
+            renamingEntry?.takeIf { it.person.isNotBlank() && (isLoan(it.type) || it.item.isBlank()) }?.let { e ->
+                val n = entries.count { it.person.equals(e.person, true) }
+                RenameDialog("Rename", e.person.trim(), info = if (n == 1) "1 entry" else "on all $n entries", onRename = { newName ->
+                    renamingEntry = null
+                    renameOrMergeKhata(e.person, newName, merge = entries.any { it.person.trim().equals(newName.trim(), true) })
+                }, onDismiss = { renamingEntry = null })
+            }
+            renamingEntry?.takeIf { it.person.isBlank() || !(isLoan(it.type) || it.item.isBlank()) }?.let { e ->
                 RenameDialog("Rename entry", entryTitle(e), onRename = { newName ->
                     renamingEntry = null
                     // The entry's own name (its item); the note follows when it only repeated the old name.
@@ -3282,7 +3297,7 @@ fun App(
                     onEdit = { menuFor = null; editing = e },
                     onRename = { menuFor = null; renamingEntry = e },
                     onMove = { menuFor = null; moving = e },
-                    onSelect = { menuFor = null; selection.ids.clear(); selection.ids.add(e.id); selection.active = true },
+                    onSelect = if (menuInChat) null else ({ menuFor = null; selection.ids.clear(); selection.ids.add(e.id); selection.active = true }),
                     onDelete = { menuFor = null; confirm = "Move \"${entryTitle(e)}\" (${money(currency, e.amount)}) to Trash?" to setOf(e.id) },
                     onDismiss = { menuFor = null },
                     onBill = if (e.type == Type.SALE && e.person.isNotBlank()) ({ menuFor = null; sharePdf(billDoc(e)) }) else null
