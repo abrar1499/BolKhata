@@ -932,6 +932,7 @@ class ParserShampooSpellingTest {
 class VoiceFixTest {
     @Test fun romanUrduUrduAndHindiAreTheAppsOwn() {
         assertTrue(Normalizer.localTongue("hamid ko 500 diye", "hamid ko 500 diye"))
+        assertTrue(Normalizer.localTongue("sab sae chal raha hqu", "sab sae chal raha hqu"))
         assertTrue(Normalizer.localTongue("حامد کو 500 دیے", "hamid ko 500 diye"))
         assertTrue(Normalizer.localTongue("हामिद को 500 दिए", "hamid ko 500 diye"))
         assertFalse(Normalizer.localTongue("I gave Hamid 500", "I gave Hamid 500"))

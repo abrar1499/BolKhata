@@ -1424,9 +1424,10 @@ fun App(
                     postChat("", isUser = false, meta = "ask=$p|$n|" + Ask.kinds(book).joinToString(",") + (if (book == Sides.STAFF) "|staff" else ""))
                     return@launch
                 }
-                // Learnt from the AI before: a message of the same shape (only its numbers differ) is done by the app alone, for nothing.
-                // People and numbers are open places in it, so a known sentence with another name needs no AI either.
-                if (!retry && !aiFirst) {
+                // Learnt from the AI before: a message of the same shape (only its numbers differ) is done by the app alone, for nothing,
+                // in any language (it is the AI's own answer). People and numbers are open places in it, so a known sentence with
+                // another name needs no AI either.
+                if (!retry) {
                     val host = chatHost(names0)
                     val who = AiAgent.who(names0, store.known())
                     val counted = AiAgent.counted(roman)
