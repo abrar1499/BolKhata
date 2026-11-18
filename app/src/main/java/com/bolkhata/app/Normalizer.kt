@@ -298,17 +298,17 @@ object Normalizer {
      * written in Roman letters), English or nothing typed yet is "" (the phone's own language).
      */
     fun voiceLanguage(picked: String, typed: List<String>): String {
-        // Urdu and Hindi are heard as India's Hindi: phones hear spoken Urdu far better that way (its letters are turned
-        // into Roman ones for the chat).
-        if (picked.isNotBlank()) return if (picked == "hi" || picked.startsWith("ur")) "hi-IN" else picked
+        // Urdu, typed or in Roman letters, is heard as Pakistan's Urdu: it knows names like Hafsa that the Hindi one
+        // turns into other words (its letters are turned into Roman ones for the chat). Hindi is heard as India's Hindi.
+        if (picked.isNotBlank()) return if (picked == "hi") "hi-IN" else picked
         val styles = typed.takeLast(12).filter { it.isNotBlank() }.map { t ->
             when {
-                // Urdu's own letters (ٹ ڈ ڑ ں ے ہ ھ): heard as Hindi; other Arabic letters: Arabic.
-                t.any { it in "ٹڈڑںےۓہھ" } -> "hi-IN"
+                // Urdu's own letters (ٹ ڈ ڑ ں ے ہ ھ): Urdu; other Arabic letters: Arabic.
+                t.any { it in "ٹڈڑںےۓہھ" } -> "ur-PK"
                 t.any { it in '\u0600'..'\u06FF' } -> "ar"
                 t.any { it in '\u0900'..'\u097F' } -> "hi-IN"
                 NativeChatEngine.isEnglish(t) -> ""
-                else -> "hi-IN"
+                else -> "ur-PK"
             }
         }
         return styles.groupingBy { it }.eachCount().maxByOrNull { it.value }?.key.orEmpty()
