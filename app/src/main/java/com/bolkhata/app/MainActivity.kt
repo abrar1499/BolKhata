@@ -1412,7 +1412,9 @@ fun App(
                 // only what it is not sure of. Any other language goes to the AI first, whenever one can answer. The app
                 // answers by itself only when no AI can (no key, no internet, the smart answers and reward videos used up).
                 val aiNow = !noAi && Ai.handles(groqKey) && Ai.chain.any { (k, _) -> (Ai.restUntil[Ai.provider(k)?.name.orEmpty()] ?: 0L) <= System.currentTimeMillis() }
-                val aiFirst = Ai.first(aiNow, onOwnKey(), Premium.active, store.smartLeft, Ads.rewardsLeft(context)) && !Normalizer.localTongue(text, roman)
+                val aiFirst = Ai.first(aiNow, onOwnKey(), Premium.active, store.smartLeft, Ads.rewardsLeft(context)) && !Normalizer.localTongue(text, roman) &&
+                    // A greeting or "how are you", in any language, is the app's own short answer: no AI for it.
+                    !(NativeChatEngine.isSmallTalk(roman) && roman.trim().split(Regex("""\s+""")).size <= 4)
                 // A saved person and a number, nothing else: the chat asks what happened with a small card, in any language.
                 // With an AI at hand the assistants read such a message themselves ("anwar ko 5000 awal eent di" is goods,
                 // not money); this quick card is for when no AI can answer.
@@ -1460,7 +1462,8 @@ fun App(
                     val shown = mine?.card?.ifBlank { mine.text }.orEmpty()
                     // The app's own words are English: its plain answers (talk, a total in words) come from the AI, which answers in
                     // the language the person typed (Roman Urdu, Urdu, French…); cards and saves stay the app's.
-                    val foreign = mine != null && mine.added.isEmpty() && mine.card.isBlank() && mine.ask.isBlank()
+                    val talk = NativeChatEngine.isSmallTalk(roman) && roman.trim().split(Regex("""\s+""")).size <= 4
+                    val foreign = mine != null && mine.added.isEmpty() && mine.card.isBlank() && mine.ask.isBlank() && !talk
                     val weak = mine != null && mine.added.isEmpty() && (foreign || shown.startsWith("Nothing found") ||
                         (shown in setOf("Good, you?", "Hi! How can I help?", "Great! How can I help?") && text.trim().split(Regex("""\s+""")).size > 3))
                     val aiReady = !noAi && Ai.chain.any { (k, _) -> (Ai.restUntil[Ai.provider(k)?.name.orEmpty()] ?: 0L) <= System.currentTimeMillis() }
