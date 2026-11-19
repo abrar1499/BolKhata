@@ -1525,6 +1525,8 @@ fun App(
                             trash = { ids -> bin = mine.filter { it.id in ids } + bin; mine = mine.filter { it.id !in ids } }, names = { names0 }, currency = currency,
                             setup = { setup }, saveSetup = { setup = it }, trashed = { bin },
                             restore = { ids -> mine = bin.filter { it.id in ids } + mine; bin = bin.filter { it.id !in ids } },
+                            // A setting is only changed by the winner on the real app; the copy says it is done, so the answer does not say "can't".
+                            settings = { k, _ -> org.json.JSONObject().put("done", if (k == "clear_chat") "Chat cleared." else "Done.").toString() },
                             // The app's language too: the AI answers voice in it, and a learnt reply is tagged with it (see AiAgent.replay).
                             language = I18n.englishName)
                     }
