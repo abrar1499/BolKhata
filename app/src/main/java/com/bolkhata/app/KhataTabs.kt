@@ -514,13 +514,13 @@ internal fun LazyListScope.ledger(
     var days = 0
     val ads = if (cash) cashAds(rows.map { it.date }) else emptyMap()
     rows.forEachIndexed { i, r ->
+        // The Cashbook: a small picture right after the 5th entry (seen on the first screen), then between two days a wide
+        // video (192 × 120) after 12, and every 12 a picture and a video by turns.
+        ads[i]?.let { n ->
+            item(key = keyPrefix + "ad" + n, contentType = "ad") { NativeAdCard(cashAdPlace(title, n), Modifier.padding(start = 10.dp, end = 10.dp, top = 1.dp), big = n % 2 == 0, round = false, small = n % 2 == 1) }
+        }
         if (i == 0 || !sameDay(rows[i - 1].date, r.date)) {
-            // The Cashbook: between two days, a small picture after the first 5 entries (seen on the first screen), a wide
-            // video (192 × 120) after 12, then every 12 a picture and a video by turns.
             // Other ledgers (inside an account, opened for a quick look): one slim picture after the 3rd day.
-            ads[i]?.let { n ->
-                item(key = keyPrefix + "ad" + n, contentType = "ad") { NativeAdCard(cashAdPlace(title, n), Modifier.padding(start = 10.dp, end = 10.dp, top = 1.dp), big = n % 2 == 0, round = false, small = n % 2 == 1) }
-            }
             if (!cash && days == 3) {
                 item(key = keyPrefix + "ad3", contentType = "ad") { NativeAdCard("ledger-$keyPrefix$title-3", Modifier.padding(start = 10.dp, end = 10.dp, top = 1.dp), round = false, small = true) }
             }
@@ -535,15 +535,17 @@ internal fun LazyListScope.ledger(
 }
 
 /**
- * Where the Cashbook's ads go, for entries by [dates] (newest first): row index → its turn (1, 2, …). An ad sits between two
- * days: the first (a small picture) once 5 or more entries are above it, so the first screen has one; the second (a
- * video) once 12 or more are; then each 12 or more after the last. Odd turns are a picture, even ones a video.
+ * Where the Cashbook's ads go, for entries by [dates] (newest first): row index → its turn (1, 2, …), the ad going just
+ * above that row. The first (a small picture) comes right after the 5th entry, whatever its day, so the first screen has
+ * one; the others sit between two days: the second (a video) once 12 or more entries are above it, then each 12 or more
+ * after the last. Odd turns are a picture, even ones a video.
  */
 internal fun cashAds(dates: List<Long>): Map<Int, Int> {
     val at = mutableMapOf<Int, Int>()
     var since = 0
     dates.forEachIndexed { i, d ->
-        if (i > 0 && since >= (when (at.size) { 0 -> 5; 1 -> 7; else -> 12 }) && !sameDay(dates[i - 1], d)) { at[i] = at.size + 1; since = 0 }
+        val first = at.isEmpty()
+        if (i > 0 && since >= (when (at.size) { 0 -> 5; 1 -> 7; else -> 12 }) && (first || !sameDay(dates[i - 1], d))) { at[i] = at.size + 1; since = 0 }
         since++
     }
     return at
