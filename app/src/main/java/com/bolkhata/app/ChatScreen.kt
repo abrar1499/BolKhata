@@ -1041,7 +1041,7 @@ private fun Working(label: String) {
 private val RateAsk = Regex("""(?is)^(?=.*\d)(?=.*(\brate\b|ریٹ|रेट)).*\?\s*$""")
 
 /**
- * The rate box under the AI's rate question: "RATE · 6,000" with what it comes to, the rate and Save on one line, and
+ * The rate box for the AI's rate question: "RATE FOR 6,000" with what it comes to, the rate and Save on one line, and
  * the units (as in + Entry) to pick. Save answers the question ("900 per 1000", "50 per kg", "900 each"). A rate typed
  * or said in the chat bar while it is open fills it (see [RateBox]). It sits inside the answer's bubble, under a line.
  */
