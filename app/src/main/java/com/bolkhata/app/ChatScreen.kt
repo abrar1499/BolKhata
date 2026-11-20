@@ -1041,7 +1041,7 @@ private fun Working(label: String) {
 private val RateAsk = Regex("""(?is)^(?=.*\d)(?=.*(\brate\b|ریٹ|रेट)).*\?\s*$""")
 
 /**
- * The rate box for the AI's rate question: "RATE FOR 6,000" with what it comes to, the rate and Save on one line, and
+ * The rate box for the AI's rate question: what the rate comes to (once typed), the rate and Save on one line, and
  * the units (as in + Entry) to pick. Save answers the question ("900 per 1000", "50 per kg", "900 each"). A rate typed
  * or said in the chat bar while it is open fills it (see [RateBox]). It sits inside the answer's bubble, under a line.
  */
@@ -1058,12 +1058,10 @@ private fun RateCard(text: String, onSend: (String) -> Unit) {
     val sub = MaterialTheme.colorScheme.onSurfaceVariant
     Column(Modifier.padding(top = 8.dp).width(250.dp)) {
         HorizontalDivider(color = sub.copy(alpha = 0.15f))
-        Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.Bottom) {
-            Text("RATE FOR " + fmt(qty), fontSize = 9.5.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp, color = sub, modifier = Modifier.weight(1f))
-            if (r > 0 && qty > 0) Text("= " + fmt(if (unit == "1000") qty / 1000 * r else qty * r) + " " + LocalCurrency.current,
-                fontSize = 11.sp, fontWeight = FontWeight.Bold, color = RedSpend)
-        }
-        Row(Modifier.padding(top = 6.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        // What the typed rate comes to, once there is one (no heading: the question above says what it is for).
+        if (r > 0 && qty > 0) Text("= " + fmt(if (unit == "1000") qty / 1000 * r else qty * r) + " " + LocalCurrency.current,
+            fontSize = 11.sp, fontWeight = FontWeight.Bold, color = RedSpend, modifier = Modifier.align(Alignment.End).padding(top = 6.dp))
+        Row(Modifier.padding(top = 8.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f).height(32.dp).fieldEdge(RoundedCornerShape(11.dp)).padding(horizontal = 9.dp), contentAlignment = Alignment.CenterStart) {
                 if (rate.isEmpty()) Text("Rate", fontSize = 14.sp, color = sub)
                 androidx.compose.foundation.text.BasicTextField(rate, { v -> rate = v.filter { it.isDigit() || it == '.' } }, singleLine = true,
