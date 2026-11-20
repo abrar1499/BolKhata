@@ -699,20 +699,17 @@ private fun adUnder(state: LazyListState, low: Dp, high: Dp): Boolean {
 }
 
 /**
- * Small round ↑ button, centred a little above the Cashbook's +, shown only while a scrolled-down list moves and gone
- * a second after it stops. It steps aside while an ad is under it.
+ * Small round ↑ button: hidden while the list scrolls, shown once a scrolled-down list stops, a little above the
+ * Cashbook's + wherever that sits ([plus]: its bottom; null on lists without one). It steps aside while an ad is under it.
  */
 @Composable
-private fun BoxScope.UpButton(state: LazyListState) {
+private fun BoxScope.UpButton(state: LazyListState, plus: Dp? = null) {
     val scope = rememberCoroutineScope()
-    val bottom = LocalBarSpace.current + 70.dp
+    val bottom = (plus ?: (LocalBarSpace.current + 8.dp)) + 62.dp
     val down by remember { derivedStateOf { state.firstVisibleItemIndex > 4 } }
-    var moving by remember { mutableStateOf(false) }
-    val scrolling = state.isScrollInProgress
-    LaunchedEffect(scrolling) { if (scrolling) moving = true else { kotlinx.coroutines.delay(1000); moving = false } }
     // The button's lower and upper edge above the list's end, with a little room around it.
     val clear = !adUnder(state, bottom - 6.dp, bottom + 36.dp)
-    if (down && moving && clear) Box(
+    if (down && !state.isScrollInProgress && clear) Box(
         Modifier.align(Alignment.BottomEnd).padding(end = 25.dp, bottom = bottom)
             .size(30.dp).lift(2.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.onSurface)
             .clickable { scope.launch { state.animateScrollToItem(0) } },
@@ -797,8 +794,9 @@ fun CashBookScreen(
                 cards = true, cash = true
             )
         }
-        UpButton(state)
-        AddRound(state) { picking = true }
+        val plus = plusPlace(state)
+        UpButton(state, plus)
+        AddRound(plus) { picking = true }
     }
     if (picking) EntryPicker(entries, setup, onSetup, onDismiss = { picking = false }) { e -> onSave(e); picking = false }
 }
@@ -824,16 +822,22 @@ private fun adTop(state: LazyListState, low: Dp, high: Dp): Dp? {
 }
 
 /**
- * The + on the Cashbook, shaped as WhatsApp's (a rounded square): the header's red, or the Navy blues in the dark, with a white +.
- * Hidden while the list scrolls, back the moment it stops; it never covers an ad: then it sits just above the ad.
+ * Where the Cashbook's + sits (its bottom above the list's end), or null while it is hidden: while the list scrolls, and
+ * when an ad under its place leaves no room above that ad. It never covers an ad: it sits just above one.
  */
 @Composable
-private fun BoxScope.AddRound(state: LazyListState, onClick: () -> Unit) {
+private fun plusPlace(state: LazyListState): Dp? {
     val base = LocalBarSpace.current + 8.dp
     val under = adTop(state, base - 6.dp, base + 50.dp)
     val bottom = under?.let { it + 8.dp } ?: base
     val room = with(androidx.compose.ui.platform.LocalDensity.current) { state.layoutInfo.viewportEndOffset.toDp() }
-    if (state.isScrollInProgress || (under != null && bottom + 52.dp > room - 160.dp)) return
+    return if (state.isScrollInProgress || (under != null && bottom + 52.dp > room - 160.dp)) null else bottom
+}
+
+/** The + on the Cashbook, shaped as WhatsApp's (a rounded square): the header's red, or the Navy blues in the dark, with a white +; at [place] (see [plusPlace]). */
+@Composable
+private fun BoxScope.AddRound(place: Dp?, onClick: () -> Unit) {
+    val bottom = place ?: return
     // Dark: the Navy band's own blues with a fine light edge (red is for money out there); light: the header's red.
     val glow = LocalLook.current?.glow == true
     val red = if (glow) Color(0xFF1E3A5F) else Color(0xFFE3342F)
