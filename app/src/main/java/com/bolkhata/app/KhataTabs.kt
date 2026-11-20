@@ -489,6 +489,8 @@ private val KhataBlue = Color(0xFF0369A1)
 private val Faint = Color(0x14786C6C)
 /** The ledger card's lines between entries (and under the last): light theme a warm grey; dark theme a shade darker than the rows, so they stay apart without breaking from the card. */
 private val Rule: Color @Composable get() = if (LocalLook.current != null) Color(0xFF2A3040) else Color(0x33786C6C)
+/** The date strip's left and right lines: light theme a soft warm grey, dark theme a soft white. */
+private val DaySide: Color @Composable get() = if (LocalLook.current != null) Color(0x24FFFFFF) else Color(0x26786C6C)
 /** The ledger's column lines (between the name and the amounts): much lighter than [Rule], just there. */
 private val ColumnRule: Color @Composable get() = if (LocalLook.current != null) Color(0x12FFFFFF) else Color(0x12786C6C)
 
@@ -641,7 +643,7 @@ private fun DayLine(date: Long, cols: List<LCol>, day: List<LRow>) = Tight {
     val totals = cols.indices.map { k -> day.sumOf { it.amounts.getOrElse(k) { 0.0 } } }
     // One light keyboard-grey strip for the whole day: date, then the day's totals in their colours (no + / −); a line
     // down its left and right ends (the entries have none).
-    val rule = Rule
+    val rule = DaySide
     Row(
         Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(IntrinsicSize.Min).background(DayStrip).drawWithContent {
             drawContent()
