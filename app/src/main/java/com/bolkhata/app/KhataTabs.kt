@@ -482,12 +482,13 @@ private val Faint = Color(0x14786C6C)
 /** The ledger card's lines (round its edge, between entries, between columns): one shade, a little stronger than [Faint] so the outline shows on the page. */
 private val Rule = Color(0x26786C6C)
 
-/** The Cashbook card's left and right edges: a [Rule] line down each side of a row, day strip or ad, so the card is outlined all round. */
-private fun Modifier.cardSides(): Modifier = drawWithContent {
+/** The Cashbook card's left and right edges: a [Rule] line down each side of a row, day strip or ad, so the card is outlined all round; [bottom] one under it too (an ad). */
+private fun Modifier.cardSides(bottom: Boolean = false): Modifier = drawWithContent {
     drawContent()
     val w = 1.dp.toPx()
     drawRect(Rule, Offset.Zero, Size(w, size.height))
     drawRect(Rule, Offset(size.width - w, 0f), Size(w, size.height))
+    if (bottom) drawRect(Rule, Offset(0f, size.height - w), Size(size.width, w))
 }
 /** The day strip in ledgers: the light grey-blue of a phone keyboard (dark: a deep slate). */
 private val DayStrip: Color
@@ -528,12 +529,12 @@ internal fun LazyListScope.ledger(
         // The Cashbook: a small picture right after the 5th entry (seen on the first screen), then between two days a wide
         // video (192 × 120) after 12, and every 12 a picture and a video by turns.
         ads[i]?.let { n ->
-            item(key = keyPrefix + "ad" + n, contentType = "ad") { NativeAdCard(cashAdPlace(title, n), Modifier.padding(horizontal = 10.dp).cardSides(), big = n % 2 == 0, round = false, small = n % 2 == 1) }
+            item(key = keyPrefix + "ad" + n, contentType = "ad") { NativeAdCard(cashAdPlace(title, n), Modifier.padding(horizontal = 10.dp).cardSides(bottom = true), big = n % 2 == 0, round = false, small = n % 2 == 1) }
         }
         if (i == 0 || !sameDay(rows[i - 1].date, r.date)) {
             // Other ledgers (inside an account, opened for a quick look): one slim picture after the 3rd day.
             if (!cash && days == 3) {
-                item(key = keyPrefix + "ad3", contentType = "ad") { NativeAdCard("ledger-$keyPrefix$title-3", Modifier.padding(horizontal = 10.dp).cardSides(), round = false, small = true) }
+                item(key = keyPrefix + "ad3", contentType = "ad") { NativeAdCard("ledger-$keyPrefix$title-3", Modifier.padding(horizontal = 10.dp).cardSides(bottom = true), round = false, small = true) }
             }
             days++
             val day = byDay[dayNumber(r.date)].orEmpty()
