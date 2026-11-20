@@ -488,8 +488,23 @@ private val Faint = Color(0x14786C6C)
 /** The ledger card's lines between entries (and under the last): light theme a warm grey; dark theme a shade darker than the rows, so they stay apart without breaking from the card. */
 private val Rule: Color @Composable get() = if (LocalLook.current != null) Color(0xFF2A3040) else Color(0x33786C6C)
 /** The ledger's column lines (between the name and the amounts): much lighter than [Rule], just there. */
-/** The lines inside a day (between its entries, under its date strip and under the month head): barely there. */
-private val Soft: Color @Composable get() = if (LocalLook.current != null) Color(0x1F000000) else Color(0x12786C6C)
+/** The ledger's dotted lines, as on a receipt (between entries, along the date strips): faint warm grey; dark theme faint white. */
+private val Dots: Color @Composable get() = if (LocalLook.current != null) Color(0x1AFFFFFF) else Color(0x2E786C6C)
+
+/** A row of small round dots across the width at [y], 3.2 dp apart, soft-edged, as a receipt's dotted line. */
+private fun DrawScope.dots(color: Color, y: Float) {
+    val step = 3.2.dp.toPx()
+    val r = 0.6.dp.toPx()
+    var x = step / 2
+    while (x < size.width) { drawCircle(color, r, Offset(x, y)); x += step }
+}
+
+/** A dotted line between two entries, on the card's white, as wide as the rows. */
+@Composable
+private fun DotLine() {
+    val c = Dots
+    Canvas(Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.surface)) { dots(c, size.height / 2) }
+}
 private val ColumnRule: Color @Composable get() = if (LocalLook.current != null) Color(0x12FFFFFF) else Color(0x12786C6C)
 
 
@@ -633,10 +648,8 @@ private fun DayLine(date: Long, cols: List<LCol>, day: List<LRow>) = Tight {
     val totals = cols.indices.map { k -> day.sumOf { it.amounts.getOrElse(k) { 0.0 } } }
     // One light keyboard-grey strip for the whole day: date, then the day's totals in their colours (no + / −). It reaches
     // 1 dp past the entries on each side alike, as a band; the ends rounded a little and shining, fading inward, so they
-    // look curved like a road's edge; the entries' line along its top and bottom.
-    // Its top and bottom lines as soft as the lines between entries.
-    val topLine = Soft
-    val bottomLine = Soft
+    // look curved like a road's edge; a dotted line along its top and bottom, as between the entries.
+    val dotted = Dots
     val shine = if (LocalLook.current != null) Color(0x14FFFFFF) else Color(0x73FFFFFF)
     val shape = RoundedCornerShape(1.5.dp)
     Row(
@@ -645,9 +658,9 @@ private fun DayLine(date: Long, cols: List<LCol>, day: List<LRow>) = Tight {
             drawRect(Brush.horizontalGradient(listOf(shine, Color.Transparent), 0f, g), Offset.Zero, Size(g, size.height))
             drawRect(Brush.horizontalGradient(listOf(Color.Transparent, shine), size.width - g, size.width), Offset(size.width - g, 0f), Size(g, size.height))
             drawContent()
-            val px = 1.dp.toPx()
-            drawRect(topLine, Offset.Zero, Size(size.width, px))
-            drawRect(bottomLine, Offset(0f, size.height - px), Size(size.width, px))
+            val half = 0.5.dp.toPx()
+            dots(dotted, half)
+            dots(dotted, size.height - half)
         }.padding(horizontal = 1.dp)   // its words and totals stay over the entries' columns
     ) {
         Text(dayLineFmt.format(Date(date)), fontSize = 11.sp, fontWeight = FontWeight.Bold,
@@ -670,7 +683,7 @@ private fun LedgerRow(r: LRow, cols: List<LCol>, last: Boolean, card: Boolean = 
     val sel = LocalSelection.current
     val picking = sel?.active == true && r.entry != null
     val picked = picking && r.entry!!.id in sel!!.ids
-    if (top) HorizontalDivider(Modifier.padding(horizontal = 10.dp).background(MaterialTheme.colorScheme.surface), color = Soft)
+    if (top) DotLine()
     Row(
         Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(IntrinsicSize.Min).then(if (card) Modifier else Modifier.lift(1.dp, shape)).clip(shape)
             .background(MaterialTheme.colorScheme.surface).background(if (picked) Ember.copy(alpha = 0.12f) else Color.Transparent)
@@ -702,7 +715,8 @@ private fun LedgerRow(r: LRow, cols: List<LCol>, last: Boolean, card: Boolean = 
     }
     // On the row's own white (not the page's grey behind it), so it is as light as the column lines; the list's last
     // entry gets one too, closing the card's bottom.
-    if (!last || end) HorizontalDivider(Modifier.padding(horizontal = 10.dp).background(MaterialTheme.colorScheme.surface), color = if (last) Rule else Soft)
+    if (!last) DotLine()
+    else if (end) HorizontalDivider(Modifier.padding(horizontal = 10.dp).background(MaterialTheme.colorScheme.surface), color = Rule)
 }
 
 /** The add button just above the bottom panel: a white card with a khata icon and "Entry". The form has Cash out / in. */
