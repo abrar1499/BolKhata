@@ -81,6 +81,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -505,7 +506,7 @@ private fun signed(k: LKind, v: Double) = if (v == 0.0) "" else (when (k) { LKin
  */
 internal fun LazyListScope.ledger(
     title: String, cols: List<LCol>, rows: List<LRow>, keyPrefix: String = "", cards: Boolean = true, onHold: (() -> Unit)? = null,
-    cash: Boolean = false
+    cash: Boolean = false, endAd: Boolean? = true
 ) {
     item(key = keyPrefix + "lh") { LedgerHead(title, entryCount(rows.size), cols, rows.isEmpty(), ids = rows.mapNotNull { it.entry?.id }, onHold = onHold) }
     if (rows.isEmpty()) item(key = keyPrefix + "empty") { EmptyHint() }
@@ -531,9 +532,10 @@ internal fun LazyListScope.ledger(
         item(key = keyPrefix + r.key) { LedgerRow(r, cols, last, cards) }
     }
     // At the end of the Cashbook: the banner strip, square and joined to the rows above it as a day strip is.
-    // Only under three or more entries: a near-empty book gets no ad.
-    if (cash && rows.size >= 3) item(key = keyPrefix + "end-ad", contentType = "ad") {
-        NativeAdCard("ledger-end-$keyPrefix$title", Modifier.padding(start = 10.dp, end = 10.dp, top = 1.dp), round = false, small = true, banner = true)
+    // Only under three or more entries: a near-empty book gets no ad. [endAd] null: an empty place the size of the strip,
+    // laid out first to see where it falls; false: no strip (it would open on the + button).
+    if (cash && rows.size >= 3 && endAd != false) item(key = keyPrefix + "end-ad", contentType = if (endAd == null) "slot" else "ad") {
+        if (endAd == null) Spacer(Modifier.fillMaxWidth().height(57.dp)) else NativeAdCard("ledger-end-$keyPrefix$title", Modifier.padding(start = 10.dp, end = 10.dp, top = 1.dp), round = false, small = true, banner = true)
     }
 }
 
@@ -738,8 +740,20 @@ fun CashBookScreen(
     val pdf = LocalPdf.current
     val cur = LocalCurrency.current.let { if (it.isBlank()) "" else " $it" }
     var picking by remember { mutableStateOf(false) }
+    // The strip at the end never opens on the + button: where it would first fall there, the list has no strip.
+    val plus = LocalBarSpace.current + 8.dp
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    var endAd by remember(list.size, month, q) { mutableStateOf<Boolean?>(null) }
+    LaunchedEffect(endAd) {
+        if (endAd != null) return@LaunchedEffect
+        val info = snapshotFlow { state.layoutInfo }.first { it.visibleItemsInfo.isNotEmpty() }
+        val (lo, hi) = with(density) { (plus - 6.dp).roundToPx() to (plus + 50.dp).roundToPx() }
+        val end = info.viewportEndOffset
+        endAd = info.visibleItemsInfo.firstOrNull { it.key == "end-ad" }?.let { !(it.offset < end - lo && it.offset + it.size > end - hi) } ?: true
+    }
     Box(Modifier.fillMaxSize()) {
-        LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
+        // Room under the list's end, so a strip scrolled up to there sits above the +.
+        LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(bottom = barSpace(66.dp))) {
             stickyHeader { TabHead {
                 KhataTop("", "", onMenu, business = business, onPdf = {
                     pdf(PdfDoc("Cashbook", if (q.isNotBlank()) "Search: $q" else monthLabel(months, month) ?: "All",
@@ -767,7 +781,7 @@ fun CashBookScreen(
                     LRow(e.id, e.date, title(e), e.note, listOf(if (cashOut(e)) e.amount else 0.0, if (cashIn(e)) e.amount else 0.0), e,
                         khata = e.person.trim().ifBlank { e.category.label }) { onEdit(e) }
                 },
-                cards = true, cash = true
+                cards = true, cash = true, endAd = endAd
             )
         }
         UpButton(state)
