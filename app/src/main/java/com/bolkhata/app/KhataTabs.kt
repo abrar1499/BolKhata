@@ -489,6 +489,8 @@ private val KhataBlue = Color(0xFF0369A1)
 private val Faint = Color(0x14786C6C)
 /** The ledger card's lines (round its edge, between entries, between columns): one shade, a little stronger than [Faint] so the outline shows on the page. */
 private val Rule = Color(0x26786C6C)
+/** The ledger's column lines (between the name and the amounts): a touch lighter than [Rule]. */
+private val ColumnRule = Color(0x1C786C6C)
 
 /** The Cashbook card's left and right edges: a [Rule] line down each side of a row or day strip, so the card is outlined all round. */
 private fun Modifier.cardSides(): Modifier = drawWithContent {
@@ -634,7 +636,7 @@ private fun LedgerHead(
             )
         }
         cols.forEach { c ->
-            VerticalDivider(Modifier.fillMaxHeight(), color = Rule)
+            VerticalDivider(Modifier.fillMaxHeight(), color = ColumnRule)
             // Column name, with the month's total right under it.
             Column(
                 Modifier.width(w).fillMaxHeight().padding(horizontal = 3.dp),
@@ -701,7 +703,7 @@ private fun LedgerRow(r: LRow, cols: List<LCol>, last: Boolean, card: Boolean = 
             )
         }
         cols.forEachIndexed { i, _ ->
-            VerticalDivider(Modifier.fillMaxHeight(), color = Rule)
+            VerticalDivider(Modifier.fillMaxHeight(), color = ColumnRule)
             Box(Modifier.width(w).fillMaxHeight(), contentAlignment = Alignment.Center) {
                 val v = r.amounts.getOrElse(i) { 0.0 }
                 FitText(if (v == 0.0) "" else fmt(v), 12.sp, FontWeight.Bold, AmountInk, Modifier.padding(horizontal = 3.dp))
