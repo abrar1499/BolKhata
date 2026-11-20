@@ -263,11 +263,9 @@ internal fun SideMenu(
             dismissButton = { TextButton(onClick = { bizDelete = null }) { Text("Cancel") } }
         )
     }
-    // Dark (Navy glow): as the mock, the menu is the plain page colour, without the page's soft lights, so its cards sit
-    // evenly on it; light: the page as before.
-    val look = LocalLook.current
+    // The page under the menu; in the dark (Navy glow) its soft lights at half strength, so the menu stays calm.
     ModalDrawerSheet(
-        modifier = Modifier.width(252.dp).then(if (look?.glow == true) Modifier.background(Color(look.page)) else Modifier.pageGround()),
+        modifier = Modifier.width(252.dp).pageGround(lights = 0.5f),
         drawerContainerColor = Color.Transparent,
         drawerContentColor = MaterialTheme.colorScheme.onBackground,
         drawerShape = RoundedCornerShape(0.dp),
