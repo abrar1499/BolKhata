@@ -492,18 +492,22 @@ private fun Modifier.cardSides(): Modifier = drawWithContent {
 }
 
 /**
- * An ad in the card, level with the rows in both themes: the rows' edge line is part of the row (on a light page it melts
- * into the page, so a row looks to end where its white ends), so the ad's outer 1 dp down each side and under it takes
- * that same line, in the colour the rows' line has on their card. The ad's own colour then ends where the rows' does.
+ * An ad in the card, level with the rows, and the card's line under it. Light theme: the rows' edge line melts into the
+ * page, so a row looks to end where its white ends; the ad's outer 1 dp down each side takes that same line too, so its
+ * own colour ends there as well. Dark theme: the rows' edge shows, so the ad goes right to it with no line down its sides.
  */
 @Composable
 private fun Modifier.adFrame(): Modifier {
-    val edge = Rule.compositeOver(MaterialTheme.colorScheme.surface)
+    val card = MaterialTheme.colorScheme.surface
+    val edge = Rule.compositeOver(card)
+    val sides = card.luminance() > 0.5f
     return drawWithContent {
         drawContent()
         val w = 1.dp.toPx()
-        drawRect(edge, Offset.Zero, Size(w, size.height))
-        drawRect(edge, Offset(size.width - w, 0f), Size(w, size.height))
+        if (sides) {
+            drawRect(edge, Offset.Zero, Size(w, size.height))
+            drawRect(edge, Offset(size.width - w, 0f), Size(w, size.height))
+        }
         drawRect(edge, Offset(0f, size.height - w), Size(size.width, w))
     }
 }
