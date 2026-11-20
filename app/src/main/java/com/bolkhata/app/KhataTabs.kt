@@ -54,6 +54,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.takeOrElse
@@ -198,10 +200,15 @@ private fun KhataTop(
 private fun TabHead(content: @Composable ColumnScope.() -> Unit) =
     Column(Modifier.fillMaxWidth().pageGround().padding(bottom = 4.dp), content = content)
 
-/** The theme band in the app icon's glass look, with a thin light bottom edge. */
-internal fun DrawScope.drawBand(theme: HeaderTheme, h: Float) {
+/**
+ * The theme band in the app icon's glass look, with a thin light bottom edge; [alpha] a little see-through (as the mock),
+ * so the page, or on Chat the blurred messages under it, shows faintly.
+ */
+internal fun DrawScope.drawBand(theme: HeaderTheme, h: Float, alpha: Float = 0.85f) {
+    drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(0f, 0f, size.width, h), androidx.compose.ui.graphics.Paint().apply { this.alpha = alpha })
     drawGlass(bandColors(theme), h)
     drawRect(Color.White.copy(alpha = 0.35f), topLeft = Offset(0f, h - 1.dp.toPx()), size = Size(size.width, 1.dp.toPx()))
+    drawContext.canvas.restore()
 }
 
 /** White pill at the top: the glossy app logo and the open business; a tap opens the side menu (businesses and settings). */
@@ -212,7 +219,8 @@ internal fun BusinessPill(name: String, onMenu: () -> Unit) {
     Row(
         Modifier.padding(top = 12.dp).then(if (dark) Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.surface)
             else Modifier.lift(1.dp, CircleShape).clip(CircleShape).background(Color.White))
-            .clickable(onClickLabel = "Menu") { onMenu() }.padding(start = 6.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
+            // As the mock: the logo 12 dp in from the pill's round end (6 padding + 6 margin), not hard against it.
+            .clickable(onClickLabel = "Menu") { onMenu() }.padding(start = 12.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         GlassLogo(24.dp)
@@ -265,9 +273,10 @@ private fun SumCard(
                 }
             }
             if (link.isNotEmpty()) VerticalDivider(Modifier.fillMaxHeight(), color = MaterialTheme.colorScheme.outlineVariant)
+            // One line, as the mock: a short link ("Report ›") sits in 64 dp, a longer one ("↺ Restore all") takes its own width.
             if (link.isNotEmpty()) Text(
-                link, color = Ember, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
-                modifier = Modifier.width(64.dp).clickable { onLink() }.padding(vertical = 8.dp)
+                link, color = Ember, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 1, softWrap = false,
+                modifier = Modifier.widthIn(min = 64.dp).clickable { onLink() }.padding(start = 6.dp, end = 10.dp, top = 8.dp, bottom = 8.dp)
             )
         }
     }
@@ -478,6 +487,37 @@ private val dayLineFmt = SimpleDateFormat("EEE, d MMM yyyy", Locale.US)
 /** Blue of the small khata name in ledger rows: red and green stay for money. */
 private val KhataBlue = Color(0xFF0369A1)
 private val Faint = Color(0x14786C6C)
+/** The ledger card's lines (round its edge, between entries, between columns): one shade, a little stronger than [Faint] so the outline shows on the page. */
+private val Rule = Color(0x26786C6C)
+
+/** The Cashbook card's left and right edges: a [Rule] line down each side of a row or day strip, so the card is outlined all round. */
+private fun Modifier.cardSides(): Modifier = drawWithContent {
+    drawContent()
+    val w = 1.dp.toPx()
+    drawRect(Rule, Offset.Zero, Size(w, size.height))
+    drawRect(Rule, Offset(size.width - w, 0f), Size(w, size.height))
+}
+
+/**
+ * An ad in the card, level with the rows, and the card's line under it. Light theme: the rows' edge line melts into the
+ * page, so a row looks to end where its white ends; the ad's outer 1 dp down each side takes that same line too, so its
+ * own colour ends there as well. Dark theme: the rows' edge shows, so the ad goes right to it with no line down its sides.
+ */
+@Composable
+private fun Modifier.adFrame(): Modifier {
+    val card = MaterialTheme.colorScheme.surface
+    val edge = Rule.compositeOver(card)
+    val sides = card.luminance() > 0.5f
+    return drawWithContent {
+        drawContent()
+        val w = 1.dp.toPx()
+        if (sides) {
+            drawRect(edge, Offset.Zero, Size(w, size.height))
+            drawRect(edge, Offset(size.width - w, 0f), Size(w, size.height))
+        }
+        drawRect(edge, Offset(0f, size.height - w), Size(size.width, w))
+    }
+}
 /** The day strip in ledgers: the light grey-blue of a phone keyboard (dark: a deep slate). */
 private val DayStrip: Color
     @Composable @ReadOnlyComposable get() = LocalLook.current?.let { Color(it.day) } ?: Color(0xFFEEF1F8)
@@ -517,12 +557,12 @@ internal fun LazyListScope.ledger(
         // The Cashbook: a small picture right after the 5th entry (seen on the first screen), then between two days a wide
         // video (192 × 120) after 12, and every 12 a picture and a video by turns.
         ads[i]?.let { n ->
-            item(key = keyPrefix + "ad" + n, contentType = "ad") { NativeAdCard(cashAdPlace(title, n), Modifier.padding(horizontal = 10.dp), big = n % 2 == 0, round = false, small = n % 2 == 1) }
+            item(key = keyPrefix + "ad" + n, contentType = "ad") { NativeAdCard(cashAdPlace(title, n), Modifier.padding(horizontal = 10.dp).adFrame(), big = n % 2 == 0, round = false, small = n % 2 == 1) }
         }
         if (i == 0 || !sameDay(rows[i - 1].date, r.date)) {
             // Other ledgers (inside an account, opened for a quick look): one slim picture after the 3rd day.
             if (!cash && days == 3) {
-                item(key = keyPrefix + "ad3", contentType = "ad") { NativeAdCard("ledger-$keyPrefix$title-3", Modifier.padding(horizontal = 10.dp), round = false, small = true) }
+                item(key = keyPrefix + "ad3", contentType = "ad") { NativeAdCard("ledger-$keyPrefix$title-3", Modifier.padding(horizontal = 10.dp).adFrame(), round = false, small = true) }
             }
             days++
             val day = byDay[dayNumber(r.date)].orEmpty()
@@ -531,7 +571,7 @@ internal fun LazyListScope.ledger(
         // As cards, each day is one card: its day line and entries, the last entry closing it. An ad right under an entry
         // keeps the entries' faint line above it (no gap, no shadow), so a white video card does not run into the row.
         val last = i == rows.lastIndex || (cards && !sameDay(rows[i + 1].date, r.date))
-        item(key = keyPrefix + r.key) { LedgerRow(r, cols, last, cards) }
+        item(key = keyPrefix + r.key) { LedgerRow(r, cols, last, cards, end = i == rows.lastIndex) }
     }
 }
 
@@ -575,7 +615,7 @@ private fun LedgerHead(
     val sel = LocalSelection.current
     Row(
         Modifier.padding(start = 10.dp, end = 10.dp, top = 8.dp).fillMaxWidth().height(IntrinsicSize.Min)
-            .then(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp, bottomStart = if (empty) 14.dp else 0.dp, bottomEnd = if (empty) 14.dp else 0.dp).let { Modifier.lift(1.dp, it).clip(it) })
+            .then(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp, bottomStart = if (empty) 14.dp else 0.dp, bottomEnd = if (empty) 14.dp else 0.dp).let { Modifier.clip(it).border(1.dp, Rule, it) })
             .background(MaterialTheme.colorScheme.surface)
             .then(if (onHold != null) Modifier.combinedClickable(onLongClick = onHold) {} else Modifier)
     ) {
@@ -594,7 +634,7 @@ private fun LedgerHead(
             )
         }
         cols.forEach { c ->
-            VerticalDivider(Modifier.fillMaxHeight(), color = Faint)
+            VerticalDivider(Modifier.fillMaxHeight(), color = Rule)
             // Column name, with the month's total right under it.
             Column(
                 Modifier.width(w).fillMaxHeight().padding(horizontal = 3.dp),
@@ -616,7 +656,7 @@ private fun DayLine(date: Long, cols: List<LCol>, day: List<LRow>) = Tight {
     val totals = cols.indices.map { k -> day.sumOf { it.amounts.getOrElse(k) { 0.0 } } }
     // One light keyboard-grey strip for the whole day: date, then the day's totals in their colours (no + / −).
     Row(
-        Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(IntrinsicSize.Min).background(DayStrip)
+        Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(IntrinsicSize.Min).background(DayStrip).cardSides()
     ) {
         Text(dayLineFmt.format(Date(date)), fontSize = 11.sp, fontWeight = FontWeight.Bold,
             modifier = Modifier.weight(1f).padding(start = 12.dp, top = 4.dp, bottom = 4.dp))
@@ -630,7 +670,7 @@ private fun DayLine(date: Long, cols: List<LCol>, day: List<LRow>) = Tight {
 
 /** One entry line; as a [card] it is part of its day's flat square card (no shadow, so the day's last line has no raised edge), [last] closing that card. */
 @Composable
-private fun LedgerRow(r: LRow, cols: List<LCol>, last: Boolean, card: Boolean = false) = Tight {
+private fun LedgerRow(r: LRow, cols: List<LCol>, last: Boolean, card: Boolean = false, end: Boolean = false) = Tight {
     val sub = MaterialTheme.colorScheme.onSurfaceVariant
     val w = colW(cols)
     val shape = if (card) RectangleShape else sheetShape(last)
@@ -641,6 +681,7 @@ private fun LedgerRow(r: LRow, cols: List<LCol>, last: Boolean, card: Boolean = 
     Row(
         Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(IntrinsicSize.Min).then(if (card) Modifier else Modifier.lift(1.dp, shape)).clip(shape)
             .background(MaterialTheme.colorScheme.surface).background(if (picked) Ember.copy(alpha = 0.12f) else Color.Transparent)
+            .then(if (card) Modifier.cardSides() else Modifier)
             .combinedClickable(onLongClick = r.entry?.let { e -> if (picking) ({ sel!!.toggle(e.id) }) else menu?.let { { it(e) } } }) {
                 if (picking) sel!!.toggle(r.entry!!.id) else r.onClick()
             }
@@ -660,14 +701,17 @@ private fun LedgerRow(r: LRow, cols: List<LCol>, last: Boolean, card: Boolean = 
             )
         }
         cols.forEachIndexed { i, _ ->
-            VerticalDivider(Modifier.fillMaxHeight(), color = Faint)
+            VerticalDivider(Modifier.fillMaxHeight(), color = Rule)
             Box(Modifier.width(w).fillMaxHeight(), contentAlignment = Alignment.Center) {
                 val v = r.amounts.getOrElse(i) { 0.0 }
                 FitText(if (v == 0.0) "" else fmt(v), 12.sp, FontWeight.Bold, AmountInk, Modifier.padding(horizontal = 3.dp))
             }
         }
     }
-    if (!last) HorizontalDivider(Modifier.padding(horizontal = 10.dp), color = Faint)
+    // On the row's own white (not the page's grey behind it), so it is as light as the column lines; the list's last
+    // entry gets one too, closing the card's bottom.
+    if (!last || end) HorizontalDivider(Modifier.padding(horizontal = 10.dp).background(MaterialTheme.colorScheme.surface)
+        .then(if (card) Modifier.cardSides() else Modifier), color = Rule)
 }
 
 /** The add button just above the bottom panel: a white card with a khata icon and "Entry". The form has Cash out / in. */
