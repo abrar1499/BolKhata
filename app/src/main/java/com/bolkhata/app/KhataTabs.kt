@@ -640,17 +640,17 @@ private fun DayLine(date: Long, cols: List<LCol>, day: List<LRow>) = Tight {
     val w = colW(cols)
     val totals = cols.indices.map { k -> day.sumOf { it.amounts.getOrElse(k) { 0.0 } } }
     // One light keyboard-grey strip for the whole day: date, then the day's totals in their colours (no + / −). It reaches
-    // 2 dp past the entries on each side, as a band; the ends rounded a little and shining, fading inward, so they look
+    // 1 dp past the entries on each side, as a band; the ends rounded a little and shining, fading inward, so they look
     // curved like a road's edge.
     val shine = if (LocalLook.current != null) Color(0x14FFFFFF) else Color(0x73FFFFFF)
     val shape = RoundedCornerShape(1.5.dp)
     Row(
-        Modifier.padding(horizontal = 8.dp).fillMaxWidth().height(IntrinsicSize.Min).clip(shape).background(DayStrip).drawWithContent {
+        Modifier.padding(horizontal = 9.dp).fillMaxWidth().height(IntrinsicSize.Min).clip(shape).background(DayStrip).drawWithContent {
             val g = 9.dp.toPx()
             drawRect(Brush.horizontalGradient(listOf(shine, Color.Transparent), 0f, g), Offset.Zero, Size(g, size.height))
             drawRect(Brush.horizontalGradient(listOf(Color.Transparent, shine), size.width - g, size.width), Offset(size.width - g, 0f), Size(g, size.height))
             drawContent()
-        }.padding(horizontal = 2.dp)   // its words and totals stay over the entries' columns
+        }.padding(horizontal = 1.dp)   // its words and totals stay over the entries' columns
     ) {
         Text(dayLineFmt.format(Date(date)), fontSize = 11.sp, fontWeight = FontWeight.Bold,
             modifier = Modifier.weight(1f).padding(start = 12.dp, top = 4.dp, bottom = 4.dp))
