@@ -491,7 +491,7 @@ private val Rule: Color @Composable get() = if (LocalLook.current != null) Color
 /** The lines inside a day (between its entries, under its date strip and under the month head): barely there. */
 private val Soft: Color @Composable get() = if (LocalLook.current != null) Color(0x1F000000) else Color(0x12786C6C)
 /** The line along a date strip's top, where one day ends and the next begins: clear (dark theme: a soft light line). */
-private val DayTop: Color @Composable get() = if (LocalLook.current != null) Color(0x1FFFFFFF) else Color(0x33786C6C)
+private val DayTop: Color @Composable get() = if (LocalLook.current != null) Color(0x17FFFFFF) else Color(0x26786C6C)
 private val ColumnRule: Color @Composable get() = if (LocalLook.current != null) Color(0x12FFFFFF) else Color(0x12786C6C)
 
 
