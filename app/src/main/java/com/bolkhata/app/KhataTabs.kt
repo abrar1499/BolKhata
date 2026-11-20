@@ -517,19 +517,20 @@ internal fun LazyListScope.ledger(
         // The Cashbook: a small picture right after the 5th entry (seen on the first screen), then between two days a wide
         // video (192 × 120) after 12, and every 12 a picture and a video by turns.
         ads[i]?.let { n ->
-            item(key = keyPrefix + "ad" + n, contentType = "ad") { NativeAdCard(cashAdPlace(title, n), Modifier.padding(start = 10.dp, end = 10.dp, top = 1.dp), big = n % 2 == 0, round = false, small = n % 2 == 1) }
+            item(key = keyPrefix + "ad" + n, contentType = "ad") { NativeAdCard(cashAdPlace(title, n), Modifier.padding(horizontal = 10.dp), big = n % 2 == 0, round = false, small = n % 2 == 1) }
         }
         if (i == 0 || !sameDay(rows[i - 1].date, r.date)) {
             // Other ledgers (inside an account, opened for a quick look): one slim picture after the 3rd day.
             if (!cash && days == 3) {
-                item(key = keyPrefix + "ad3", contentType = "ad") { NativeAdCard("ledger-$keyPrefix$title-3", Modifier.padding(start = 10.dp, end = 10.dp, top = 1.dp), round = false, small = true) }
+                item(key = keyPrefix + "ad3", contentType = "ad") { NativeAdCard("ledger-$keyPrefix$title-3", Modifier.padding(horizontal = 10.dp), round = false, small = true) }
             }
             days++
             val day = byDay[dayNumber(r.date)].orEmpty()
             item(key = keyPrefix + "d" + r.key) { DayLine(r.date, cols, day) }
         }
-        // As cards, each day is one card: its day line and entries, the last entry closing it.
-        val last = i == rows.lastIndex || (cards && !sameDay(rows[i + 1].date, r.date))
+        // As cards, each day is one card: its day line and entries, the last entry closing it. An ad right under an entry
+        // closes it too: no line between them, the ad sits flat against it.
+        val last = i == rows.lastIndex || (cards && !sameDay(rows[i + 1].date, r.date)) || (i + 1) in ads
         item(key = keyPrefix + r.key) { LedgerRow(r, cols, last, cards) }
     }
 }
