@@ -487,17 +487,21 @@ private val dayLineFmt = SimpleDateFormat("EEE, d MMM yyyy", Locale.US)
 /** Blue of the small khata name in ledger rows: red and green stay for money. */
 private val KhataBlue = Color(0xFF0369A1)
 private val Faint = Color(0x14786C6C)
-/** The ledger card's lines (round its edge, between entries, between columns): one shade, a little stronger than [Faint] so the outline shows on the page. */
-private val Rule = Color(0x26786C6C)
+/** The ledger card's lines (round its edge, between entries): one shade, strong enough to show in both themes (light: warm grey; dark: soft white). */
+private val Rule: Color @Composable get() = if (LocalLook.current != null) Color(0x24FFFFFF) else Color(0x33786C6C)
 /** The ledger's column lines (between the name and the amounts): much lighter than [Rule], just there. */
-private val ColumnRule = Color(0x12786C6C)
+private val ColumnRule: Color @Composable get() = if (LocalLook.current != null) Color(0x12FFFFFF) else Color(0x12786C6C)
 
 /** The Cashbook card's left and right edges: a [Rule] line down each side of a row or day strip, so the card is outlined all round. */
-private fun Modifier.cardSides(): Modifier = drawWithContent {
+@Composable
+private fun Modifier.cardSides(): Modifier {
+    val rule = Rule
+    return drawWithContent {
     drawContent()
     val w = 1.dp.toPx()
-    drawRect(Rule, Offset.Zero, Size(w, size.height))
-    drawRect(Rule, Offset(size.width - w, 0f), Size(w, size.height))
+    drawRect(rule, Offset.Zero, Size(w, size.height))
+    drawRect(rule, Offset(size.width - w, 0f), Size(w, size.height))
+    }
 }
 
 /**
