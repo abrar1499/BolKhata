@@ -781,14 +781,36 @@ fun CashBookScreen(
 /** The + button's shape, as WhatsApp's: a rounded square. */
 private val FabShape = RoundedCornerShape(16.dp)
 
-/** The + on the Cashbook, shaped as WhatsApp's (a rounded square): the header's red, or the Navy blues in the dark, with a white +. Like ↑, it steps aside while an ad is under it. */
+/** How high above the list's end the top of an ad lying between [low] and [high] is, or null when no ad is there. */
+@Composable
+private fun adTop(state: LazyListState, low: Dp, high: Dp): Dp? {
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val (lo, hi) = with(density) { low.roundToPx() to high.roundToPx() }
+    val top by remember(state, lo, hi) {
+        derivedStateOf {
+            val end = state.layoutInfo.viewportEndOffset
+            state.layoutInfo.visibleItemsInfo.filter { it.contentType == "ad" && it.offset < end - lo && it.offset + it.size > end - hi }
+                .maxOfOrNull { end - it.offset }
+        }
+    }
+    return top?.let { with(density) { it.toDp() } }
+}
+
+/**
+ * The + on the Cashbook, shaped as WhatsApp's (a rounded square): the header's red, or the Navy blues in the dark, with a white +.
+ * It never covers an ad: while the list moves over one it steps aside, and when the list stops it sits just above the ad.
+ */
 @Composable
 private fun BoxScope.AddRound(state: LazyListState, onClick: () -> Unit) {
-    val bottom = LocalBarSpace.current + 8.dp
+    val base = LocalBarSpace.current + 8.dp
+    val under = adTop(state, base - 6.dp, base + 50.dp)
+    val bottom = under?.let { it + 8.dp } ?: base
+    val room = with(androidx.compose.ui.platform.LocalDensity.current) { state.layoutInfo.viewportEndOffset.toDp() }
+    if (under != null && (state.isScrollInProgress || bottom + 52.dp > room - 160.dp)) return
     // Dark: the Navy band's own blues with a fine light edge (red is for money out there); light: the header's red.
     val glow = LocalLook.current?.glow == true
     val red = if (glow) Color(0xFF1E3A5F) else Color(0xFFE3342F)
-    if (!adUnder(state, bottom - 6.dp, bottom + 50.dp)) Box(
+    Box(
         Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = bottom).size(52.dp)
             .lift(6.dp, FabShape, ambientColor = red, spotColor = red).clip(FabShape)
             .then(if (glow) Modifier.border(1.dp, Color(0x24FFFFFF), FabShape) else Modifier)
