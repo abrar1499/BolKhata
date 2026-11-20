@@ -667,7 +667,8 @@ private fun LedgerRow(r: LRow, cols: List<LCol>, last: Boolean, card: Boolean = 
             }
         }
     }
-    if (!last) HorizontalDivider(Modifier.padding(horizontal = 10.dp), color = Faint)
+    // On the row's own white (not the page's grey behind it), so it is as light as the column lines.
+    if (!last) HorizontalDivider(Modifier.padding(horizontal = 10.dp).background(MaterialTheme.colorScheme.surface), color = Faint)
 }
 
 /** The add button just above the bottom panel: a white card with a khata icon and "Entry". The form has Cash out / in. */
