@@ -639,9 +639,16 @@ private fun LedgerHead(
 private fun DayLine(date: Long, cols: List<LCol>, day: List<LRow>) = Tight {
     val w = colW(cols)
     val totals = cols.indices.map { k -> day.sumOf { it.amounts.getOrElse(k) { 0.0 } } }
-    // One light keyboard-grey strip for the whole day: date, then the day's totals in their colours (no + / −).
+    // One light keyboard-grey strip for the whole day: date, then the day's totals in their colours (no + / −); a line
+    // down its left and right ends (the entries have none).
+    val rule = Rule
     Row(
-        Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(IntrinsicSize.Min).background(DayStrip)
+        Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(IntrinsicSize.Min).background(DayStrip).drawWithContent {
+            drawContent()
+            val px = 1.dp.toPx()
+            drawRect(rule, Offset.Zero, Size(px, size.height))
+            drawRect(rule, Offset(size.width - px, 0f), Size(px, size.height))
+        }
     ) {
         Text(dayLineFmt.format(Date(date)), fontSize = 11.sp, fontWeight = FontWeight.Bold,
             modifier = Modifier.weight(1f).padding(start = 12.dp, top = 4.dp, bottom = 4.dp))
