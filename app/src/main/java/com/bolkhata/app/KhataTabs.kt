@@ -201,13 +201,12 @@ private fun TabHead(content: @Composable ColumnScope.() -> Unit) =
     Column(Modifier.fillMaxWidth().pageGround().padding(bottom = 4.dp), content = content)
 
 /**
- * The theme band in the app icon's glass look, with a thin light bottom edge; [alpha] a little see-through (as the mock),
+ * The theme band in the app icon's glass look, no line along its bottom; [alpha] a little see-through (as the mock),
  * so the page, or on Chat the blurred messages under it, shows faintly.
  */
 internal fun DrawScope.drawBand(theme: HeaderTheme, h: Float, alpha: Float = 0.85f) {
     drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(0f, 0f, size.width, h), androidx.compose.ui.graphics.Paint().apply { this.alpha = alpha })
     drawGlass(bandColors(theme), h)
-    drawRect(Color.White.copy(alpha = 0.35f), topLeft = Offset(0f, h - 1.dp.toPx()), size = Size(size.width, 1.dp.toPx()))
     drawContext.canvas.restore()
 }
 
