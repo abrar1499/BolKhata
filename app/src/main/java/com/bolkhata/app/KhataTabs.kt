@@ -487,8 +487,8 @@ private val dayLineFmt = SimpleDateFormat("EEE, d MMM yyyy", Locale.US)
 /** Blue of the small khata name in ledger rows: red and green stay for money. */
 private val KhataBlue = Color(0xFF0369A1)
 private val Faint = Color(0x14786C6C)
-/** The ledger card's lines between entries (and under the last): strong enough to show in both themes (light: warm grey; dark: soft white). */
-private val Rule: Color @Composable get() = if (LocalLook.current != null) Color(0x24FFFFFF) else Color(0x33786C6C)
+/** The ledger card's lines between entries (and under the last): light theme a warm grey; dark theme the page's own navy, so each entry stands as its own strip. */
+private val Rule: Color @Composable get() = if (LocalLook.current != null) Color(0xFF222836) else Color(0x33786C6C)
 /** The ledger's column lines (between the name and the amounts): much lighter than [Rule], just there. */
 private val ColumnRule: Color @Composable get() = if (LocalLook.current != null) Color(0x12FFFFFF) else Color(0x12786C6C)
 
