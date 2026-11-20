@@ -632,6 +632,9 @@ object NativeChatEngine {
                 java.text.SimpleDateFormat("'Today is' d MMM yyyy, EEEE.", Locale.ENGLISH).format(java.util.Date(now))
             has(w, setOf("time", "waqt", "baje", "bje")) && has(w, setOf("kya", "kia", "what", "kitne", "kitny")) ->
                 java.text.SimpleDateFormat("h:mm a", Locale.ENGLISH).format(java.util.Date(now))
+            // "aur sunao" (what's new?): a greeting, never a request for a report.
+            w.size <= 3 && has(w, setOf("sunao", "sunaao", "sunaw", "sunain", "sunaen", "sunaye")) && w.all { it in setOf("aur", "ar", "or", "aor", "sunao", "sunaao", "sunaw", "sunain", "sunaen", "sunaye", "kya", "kia", "bhai", "yar", "yaar", "g", "ji", "jee") } ->
+                "All good! What should I note?"
             has(w, setOf("hal", "haal", "kaise", "kaisa", "kaisi", "kese", "kesa", "kesi", "kesy", "kaisay", "kaisy", "kasy", "kase", "kasa", "kasi",
                 "kasay", "kesay", "kesey", "kaisey", "kaese", "kaysy", "kse", "ksy")) || (has(w, setOf("kya", "kia")) && has(w, setOf("hal", "haal"))) -> "Good, you?"
             // The answer to "kaise ho": "good", "fine", "alhamdulillah".
