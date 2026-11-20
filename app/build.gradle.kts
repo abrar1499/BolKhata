@@ -116,6 +116,10 @@ dependencies {
     implementation("com.google.android.gms:play-services-auth:21.4.0")
     // Quiet ads (see Ads.kt): native cards and a banner from Google AdMob.
     implementation("com.google.android.gms:play-services-ads:23.6.0")
+    // Mediation: Meta Audience Network and AppLovin bid for the same ad places too, so each ad goes to the best price.
+    // These adapter versions are the newest built for play-services-ads 23.6.0.
+    implementation("com.google.ads.mediation:facebook:6.19.0.0")
+    implementation("com.google.ads.mediation:applovin:13.1.0.0")
     // Premium (no ads, smart assistant with no limits) is sold through Google Play subscriptions.
     implementation("com.android.billingclient:billing:8.0.0")
     // Google's consent form for ads where the law asks for it (Europe, UK).

@@ -39,7 +39,7 @@ import com.google.android.ump.ConsentRequestParameters
 import com.google.android.ump.UserMessagingPlatform
 
 /** Most new ads one phone is shown in a day (chat, cashbook, lists); after that their places stay empty until the next day. */
-internal const val AD_LOADS_A_DAY = 20
+internal const val AD_LOADS_A_DAY = 40
 
 /** Most reward videos one phone is offered in a day; after that the app answers by itself until the next day. */
 internal const val REWARDS_A_DAY = 5
