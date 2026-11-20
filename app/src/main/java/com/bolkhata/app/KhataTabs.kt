@@ -81,7 +81,6 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -506,21 +505,22 @@ private fun signed(k: LKind, v: Double) = if (v == 0.0) "" else (when (k) { LKin
  */
 internal fun LazyListScope.ledger(
     title: String, cols: List<LCol>, rows: List<LRow>, keyPrefix: String = "", cards: Boolean = true, onHold: (() -> Unit)? = null,
-    cash: Boolean = false, endAd: Boolean? = true
+    cash: Boolean = false
 ) {
     item(key = keyPrefix + "lh") { LedgerHead(title, entryCount(rows.size), cols, rows.isEmpty(), ids = rows.mapNotNull { it.entry?.id }, onHold = onHold) }
     if (rows.isEmpty()) item(key = keyPrefix + "empty") { EmptyHint() }
     // Each day's rows, found in one pass (filtering the whole list for every day made long lists slow).
     val byDay = rows.groupBy { dayNumber(it.date) }
     var days = 0
+    val ads = if (cash) cashAds(rows.map { it.date }) else emptyMap()
     rows.forEachIndexed { i, r ->
         if (i == 0 || !sameDay(rows[i - 1].date, r.date)) {
-            // The Cashbook keeps its ads near the top, where they are seen: a wide video card (192 × 120) after the 3rd day, a slim picture
-            // after the 6th. Other ledgers (inside an account, opened for a quick look): one slim picture after the 3rd day.
-            if (cash && (days == 3 || days == 6)) {
-                val n = days
-                item(key = keyPrefix + "ad" + n, contentType = "ad") { NativeAdCard("ledger-$keyPrefix$title-$n", Modifier.padding(start = 10.dp, end = 10.dp, top = 1.dp), big = n == 3, round = false, small = n != 3) }
-            } else if (!cash && days == 3) {
+            // The Cashbook: an ad between two days after every 12 entries, a picture and a wide video (192 × 120) by turns.
+            // Other ledgers (inside an account, opened for a quick look): one slim picture after the 3rd day.
+            ads[i]?.let { n ->
+                item(key = keyPrefix + "ad" + n, contentType = "ad") { NativeAdCard(cashAdPlace(title, n), Modifier.padding(start = 10.dp, end = 10.dp, top = 1.dp), big = n % 2 == 0, round = false, small = n % 2 == 1) }
+            }
+            if (!cash && days == 3) {
                 item(key = keyPrefix + "ad3", contentType = "ad") { NativeAdCard("ledger-$keyPrefix$title-3", Modifier.padding(start = 10.dp, end = 10.dp, top = 1.dp), round = false, small = true) }
             }
             days++
@@ -531,13 +531,24 @@ internal fun LazyListScope.ledger(
         val last = i == rows.lastIndex || (cards && !sameDay(rows[i + 1].date, r.date))
         item(key = keyPrefix + r.key) { LedgerRow(r, cols, last, cards) }
     }
-    // At the end of the Cashbook: the banner strip, square and joined to the rows above it as a day strip is.
-    // Only under three or more entries: a near-empty book gets no ad. [endAd] null: an empty place the size of the strip,
-    // laid out first to see where it falls; false: no strip (it would open on the + button).
-    if (cash && rows.size >= 3 && endAd != false) item(key = keyPrefix + "end-ad", contentType = if (endAd == null) "slot" else "ad") {
-        if (endAd == null) Spacer(Modifier.fillMaxWidth().height(57.dp)) else NativeAdCard("ledger-end-$keyPrefix$title", Modifier.padding(start = 10.dp, end = 10.dp, top = 1.dp), round = false, small = true, banner = true)
-    }
 }
+
+/**
+ * Where the Cashbook's ads go, for entries by [dates] (newest first): row index → its turn (1, 2, …). An ad sits between two
+ * days once 12 or more entries have gone by since the last one (or the top); odd turns are a picture, even ones a video.
+ */
+internal fun cashAds(dates: List<Long>): Map<Int, Int> {
+    val at = mutableMapOf<Int, Int>()
+    var since = 0
+    dates.forEachIndexed { i, d ->
+        if (i > 0 && since >= 12 && !sameDay(dates[i - 1], d)) { at[i] = at.size + 1; since = 0 }
+        since++
+    }
+    return at
+}
+
+/** The Cashbook ad's place (see [Ads.native]): one per month list and turn. */
+internal fun cashAdPlace(list: String, n: Int) = "ledger-$list-$n"
 
 /** What an empty list shows instead of a blank page: the app logo and how to add the first entry. */
 @Composable
@@ -740,20 +751,19 @@ fun CashBookScreen(
     val pdf = LocalPdf.current
     val cur = LocalCurrency.current.let { if (it.isBlank()) "" else " $it" }
     var picking by remember { mutableStateOf(false) }
-    // The strip at the end never opens on the + button: where it would first fall there, the list has no strip.
-    val plus = LocalBarSpace.current + 8.dp
-    val density = androidx.compose.ui.platform.LocalDensity.current
-    var endAd by remember(list.size, month, q) { mutableStateOf<Boolean?>(null) }
-    LaunchedEffect(endAd) {
-        if (endAd != null) return@LaunchedEffect
-        val info = snapshotFlow { state.layoutInfo }.first { it.visibleItemsInfo.isNotEmpty() }
-        val (lo, hi) = with(density) { (plus - 6.dp).roundToPx() to (plus + 50.dp).roundToPx() }
-        val end = info.viewportEndOffset
-        endAd = info.visibleItemsInfo.firstOrNull { it.key == "end-ad" }?.let { !(it.offset < end - lo && it.offset + it.size > end - hi) } ?: true
+    val label = if (q.isNotBlank()) "Found" else monthLabel(months, month) ?: ""
+    // An ad is asked of Google only when the person has scrolled to within 10 entries of it: no request goes unseen, and it
+    // is in hand by the time its place comes on screen, so nothing jumps.
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val adAt = remember(list) { cashAds(list.map { it.date }) }
+    val rowOf = remember(list) { list.withIndex().associate { (i, e) -> e.id to i } }
+    LaunchedEffect(adAt, label) {
+        snapshotFlow { state.layoutInfo.visibleItemsInfo.maxOfOrNull { rowOf[it.key] ?: -1 } ?: -1 }.collect { seen ->
+            adAt.forEach { (i, n) -> if (i <= seen + 10) Ads.native(context, cashAdPlace(label, n), small = n % 2 == 1) {} }
+        }
     }
     Box(Modifier.fillMaxSize()) {
-        // Room under the list's end, so a strip scrolled up to there sits above the +.
-        LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(bottom = barSpace(66.dp))) {
+        LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(bottom = barSpace(56.dp))) {
             stickyHeader { TabHead {
                 KhataTop("", "", onMenu, business = business, onPdf = {
                     pdf(PdfDoc("Cashbook", if (q.isNotBlank()) "Search: $q" else monthLabel(months, month) ?: "All",
@@ -770,7 +780,6 @@ fun CashBookScreen(
                 SearchBox(q, "Search") { q = it }
                 if (q.isBlank() && months.isNotEmpty()) MonthChips(months, month) { month = it }
             } }
-            val label = if (q.isNotBlank()) "Found" else monthLabel(months, month) ?: ""
             ledger(
                 label,
                 listOf(
@@ -781,7 +790,7 @@ fun CashBookScreen(
                     LRow(e.id, e.date, title(e), e.note, listOf(if (cashOut(e)) e.amount else 0.0, if (cashIn(e)) e.amount else 0.0), e,
                         khata = e.person.trim().ifBlank { e.category.label }) { onEdit(e) }
                 },
-                cards = true, cash = true, endAd = endAd
+                cards = true, cash = true
             )
         }
         UpButton(state)

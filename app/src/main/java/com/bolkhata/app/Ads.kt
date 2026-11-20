@@ -94,6 +94,11 @@ object Ads {
     /** Loaded native ads by their place (e.g. "chat-12"), so an ad stays the same while it is on screen and is not fetched again. */
     /** Ads fetched, by place; read in Compose, so a list redraws its card when the ad inside it arrives. */
     private val loaded = mutableStateMapOf<String, NativeAd>()
+    /** When each place's ad came, and when it was last asked for. */
+    private val loadedAt = mutableMapOf<String, Long>()
+    private val asking = mutableMapOf<String, Long>()
+    /** The ad in hand for [place], if any. */
+    fun ad(place: String): NativeAd? = loaded[place]
     /** Whether the ad for [place] is in hand and may be shown now. */
     fun showing(place: String) = loaded[place] != null && !resting && !Premium.active
 
@@ -146,10 +151,15 @@ object Ads {
 
     /** The ad for [place], fetched once; [onReady] gets it when it arrives. [small]: from the pictures-only unit. */
     fun native(context: Context, place: String, small: Boolean = false, onReady: (NativeAd) -> Unit) {
-        loaded[place]?.let { onReady(it); return }
+        val now = System.currentTimeMillis()
+        // Google wants an ad shown within the hour it came: an older one stays on show while a fresh one is asked for.
+        loaded[place]?.let { onReady(it); if (now - (loadedAt[place] ?: 0L) < 3_600_000L) return }
+        // One request at a time for a place (a list asks ahead, its card asks when drawn); a failed one is tried again after 30 s.
+        if (now - (asking[place] ?: 0L) < 30_000L) return
         if (!ready || resting || Premium.active || (play && today(context, "loads") >= AD_LOADS_A_DAY)) return
+        asking[place] = now
         AdLoader.Builder(context, if (small) smallUnit else nativeUnit)
-            .forNativeAd { ad -> loaded[place] = ad; count(context, "loads"); onReady(ad) }
+            .forNativeAd { ad -> loaded[place] = ad; loadedAt[place] = System.currentTimeMillis(); asking.remove(place); count(context, "loads"); onReady(ad) }
             .withAdListener(taps(context))
             .withNativeAdOptions(NativeAdOptions.Builder().setAdChoicesPlacement(NativeAdOptions.ADCHOICES_TOP_RIGHT)
                 .setVideoOptions(VideoOptions.Builder().setStartMuted(true).build()).build())
@@ -171,12 +181,11 @@ fun videoTurn(nth: Int) = nth % 2 == 1
 @Composable
 fun NativeAdCard(place: String, modifier: Modifier = Modifier, video: Boolean = false, round: Boolean = true, small: Boolean = false, big: Boolean = false, banner: Boolean = false, corner: Int? = null) {
     val context = LocalContext.current
-    var ad by remember(place) { mutableStateOf<NativeAd?>(null) }
     DisposableEffect(place, Ads.ready) {
-        Ads.native(context, place, small) { ad = it }
+        Ads.native(context, place, small) {}
         onDispose { }
     }
-    val shown = ad?.takeIf { !Ads.resting && !Premium.active } ?: return
+    val shown = Ads.ad(place)?.takeIf { !Ads.resting && !Premium.active } ?: return
     AndroidView(factory = { ctx: Context -> (if (banner) bannerRow(ctx) else if (big) videoRow(ctx, wide = true) else if (video || shown.mediaContent?.hasVideoContent() == true) videoRow(ctx) else adRow(ctx)).also { v -> (v.getChildAt(0).background as? GradientDrawable)?.let { if (!round) it.cornerRadius = 0f else if (corner != null) it.cornerRadius = ctx.dp(corner).toFloat() } } }, modifier = modifier.fillMaxWidth(), update = { v: NativeAdView -> v.show(shown) })
 }
 
