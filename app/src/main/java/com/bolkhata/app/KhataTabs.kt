@@ -515,11 +515,11 @@ internal fun LazyListScope.ledger(
     val ads = if (cash) cashAds(rows.map { it.date }) else emptyMap()
     rows.forEachIndexed { i, r ->
         if (i == 0 || !sameDay(rows[i - 1].date, r.date)) {
-            // The Cashbook: an ad between two days, the first after 5 entries (seen on the first screen), then after every 12;
-            // a wide video (192 × 120) and a picture by turns.
+            // The Cashbook: between two days, a small picture after the first 5 entries (seen on the first screen), a wide
+            // video (192 × 120) after 12, then every 12 a picture and a video by turns.
             // Other ledgers (inside an account, opened for a quick look): one slim picture after the 3rd day.
             ads[i]?.let { n ->
-                item(key = keyPrefix + "ad" + n, contentType = "ad") { NativeAdCard(cashAdPlace(title, n), Modifier.padding(start = 10.dp, end = 10.dp, top = 1.dp), big = n % 2 == 1, round = false, small = n % 2 == 0) }
+                item(key = keyPrefix + "ad" + n, contentType = "ad") { NativeAdCard(cashAdPlace(title, n), Modifier.padding(start = 10.dp, end = 10.dp, top = 1.dp), big = n % 2 == 0, round = false, small = n % 2 == 1) }
             }
             if (!cash && days == 3) {
                 item(key = keyPrefix + "ad3", contentType = "ad") { NativeAdCard("ledger-$keyPrefix$title-3", Modifier.padding(start = 10.dp, end = 10.dp, top = 1.dp), round = false, small = true) }
@@ -536,14 +536,14 @@ internal fun LazyListScope.ledger(
 
 /**
  * Where the Cashbook's ads go, for entries by [dates] (newest first): row index → its turn (1, 2, …). An ad sits between two
- * days: the first once 5 or more entries are above it (so the first screen has one), each next one 12 or more after the
- * last; odd turns are a video, even ones a picture.
+ * days: the first (a small picture) once 5 or more entries are above it, so the first screen has one; the second (a
+ * video) once 12 or more are; then each 12 or more after the last. Odd turns are a picture, even ones a video.
  */
 internal fun cashAds(dates: List<Long>): Map<Int, Int> {
     val at = mutableMapOf<Int, Int>()
     var since = 0
     dates.forEachIndexed { i, d ->
-        if (i > 0 && since >= (if (at.isEmpty()) 5 else 12) && !sameDay(dates[i - 1], d)) { at[i] = at.size + 1; since = 0 }
+        if (i > 0 && since >= (when (at.size) { 0 -> 5; 1 -> 7; else -> 12 }) && !sameDay(dates[i - 1], d)) { at[i] = at.size + 1; since = 0 }
         since++
     }
     return at
@@ -761,7 +761,7 @@ fun CashBookScreen(
     val rowOf = remember(list) { list.withIndex().associate { (i, e) -> e.id to i } }
     LaunchedEffect(adAt, label) {
         snapshotFlow { state.layoutInfo.visibleItemsInfo.maxOfOrNull { rowOf[it.key] ?: -1 } ?: -1 }.collect { seen ->
-            adAt.forEach { (i, n) -> if (i <= seen + 10) Ads.native(context, cashAdPlace(label, n), small = n % 2 == 0) {} }
+            adAt.forEach { (i, n) -> if (i <= seen + 10) Ads.native(context, cashAdPlace(label, n), small = n % 2 == 1) {} }
         }
     }
     Box(Modifier.fillMaxSize()) {
