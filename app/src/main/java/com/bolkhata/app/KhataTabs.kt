@@ -487,34 +487,19 @@ private val dayLineFmt = SimpleDateFormat("EEE, d MMM yyyy", Locale.US)
 /** Blue of the small khata name in ledger rows: red and green stay for money. */
 private val KhataBlue = Color(0xFF0369A1)
 private val Faint = Color(0x14786C6C)
-/** The ledger card's lines (round its edge, between entries, between columns): one shade, a little stronger than [Faint] so the outline shows on the page. */
-private val Rule = Color(0x26786C6C)
+/** The ledger card's lines between entries (and under the last): light theme a warm grey; dark theme a shade darker than the rows, so they stay apart without breaking from the card. */
+private val Rule: Color @Composable get() = if (LocalLook.current != null) Color(0xFF2A3040) else Color(0x33786C6C)
+/** The ledger's column lines (between the name and the amounts): much lighter than [Rule], just there. */
+private val ColumnRule: Color @Composable get() = if (LocalLook.current != null) Color(0x12FFFFFF) else Color(0x12786C6C)
 
-/** The Cashbook card's left and right edges: a [Rule] line down each side of a row or day strip, so the card is outlined all round. */
-private fun Modifier.cardSides(): Modifier = drawWithContent {
-    drawContent()
-    val w = 1.dp.toPx()
-    drawRect(Rule, Offset.Zero, Size(w, size.height))
-    drawRect(Rule, Offset(size.width - w, 0f), Size(w, size.height))
-}
 
-/**
- * An ad in the card, level with the rows, and the card's line under it. Light theme: the rows' edge line melts into the
- * page, so a row looks to end where its white ends; the ad's outer 1 dp down each side takes that same line too, so its
- * own colour ends there as well. Dark theme: the rows' edge shows, so the ad goes right to it with no line down its sides.
- */
+/** An ad in the card: as wide as the rows, level with them, and the line between entries under it (in the colour it has on the rows). */
 @Composable
 private fun Modifier.adFrame(): Modifier {
-    val card = MaterialTheme.colorScheme.surface
-    val edge = Rule.compositeOver(card)
-    val sides = card.luminance() > 0.5f
+    val edge = Rule.compositeOver(MaterialTheme.colorScheme.surface)
     return drawWithContent {
         drawContent()
         val w = 1.dp.toPx()
-        if (sides) {
-            drawRect(edge, Offset.Zero, Size(w, size.height))
-            drawRect(edge, Offset(size.width - w, 0f), Size(w, size.height))
-        }
         drawRect(edge, Offset(0f, size.height - w), Size(size.width, w))
     }
 }
@@ -615,7 +600,7 @@ private fun LedgerHead(
     val sel = LocalSelection.current
     Row(
         Modifier.padding(start = 10.dp, end = 10.dp, top = 8.dp).fillMaxWidth().height(IntrinsicSize.Min)
-            .then(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp, bottomStart = if (empty) 14.dp else 0.dp, bottomEnd = if (empty) 14.dp else 0.dp).let { Modifier.clip(it).border(1.dp, Rule, it) })
+            .then(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp, bottomStart = if (empty) 14.dp else 0.dp, bottomEnd = if (empty) 14.dp else 0.dp).let { Modifier.clip(it) })
             .background(MaterialTheme.colorScheme.surface)
             .then(if (onHold != null) Modifier.combinedClickable(onLongClick = onHold) {} else Modifier)
     ) {
@@ -634,7 +619,7 @@ private fun LedgerHead(
             )
         }
         cols.forEach { c ->
-            VerticalDivider(Modifier.fillMaxHeight(), color = Rule)
+            VerticalDivider(Modifier.fillMaxHeight(), color = ColumnRule)
             // Column name, with the month's total right under it.
             Column(
                 Modifier.width(w).fillMaxHeight().padding(horizontal = 3.dp),
@@ -654,9 +639,18 @@ private fun LedgerHead(
 private fun DayLine(date: Long, cols: List<LCol>, day: List<LRow>) = Tight {
     val w = colW(cols)
     val totals = cols.indices.map { k -> day.sumOf { it.amounts.getOrElse(k) { 0.0 } } }
-    // One light keyboard-grey strip for the whole day: date, then the day's totals in their colours (no + / −).
+    // One light keyboard-grey strip for the whole day: date, then the day's totals in their colours (no + / −). It reaches
+    // 1 dp past the entries on each side alike, as a band; the ends rounded a little and shining, fading inward, so they
+    // look curved like a road's edge.
+    val shine = if (LocalLook.current != null) Color(0x14FFFFFF) else Color(0x73FFFFFF)
+    val shape = RoundedCornerShape(1.5.dp)
     Row(
-        Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(IntrinsicSize.Min).background(DayStrip).cardSides()
+        Modifier.padding(horizontal = 9.dp).fillMaxWidth().height(IntrinsicSize.Min).clip(shape).background(DayStrip).drawWithContent {
+            val g = 9.dp.toPx()
+            drawRect(Brush.horizontalGradient(listOf(shine, Color.Transparent), 0f, g), Offset.Zero, Size(g, size.height))
+            drawRect(Brush.horizontalGradient(listOf(Color.Transparent, shine), size.width - g, size.width), Offset(size.width - g, 0f), Size(g, size.height))
+            drawContent()
+        }.padding(horizontal = 1.dp)   // its words and totals stay over the entries' columns
     ) {
         Text(dayLineFmt.format(Date(date)), fontSize = 11.sp, fontWeight = FontWeight.Bold,
             modifier = Modifier.weight(1f).padding(start = 12.dp, top = 4.dp, bottom = 4.dp))
@@ -681,7 +675,6 @@ private fun LedgerRow(r: LRow, cols: List<LCol>, last: Boolean, card: Boolean = 
     Row(
         Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(IntrinsicSize.Min).then(if (card) Modifier else Modifier.lift(1.dp, shape)).clip(shape)
             .background(MaterialTheme.colorScheme.surface).background(if (picked) Ember.copy(alpha = 0.12f) else Color.Transparent)
-            .then(if (card) Modifier.cardSides() else Modifier)
             .combinedClickable(onLongClick = r.entry?.let { e -> if (picking) ({ sel!!.toggle(e.id) }) else menu?.let { { it(e) } } }) {
                 if (picking) sel!!.toggle(r.entry!!.id) else r.onClick()
             }
@@ -701,7 +694,7 @@ private fun LedgerRow(r: LRow, cols: List<LCol>, last: Boolean, card: Boolean = 
             )
         }
         cols.forEachIndexed { i, _ ->
-            VerticalDivider(Modifier.fillMaxHeight(), color = Rule)
+            VerticalDivider(Modifier.fillMaxHeight(), color = ColumnRule)
             Box(Modifier.width(w).fillMaxHeight(), contentAlignment = Alignment.Center) {
                 val v = r.amounts.getOrElse(i) { 0.0 }
                 FitText(if (v == 0.0) "" else fmt(v), 12.sp, FontWeight.Bold, AmountInk, Modifier.padding(horizontal = 3.dp))
@@ -710,8 +703,7 @@ private fun LedgerRow(r: LRow, cols: List<LCol>, last: Boolean, card: Boolean = 
     }
     // On the row's own white (not the page's grey behind it), so it is as light as the column lines; the list's last
     // entry gets one too, closing the card's bottom.
-    if (!last || end) HorizontalDivider(Modifier.padding(horizontal = 10.dp).background(MaterialTheme.colorScheme.surface)
-        .then(if (card) Modifier.cardSides() else Modifier), color = Rule)
+    if (!last || end) HorizontalDivider(Modifier.padding(horizontal = 10.dp).background(MaterialTheme.colorScheme.surface), color = Rule)
 }
 
 /** The add button just above the bottom panel: a white card with a khata icon and "Entry". The form has Cash out / in. */
