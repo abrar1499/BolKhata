@@ -164,8 +164,9 @@ fun ChatScreen(
                         // The AI's own sentences ("plain") are never read as a report.
                         else remember(message.text, currency) { if (message.meta.contains("; plain")) null else Report.parse(message.text, currency) }
                             ?.let { ReportCard(it, message.text, message.timestamp) }
-                            // "What rate for 15000 Kachi eent?" on the last answer: the rate is typed right in the chat.
-                            ?: AssistantBubble(message.text, message.timestamp)
+                            // "What rate for 15000 Kachi eent?" on the last answer: the rate box inside its bubble (see RateCard).
+                            ?: AssistantBubble(message.text, message.timestamp,
+                                if (message == messages.lastOrNull() && RateAsk.matches(message.text)) ({ RateCard(message.text, onSend) }) else null)
                         // "Which A or B do you mean?": one tap on a name opens that khata.
                         if (message == messages.lastOrNull()) {
                             val names = NativeChatEngine.nameChoices(message.text)
@@ -187,8 +188,6 @@ fun ChatScreen(
                             if (names.isEmpty() && asks.isNotEmpty()) FollowChips(asks, onSend)
                         }
                         if (!message.meta.startsWith("reward")) AnswerActions(ratings[message.id]) { good -> onRate(message.id, good) }
-                        // The AI asked a work's or sale's rate on the last answer: the rate box under it (see RateCard).
-                        if (message == messages.lastOrNull() && RateAsk.matches(message.text)) RateCard(message.text, onSend)
                         // "Claude · 1.2s · 340 tokens" under an answer: the APK only; the Play build shows no such detail.
                         if (!BuildConfig.PLAY) Regex("""usage=([^;]+)""").find(message.meta)?.let {
                             Text(it.groupValues[1], fontSize = 8.sp, lineHeight = 8.sp, color = Color(0xFFA39E98),
@@ -599,8 +598,9 @@ private fun NameChoices(names: List<String>, newOf: String? = null, onPick: (Str
 }
 
 @Composable
-private fun AssistantBubble(text: String, time: Long) {
+private fun AssistantBubble(text: String, time: Long, extra: (@Composable () -> Unit)? = null) {
     // A white raised bubble with WhatsApp's tail pointing at the logo; the engine trace is kept in the chat log, not shown here.
+    // [extra] (the rate box) sits inside it under the words, the time then at the bubble's bottom right.
     Box(
         Modifier
             .padding(start = 1.dp)
@@ -610,7 +610,16 @@ private fun AssistantBubble(text: String, time: Long) {
             .copyable(text)
             .background(MaterialTheme.colorScheme.surface)
             .padding(start = 10.dp + TAIL, end = 10.dp, top = 6.dp, bottom = 5.dp)
-    ) { TimedText(text, time, MaterialTheme.colorScheme.onSurface) }
+    ) {
+        if (extra == null) TimedText(text, time, MaterialTheme.colorScheme.onSurface)
+        // No intrinsic width here: the rate box holds a LazyRow, which cannot be measured that way.
+        else Column {
+            Text(text, color = MaterialTheme.colorScheme.onSurface, fontSize = 13.sp, lineHeight = 17.5.sp)
+            extra()
+            Text(remember(time) { stampOf(time) }, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), fontSize = 8.sp, lineHeight = 8.sp,
+                modifier = Modifier.align(Alignment.End).padding(top = 3.dp, bottom = 1.dp))
+        }
+    }
 }
 
 /**
@@ -1034,7 +1043,7 @@ private val RateAsk = Regex("""(?is)^(?=.*\d)(?=.*(\brate\b|ریٹ|रेट)).*
 /**
  * The rate box under the AI's rate question: "RATE · 6,000" with what it comes to, the rate and Save on one line, and
  * the units (as in + Entry) to pick. Save answers the question ("900 per 1000", "50 per kg", "900 each"). A rate typed
- * or said in the chat bar while it is open fills it (see [RateBox]).
+ * or said in the chat bar while it is open fills it (see [RateBox]). It sits inside the answer's bubble, under a line.
  */
 @Composable
 private fun RateCard(text: String, onSend: (String) -> Unit) {
@@ -1047,10 +1056,9 @@ private fun RateCard(text: String, onSend: (String) -> Unit) {
     LaunchedEffect(RateBox.fill) { RateBox.fill?.let { (r, u) -> rate = r; if (u != null) unit = u; RateBox.fill = null } }
     val r = rate.toDoubleOrNull() ?: 0.0
     val sub = MaterialTheme.colorScheme.onSurfaceVariant
-    val shape = RoundedCornerShape(8.dp)
-    Column(Modifier.padding(start = 8.dp, top = 4.dp).width(262.dp).lift(1.dp, shape).clip(shape).background(MaterialTheme.colorScheme.surface)
-        .padding(start = 12.dp, end = 10.dp, top = 8.dp, bottom = 9.dp)) {
-        Row(verticalAlignment = Alignment.Bottom) {
+    Column(Modifier.padding(top = 8.dp).width(250.dp)) {
+        HorizontalDivider(color = sub.copy(alpha = 0.15f))
+        Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.Bottom) {
             Text("RATE · " + fmt(qty), fontSize = 9.5.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp, color = sub, modifier = Modifier.weight(1f))
             if (r > 0 && qty > 0) Text("= " + fmt(if (unit == "1000") qty / 1000 * r else qty * r) + " " + LocalCurrency.current,
                 fontSize = 11.sp, fontWeight = FontWeight.Bold, color = RedSpend)
