@@ -642,15 +642,15 @@ private fun DayLine(date: Long, cols: List<LCol>, day: List<LRow>) = Tight {
     val w = colW(cols)
     val totals = cols.indices.map { k -> day.sumOf { it.amounts.getOrElse(k) { 0.0 } } }
     // One light keyboard-grey strip for the whole day: date, then the day's totals in their colours (no + / −); a line
-    // down its left and right ends (the entries have none).
+    // down its left and right ends (the entries have none); it reaches 2 dp past the entries on each side, as a band.
     val rule = DaySide
     Row(
-        Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(IntrinsicSize.Min).background(DayStrip).drawWithContent {
+        Modifier.padding(horizontal = 8.dp).fillMaxWidth().height(IntrinsicSize.Min).background(DayStrip).drawWithContent {
             drawContent()
             val px = 1.dp.toPx()
             drawRect(rule, Offset.Zero, Size(px, size.height))
             drawRect(rule, Offset(size.width - px, 0f), Size(px, size.height))
-        }
+        }.padding(horizontal = 2.dp)   // its words and totals stay over the entries' columns
     ) {
         Text(dayLineFmt.format(Date(date)), fontSize = 11.sp, fontWeight = FontWeight.Bold,
             modifier = Modifier.weight(1f).padding(start = 12.dp, top = 4.dp, bottom = 4.dp))
