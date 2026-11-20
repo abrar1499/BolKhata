@@ -490,8 +490,6 @@ private val Rule: Color @Composable get() = if (LocalLook.current != null) Color
 /** The ledger's column lines (between the name and the amounts): much lighter than [Rule], just there. */
 /** The lines inside a day (between its entries, under its date strip and under the month head): barely there. */
 private val Soft: Color @Composable get() = if (LocalLook.current != null) Color(0x1F000000) else Color(0x12786C6C)
-/** The line along a date strip's top, where one day ends and the next begins: clear (dark theme: a soft light line). */
-private val DayTop: Color @Composable get() = if (LocalLook.current != null) Color(0x17FFFFFF) else Color(0x26786C6C)
 private val ColumnRule: Color @Composable get() = if (LocalLook.current != null) Color(0x12FFFFFF) else Color(0x12786C6C)
 
 
@@ -544,7 +542,7 @@ internal fun LazyListScope.ledger(
             }
             days++
             val day = byDay[dayNumber(r.date)].orEmpty()
-            item(key = keyPrefix + "d" + r.key) { DayLine(r.date, cols, day, first = i == 0) }
+            item(key = keyPrefix + "d" + r.key) { DayLine(r.date, cols, day) }
         }
         // As cards, each day is one card: its day line and entries, the last entry closing it. An entry with an ad right
         // under it keeps its line (also at a day's end), so every ad has the entries' line above it as well as under it.
@@ -630,14 +628,14 @@ private fun LedgerHead(
 
 /** The slim line above each day: the day's name and its totals in their columns. */
 @Composable
-private fun DayLine(date: Long, cols: List<LCol>, day: List<LRow>, first: Boolean = false) = Tight {
+private fun DayLine(date: Long, cols: List<LCol>, day: List<LRow>) = Tight {
     val w = colW(cols)
     val totals = cols.indices.map { k -> day.sumOf { it.amounts.getOrElse(k) { 0.0 } } }
     // One light keyboard-grey strip for the whole day: date, then the day's totals in their colours (no + / −). It reaches
     // 1 dp past the entries on each side alike, as a band; the ends rounded a little and shining, fading inward, so they
     // look curved like a road's edge; the entries' line along its top and bottom.
-    // Its top line marks the change of day (soft under the month head, where nothing ends); its bottom line is soft.
-    val topLine = if (first) Soft else DayTop
+    // Its top and bottom lines as soft as the lines between entries.
+    val topLine = Soft
     val bottomLine = Soft
     val shine = if (LocalLook.current != null) Color(0x14FFFFFF) else Color(0x73FFFFFF)
     val shape = RoundedCornerShape(1.5.dp)
