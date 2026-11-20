@@ -200,10 +200,15 @@ private fun KhataTop(
 private fun TabHead(content: @Composable ColumnScope.() -> Unit) =
     Column(Modifier.fillMaxWidth().pageGround().padding(bottom = 4.dp), content = content)
 
-/** The theme band in the app icon's glass look, with a thin light bottom edge. */
-internal fun DrawScope.drawBand(theme: HeaderTheme, h: Float) {
+/**
+ * The theme band in the app icon's glass look, with a thin light bottom edge; [alpha] a little see-through (as the mock),
+ * so the page, or on Chat the blurred messages under it, shows faintly.
+ */
+internal fun DrawScope.drawBand(theme: HeaderTheme, h: Float, alpha: Float = 0.85f) {
+    drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(0f, 0f, size.width, h), androidx.compose.ui.graphics.Paint().apply { this.alpha = alpha })
     drawGlass(bandColors(theme), h)
     drawRect(Color.White.copy(alpha = 0.35f), topLeft = Offset(0f, h - 1.dp.toPx()), size = Size(size.width, 1.dp.toPx()))
+    drawContext.canvas.restore()
 }
 
 /** White pill at the top: the glossy app logo and the open business; a tap opens the side menu (businesses and settings). */

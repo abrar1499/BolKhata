@@ -40,6 +40,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.layout.onSizeChanged
+import dev.chrisbanes.haze.haze
+import dev.chrisbanes.haze.hazeChild
 import kotlinx.coroutines.launch
 
 /**
@@ -97,32 +100,22 @@ fun ChatScreen(
         if (itemCount > 0) listState.animateScrollToItem(itemCount - 1)
     }
 
-    Column(Modifier.fillMaxSize()) {
-        // One slim line with the business pill on the theme's band: the band runs just behind the line (Chat has no
-        // summary card under it); the messages start below it.
-        val theme = LocalHeader.current
-        val banded = theme.name != "Clean"
-        val ink = if (banded) theme.on.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant
-        Box(Modifier.fillMaxWidth().then(if (banded) Modifier.drawBehind { drawBand(theme, size.height) } else Modifier)) {
-            Column(Modifier.statusBarsPadding().padding(horizontal = 12.dp).padding(bottom = 10.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    BusinessPill(business.ifBlank { "Chat" }, onMenu)
-                    Text(subtitle, color = ink, fontSize = 11.sp, maxLines = 1,
-                        overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 10.dp, top = 10.dp))
-                    // The 🌐 pill and ⋮ in the same place as on every tab.
-                    TopActions(ink) { close ->
-                        TopMenuItem(Icons.Outlined.Share, "Share chat log", enabled = !loading) { close(); confirmShare = true }
-                        TopMenuItem(Icons.Outlined.Delete, "Clear chat", enabled = messages.isNotEmpty() && !loading) { close(); confirmClear = true }
-                    }
-                }
-            }
-        }
-
-        Box(Modifier.weight(1f).fillMaxWidth()) {
+    // One slim line with the business pill on the theme's band (Chat has no summary card under it). The line lies over
+    // the messages: they scroll under the band, which shows them blurred through it (Android 12+; older phones have no
+    // blur, so there the band stays solid and nothing shows through).
+    val theme = LocalHeader.current
+    val banded = theme.name != "Clean"
+    val ink = if (banded) theme.on.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant
+    val haze = remember { dev.chrisbanes.haze.HazeState() }
+    val blurs = android.os.Build.VERSION.SDK_INT >= 31
+    var headH by remember { mutableIntStateOf(0) }
+    val headDp = with(androidx.compose.ui.platform.LocalDensity.current) { headH.toDp() }
+    Box(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize()) {
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().then(if (blurs) Modifier.haze(haze) else Modifier),
             state = listState,
-            contentPadding = PaddingValues(start = 12.dp, top = 6.dp, end = 12.dp, bottom = barSpace(14.dp)),
+            contentPadding = PaddingValues(start = 12.dp, top = headDp + 6.dp, end = 12.dp, bottom = barSpace(14.dp)),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             if (messages.isEmpty()) {
@@ -280,6 +273,26 @@ fun ChatScreen(
         }
         }
 
+        Box(
+            Modifier.fillMaxWidth().onSizeChanged { headH = it.height }.then(
+                if (blurs) Modifier.hazeChild(haze, dev.chrisbanes.haze.HazeStyle(backgroundColor = MaterialTheme.colorScheme.background, tint = null, blurRadius = 14.dp))
+                else Modifier.background(MaterialTheme.colorScheme.background)
+            )
+        ) {
+            if (banded) Box(Modifier.matchParentSize().drawBehind { drawBand(theme, size.height, if (blurs) 0.85f else 1f) })
+            Column(Modifier.statusBarsPadding().padding(horizontal = 12.dp).padding(bottom = 10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    BusinessPill(business.ifBlank { "Chat" }, onMenu)
+                    Text(subtitle, color = ink, fontSize = 11.sp, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 10.dp, top = 10.dp))
+                    // The 🌐 pill and ⋮ in the same place as on every tab.
+                    TopActions(ink) { close ->
+                        TopMenuItem(Icons.Outlined.Share, "Share chat log", enabled = !loading) { close(); confirmShare = true }
+                        TopMenuItem(Icons.Outlined.Delete, "Clear chat", enabled = messages.isNotEmpty() && !loading) { close(); confirmClear = true }
+                    }
+                }
+            }
+        }
     }
 
     if (confirmShare) {
