@@ -186,7 +186,29 @@ fun NativeAdCard(place: String, modifier: Modifier = Modifier, video: Boolean = 
         onDispose { }
     }
     val shown = Ads.ad(place)?.takeIf { !Ads.resting && !Premium.active } ?: return
-    AndroidView(factory = { ctx: Context -> (if (banner) bannerRow(ctx) else if (big) videoRow(ctx, wide = true) else if (video || shown.mediaContent?.hasVideoContent() == true) videoRow(ctx) else adRow(ctx)).also { v -> (v.getChildAt(0).background as? GradientDrawable)?.let { if (!round) { it.cornerRadius = 0f; it.setColor(AColor.argb(217, 255, 255, 255)) } else if (corner != null) it.cornerRadius = ctx.dp(corner).toFloat() } } }, modifier = modifier.fillMaxWidth(), update = { v: NativeAdView -> v.show(shown) })
+    // Dark theme: the ad's card and words in the app's dark colours (as the rows'), like the rest of the page.
+    val look = LocalLook.current
+    val dark = look?.let { if (it.glow) 0xFF323845.toInt() else it.card.toInt() }
+    androidx.compose.runtime.key(dark) {
+        AndroidView(factory = { ctx: Context -> (if (banner) bannerRow(ctx) else if (big) videoRow(ctx, wide = true) else if (video || shown.mediaContent?.hasVideoContent() == true) videoRow(ctx) else adRow(ctx)).also { v ->
+            (v.getChildAt(0).background as? GradientDrawable)?.let {
+                if (!round) { it.cornerRadius = 0f; it.setColor(AColor.argb(217, 255, 255, 255)) } else if (corner != null) it.cornerRadius = ctx.dp(corner).toFloat()
+                if (dark != null) it.setColor(dark)
+            }
+            if (dark != null) v.darken(dark)
+        } }, modifier = modifier.fillMaxWidth(), update = { v: NativeAdView -> v.show(shown) })
+    }
+}
+
+/** Dark theme: the ad's words light on [card] (headline near white, the rest soft grey, the "Ad" tag's edge faint); its picture and button stay. */
+private fun android.view.View.darken(card: Int) {
+    if (this is TextView) when (currentTextColor) {
+        AColor.rgb(29, 29, 31) -> setTextColor(0xFFF5F5F4.toInt())
+        AColor.rgb(138, 133, 128) -> setTextColor(0xFFA8A29E.toInt())
+        AColor.rgb(155, 149, 142) -> { setTextColor(0xFFA8A29E.toInt()); (background as? GradientDrawable)?.setStroke(context.dp(1), 0x40FFFFFF) }
+    }
+    (background as? android.graphics.drawable.ColorDrawable)?.let { if (it.color == AColor.WHITE) setBackgroundColor(card) }
+    if (this is android.view.ViewGroup) for (i in 0 until childCount) getChildAt(i).darken(card)
 }
 
 private fun Context.dp(v: Int) = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), resources.displayMetrics).toInt()
