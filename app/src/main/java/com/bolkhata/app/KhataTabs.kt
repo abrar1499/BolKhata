@@ -515,7 +515,8 @@ internal fun LazyListScope.ledger(
     val ads = if (cash) cashAds(rows.map { it.date }) else emptyMap()
     rows.forEachIndexed { i, r ->
         if (i == 0 || !sameDay(rows[i - 1].date, r.date)) {
-            // The Cashbook: an ad between two days after every 12 entries, a wide video (192 × 120) and a picture by turns.
+            // The Cashbook: an ad between two days, the first after 5 entries (seen on the first screen), then after every 12;
+            // a wide video (192 × 120) and a picture by turns.
             // Other ledgers (inside an account, opened for a quick look): one slim picture after the 3rd day.
             ads[i]?.let { n ->
                 item(key = keyPrefix + "ad" + n, contentType = "ad") { NativeAdCard(cashAdPlace(title, n), Modifier.padding(start = 10.dp, end = 10.dp, top = 1.dp), big = n % 2 == 1, round = false, small = n % 2 == 0) }
@@ -535,13 +536,14 @@ internal fun LazyListScope.ledger(
 
 /**
  * Where the Cashbook's ads go, for entries by [dates] (newest first): row index → its turn (1, 2, …). An ad sits between two
- * days once 12 or more entries have gone by since the last one (or the top); odd turns are a video, even ones a picture.
+ * days: the first once 5 or more entries are above it (so the first screen has one), each next one 12 or more after the
+ * last; odd turns are a video, even ones a picture.
  */
 internal fun cashAds(dates: List<Long>): Map<Int, Int> {
     val at = mutableMapOf<Int, Int>()
     var since = 0
     dates.forEachIndexed { i, d ->
-        if (i > 0 && since >= 12 && !sameDay(dates[i - 1], d)) { at[i] = at.size + 1; since = 0 }
+        if (i > 0 && since >= (if (at.isEmpty()) 5 else 12) && !sameDay(dates[i - 1], d)) { at[i] = at.size + 1; since = 0 }
         since++
     }
     return at
