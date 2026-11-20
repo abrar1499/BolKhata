@@ -794,7 +794,7 @@ fun FitText(
  * sticky band or a page opened over another is solid yet joins the glow behind it without a seam.
  */
 @Composable
-fun Modifier.pageGround(): Modifier {
+fun Modifier.pageGround(lights: Float = 1f): Modifier {
     val look = LocalLook.current
     if (look?.glow != true) return background(MaterialTheme.colorScheme.background)
     val screen = androidx.compose.ui.platform.LocalContext.current.resources.displayMetrics
@@ -804,7 +804,7 @@ fun Modifier.pageGround(): Modifier {
     return onGloballyPositioned { at = it.positionInWindow() }.drawBehind {
         drawRect(Color(look.page))
         // A light at (x, y) of the screen, fading out over r screen widths.
-        fun light(x: Float, y: Float, r: Float, c: Long) = Color(c).let {
+        fun light(x: Float, y: Float, r: Float, c: Long) = Color(c).let { it.copy(alpha = it.alpha * lights) }.let {
             drawRect(Brush.radialGradient(listOf(it, it.copy(alpha = 0f)), Offset(x * w - at.x, y * h - at.y), r * w))
         }
         light(0.08f, 0.22f, 0.55f, 0x734670C8)

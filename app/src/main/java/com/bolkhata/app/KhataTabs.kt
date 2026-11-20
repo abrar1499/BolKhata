@@ -55,7 +55,6 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.takeOrElse
@@ -201,13 +200,12 @@ private fun TabHead(content: @Composable ColumnScope.() -> Unit) =
     Column(Modifier.fillMaxWidth().pageGround().padding(bottom = 4.dp), content = content)
 
 /**
- * The theme band in the app icon's glass look, with a thin light bottom edge; [alpha] a little see-through (as the mock),
+ * The theme band in the app icon's glass look, no line along its bottom; [alpha] a little see-through (as the mock),
  * so the page, or on Chat the blurred messages under it, shows faintly.
  */
 internal fun DrawScope.drawBand(theme: HeaderTheme, h: Float, alpha: Float = 0.85f) {
     drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(0f, 0f, size.width, h), androidx.compose.ui.graphics.Paint().apply { this.alpha = alpha })
     drawGlass(bandColors(theme), h)
-    drawRect(Color.White.copy(alpha = 0.35f), topLeft = Offset(0f, h - 1.dp.toPx()), size = Size(size.width, 1.dp.toPx()))
     drawContext.canvas.restore()
 }
 
@@ -493,16 +491,7 @@ private val Rule: Color @Composable get() = if (LocalLook.current != null) Color
 private val ColumnRule: Color @Composable get() = if (LocalLook.current != null) Color(0x12FFFFFF) else Color(0x12786C6C)
 
 
-/** An ad in the card: as wide as the rows, level with them, and the line between entries under it (in the colour it has on the rows). */
-@Composable
-private fun Modifier.adFrame(): Modifier {
-    val edge = Rule.compositeOver(MaterialTheme.colorScheme.surface)
-    return drawWithContent {
-        drawContent()
-        val w = 1.dp.toPx()
-        drawRect(edge, Offset(0f, size.height - w), Size(size.width, w))
-    }
-}
+
 /** The day strip in ledgers: the light grey-blue of a phone keyboard (dark: a deep slate). */
 private val DayStrip: Color
     @Composable @ReadOnlyComposable get() = LocalLook.current?.let { Color(it.day) } ?: Color(0xFFEEF1F8)
@@ -542,21 +531,23 @@ internal fun LazyListScope.ledger(
         // The Cashbook: a small picture right after the 5th entry (seen on the first screen), then between two days a wide
         // video (192 × 120) after 12, and every 12 a picture and a video by turns.
         ads[i]?.let { n ->
-            item(key = keyPrefix + "ad" + n, contentType = "ad") { NativeAdCard(cashAdPlace(title, n), Modifier.padding(horizontal = 10.dp).adFrame(), big = n % 2 == 0, round = false, small = n % 2 == 1) }
+            item(key = keyPrefix + "ad" + n, contentType = "ad") { NativeAdCard(cashAdPlace(title, n), Modifier.padding(horizontal = 10.dp), big = n % 2 == 0, round = false, small = n % 2 == 1) }
         }
         if (i == 0 || !sameDay(rows[i - 1].date, r.date)) {
             // Other ledgers (inside an account, opened for a quick look): one slim picture after the 3rd day.
             if (!cash && days == 3) {
-                item(key = keyPrefix + "ad3", contentType = "ad") { NativeAdCard("ledger-$keyPrefix$title-3", Modifier.padding(horizontal = 10.dp).adFrame(), round = false, small = true) }
+                item(key = keyPrefix + "ad3", contentType = "ad") { NativeAdCard("ledger-$keyPrefix$title-3", Modifier.padding(horizontal = 10.dp), round = false, small = true) }
             }
             days++
             val day = byDay[dayNumber(r.date)].orEmpty()
             item(key = keyPrefix + "d" + r.key) { DayLine(r.date, cols, day) }
         }
-        // As cards, each day is one card: its day line and entries, the last entry closing it. An ad right under an entry
-        // keeps the entries' faint line above it (no gap, no shadow), so a white video card does not run into the row.
-        val last = i == rows.lastIndex || (cards && !sameDay(rows[i + 1].date, r.date))
-        item(key = keyPrefix + r.key) { LedgerRow(r, cols, last, cards, end = i == rows.lastIndex) }
+        // As cards, each day is one card: its day line and entries, the last entry closing it. An entry with an ad right
+        // under it keeps its line (also at a day's end), so every ad has the entries' line above it as well as under it.
+        val last = i == rows.lastIndex || (cards && !sameDay(rows[i + 1].date, r.date) && (i + 1) !in ads)
+        // An ad inside a day (not before its date strip) has the entries' line under it too: on the entry that follows.
+        val underAd = i in ads && i > 0 && sameDay(rows[i - 1].date, r.date)
+        item(key = keyPrefix + r.key) { LedgerRow(r, cols, last, cards, end = i == rows.lastIndex, top = underAd) }
     }
 }
 
@@ -640,7 +631,8 @@ private fun DayLine(date: Long, cols: List<LCol>, day: List<LRow>) = Tight {
     val totals = cols.indices.map { k -> day.sumOf { it.amounts.getOrElse(k) { 0.0 } } }
     // One light keyboard-grey strip for the whole day: date, then the day's totals in their colours (no + / −). It reaches
     // 1 dp past the entries on each side alike, as a band; the ends rounded a little and shining, fading inward, so they
-    // look curved like a road's edge.
+    // look curved like a road's edge; the entries' line along its top and bottom.
+    val rule = Rule
     val shine = if (LocalLook.current != null) Color(0x14FFFFFF) else Color(0x73FFFFFF)
     val shape = RoundedCornerShape(1.5.dp)
     Row(
@@ -649,6 +641,9 @@ private fun DayLine(date: Long, cols: List<LCol>, day: List<LRow>) = Tight {
             drawRect(Brush.horizontalGradient(listOf(shine, Color.Transparent), 0f, g), Offset.Zero, Size(g, size.height))
             drawRect(Brush.horizontalGradient(listOf(Color.Transparent, shine), size.width - g, size.width), Offset(size.width - g, 0f), Size(g, size.height))
             drawContent()
+            val px = 1.dp.toPx()
+            drawRect(rule, Offset.Zero, Size(size.width, px))
+            drawRect(rule, Offset(0f, size.height - px), Size(size.width, px))
         }.padding(horizontal = 1.dp)   // its words and totals stay over the entries' columns
     ) {
         Text(dayLineFmt.format(Date(date)), fontSize = 11.sp, fontWeight = FontWeight.Bold,
@@ -663,7 +658,7 @@ private fun DayLine(date: Long, cols: List<LCol>, day: List<LRow>) = Tight {
 
 /** One entry line; as a [card] it is part of its day's flat square card (no shadow, so the day's last line has no raised edge), [last] closing that card. */
 @Composable
-private fun LedgerRow(r: LRow, cols: List<LCol>, last: Boolean, card: Boolean = false, end: Boolean = false) = Tight {
+private fun LedgerRow(r: LRow, cols: List<LCol>, last: Boolean, card: Boolean = false, end: Boolean = false, top: Boolean = false) = Tight {
     val sub = MaterialTheme.colorScheme.onSurfaceVariant
     val w = colW(cols)
     val shape = if (card) RectangleShape else sheetShape(last)
@@ -671,6 +666,7 @@ private fun LedgerRow(r: LRow, cols: List<LCol>, last: Boolean, card: Boolean = 
     val sel = LocalSelection.current
     val picking = sel?.active == true && r.entry != null
     val picked = picking && r.entry!!.id in sel!!.ids
+    if (top) HorizontalDivider(Modifier.padding(horizontal = 10.dp).background(MaterialTheme.colorScheme.surface), color = Rule)
     Row(
         Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(IntrinsicSize.Min).then(if (card) Modifier else Modifier.lift(1.dp, shape)).clip(shape)
             .background(MaterialTheme.colorScheme.surface).background(if (picked) Ember.copy(alpha = 0.12f) else Color.Transparent)
