@@ -1059,7 +1059,7 @@ private fun RateCard(text: String, onSend: (String) -> Unit) {
     Column(Modifier.padding(top = 8.dp).width(250.dp)) {
         HorizontalDivider(color = sub.copy(alpha = 0.15f))
         Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.Bottom) {
-            Text("RATE · " + fmt(qty), fontSize = 9.5.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp, color = sub, modifier = Modifier.weight(1f))
+            Text("RATE FOR " + fmt(qty), fontSize = 9.5.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp, color = sub, modifier = Modifier.weight(1f))
             if (r > 0 && qty > 0) Text("= " + fmt(if (unit == "1000") qty / 1000 * r else qty * r) + " " + LocalCurrency.current,
                 fontSize = 11.sp, fontWeight = FontWeight.Bold, color = RedSpend)
         }
