@@ -643,11 +643,17 @@ private fun DayLine(date: Long, cols: List<LCol>, day: List<LRow>) = Tight {
     val totals = cols.indices.map { k -> day.sumOf { it.amounts.getOrElse(k) { 0.0 } } }
     // One light keyboard-grey strip for the whole day: date, then the day's totals in their colours (no + / −); a line
     // down its left and right ends (the entries have none); it reaches 2 dp past the entries on each side, as a band.
+    // Its ends are rounded a little and shine, fading inward, so they look curved like a road's edge.
     val rule = DaySide
+    val shine = if (LocalLook.current != null) Color(0x29FFFFFF) else Color(0xD9FFFFFF)
+    val shape = RoundedCornerShape(3.dp)
     Row(
-        Modifier.padding(horizontal = 8.dp).fillMaxWidth().height(IntrinsicSize.Min).background(DayStrip).drawWithContent {
-            drawContent()
+        Modifier.padding(horizontal = 8.dp).fillMaxWidth().height(IntrinsicSize.Min).clip(shape).background(DayStrip).drawWithContent {
             val px = 1.dp.toPx()
+            val g = 9.dp.toPx()
+            drawRect(Brush.horizontalGradient(listOf(shine, Color.Transparent), 0f, g), Offset.Zero, Size(g, size.height))
+            drawRect(Brush.horizontalGradient(listOf(Color.Transparent, shine), size.width - g, size.width), Offset(size.width - g, 0f), Size(g, size.height))
+            drawContent()
             drawRect(rule, Offset.Zero, Size(px, size.height))
             drawRect(rule, Offset(size.width - px, 0f), Size(px, size.height))
         }.padding(horizontal = 2.dp)   // its words and totals stay over the entries' columns
