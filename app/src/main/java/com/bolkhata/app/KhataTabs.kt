@@ -514,34 +514,39 @@ internal fun LazyListScope.ledger(
     var days = 0
     val ads = if (cash) cashAds(rows.map { it.date }) else emptyMap()
     rows.forEachIndexed { i, r ->
+        // The Cashbook: a small picture right after the 5th entry (seen on the first screen), then between two days a wide
+        // video (192 × 120) after 12, and every 12 a picture and a video by turns.
+        ads[i]?.let { n ->
+            item(key = keyPrefix + "ad" + n, contentType = "ad") { NativeAdCard(cashAdPlace(title, n), Modifier.padding(horizontal = 10.dp), big = n % 2 == 0, round = false, small = n % 2 == 1) }
+        }
         if (i == 0 || !sameDay(rows[i - 1].date, r.date)) {
-            // The Cashbook: an ad between two days after every 12 entries, a wide video (192 × 120) and a picture by turns.
             // Other ledgers (inside an account, opened for a quick look): one slim picture after the 3rd day.
-            ads[i]?.let { n ->
-                item(key = keyPrefix + "ad" + n, contentType = "ad") { NativeAdCard(cashAdPlace(title, n), Modifier.padding(start = 10.dp, end = 10.dp, top = 1.dp), big = n % 2 == 1, round = false, small = n % 2 == 0) }
-            }
             if (!cash && days == 3) {
-                item(key = keyPrefix + "ad3", contentType = "ad") { NativeAdCard("ledger-$keyPrefix$title-3", Modifier.padding(start = 10.dp, end = 10.dp, top = 1.dp), round = false, small = true) }
+                item(key = keyPrefix + "ad3", contentType = "ad") { NativeAdCard("ledger-$keyPrefix$title-3", Modifier.padding(horizontal = 10.dp), round = false, small = true) }
             }
             days++
             val day = byDay[dayNumber(r.date)].orEmpty()
             item(key = keyPrefix + "d" + r.key) { DayLine(r.date, cols, day) }
         }
-        // As cards, each day is one card: its day line and entries, the last entry closing it.
+        // As cards, each day is one card: its day line and entries, the last entry closing it. An ad right under an entry
+        // keeps the entries' faint line above it (no gap, no shadow), so a white video card does not run into the row.
         val last = i == rows.lastIndex || (cards && !sameDay(rows[i + 1].date, r.date))
         item(key = keyPrefix + r.key) { LedgerRow(r, cols, last, cards) }
     }
 }
 
 /**
- * Where the Cashbook's ads go, for entries by [dates] (newest first): row index → its turn (1, 2, …). An ad sits between two
- * days once 12 or more entries have gone by since the last one (or the top); odd turns are a video, even ones a picture.
+ * Where the Cashbook's ads go, for entries by [dates] (newest first): row index → its turn (1, 2, …), the ad going just
+ * above that row. The first (a small picture) comes right after the 5th entry, whatever its day, so the first screen has
+ * one; the others sit between two days: the second (a video) once 12 or more entries are above it, then each 12 or more
+ * after the last. Odd turns are a picture, even ones a video.
  */
 internal fun cashAds(dates: List<Long>): Map<Int, Int> {
     val at = mutableMapOf<Int, Int>()
     var since = 0
     dates.forEachIndexed { i, d ->
-        if (i > 0 && since >= 12 && !sameDay(dates[i - 1], d)) { at[i] = at.size + 1; since = 0 }
+        val first = at.isEmpty()
+        if (i > 0 && since >= (when (at.size) { 0 -> 5; 1 -> 7; else -> 12 }) && (first || !sameDay(dates[i - 1], d))) { at[i] = at.size + 1; since = 0 }
         since++
     }
     return at
@@ -611,7 +616,7 @@ private fun DayLine(date: Long, cols: List<LCol>, day: List<LRow>) = Tight {
     val totals = cols.indices.map { k -> day.sumOf { it.amounts.getOrElse(k) { 0.0 } } }
     // One light keyboard-grey strip for the whole day: date, then the day's totals in their colours (no + / −).
     Row(
-        Modifier.padding(start = 10.dp, end = 10.dp, top = 1.dp).fillMaxWidth().height(IntrinsicSize.Min).background(DayStrip)
+        Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(IntrinsicSize.Min).background(DayStrip)
     ) {
         Text(dayLineFmt.format(Date(date)), fontSize = 11.sp, fontWeight = FontWeight.Bold,
             modifier = Modifier.weight(1f).padding(start = 12.dp, top = 4.dp, bottom = 4.dp))
@@ -623,7 +628,7 @@ private fun DayLine(date: Long, cols: List<LCol>, day: List<LRow>) = Tight {
     }
 }
 
-/** One entry line; as a [card] it is part of its day's square raised card, [last] closing that card. */
+/** One entry line; as a [card] it is part of its day's flat square card (no shadow, so the day's last line has no raised edge), [last] closing that card. */
 @Composable
 private fun LedgerRow(r: LRow, cols: List<LCol>, last: Boolean, card: Boolean = false) = Tight {
     val sub = MaterialTheme.colorScheme.onSurfaceVariant
@@ -634,7 +639,7 @@ private fun LedgerRow(r: LRow, cols: List<LCol>, last: Boolean, card: Boolean = 
     val picking = sel?.active == true && r.entry != null
     val picked = picking && r.entry!!.id in sel!!.ids
     Row(
-        Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(IntrinsicSize.Min).lift(1.dp, shape).clip(shape)
+        Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(IntrinsicSize.Min).then(if (card) Modifier else Modifier.lift(1.dp, shape)).clip(shape)
             .background(MaterialTheme.colorScheme.surface).background(if (picked) Ember.copy(alpha = 0.12f) else Color.Transparent)
             .combinedClickable(onLongClick = r.entry?.let { e -> if (picking) ({ sel!!.toggle(e.id) }) else menu?.let { { it(e) } } }) {
                 if (picking) sel!!.toggle(r.entry!!.id) else r.onClick()
@@ -683,7 +688,7 @@ private fun BoxScope.PlusButton(onClick: () -> Unit) {
 
 /** Whether an ad in [state]'s list lies between [low] and [high] above the list's end: nothing may cover an ad. */
 @Composable
-private fun adUnder(state: LazyListState, low: Dp, high: Dp): Boolean {
+internal fun adUnder(state: LazyListState, low: Dp, high: Dp): Boolean {
     val (lo, hi) = with(androidx.compose.ui.platform.LocalDensity.current) { low.roundToPx() to high.roundToPx() }
     val under by remember(state, lo, hi) {
         derivedStateOf {
@@ -695,20 +700,17 @@ private fun adUnder(state: LazyListState, low: Dp, high: Dp): Boolean {
 }
 
 /**
- * Small round ↑ button, centred a little above the Cashbook's +, shown only while a scrolled-down list moves and gone
- * a second after it stops. It steps aside while an ad is under it.
+ * Small round ↑ button: hidden while the list scrolls, shown once a scrolled-down list stops, a little above the
+ * Cashbook's + wherever that sits ([plus]: its bottom; null on lists without one). It steps aside while an ad is under it.
  */
 @Composable
-private fun BoxScope.UpButton(state: LazyListState) {
+private fun BoxScope.UpButton(state: LazyListState, plus: Dp? = null) {
     val scope = rememberCoroutineScope()
-    val bottom = LocalBarSpace.current + 70.dp
+    val bottom = (plus ?: (LocalBarSpace.current + 8.dp)) + 62.dp
     val down by remember { derivedStateOf { state.firstVisibleItemIndex > 4 } }
-    var moving by remember { mutableStateOf(false) }
-    val scrolling = state.isScrollInProgress
-    LaunchedEffect(scrolling) { if (scrolling) moving = true else { kotlinx.coroutines.delay(1000); moving = false } }
     // The button's lower and upper edge above the list's end, with a little room around it.
     val clear = !adUnder(state, bottom - 6.dp, bottom + 36.dp)
-    if (down && moving && clear) Box(
+    if (down && !state.isScrollInProgress && clear) Box(
         Modifier.align(Alignment.BottomEnd).padding(end = 25.dp, bottom = bottom)
             .size(30.dp).lift(2.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.onSurface)
             .clickable { scope.launch { state.animateScrollToItem(0) } },
@@ -759,7 +761,7 @@ fun CashBookScreen(
     val rowOf = remember(list) { list.withIndex().associate { (i, e) -> e.id to i } }
     LaunchedEffect(adAt, label) {
         snapshotFlow { state.layoutInfo.visibleItemsInfo.maxOfOrNull { rowOf[it.key] ?: -1 } ?: -1 }.collect { seen ->
-            adAt.forEach { (i, n) -> if (i <= seen + 10) Ads.native(context, cashAdPlace(label, n), small = n % 2 == 0) {} }
+            adAt.forEach { (i, n) -> if (i <= seen + 10) Ads.native(context, cashAdPlace(label, n), small = n % 2 == 1) {} }
         }
     }
     Box(Modifier.fillMaxSize()) {
@@ -793,8 +795,9 @@ fun CashBookScreen(
                 cards = true, cash = true
             )
         }
-        UpButton(state)
-        AddRound(state) { picking = true }
+        val plus = plusPlace(state)
+        UpButton(state, plus)
+        AddRound(plus) { picking = true }
     }
     if (picking) EntryPicker(entries, setup, onSetup, onDismiss = { picking = false }) { e -> onSave(e); picking = false }
 }
@@ -820,16 +823,22 @@ private fun adTop(state: LazyListState, low: Dp, high: Dp): Dp? {
 }
 
 /**
- * The + on the Cashbook, shaped as WhatsApp's (a rounded square): the header's red, or the Navy blues in the dark, with a white +.
- * It never covers an ad: while the list moves over one it steps aside, and when the list stops it sits just above the ad.
+ * Where the Cashbook's + sits (its bottom above the list's end), or null while it is hidden: while the list scrolls, and
+ * when an ad under its place leaves no room above that ad. It never covers an ad: it sits just above one.
  */
 @Composable
-private fun BoxScope.AddRound(state: LazyListState, onClick: () -> Unit) {
+private fun plusPlace(state: LazyListState): Dp? {
     val base = LocalBarSpace.current + 8.dp
     val under = adTop(state, base - 6.dp, base + 50.dp)
     val bottom = under?.let { it + 8.dp } ?: base
     val room = with(androidx.compose.ui.platform.LocalDensity.current) { state.layoutInfo.viewportEndOffset.toDp() }
-    if (under != null && (state.isScrollInProgress || bottom + 52.dp > room - 160.dp)) return
+    return if (state.isScrollInProgress || (under != null && bottom + 52.dp > room - 160.dp)) null else bottom
+}
+
+/** The + on the Cashbook, shaped as WhatsApp's (a rounded square): the header's red, or the Navy blues in the dark, with a white +; at [place] (see [plusPlace]). */
+@Composable
+private fun BoxScope.AddRound(place: Dp?, onClick: () -> Unit) {
+    val bottom = place ?: return
     // Dark: the Navy band's own blues with a fine light edge (red is for money out there); light: the header's red.
     val glow = LocalLook.current?.glow == true
     val red = if (glow) Color(0xFF1E3A5F) else Color(0xFFE3342F)
