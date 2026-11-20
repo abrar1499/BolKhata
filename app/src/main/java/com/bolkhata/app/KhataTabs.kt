@@ -642,7 +642,7 @@ private fun DayLine(date: Long, cols: List<LCol>, day: List<LRow>) = Tight {
     // One light keyboard-grey strip for the whole day: date, then the day's totals in their colours (no + / −). It reaches
     // 2 dp past the entries on each side, as a band; the ends rounded a little and shining, fading inward, so they look
     // curved like a road's edge.
-    val shine = if (LocalLook.current != null) Color(0x29FFFFFF) else Color(0xD9FFFFFF)
+    val shine = if (LocalLook.current != null) Color(0x14FFFFFF) else Color(0x73FFFFFF)
     val shape = RoundedCornerShape(1.5.dp)
     Row(
         Modifier.padding(horizontal = 8.dp).fillMaxWidth().height(IntrinsicSize.Min).clip(shape).background(DayStrip).drawWithContent {
