@@ -489,8 +489,8 @@ private val KhataBlue = Color(0xFF0369A1)
 private val Faint = Color(0x14786C6C)
 /** The ledger card's lines (round its edge, between entries, between columns): one shade, a little stronger than [Faint] so the outline shows on the page. */
 private val Rule = Color(0x26786C6C)
-/** The ledger's column lines (between the name and the amounts): a touch lighter than [Rule]. */
-private val ColumnRule = Color(0x1C786C6C)
+/** The ledger's column lines (between the name and the amounts): much lighter than [Rule], just there. */
+private val ColumnRule = Color(0x12786C6C)
 
 /** The Cashbook card's left and right edges: a [Rule] line down each side of a row or day strip, so the card is outlined all round. */
 private fun Modifier.cardSides(): Modifier = drawWithContent {
