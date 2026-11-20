@@ -513,7 +513,14 @@ private fun MenuRow(onClick: (() -> Unit)?, last: Boolean = false, onLong: (() -
             ).padding(horizontal = 12.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically, content = content
         )
-        if (!last) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+        // A faint dotted line, as the Cashbook's (dark theme: faint white, never a bright line).
+        if (!last) {
+            val c = if (LocalLook.current != null) Color(0x1AFFFFFF) else Color(0x2E786C6C)
+            androidx.compose.foundation.Canvas(Modifier.fillMaxWidth().height(1.dp)) {
+                val step = 3.2.dp.toPx(); val r = 0.6.dp.toPx(); var x = step / 2
+                while (x < size.width) { drawCircle(c, r, androidx.compose.ui.geometry.Offset(x, size.height / 2)); x += step }
+            }
+        }
     }
 }
 
