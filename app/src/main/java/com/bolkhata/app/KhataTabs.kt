@@ -743,17 +743,21 @@ internal fun adUnder(state: LazyListState, low: Dp, high: Dp): Boolean {
 @Composable
 private fun BoxScope.UpButton(state: LazyListState, plus: Dp? = null) {
     val scope = rememberCoroutineScope()
+    val glow = LocalLook.current?.glow == true
     val bottom = (plus ?: (LocalBarSpace.current + 8.dp)) + 62.dp
     val down by remember { derivedStateOf { state.firstVisibleItemIndex > 4 } }
     // The button's lower and upper edge above the list's end, with a little room around it.
     val clear = !adUnder(state, bottom - 6.dp, bottom + 36.dp)
     if (down && !state.isScrollInProgress && clear) Box(
         Modifier.align(Alignment.BottomEnd).padding(end = 25.dp, bottom = bottom)
-            .size(30.dp).lift(2.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.onSurface)
+            .size(30.dp).lift(2.dp, CircleShape).clip(CircleShape)
+            // See-through as the + below it; in the dark the + button's own Navy blues with a fine light edge.
+            .then(if (glow) Modifier.background(Brush.linearGradient(listOf(Color(0xFF2C5282), Color(0xFF1E3A5F)).map { it.copy(alpha = 0.7f) }))
+                .border(1.dp, Color(0x24FFFFFF), CircleShape) else Modifier.background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)))
             .clickable { scope.launch { state.animateScrollToItem(0) } },
         contentAlignment = Alignment.Center
     ) {
-        Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Back to top", tint = MaterialTheme.colorScheme.surfaceContainer,
+        Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Back to top", tint = if (glow) Color.White else MaterialTheme.colorScheme.surfaceContainer,
             modifier = Modifier.size(20.dp))
     }
 }
@@ -883,8 +887,8 @@ private fun BoxScope.AddRound(place: Dp?, onClick: () -> Unit) {
         Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = bottom).size(52.dp)
             .lift(6.dp, FabShape, ambientColor = red, spotColor = red).clip(FabShape)
             .then(if (glow) Modifier.border(1.dp, Color(0x24FFFFFF), FabShape) else Modifier)
-            // A little see-through (85%), so the page shows faintly under it.
-            .background(Brush.linearGradient((if (glow) listOf(Color(0xFF2C5282), red) else listOf(Color(0xFFFF7A45), red, Color(0xFFB91C3C))).map { it.copy(alpha = 0.85f) }))
+            // See-through (70%), so the page shows under it.
+            .background(Brush.linearGradient((if (glow) listOf(Color(0xFF2C5282), red) else listOf(Color(0xFFFF7A45), red, Color(0xFFB91C3C))).map { it.copy(alpha = 0.7f) }))
             .clickable { onClick() }
             .drawBehind {
                 // As WhatsApp's new-chat mark: a white rounded square with the + inside in the button's colour.
