@@ -267,9 +267,10 @@ private fun SumCard(
                 }
             }
             if (link.isNotEmpty()) VerticalDivider(Modifier.fillMaxHeight(), color = MaterialTheme.colorScheme.outlineVariant)
+            // One line, as the mock: a short link ("Report ›") sits in 64 dp, a longer one ("↺ Restore all") takes its own width.
             if (link.isNotEmpty()) Text(
-                link, color = Ember, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
-                modifier = Modifier.width(64.dp).clickable { onLink() }.padding(vertical = 8.dp)
+                link, color = Ember, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 1, softWrap = false,
+                modifier = Modifier.widthIn(min = 64.dp).clickable { onLink() }.padding(start = 6.dp, end = 10.dp, top = 8.dp, bottom = 8.dp)
             )
         }
     }
