@@ -545,7 +545,9 @@ internal fun LazyListScope.ledger(
         // As cards, each day is one card: its day line and entries, the last entry closing it. An entry with an ad right
         // under it keeps its line (also at a day's end), so every ad has the entries' line above it as well as under it.
         val last = i == rows.lastIndex || (cards && !sameDay(rows[i + 1].date, r.date) && (i + 1) !in ads)
-        item(key = keyPrefix + r.key) { LedgerRow(r, cols, last, cards, end = i == rows.lastIndex) }
+        // An ad inside a day (not before its date strip) has the entries' line under it too: on the entry that follows.
+        val underAd = i in ads && i > 0 && sameDay(rows[i - 1].date, r.date)
+        item(key = keyPrefix + r.key) { LedgerRow(r, cols, last, cards, end = i == rows.lastIndex, top = underAd) }
     }
 }
 
@@ -656,7 +658,7 @@ private fun DayLine(date: Long, cols: List<LCol>, day: List<LRow>) = Tight {
 
 /** One entry line; as a [card] it is part of its day's flat square card (no shadow, so the day's last line has no raised edge), [last] closing that card. */
 @Composable
-private fun LedgerRow(r: LRow, cols: List<LCol>, last: Boolean, card: Boolean = false, end: Boolean = false) = Tight {
+private fun LedgerRow(r: LRow, cols: List<LCol>, last: Boolean, card: Boolean = false, end: Boolean = false, top: Boolean = false) = Tight {
     val sub = MaterialTheme.colorScheme.onSurfaceVariant
     val w = colW(cols)
     val shape = if (card) RectangleShape else sheetShape(last)
@@ -664,6 +666,7 @@ private fun LedgerRow(r: LRow, cols: List<LCol>, last: Boolean, card: Boolean = 
     val sel = LocalSelection.current
     val picking = sel?.active == true && r.entry != null
     val picked = picking && r.entry!!.id in sel!!.ids
+    if (top) HorizontalDivider(Modifier.padding(horizontal = 10.dp).background(MaterialTheme.colorScheme.surface), color = Rule)
     Row(
         Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(IntrinsicSize.Min).then(if (card) Modifier else Modifier.lift(1.dp, shape)).clip(shape)
             .background(MaterialTheme.colorScheme.surface).background(if (picked) Ember.copy(alpha = 0.12f) else Color.Transparent)
