@@ -24,12 +24,14 @@ class AdsTest {
     }
 
     @Test
-    fun cashbookAdsComeBetweenDaysAfterEvery12Entries() {
+    fun cashbookAdsComeBetweenDaysAfter5ThenEvery12Entries() {
         // One busy day: no place between two days, no ad.
         assertEquals(emptyMap<Int, Int>(), cashAds(book(1, 30)))
+        // Fewer than 5 above the first day line: no ad yet.
+        assertEquals(emptyMap<Int, Int>(), cashAds(book(2, 3)))
         // 12 a day: an ad before the 2nd and the 3rd day, a video then a picture.
         assertEquals(mapOf(12 to 1, 24 to 2), cashAds(book(3, 12)))
-        // 5 a day: the first day starting after 12 entries (the 4th, at row 15), then 12 more again.
-        assertEquals(mapOf(15 to 1, 30 to 2), cashAds(book(7, 5)))
+        // 5 a day: the first after day 1 (row 5), the next at the first day line 12 or more later (row 20).
+        assertEquals(mapOf(5 to 1, 20 to 2), cashAds(book(7, 5)))
     }
 }
