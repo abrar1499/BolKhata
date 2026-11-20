@@ -489,8 +489,8 @@ private val KhataBlue = Color(0xFF0369A1)
 private val Faint = Color(0x14786C6C)
 /** The ledger card's lines between entries (and under the last): light theme a warm grey; dark theme a shade darker than the rows, so they stay apart without breaking from the card. */
 private val Rule: Color @Composable get() = if (LocalLook.current != null) Color(0xFF2A3040) else Color(0x33786C6C)
-/** The date strip's left and right lines: a shade of the strip's own colour, so they belong to it (light a little deeper, dark a little lighter). */
-private val DaySide: Color @Composable get() = if (LocalLook.current != null) Color(0x1FFFFFFF) else Color(0xFFDDE2EE)
+/** The date strip's left and right lines: a shade of the strip's own colour, so they belong to it (a touch deeper than the strip in both themes). */
+private val DaySide: Color @Composable get() = if (LocalLook.current != null) Color(0x1F000000) else Color(0xFFE5E9F2)
 /** The ledger's column lines (between the name and the amounts): much lighter than [Rule], just there. */
 private val ColumnRule: Color @Composable get() = if (LocalLook.current != null) Color(0x12FFFFFF) else Color(0x12786C6C)
 
