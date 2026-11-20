@@ -825,7 +825,7 @@ private fun adTop(state: LazyListState, low: Dp, high: Dp): Dp? {
 
 /**
  * The + on the Cashbook, shaped as WhatsApp's (a rounded square): the header's red, or the Navy blues in the dark, with a white +.
- * It never covers an ad: while the list moves over one it steps aside, and when the list stops it sits just above the ad.
+ * Hidden while the list scrolls, back the moment it stops; it never covers an ad: then it sits just above the ad.
  */
 @Composable
 private fun BoxScope.AddRound(state: LazyListState, onClick: () -> Unit) {
@@ -833,7 +833,7 @@ private fun BoxScope.AddRound(state: LazyListState, onClick: () -> Unit) {
     val under = adTop(state, base - 6.dp, base + 50.dp)
     val bottom = under?.let { it + 8.dp } ?: base
     val room = with(androidx.compose.ui.platform.LocalDensity.current) { state.layoutInfo.viewportEndOffset.toDp() }
-    if (under != null && (state.isScrollInProgress || bottom + 52.dp > room - 160.dp)) return
+    if (state.isScrollInProgress || (under != null && bottom + 52.dp > room - 160.dp)) return
     // Dark: the Navy band's own blues with a fine light edge (red is for money out there); light: the header's red.
     val glow = LocalLook.current?.glow == true
     val red = if (glow) Color(0xFF1E3A5F) else Color(0xFFE3342F)
