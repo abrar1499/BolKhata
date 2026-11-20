@@ -492,8 +492,9 @@ private fun Modifier.cardSides(): Modifier = drawWithContent {
 }
 
 /**
- * An ad in the card: as wide as the rows and level with them, no line down its sides; only the card's line under it,
- * laid over its own bottom edge in the colour the rows' line has on their card.
+ * An ad in the card, level with the rows in both themes: the rows' edge line is part of the row (on a light page it melts
+ * into the page, so a row looks to end where its white ends), so the ad's outer 1 dp down each side and under it takes
+ * that same line, in the colour the rows' line has on their card. The ad's own colour then ends where the rows' does.
  */
 @Composable
 private fun Modifier.adFrame(): Modifier {
@@ -501,6 +502,8 @@ private fun Modifier.adFrame(): Modifier {
     return drawWithContent {
         drawContent()
         val w = 1.dp.toPx()
+        drawRect(edge, Offset.Zero, Size(w, size.height))
+        drawRect(edge, Offset(size.width - w, 0f), Size(w, size.height))
         drawRect(edge, Offset(0f, size.height - w), Size(size.width, w))
     }
 }
