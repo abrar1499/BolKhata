@@ -214,7 +214,8 @@ internal fun BusinessPill(name: String, onMenu: () -> Unit) {
     Row(
         Modifier.padding(top = 12.dp).then(if (dark) Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.surface)
             else Modifier.lift(1.dp, CircleShape).clip(CircleShape).background(Color.White))
-            .clickable(onClickLabel = "Menu") { onMenu() }.padding(start = 6.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
+            // As the mock: the logo 12 dp in from the pill's round end (6 padding + 6 margin), not hard against it.
+            .clickable(onClickLabel = "Menu") { onMenu() }.padding(start = 12.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         GlassLogo(24.dp)
