@@ -482,18 +482,24 @@ private val Faint = Color(0x14786C6C)
 /** The ledger card's lines (round its edge, between entries, between columns): one shade, a little stronger than [Faint] so the outline shows on the page. */
 private val Rule = Color(0x26786C6C)
 
-/** The Cashbook card's left and right edges: a [Rule] line down each side of a row, day strip or ad, so the card is outlined all round; [bottom] one under it too (an ad). */
-private fun Modifier.cardSides(bottom: Boolean = false): Modifier = drawWithContent {
+/** The Cashbook card's left and right edges: a [Rule] line down each side of a row or day strip, so the card is outlined all round. */
+private fun Modifier.cardSides(): Modifier = drawWithContent {
     drawContent()
     val w = 1.dp.toPx()
     drawRect(Rule, Offset.Zero, Size(w, size.height))
     drawRect(Rule, Offset(size.width - w, 0f), Size(w, size.height))
-    if (bottom) drawRect(Rule, Offset(0f, size.height - w), Size(size.width, w))
 }
 
-/** An ad in the card: its lines (sides and under it) drawn on the card's own colour just outside the ad, as the rows', so both sides show alike over a picture or a pale card, in either theme. */
+/**
+ * An ad in the card: as wide as the rows, its own edges being the card's there (no side lines, which would show over a
+ * picture but not over a pale card), and the card's line under it, drawn on the card's own colour as between rows.
+ */
 @Composable
-private fun Modifier.adFrame(): Modifier = background(MaterialTheme.colorScheme.surface).cardSides(bottom = true).padding(start = 1.dp, end = 1.dp, bottom = 1.dp)
+private fun Modifier.adFrame(): Modifier = background(MaterialTheme.colorScheme.surface).drawWithContent {
+    drawContent()
+    val w = 1.dp.toPx()
+    drawRect(Rule, Offset(0f, size.height - w), Size(size.width, w))
+}.padding(bottom = 1.dp)
 /** The day strip in ledgers: the light grey-blue of a phone keyboard (dark: a deep slate). */
 private val DayStrip: Color
     @Composable @ReadOnlyComposable get() = LocalLook.current?.let { Color(it.day) } ?: Color(0xFFEEF1F8)
