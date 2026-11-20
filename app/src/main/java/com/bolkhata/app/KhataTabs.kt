@@ -631,7 +631,6 @@ private fun LedgerHead(
             }
         }
     }
-    if (!empty) HorizontalDivider(Modifier.padding(horizontal = 10.dp), color = MaterialTheme.colorScheme.outlineVariant)
 }
 
 /** The slim line above each day: the day's name and its totals in their columns. */
