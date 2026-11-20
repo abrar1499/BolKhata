@@ -631,7 +631,6 @@ private fun LedgerHead(
             }
         }
     }
-    if (!empty) HorizontalDivider(Modifier.padding(horizontal = 10.dp), color = MaterialTheme.colorScheme.outlineVariant)
 }
 
 /** The slim line above each day: the day's name and its totals in their columns. */
@@ -1422,7 +1421,7 @@ internal fun TopActions(tint: Color, pill: Boolean = true, top: Dp = 12.dp, menu
             DropdownMenu(
                 expanded = more, onDismissRequest = { more = false }, shape = RoundedCornerShape(8.dp),
                 containerColor = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 0.dp, shadowElevation = 8.dp,
-                modifier = Modifier.widthIn(min = 160.dp)
+                modifier = Modifier.widthIn(min = 128.dp)
             ) { menu { more = false } }
         }
     }
@@ -1431,10 +1430,11 @@ internal fun TopActions(tint: Color, pill: Boolean = true, top: Dp = 12.dp, menu
 /** One row of the ⋮ card: a line icon and the word. */
 @Composable
 internal fun TopMenuItem(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, enabled: Boolean = true, onClick: () -> Unit) =
+    // Compact: 36 high, small words and icon, so the card under ⋮ stays small.
     DropdownMenuItem(
-        text = { Text(label, fontSize = 13.5.sp) }, onClick = onClick, enabled = enabled,
-        leadingIcon = { Icon(icon, contentDescription = null, modifier = Modifier.size(19.dp)) },
-        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp)
+        text = { Text(label, fontSize = 12.5.sp) }, onClick = onClick, enabled = enabled,
+        leadingIcon = { Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp)) },
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp), modifier = Modifier.height(36.dp)
     )
 
 /** An inner page's top: a round white back button, the path above the title, "⤓ PDF" on the right, then the summary card. */

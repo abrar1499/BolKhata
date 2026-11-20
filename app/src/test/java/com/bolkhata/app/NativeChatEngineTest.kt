@@ -526,6 +526,14 @@ class NativeChatEngineTest {
         assertEquals(listOf("Salim Khan", "Salim Raza", "Nargis Salim Rashid"),
             NativeChatEngine.nameChoices("Which Salim do you mean: Salim Khan, Salim Raza or Nargis Salim Rashid?"))
 
+    @Test fun aurSunaoIsAGreetingNotAReport() {
+        listOf("ar sunao", "aur sunao", "or sunao bhai", "sunao").forEach {
+            assertEquals(it, "chat", read(it).kind)
+            assertEquals(it, "All good! What should I note?", read(it).reply)
+            assertTrue(it, NativeChatEngine.isSmallTalk(it))
+        }
+    }
+
     @Test fun howAreYouSpellingsAndNodsAreSmallTalk() {
         assertEquals("Good, you?", read("kese ho").reply)
         listOf("kase ho", "kasy ho", "kesay ho", "kse ho").forEach { assertEquals(it, "Good, you?", read(it).reply) }
