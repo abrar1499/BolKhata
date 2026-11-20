@@ -553,9 +553,9 @@ internal fun LazyListScope.ledger(
             val day = byDay[dayNumber(r.date)].orEmpty()
             item(key = keyPrefix + "d" + r.key) { DayLine(r.date, cols, day) }
         }
-        // As cards, each day is one card: its day line and entries, the last entry closing it. An ad right under an entry
-        // keeps the entries' faint line above it (no gap, no shadow), so a white video card does not run into the row.
-        val last = i == rows.lastIndex || (cards && !sameDay(rows[i + 1].date, r.date))
+        // As cards, each day is one card: its day line and entries, the last entry closing it. An entry with an ad right
+        // under it keeps its line (also at a day's end), so every ad has the entries' line above it as well as under it.
+        val last = i == rows.lastIndex || (cards && !sameDay(rows[i + 1].date, r.date) && (i + 1) !in ads)
         item(key = keyPrefix + r.key) { LedgerRow(r, cols, last, cards, end = i == rows.lastIndex) }
     }
 }
