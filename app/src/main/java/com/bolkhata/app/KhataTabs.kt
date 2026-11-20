@@ -55,6 +55,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.takeOrElse
@@ -491,15 +492,21 @@ private fun Modifier.cardSides(): Modifier = drawWithContent {
 }
 
 /**
- * An ad in the card: as wide as the rows, its own edges being the card's there (no side lines, which would show over a
- * picture but not over a pale card), and the card's line under it, drawn on the card's own colour as between rows.
+ * An ad in the card: as wide as the rows, with the card's outline (sides and under it) laid over its own edge in the
+ * colour the rows' line has on their card, so the outline runs on unbroken, the same over a picture or a pale card, and
+ * the ad sits inside it, level with the rows.
  */
 @Composable
-private fun Modifier.adFrame(): Modifier = background(MaterialTheme.colorScheme.surface).drawWithContent {
-    drawContent()
-    val w = 1.dp.toPx()
-    drawRect(Rule, Offset(0f, size.height - w), Size(size.width, w))
-}.padding(bottom = 1.dp)
+private fun Modifier.adFrame(): Modifier {
+    val edge = Rule.compositeOver(MaterialTheme.colorScheme.surface)
+    return drawWithContent {
+        drawContent()
+        val w = 1.dp.toPx()
+        drawRect(edge, Offset.Zero, Size(w, size.height))
+        drawRect(edge, Offset(size.width - w, 0f), Size(w, size.height))
+        drawRect(edge, Offset(0f, size.height - w), Size(size.width, w))
+    }
+}
 /** The day strip in ledgers: the light grey-blue of a phone keyboard (dark: a deep slate). */
 private val DayStrip: Color
     @Composable @ReadOnlyComposable get() = LocalLook.current?.let { Color(it.day) } ?: Color(0xFFEEF1F8)
