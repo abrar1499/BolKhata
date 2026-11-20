@@ -174,7 +174,9 @@ object AiAgent {
           not repeat the rows or amounts. "detail", "details", "tafseel" or "kahan kahan laga" after a total is the
           breakdown view; "list" or "entries" is the list view; "category" or "main category" is the breakdown;
           "monthly", "per month", "mahana", "har mahine" is by_month (it also gives the average a month); person-wise
-          is by_person; item-wise is by_item.
+          is by_person; item-wise is by_item. A question for the spending or income of a time ("today expense", "all
+          exp", "aaj ka kharcha", "is mahine ka kharcha", "total income") is the breakdown view (by category), every
+          time; the list view only when entries or a list are asked for.
         - A follow-up ("detail do", "aur food?", "list me batao", "main category bola tha") keeps what the previous
           look-up picked (types, dates, people, categories) and changes only what the new message changes.
         - A word in Urdu, Arabic or Hindi script is read by its sound and may be an English word written that way

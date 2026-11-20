@@ -182,6 +182,8 @@ class AiEvalTest {
         case("month by month", "mahana kharcha dikhao") { listOf("shows a card" to shown.isNotBlank(), "nothing saved" to added.isEmpty()) },
         case("who owes me", "kis kis se paise lene hain") { listOf("nothing saved" to added.isEmpty(), "answers" to (shown.isNotBlank() || text.isNotBlank())) },
         case("profit", "profit kitna hai") { listOf("nothing saved" to added.isEmpty(), "answers" to (shown.isNotBlank() || text.isNotBlank())) },
+        case("all spending by category", "all exp") { listOf("nothing saved" to added.isEmpty(), "by category (shares)" to shown.contains("%")) },
+        case("today's spending by category", "today expense") { listOf("nothing saved" to added.isEmpty(), "by category, or nothing today" to (shown.contains("%") || shown.isBlank())) },
         case("english question", "show this month's expenses") { listOf("shows a card" to shown.isNotBlank(), "nothing saved" to added.isEmpty()) },
         case("pdf", "hamid ke hisab ka pdf bana do") { listOf("a PDF is made" to (world.pdf != null), "nothing saved" to added.isEmpty()) },
         // ---- changes
