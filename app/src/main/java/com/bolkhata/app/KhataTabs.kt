@@ -491,7 +491,7 @@ private val Rule: Color @Composable get() = if (LocalLook.current != null) Color
 /** The lines inside a day (between its entries, under its date strip and under the month head): barely there. */
 private val Soft: Color @Composable get() = if (LocalLook.current != null) Color(0x1F000000) else Color(0x12786C6C)
 /** The line along a date strip's top, where one day ends and the next begins: clear (dark theme: a soft light line). */
-private val DayTop: Color @Composable get() = if (LocalLook.current != null) Color(0x1FFFFFFF) else Color(0x33786C6C)
+private val DayTop: Color @Composable get() = if (LocalLook.current != null) Color(0x17FFFFFF) else Color(0x26786C6C)
 private val ColumnRule: Color @Composable get() = if (LocalLook.current != null) Color(0x12FFFFFF) else Color(0x12786C6C)
 
 
@@ -743,17 +743,21 @@ internal fun adUnder(state: LazyListState, low: Dp, high: Dp): Boolean {
 @Composable
 private fun BoxScope.UpButton(state: LazyListState, plus: Dp? = null) {
     val scope = rememberCoroutineScope()
+    val glow = LocalLook.current?.glow == true
     val bottom = (plus ?: (LocalBarSpace.current + 8.dp)) + 62.dp
     val down by remember { derivedStateOf { state.firstVisibleItemIndex > 4 } }
     // The button's lower and upper edge above the list's end, with a little room around it.
     val clear = !adUnder(state, bottom - 6.dp, bottom + 36.dp)
     if (down && !state.isScrollInProgress && clear) Box(
         Modifier.align(Alignment.BottomEnd).padding(end = 25.dp, bottom = bottom)
-            .size(30.dp).lift(2.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.onSurface)
+            .size(30.dp).lift(2.dp, CircleShape).clip(CircleShape)
+            // In the dark the + button's own Navy blues with a fine light edge.
+            .then(if (glow) Modifier.background(Brush.linearGradient(listOf(Color(0xFF2C5282), Color(0xFF1E3A5F))))
+                .border(1.dp, Color(0x24FFFFFF), CircleShape) else Modifier.background(MaterialTheme.colorScheme.onSurface))
             .clickable { scope.launch { state.animateScrollToItem(0) } },
         contentAlignment = Alignment.Center
     ) {
-        Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Back to top", tint = MaterialTheme.colorScheme.surfaceContainer,
+        Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Back to top", tint = if (glow) Color.White else MaterialTheme.colorScheme.surfaceContainer,
             modifier = Modifier.size(20.dp))
     }
 }
