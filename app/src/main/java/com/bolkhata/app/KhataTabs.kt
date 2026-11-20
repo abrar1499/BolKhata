@@ -44,6 +44,7 @@ import androidx.compose.material.icons.outlined.ReceiptLong
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -254,20 +255,26 @@ private fun SumCard(
     /** Which figures (0, 1, 2) are counts, shown without the currency. */
     plain: Set<Int> = emptySet()
 ) {
+    // As the mock: 2 dp wider than the space on each side, corners 16, the figures 14 and their words 10.
     Surface(
-        shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 1.dp
+        modifier = Modifier.layout { m, k ->
+            val extra = 2.dp.roundToPx()
+            val p = m.measure(k.copy(minWidth = k.minWidth + extra * 2, maxWidth = k.maxWidth + extra * 2))
+            layout(p.width - extra * 2, p.height) { p.place(-extra, 0) }
+        },
+        shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 1.dp
     ) {
         // In the dark theme solid (nothing behind shows through), lighter at the top, its edge light at the top fading down.
         val deep = LocalLook.current?.glow == true
         Row(Modifier.then(if (deep) Modifier.background(Color(0xFF222A3E)).background(Brush.verticalGradient(listOf(Color(0x1AFFFFFF), Color(0x05FFFFFF))))
-            .border(0.5.dp, Brush.verticalGradient(listOf(Color(0x1FFFFFFF), Color(0x08FFFFFF))), RoundedCornerShape(14.dp)) else Modifier.solidCard())
-            .fillMaxWidth().height(IntrinsicSize.Min).padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+            .border(0.5.dp, Brush.verticalGradient(listOf(Color(0x1FFFFFFF), Color(0x08FFFFFF))), RoundedCornerShape(16.dp)) else Modifier.solidCard())
+            .fillMaxWidth().height(IntrinsicSize.Min).padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             listOfNotNull(a, b, c).forEachIndexed { i, (value, label, color) ->
                 if (i > 0) VerticalDivider(Modifier.fillMaxHeight(), color = MaterialTheme.colorScheme.outlineVariant)
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                    if (i in plain) FitText(value, 12.sp, FontWeight.ExtraBold, color, Modifier.padding(horizontal = 4.dp))
-                    else MoneyText(value, 12.sp, FontWeight.ExtraBold, color, Modifier.padding(horizontal = 4.dp))
-                    Text(label, fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (i in plain) FitText(value, 14.sp, FontWeight.ExtraBold, color, Modifier.padding(horizontal = 4.dp))
+                    else MoneyText(value, 14.sp, FontWeight.ExtraBold, color, Modifier.padding(horizontal = 4.dp))
+                    Text(label, fontSize = 10.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             if (link.isNotEmpty()) VerticalDivider(Modifier.fillMaxHeight(), color = MaterialTheme.colorScheme.outlineVariant)

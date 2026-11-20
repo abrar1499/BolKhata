@@ -513,7 +513,8 @@ private fun MenuRow(onClick: (() -> Unit)?, last: Boolean = false, onLong: (() -
             ).padding(horizontal = 12.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically, content = content
         )
-        if (!last) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+        // A faint line, as the mock's (dark theme: a faint white, never a bright one).
+        if (!last) HorizontalDivider(color = if (LocalLook.current != null) Color(0x14FFFFFF) else Color(0x14786C6C))
     }
 }
 
