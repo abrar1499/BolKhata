@@ -644,11 +644,11 @@ private fun DayLine(date: Long, cols: List<LCol>, day: List<LRow>) = Tight {
     // little and shining, fading inward, so they look curved like a road's edge.
     val dark = LocalLook.current != null
     val shine = if (dark) Color(0x29FFFFFF) else Color(0xD9FFFFFF)
-    val shade = if (dark) Color(0x66000000) else Color(0x2E000000)
-    val shape = RoundedCornerShape(3.dp)
+    val shade = if (dark) Color(0x38000000) else Color(0x1A000000)
+    val shape = RoundedCornerShape(1.5.dp)
     Row(
         Modifier.padding(horizontal = 8.dp).fillMaxWidth().height(IntrinsicSize.Min).drawBehind {
-            val s = 3.dp.toPx()
+            val s = 2.dp.toPx()
             drawRect(Brush.horizontalGradient(listOf(Color.Transparent, shade), -s, 0f), Offset(-s, 0f), Size(s, size.height))
             drawRect(Brush.horizontalGradient(listOf(shade, Color.Transparent), size.width, size.width + s), Offset(size.width, 0f), Size(s, size.height))
         }.clip(shape).background(DayStrip).drawWithContent {
