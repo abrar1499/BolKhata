@@ -687,7 +687,7 @@ private fun BoxScope.PlusButton(onClick: () -> Unit) {
 
 /** Whether an ad in [state]'s list lies between [low] and [high] above the list's end: nothing may cover an ad. */
 @Composable
-private fun adUnder(state: LazyListState, low: Dp, high: Dp): Boolean {
+internal fun adUnder(state: LazyListState, low: Dp, high: Dp): Boolean {
     val (lo, hi) = with(androidx.compose.ui.platform.LocalDensity.current) { low.roundToPx() to high.roundToPx() }
     val under by remember(state, lo, hi) {
         derivedStateOf {

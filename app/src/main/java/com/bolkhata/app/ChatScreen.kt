@@ -14,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Delete
@@ -39,6 +40,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 
 /**
  * Chat tab: the person speaks or types. Entries are saved straight into the khata (shown as a card with Undo),
@@ -116,8 +118,9 @@ fun ChatScreen(
             }
         }
 
+        Box(Modifier.weight(1f).fillMaxWidth()) {
         LazyColumn(
-            modifier = Modifier.weight(1f).fillMaxWidth(),
+            modifier = Modifier.fillMaxSize(),
             state = listState,
             contentPadding = PaddingValues(start = 12.dp, top = 6.dp, end = 12.dp, bottom = barSpace(14.dp)),
             verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -152,7 +155,7 @@ fun ChatScreen(
                     }
                 }
             }
-            items(messages, key = { it.id }) { message -> MockSize {
+            items(messages, key = { it.id }, contentType = { if (it.id in adAfter) "ad" else "message" }) { message -> MockSize {
                 if (message.isUser) {
                     // What was said in live voice is not shown: only its answer is.
                     if (message.meta != "live") UserBubble(message.text, message.attachment, message.timestamp)
@@ -262,6 +265,19 @@ fun ChatScreen(
                     )
                 }
             }
+        }
+        // As in the Claude app: a round ↓ above the chat bar once the person has scrolled up and stopped; it goes while
+        // the list moves, when the newest message is in view, and while an answer with an ad is under it. A tap goes down.
+        val scope = rememberCoroutineScope()
+        val onAd = adUnder(listState, barSpace(4.dp), barSpace(50.dp))
+        if (listState.canScrollForward && !listState.isScrollInProgress && !onAd) Box(
+            Modifier.align(Alignment.BottomCenter).padding(bottom = barSpace(10.dp)).size(34.dp)
+                .lift(2.dp, CircleShape).clip(CircleShape).background(MaterialTheme.colorScheme.surface)
+                .clickable { scope.launch { listState.animateScrollToItem((listState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)) } },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Newest message", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(22.dp))
+        }
         }
 
     }
