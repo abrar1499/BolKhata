@@ -1144,7 +1144,7 @@ fun TransactionsScreen(entries: List<Entry>, currency: String, onEdit: (Entry) -
  */
 @Composable
 fun TrashScreen(
-    trash: List<Entry>, currency: String, onMenu: () -> Unit,
+    trash: List<Entry>, currency: String, onBack: () -> Unit,
     onRestore: (Entry) -> Unit, onRestoreAll: (List<Entry>) -> Unit, onEmpty: () -> Unit
 ) {
     var askEmpty by remember { mutableStateOf(false) }
@@ -1157,7 +1157,8 @@ fun TrashScreen(
     val listState = rememberLazyListState()
     LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = barSpace(24.dp))) {
         stickyHeader { TabHead {
-            KhataTop("Trash", "Deleted entries stay here for 30 days", onMenu) {
+            // Opened from the side menu: a round back button, as on every inner page.
+            BackHead("Trash", "Side menu ›", onBack) {
                 SumCard(
                     Triple("${list.size}", if (list.size == 1) "Entry" else "Entries", MaterialTheme.colorScheme.onSurface),
                     Triple(fmt(list.sumOf { it.amount }), "Total", RedSpend),
@@ -1174,7 +1175,7 @@ fun TrashScreen(
         } }
         item(key = "help") {
             Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 4.dp, top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Tap ↺ to bring an entry back", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                Text("Tap ↺ to bring an entry back · kept 30 days", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
                 if (trash.isNotEmpty()) TextButton(onClick = { askEmpty = true }) { Text("Empty trash", color = RedSpend, fontSize = 12.sp) }
             }
         }

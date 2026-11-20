@@ -2907,7 +2907,7 @@ fun App(
                 shown == Tab.ENTRIES -> TransactionsScreen(entries, currency, onEdit = { editing = it }, onAdd = { adding = true }, onMenu = { openMenu() })
                 shown == Tab.REPORTS -> ReportsScreen(entries, currency, onMenu = { openMenu() }, startKind = reportStart)
                 shown == Tab.TRASH -> TrashScreen(
-                    trash = trash, currency = currency, onMenu = { openMenu() },
+                    trash = trash, currency = currency, onBack = { tabNav.back() },
                     onRestore = { e ->
                         if (entries.any { it.id == e.id }) {
                             toast("This entry already exists; restore cancelled.")
