@@ -655,8 +655,7 @@ private fun DayLine(date: Long, cols: List<LCol>, day: List<LRow>) = Tight {
     val totals = cols.indices.map { k -> day.sumOf { it.amounts.getOrElse(k) { 0.0 } } }
     // One light keyboard-grey strip for the whole day: date, then the day's totals in their colours (no + / −). It reaches
     // 1 dp past the entries on each side alike, as a band; the ends rounded a little and shining, fading inward, so they
-    // look curved like a road's edge; a dotted line along its top and bottom, as between the entries.
-    val dotted = Dots
+    // look curved like a road's edge. No line along it: its own colour sets the day apart.
     val shine = if (LocalLook.current != null) Color(0x14FFFFFF) else Color(0x73FFFFFF)
     val shape = RoundedCornerShape(1.5.dp)
     Row(
@@ -665,9 +664,6 @@ private fun DayLine(date: Long, cols: List<LCol>, day: List<LRow>) = Tight {
             drawRect(Brush.horizontalGradient(listOf(shine, Color.Transparent), 0f, g), Offset.Zero, Size(g, size.height))
             drawRect(Brush.horizontalGradient(listOf(Color.Transparent, shine), size.width - g, size.width), Offset(size.width - g, 0f), Size(g, size.height))
             drawContent()
-            val half = 0.5.dp.toPx()
-            dots(dotted, half)
-            dots(dotted, size.height - half)
         }.padding(horizontal = 1.dp)   // its words and totals stay over the entries' columns
     ) {
         Text(dayLineFmt.format(Date(date)), fontSize = 11.sp, fontWeight = FontWeight.Bold,
@@ -770,9 +766,8 @@ private fun BoxScope.UpButton(state: LazyListState, plus: Dp? = null) {
     if (down && !state.isScrollInProgress && clear) Box(
         Modifier.align(Alignment.BottomEnd).padding(end = 25.dp, bottom = bottom)
             .size(30.dp).lift(2.dp, CircleShape).clip(CircleShape)
-            // In the dark the + button's own Navy blues with a fine light edge.
-            .then(if (glow) Modifier.background(Brush.linearGradient(listOf(Color(0xFF2C5282), Color(0xFF1E3A5F))))
-                .border(1.dp, Color(0x24FFFFFF), CircleShape) else Modifier.background(MaterialTheme.colorScheme.onSurface))
+            // In the dark the same glass as the + button.
+            .then(if (glow) Modifier.darkGlass(CircleShape) else Modifier.background(MaterialTheme.colorScheme.onSurface))
             .clickable { scope.launch { state.animateScrollToItem(0) } },
         contentAlignment = Alignment.Center
     ) {
@@ -864,6 +859,12 @@ fun CashBookScreen(
 
 // ---------------------------------------------------------------- + on the Cashbook
 
+/** Dark theme: the floating buttons (+ and ↑) as glass in the page's own blues: a soft sheen from the top over see-through navy. */
+private fun Modifier.darkGlass(shape: androidx.compose.ui.graphics.Shape): Modifier =
+    background(Brush.linearGradient(listOf(Color(0x99304876), Color(0x991E344E))), shape)
+        .background(Brush.verticalGradient(listOf(Color(0x33FFFFFF), Color(0x14FFFFFF))), shape)
+        .border(1.dp, Brush.verticalGradient(listOf(Color(0x29FFFFFF), Color(0x12FFFFFF))), shape)
+
 /** The + button's shape, as WhatsApp's: a rounded square. */
 private val FabShape = RoundedCornerShape(16.dp)
 
@@ -899,15 +900,15 @@ private fun plusPlace(state: LazyListState): Dp? {
 @Composable
 private fun BoxScope.AddRound(place: Dp?, onClick: () -> Unit) {
     val bottom = place ?: return
-    // Dark: the Navy band's own blues with a fine light edge (red is for money out there); light: the header's red.
+    // Dark: glass in the page's blues (red is for money out there), the + inside navy; light: the header's red.
     val glow = LocalLook.current?.glow == true
     val red = if (glow) Color(0xFF1E3A5F) else Color(0xFFE3342F)
     Box(
         Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = bottom).size(52.dp)
             .lift(6.dp, FabShape, ambientColor = red, spotColor = red).clip(FabShape)
-            .then(if (glow) Modifier.border(1.dp, Color(0x24FFFFFF), FabShape) else Modifier)
-            // A little see-through (85%), so the page shows faintly under it.
-            .background(Brush.linearGradient((if (glow) listOf(Color(0xFF2C5282), red) else listOf(Color(0xFFFF7A45), red, Color(0xFFB91C3C))).map { it.copy(alpha = 0.85f) }))
+            // Dark: glass (see darkGlass); light: the header's red, a little see-through (85%).
+            .then(if (glow) Modifier.darkGlass(FabShape)
+                else Modifier.background(Brush.linearGradient(listOf(Color(0xFFFF7A45), red, Color(0xFFB91C3C)).map { it.copy(alpha = 0.85f) })))
             .clickable { onClick() }
             .drawBehind {
                 // As WhatsApp's new-chat mark: a white rounded square with the + inside in the button's colour.
